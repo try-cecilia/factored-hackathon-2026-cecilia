@@ -1,0 +1,22 @@
+services:
+  agent:
+    build:
+      context: ..
+      dockerfile: ops/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-2}
+      - DATASET_BUCKET=${DATASET_BUCKET}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - TOGETHER_API_KEY=${TOGETHER_API_KEY}
+      - LLM_MODEL=${LLM_MODEL:-llama-3.3-70b-versatile}
+    volumes:
+      - warehouse:/app/data/warehouse
+      - raw:/app/data/raw
+
+volumes:
+  warehouse:
+  raw:

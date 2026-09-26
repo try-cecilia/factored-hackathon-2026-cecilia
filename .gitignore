@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+*.duckdb
+*.duckdb.wal
+data/raw/
+data/raw_test/
+data/warehouse/
+*.log
+.DS_Store
+.pytest_cache/
+htmlcov/
+.coverage
