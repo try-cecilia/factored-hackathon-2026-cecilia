@@ -41,10 +41,17 @@ Safety does not depend on the model. Live-model numbers (latency, cost,
 repeat variability) come from `make eval-live`: see [Status](#status).
 Intervals are Wilson 95%; zero observed events bounds the true rate below ≈0.7%.
 
+**Versus human agents:** a human-handled inquiry takes ≈341 s (120 s queue +
+221 s call, measured). This system answers with no queue; its own layers take
+milliseconds, and live-model latency is still to be measured (estimated 1–4 s).
+See the [summary table](EVALUATION.md#summary-human-agents-vs-keyword-bot-vs-this-system).
+
 Learned component: the intent classifier beats the keyword baseline on text it
 never saw (**84.9% vs 62.8%** accuracy on the held-out test split). As a
 pre-LLM guard it lifts fraud/dispute recall from 80% to **93.3%** with **0%**
 false escalations: [`eval/reports/intent_classifier.md`](eval/reports/intent_classifier.md).
+
+Submission slides and demo video: [`docs/demo/`](docs/demo/README.md).
 
 Full reports: [`EVALUATION.md`](EVALUATION.md) (method) ·
 [`eval/reports/SYSTEM_EVAL.md`](eval/reports/SYSTEM_EVAL.md) ·

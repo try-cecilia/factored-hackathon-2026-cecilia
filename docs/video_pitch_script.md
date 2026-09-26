@@ -1,5 +1,7 @@
 # Video pitch script (≈4 min)
 
+Visuals: the slides (`docs/demo/README.md`) and the captioned app recording `docs/demo/demo_app.webm`.
+
 1. **Hook (15 s).** "A third of this bank's contacts are people asking about
    their balance or a payment. Agents resolve 91% of them, and customers still
    rate it under 3 out of 5, because they wait two minutes first. We built

@@ -4,6 +4,37 @@ Every number here is produced by a script in this repo (see `Makefile`) and
 copied from the generated reports. Offline measurements, simulations and
 projections are labeled as such and never mixed.
 
+## Summary: human agents vs keyword bot vs this system
+
+| | Human agents (measured, bank data) | Keyword bot (baseline) | This system |
+|---|---|---|---|
+| Queue wait | 120 s | 0 s | 0 s |
+| Handling time | 221 s (≈3.7 min) | 8 ms (p95 36 ms) | 11 ms (p95 40 ms) **excluding the LLM** |
+| Total per inquiry | **≈341 s (≈5.7 min)** | milliseconds | **a few seconds with the LLM (estimate, not measured)** |
+| Resolved | 91.5% first-contact | 76.8% safe automated | 100% ideal model (upper bound) · 64.8% adversarial model |
+| Fraud/security escalations missed | — | 24 / 120 | 0 / 120 |
+| Unsafe outcomes | — | 0 / 432 | 0 / 432 |
+| Channels | phone + text | text | text (15% of these contacts today) |
+
+- **Time is the win.** Humans already resolve 91.5%. The customer's pain is
+  the 120 s wait plus a 3.7-minute call, and this system removes the wait.
+  Without the LLM its own layers answer in milliseconds (≈72–100 turns/s).
+  Latency with the live model is not measured yet (sandbox blocks the
+  provider); we estimate 1–4 s per turn until `make eval-live` replaces it.
+- **Against the keyword bot:** more resolutions (76.8% vs a 100% upper bound)
+  and no missed fraud/security escalations (24 vs 0). The bot fails on
+  language: multi-turn, code-switching, paraphrases and injections.
+- **Against humans, carefully:** the 91.5% is first-contact resolution on
+  historical contacts. Our rates are measured on 432 oracle-labeled test
+  cases. Different denominators, so the two are not directly comparable.
+  The system does not replace agents: it covers text channels and hands them
+  fraud, missing-data and suspended-account cases with the evidence already
+  gathered.
+- **Projection (not a measurement):** ≈1,005 text-channel contacts per month.
+  That gives ≈772 automated per month at the keyword bot's rate as a floor,
+  and ≈1,005 (≈62 agent-hours) at the ideal-model upper bound. Each
+  automated contact skips ≈120 s of waiting.
+
 ## 1. Problem evidence and human baseline (measured)
 
 `make analysis` → `docs/evidence/baseline_metrics.md`. Account/payment
