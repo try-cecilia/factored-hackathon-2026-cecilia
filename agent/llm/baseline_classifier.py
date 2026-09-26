@@ -1,43 +1,34 @@
-"""Deterministic keyword-rule baseline for intent classification.
+"""Keyword-rule intent classifier — the baseline the learned classifier must beat.
 
-This is the baseline the learned component (agent/llm/intent_classifier.py)
-must beat to justify its own existence, per "evaluate at least one learned
-component against an appropriate baseline."
+Escalation uses the shared lexicon (agent/policy/signals.py) so baseline and
+proposed system apply identical safety rules; the rest are hand-written
+routing keywords. These rules were written from the *training* templates
+only and frozen before the held-out set existed (see EVALUATION.md).
 """
 from __future__ import annotations
 
 import re
 
+from agent.policy.signals import contains_escalation_signal, normalize
+
 RULES: list[tuple[str, list[str]]] = [
-    ("requires_escalation", [
-        r"\bfraud", r"no reconozco", r"não reconheço", r"robaron", r"roubaram",
-        r"clonaron", r"clonou", r"denuncia", r"denúncia", r"no hice", r"não fiz",
-    ]),
-    ("payment_status", [
-        r"al d[ií]a", r"em dia", r"atrasad", r"atraso", r"mora\b", r"cr[ée]dito disponible",
-        r"cr[ée]dito ainda", r"vence", r"pr[óo]ximo pago", r"pr[óo]ximo pagamento",
-    ]),
-    ("exchange_rate_inquiry", [
-        r"tipo de cambio", r"cotiza[cç][aã]o", r"cotización", r"c[âa]mbio", r"d[óo]lar",
-    ]),
-    ("transaction_lookup", [
-        r"movimientos", r"movimenta[cç][õo]es", r"transacciones", r"transa[cç][õo]es",
-        r"historial", r"hist[óo]rico", r"compras", r"gastos", r"gastos",
-    ]),
-    ("balance_inquiry", [
-        r"saldo", r"cu[áa]nto tengo", r"quanto (eu )?tenho", r"dinero disponible", r"dispon[ií]vel",
-    ]),
-    ("out_of_scope", [
-        r"bloquear", r"bloquear meu", r"pr[ée]stamo nuevo", r"empr[ée]stimo novo",
-        r"requisitos", r"requisitos para", r"disputa", r"cobro\b", r"cobran[çc]a",
-        r"aumentar el l[ií]mite", r"aumentar o limite", r"n[úu]mero de tel[ée]fono", r"telefone cadastrado",
-    ]),
+    ("out_of_scope", [r"\bbloque", r"\bprestamo nuevo", r"\bemprestimo novo", r"\bnovo emprestimo", r"\bsolicitar (un|um) ",
+                      r"\brequisitos\b", r"\bdisputa", r"\baumentar (el|o) limite", r"\b(numero de )?telefono\b",
+                      r"\btelefone\b", r"\bperdi\b"]),
+    ("payment_status", [r"\bal dia\b", r"\bem dia\b", r"\batrasad", r"\batraso\b", r"\bmora\b", r"\bcredito (disponible|ainda|disponivel)",
+                        r"\bvence\b", r"\bproximo (pago|pagamento)\b", r"\bdias de (mora|atraso)\b"]),
+    ("exchange_rate_inquiry", [r"\btipo de cambio\b", r"\bcotiza", r"\bcotacao\b", r"\bcambio\b", r"\bdolar\b"]),
+    ("transaction_lookup", [r"\bmovimient", r"\bmovimenta", r"\btransac", r"\bhistorial\b", r"\bhistorico\b", r"\bcompras\b", r"\bgastos\b"]),
+    ("balance_inquiry", [r"\bsaldo\b", r"\bcuanto tengo\b", r"\bquanto (eu )?tenho\b", r"\bdisponible\b", r"\bdisponivel\b"]),
 ]
+_COMPILED = [(label, [re.compile(p) for p in pats]) for label, pats in RULES]
 
 
 def classify(utterance: str) -> str:
-    lowered = utterance.lower()
-    for label, patterns in RULES:
-        if any(re.search(p, lowered) for p in patterns):
+    if contains_escalation_signal(utterance):
+        return "requires_escalation"
+    norm = normalize(utterance)
+    for label, patterns in _COMPILED:
+        if any(p.search(norm) for p in patterns):
             return label
     return "out_of_scope"  # safest default: abstain rather than guess an in-scope action

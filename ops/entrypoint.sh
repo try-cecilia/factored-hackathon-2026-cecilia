@@ -1,14 +1,23 @@
 #!/bin/sh
 set -e
 
-# First boot on a fresh volume/container: no warehouse yet, so ingest from S3.
-# Production note: this is a hackathon-prototype simplification — a real
-# deployment would ingest on a schedule into a persistent volume/object store
-# and never block request-serving startup on a full re-ingestion. See
-# LIMITATIONS.md.
+# First boot with no warehouse: ingest. Default INGEST_ARGS is a deterministic
+# 5k-customer / 12-month sample (~15 MB, fits a 512 MB free tier). For the full
+# dataset set INGEST_ARGS="--profile serving" and give the container ~2 GB.
+# Production note: ingest on a schedule into persistent storage instead of at
+# boot (see LIMITATIONS.md).
 if [ ! -f "$DUCKDB_PATH" ]; then
-  echo "[entrypoint] No warehouse found at $DUCKDB_PATH — running initial ingestion from S3..."
-  python -m data.pipeline
+  echo "[entrypoint] no warehouse at $DUCKDB_PATH; ingesting with: $INGEST_ARGS"
+  python -m data.pipeline $INGEST_ARGS --report /app/data/reports/quality_report_boot.json
 fi
 
-exec uvicorn api.main:app --host 0.0.0.0 --port 8000
+if [ -z "$DEMO_IDP_SECRET" ]; then
+  echo "[entrypoint] WARNING: DEMO_IDP_SECRET not set; /auth/session will refuse all logins (fails closed)"
+fi
+if [ -z "$DEMO_PUBLIC_CUSTOMERS" ]; then
+  DEMO_PUBLIC_CUSTOMERS="$(python -m ops.demo_customers)"
+  export DEMO_PUBLIC_CUSTOMERS
+  echo "[entrypoint] sandbox demo customers: $DEMO_PUBLIC_CUSTOMERS"
+fi
+
+exec uvicorn api.main:app --host 0.0.0.0 --port "${PORT:-8000}"

@@ -1,0 +1,4 @@
+transaction_id,transaction_date,process_date,product_id,customer_id,transaction_type,transaction_category,amount,currency,amount_usd,channel,branch_id,merchant_name,merchant_category,transaction_country,transaction_city,transaction_status,response_code,is_fraud,fraud_score,latitude,longitude
+TXN-FIX0001,2024-01-14 09:15:00,2024-01-14,PRD-FIX0001,CLI-FIX0001,Deposit,,500.00,USD,500.00,Branch,SUC-FIX01,,,México,Ciudad de México,Approved,00,false,2.10,,
+TXN-FIX0002,2024-01-14 13:40:00,2024-01-14,PRD-FIX0004,CLI-FIX0001,Purchase,Food,85.20,USD,85.20,POS,,Restaurante Fixture,5812,México,Ciudad de México,Approved,00,false,5.00,19.4300000,-99.1300000
+TXN-FIX0003,2024-01-14 18:05:00,2024-01-14,PRD-FIX0005,CLI-FIX0001,Payment,,750.00,USD,750.00,Web,,,,México,,Approved,00,false,1.00,,

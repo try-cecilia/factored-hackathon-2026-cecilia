@@ -1,9 +1,15 @@
 """Errors raised by the deterministic tool layer.
 
-These are the signal the policy/decide layer (agent/policy/router.py) uses to
-route to CLARIFY or ESCALATE — the LLM never gets to decide what happens on
-its own; it only sees the outcome after the policy layer has acted on it.
+Each maps to exactly one disposition in agent/policy/router.py — the LLM
+never decides what a tool failure means:
+
+  MissingSlot / InvalidArgument / ResourceNotFound -> CLARIFY
+  NotApplicable                                    -> answered (AUTO_RESOLVE)
+  PermissionDenied                                 -> ESCALATE (security)
+  DataUnavailable                                  -> ESCALATE (data)
+  any other ToolError / unexpected exception       -> ESCALATE (tool failure)
 """
+from __future__ import annotations
 
 
 class ToolError(Exception):
@@ -11,29 +17,45 @@ class ToolError(Exception):
 
 
 class PermissionDenied(ToolError):
-    """Raised when the authenticated customer does not own the requested resource.
+    """The authenticated customer does not own the requested resource.
 
-    This is the guardrail against prompt injection / unauthorized access: it
-    fires purely from database ownership checks, never from anything the LLM
-    or the user said, so no amount of "ignore previous instructions" phrasing
-    can bypass it.
+    Fires from database ownership checks only — never from anything the LLM
+    or the user said — so no prompt phrasing can bypass it.
     """
+
+    def __init__(self, message: str, resource_id: str | None = None):
+        super().__init__(message)
+        self.resource_id = resource_id
 
 
 class ResourceNotFound(ToolError):
-    """Requested product/transaction/etc. does not exist."""
+    """Requested product/transaction does not exist."""
 
 
 class DataUnavailable(ToolError):
-    """Data exists but is incomplete/null in a way that blocks a verified answer
-    (e.g. no exchange rate for the requested date and no reasonable fallback)."""
+    """The data needed for a verified answer is missing, null, or too stale."""
+
+    def __init__(self, message: str, field: str | None = None):
+        super().__init__(message)
+        self.field = field
+
+
+class NotApplicable(ToolError):
+    """The question is valid but doesn't apply to this product (e.g. payment
+    status of a savings account). Answerable — not a reason to transfer."""
+
+    def __init__(self, message: str, payload: dict | None = None):
+        super().__init__(message)
+        self.payload = payload or {}
 
 
 class MissingSlot(ToolError):
-    """The LLM tried to call a tool without a required argument (e.g. no
-    product_id for payment_status). Routes to CLARIFY, not ESCALATE — this
-    is a normal "need more info" case, not a policy/security failure."""
+    """A required argument is missing or ambiguous (e.g. which product)."""
 
     def __init__(self, message: str, missing_slots: list[str] | None = None):
         super().__init__(message)
         self.missing_slots = missing_slots or []
+
+
+class InvalidArgument(MissingSlot):
+    """An argument was present but malformed (bad date, unknown currency)."""

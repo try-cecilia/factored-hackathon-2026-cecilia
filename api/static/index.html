@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Asistente de Cuenta y Pagos</title>
+<link rel="icon" href="data:,">
+<style>
+  :root { --bg:#f7f7f5; --card:#fff; --ink:#1d1d1b; --muted:#6b6b66; --line:#e3e2dd; --accent:#1f5eff;
+          --ok:#1c7c4a; --warn:#a15c00; --bad:#b3261e; --info:#5b4bb7; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#141413; --card:#1e1e1c; --ink:#ececea; --muted:#9a9a94; --line:#33332f; --accent:#7aa2ff; } }
+  * { box-sizing: border-box; }
+  body { margin:0; font:15px/1.5 system-ui, -apple-system, Segoe UI, sans-serif; background:var(--bg); color:var(--ink); }
+  main { max-width: 760px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 20px; margin: 0 0 4px; } .sub { color: var(--muted); margin: 0 0 20px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+  label { display:block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  input, textarea, select { width: 100%; font: inherit; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); }
+  .row { display:flex; gap: 10px; flex-wrap: wrap; } .row > div { flex: 1 1 180px; }
+  button { font: inherit; padding: 9px 16px; border: 0; border-radius: 8px; background: var(--accent); color: #fff; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+  #log { display:flex; flex-direction: column; gap: 10px; max-height: 55vh; overflow-y: auto; }
+  .msg { padding: 10px 12px; border-radius: 10px; white-space: pre-wrap; max-width: 92%; }
+  .me { align-self: flex-end; background: var(--accent); color: #fff; }
+  .bot { align-self: flex-start; background: var(--bg); border: 1px solid var(--line); }
+  .meta { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .tag { display:inline-block; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 99px; margin-right: 6px; color:#fff; }
+  .AUTO_RESOLVE { background: var(--ok); } .CLARIFY { background: var(--info); } .ABSTAIN { background: var(--warn); }
+  .ESCALATE { background: var(--bad); } .REAUTH_REQUIRED { background: var(--muted); }
+  .chips { display:flex; gap:6px; flex-wrap: wrap; margin-top: 10px; }
+  .chip { font-size: 13px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 99px; background: var(--card); color: var(--ink); cursor: pointer; }
+  .err { color: var(--bad); font-size: 13px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Asistente de Cuenta y Pagos</h1>
+  <p class="sub">Prototipo del Factored AI &amp; Data Hackathon 2026 · datos 100% sintéticos · ES / PT</p>
+
+  <section class="card" id="login">
+    <div class="row">
+      <div><label for="cid">Cliente de prueba</label><select id="cid"></select></div>
+      <div><label for="pin">PIN de prueba</label><input id="pin" inputmode="numeric" maxlength="6" placeholder="6 dígitos"></div>
+    </div>
+    <div style="margin-top:12px"><button id="go">Iniciar sesión</button></div>
+    <div class="err" id="lerr"></div>
+  </section>
+
+  <section class="card" id="chat" hidden>
+    <div id="log" aria-live="polite"></div>
+    <div class="chips" id="chips"></div>
+    <form id="f" style="display:flex; gap:8px; margin-top:12px">
+      <input id="m" maxlength="1000" placeholder="Escribe tu consulta…" autocomplete="off">
+      <button id="send">Enviar</button>
+    </form>
+  </section>
+</main>
+<script>
+const $ = s => document.querySelector(s);
+let token = null;
+const examples = ["¿Cuál es mi saldo?", "¿Estoy al día con mi tarjeta de crédito?", "Mis últimos movimientos",
+  "¿A cuánto está el dólar?", "Qual é o meu saldo?", "Quiero bloquear mi tarjeta", "Hay un cargo que no reconozco"];
+
+fetch("/demo/customers").then(r => r.json()).then(list => {
+  const sel = $("#cid");
+  if (!list.length) { sel.outerHTML = '<input id="cid" placeholder="CLI-...">'; return; }
+  list.forEach(c => { const o = document.createElement("option"); o.value = c.customer_id; o.textContent = c.customer_id; o.dataset.pin = c.test_pin; sel.append(o); });
+  const fill = () => { $("#pin").value = sel.selectedOptions[0].dataset.pin; }; sel.onchange = fill; fill();
+});
+
+$("#go").onclick = async () => {
+  $("#lerr").textContent = "";
+  const r = await fetch("/auth/session", {method: "POST", headers: {"content-type": "application/json"},
+    body: JSON.stringify({customer_id: $("#cid").value.trim(), pin: $("#pin").value.trim()})});
+  if (!r.ok) { $("#lerr").textContent = (await r.json()).detail || "Error"; return; }
+  token = (await r.json()).token;
+  $("#login").hidden = true; $("#chat").hidden = false; $("#m").focus();
+  examples.forEach(e => { const b = document.createElement("button"); b.type = "button"; b.className = "chip"; b.textContent = e; b.onclick = () => send(e); $("#chips").append(b); });
+};
+
+function add(text, cls, meta) {
+  const d = document.createElement("div"); d.className = "msg " + cls; d.textContent = text;
+  if (meta) { const m = document.createElement("div"); m.className = "meta"; m.innerHTML = meta; d.append(m); }
+  $("#log").append(d); $("#log").scrollTop = $("#log").scrollHeight;
+}
+
+async function send(text) {
+  if (!text) return;
+  add(text, "me"); $("#m").value = ""; $("#send").disabled = true;
+  try {
+    const r = await fetch("/chat", {method: "POST", headers: {"content-type": "application/json"},
+      body: JSON.stringify({session_token: token, message: text})});
+    const j = await r.json();
+    if (!r.ok) { add(j.detail || "Error", "bot"); return; }
+    const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+    let meta = `<span class="tag ${esc(j.disposition)}">${esc(j.disposition)}</span>${esc(j.category)} · ${Math.round(j.latency_ms)} ms · trace ${esc(j.trace_id.slice(0, 8))}`;
+    if (j.ticket_id) meta += ` · ticket ${esc(j.ticket_id.slice(0, 8))}`;
+    add(j.response_text, "bot", meta);
+  } finally { $("#send").disabled = false; }
+}
+$("#f").onsubmit = e => { e.preventDefault(); send($("#m").value.trim()); };
+</script>
+</body>
+</html>

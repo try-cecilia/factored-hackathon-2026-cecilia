@@ -17,3 +17,6 @@ tests/
 htmlcov/
 docs/
 *.md
+eval/reports/
+eval/workload/
+analysis/

@@ -1,35 +1,24 @@
-"""Deterministic Decide layer.
+"""Deterministic Decide/Verify layer — no LLM call anywhere in this module.
 
-This module is intentionally free of any LLM call. It takes the intent/slots
-the LLM extracted (agent/llm/*) plus the outcome of any tool calls already
-made, and returns one of four dispositions. The LLM proposes; this module
-disposes — "permissions and policy [are] enforce[d] outside model-generated
-prose," per the challenge brief.
+The LLM proposes (which tool, which arguments); this module disposes:
+- before the LLM runs: compliance holds and safety escalations;
+- after each tool call: what the outcome means (see agent/tools/errors.py);
+- when the LLM answers without a tool: abstain vs. clarify.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
-from agent.tools.errors import DataUnavailable, MissingSlot, PermissionDenied, ResourceNotFound
-
-# Intents this workflow (Account/Payment Inquiries) is scoped to automate.
-IN_SCOPE_INTENTS = {
-    "balance_inquiry",
-    "transaction_lookup",
-    "payment_status",
-    "exchange_rate_inquiry",
-}
-
-# Utterance signals that always force escalation regardless of intent,
-# because they imply something this workflow must never resolve on its own.
-ESCALATION_KEYWORDS = (
-    "fraude", "fraudulento", "no reconozco", "no reconocido", "robaron", "robo",
-    "clonaron", "clonación", "hackearon", "denuncia", "demanda", "amenaza",
-    "suicid", "abuso",
-    # Portuguese
-    "fraude", "não reconheço", "roubaram", "roubo", "clonaram", "ameaça",
+from agent.policy import intent_guard
+from agent.policy.signals import escalation_categories
+from agent.tools.errors import (
+    DataUnavailable,
+    MissingSlot,
+    NotApplicable,
+    PermissionDenied,
+    ResourceNotFound,
 )
 
 
@@ -40,83 +29,84 @@ class Disposition(str, Enum):
     ESCALATE = "ESCALATE"
 
 
+IN_SCOPE_INTENTS = {"balance_inquiry", "transaction_lookup", "payment_status", "exchange_rate_inquiry"}
+
+
 @dataclass
 class Decision:
     disposition: Disposition
     reason: str
+    category: str = "none"
     missing_slots: list[str] = field(default_factory=list)
-    verified_facts: dict[str, Any] = field(default_factory=dict)
     open_questions: list[str] = field(default_factory=list)
+    rule: str = ""  # which policy rule fired — shown in traces/tickets as the explanation
 
 
-REQUIRED_SLOTS = {
-    "balance_inquiry": [],  # product_id optional: no product => summarize all owned products
-    "transaction_lookup": [],
-    "payment_status": ["product_id"],
-    "exchange_rate_inquiry": ["source_currency", "target_currency"],
-}
+def pre_llm(text: str, customer_status: str | None, answering_clarification: bool = False
+            ) -> tuple[Decision | None, intent_guard.IntentReading]:
+    """Checks that run on raw text before any LLM or tool call, so no
+    downstream phrasing can talk them out of firing.
+
+    The classifier guard is skipped when the customer is answering our own
+    clarifying question ("la terminada en 3464"): a short, context-dependent
+    reply is outside what a per-utterance classifier was trained on (it
+    flagged exactly that PT reply as fraud at p=0.70 in the dev workload).
+    The safety lexicon still runs on every turn."""
+    reading = intent_guard.read(text)
+    if customer_status == "Suspended":
+        return Decision(Disposition.ESCALATE, "Customer is under an account suspension (compliance hold).",
+                        "compliance_hold", open_questions=["Confirm the reason for the suspension before disclosing account data."],
+                        rule="customer_status == Suspended"), reading
+    cats = escalation_categories(text)
+    if cats:
+        return Decision(Disposition.ESCALATE, f"Safety signal in the request: {', '.join(cats)}.", cats[0],
+                        open_questions=["Confirm whether the customer's card/account must be blocked.",
+                                        "Verify identity with a stronger factor before acting."],
+                        rule=f"lexicon:{cats[0]}"), reading
+    if reading.escalate and not answering_clarification:
+        return Decision(Disposition.ESCALATE,
+                        f"Intent classifier flags possible fraud/dispute (p={reading.p_escalation:.2f} >= {reading.threshold:.2f}).",
+                        "classifier_escalation",
+                        open_questions=["Classifier-only signal: confirm with the customer what happened."],
+                        rule="intent_classifier:requires_escalation"), reading
+    return None, reading
 
 
-def contains_escalation_signal(utterance: str) -> bool:
-    lowered = utterance.lower()
-    return any(kw in lowered for kw in ESCALATION_KEYWORDS)
-
-
-def decide(
-    intent: str,
-    slots: dict[str, Any],
-    raw_utterance: str,
-    ambiguous_product: bool = False,
-) -> Decision:
-    """Route a classified request. Called BEFORE any tool executes for intents
-    that need a disposition first (escalation / out-of-scope / clarification);
-    see decide_after_tool_call for the post-execution re-check."""
-    if contains_escalation_signal(raw_utterance):
-        return Decision(
-            disposition=Disposition.ESCALATE,
-            reason="Utterance contains a fraud/dispute/safety signal; this workflow does not resolve those.",
-            open_questions=["Confirm the customer's account is not compromised.", "Verify identity beyond session token if a human agent proceeds."],
-        )
-
-    if intent not in IN_SCOPE_INTENTS:
-        return Decision(
-            disposition=Disposition.ABSTAIN,
-            reason=f"Intent '{intent}' is out of scope for Account/Payment Inquiries.",
-        )
-
-    if ambiguous_product:
-        return Decision(
-            disposition=Disposition.CLARIFY,
-            reason="Customer has multiple products and did not specify which one.",
-            missing_slots=["product_id"],
-        )
-
-    missing = [s for s in REQUIRED_SLOTS.get(intent, []) if not slots.get(s)]
-    if missing:
-        return Decision(disposition=Disposition.CLARIFY, reason=f"Missing required slot(s): {missing}", missing_slots=missing)
-
-    return Decision(disposition=Disposition.AUTO_RESOLVE, reason="In-scope intent with all required slots present.")
-
-
-def decide_after_tool_call(intent: str, error: Optional[Exception], result: Any) -> Decision:
-    """Re-check after a tool call actually executes. A tool error always wins
-    over the pre-call decision — this is the 'Verify' step."""
+def after_tool(error: Exception | None) -> Decision | None:
+    """None means 'continue': the tool succeeded or the outcome is answerable."""
+    if error is None or isinstance(error, NotApplicable):
+        return None
     if isinstance(error, MissingSlot):
-        return Decision(disposition=Disposition.CLARIFY, reason=str(error), missing_slots=list(error.missing_slots))
-    if isinstance(error, PermissionDenied):
-        return Decision(
-            disposition=Disposition.ESCALATE,
-            reason="Ownership check failed: customer requested a resource they do not own.",
-            open_questions=["Possible unauthorized-access attempt or stale client-side reference; review before responding to customer."],
-        )
+        return Decision(Disposition.CLARIFY, str(error), "missing_or_invalid_argument",
+                        missing_slots=list(error.missing_slots), rule=f"tool_error:{type(error).__name__}")
     if isinstance(error, ResourceNotFound):
-        return Decision(disposition=Disposition.CLARIFY, reason="Referenced resource does not exist.", missing_slots=["product_id"])
+        return Decision(Disposition.CLARIFY, str(error), "resource_not_found", missing_slots=["product_id"],
+                        rule="tool_error:ResourceNotFound")
+    if isinstance(error, PermissionDenied):
+        return Decision(Disposition.ESCALATE, "Ownership check failed: the request targets a resource the customer does not own.",
+                        "security", open_questions=["Possible unauthorized-access or prompt-injection attempt; review the trace."],
+                        rule="tool_error:PermissionDenied")
     if isinstance(error, DataUnavailable):
-        return Decision(
-            disposition=Disposition.ESCALATE,
-            reason=f"Data required to verify an answer is unavailable: {error}",
-            open_questions=[str(error)],
-        )
-    if error is not None:
-        return Decision(disposition=Disposition.ESCALATE, reason=f"Unexpected tool failure: {error}", open_questions=["Tool call failed; needs manual lookup."])
-    return Decision(disposition=Disposition.AUTO_RESOLVE, reason="Tool call succeeded and result is verified.", verified_facts={"result": result})
+        return Decision(Disposition.ESCALATE, f"Data needed for a verified answer is unavailable: {error}", "data_unavailable",
+                        open_questions=[f"Look up '{error.field or 'the missing field'}' in the core system."],
+                        rule="tool_error:DataUnavailable")
+    return Decision(Disposition.ESCALATE, f"Tool failure: {error}", "tool_failure",
+                    open_questions=["A lookup failed; answer requires a manual check."], rule=f"tool_error:{type(error).__name__}")
+
+
+def no_tool_answer(reading: intent_guard.IntentReading, text: str) -> Decision:
+    """The LLM replied without calling a tool. Nothing was looked up, so this
+    is never an automated resolution."""
+    if reading.model_available:
+        if reading.intent == "out_of_scope":
+            return Decision(Disposition.ABSTAIN, "Request is outside account/payment inquiries.", "out_of_scope",
+                            rule="intent_classifier:out_of_scope")
+        return Decision(Disposition.CLARIFY, "In-scope request without enough information to look anything up.",
+                        "needs_clarification", rule=f"intent_classifier:{reading.intent}")
+    return Decision(Disposition.CLARIFY if "?" in text else Disposition.ABSTAIN, "classifier unavailable; punctuation fallback",
+                    "needs_clarification", rule="fallback:punctuation")
+
+
+def llm_unavailable(attempts: list[dict[str, Any]]) -> Decision:
+    return Decision(Disposition.ESCALATE, "No LLM provider available within the turn budget.", "llm_unavailable",
+                    open_questions=["Answer manually; the automated assistant was unavailable."], rule="llm_unavailable")

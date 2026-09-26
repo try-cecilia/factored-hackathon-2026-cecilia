@@ -1,61 +1,25 @@
-# Data evidence for the workflow choice
+# Why account & payment inquiries
 
-Pulled directly from the organizer's S3 dataset during scoping (not sampled
-from documentation — the full `call_center_interactions` and `complaints`
-tables, downloaded and aggregated with pandas).
+The full, regenerable numbers are in [`evidence/baseline_metrics.md`](evidence/baseline_metrics.md)
+(`make analysis`). The argument, in four measurements:
 
-## Contact reason distribution (`call_center_interactions`, 686,296 rows)
+1. **Largest demand.** "Transaccional" is 35.0% of 686,296 contacts. The next
+   reason, Producto, is 22.0%. The median is 6,701 contacts a month, or 411
+   agent-hours of handle time.
+2. **Already simple.** It has the highest first-contact resolution (91.5%) and
+   the shortest handle time (221 s vs 266–540 s for other reasons). The answers
+   are facts the bank already holds (balances, movements, arrears, rates). That
+   makes it the safest workflow to automate: read-only, no money movement, no
+   credit judgment.
+3. **Still a bad experience.** CSAT is 2.91/5 and NPS −70, with a 120 s queue
+   wait before a 3.7-minute call. The pain is waiting, not resolution.
+   Automation removes the wait.
+4. **Reachable now on text channels.** 15.0% of these contacts come by
+   chat/WhatsApp/app/email/web, about 1,005 a month. The remaining 85% are phone
+   calls and need speech I/O (LIMITATIONS.md).
 
-| `reason_category` | Count | % |
-|---|---|---|
-| Transaccional | 240,056 | 35.0% |
-| Producto | 150,863 | 22.0% |
-| Queja | 117,021 | 17.1% |
-| Técnico | 102,899 | 15.0% |
-| Comercial | 54,879 | 8.0% |
-| Retención | 20,578 | 3.0% |
-
-`contact_reason` and `reason_category` turned out to carry the same 6-value
-taxonomy in this dataset (a data-quality/schema-evolution quirk the data
-dictionary itself warns about) — so this is the full granularity available
-directly from that field.
-
-## Runner-up considered: transaction disputes (`complaints`, 67,095 rows)
-
-| `category` | Count | % |
-|---|---|---|
-| Transactions | 13,580 | 20.2% |
-| Fees | 13,553 | 20.2% |
-| Technical | 13,407 | 20.0% |
-| Branch | 13,361 | 19.9% |
-| Service | 13,194 | 19.7% |
-
-Top subcategories: **"Cargo no reconocido"** (12,297) and **"Cobro
-indebido"** (12,194) — together ~36% of all complaints. 20% of cases breach
-SLA. Lower raw volume than account/payment inquiries, but higher per-case
-cost and complexity (fraud linkage via `transactions.fraud_score`/`is_fraud`,
-mandatory human escalation). Documented here as the clear second choice,
-in case the workflow scope is revisited post-hackathon.
-
-## Product mix (`products`, 400,000 rows) — for context
-
-| `product_type` | % |
-|---|---|
-| Cuenta Ahorro | 30.1% |
-| Tarjeta Crédito | 25.0% |
-| Cuenta Corriente | 25.0% |
-| Tarjeta Débito | 10.0% |
-| Préstamo Personal | 5.0% |
-| Préstamo Hipotecario | 3.0% |
-| Inversión | 1.5% |
-| Seguro | 0.5% |
-
-## Conclusion
-
-Account/Payment Inquiries is the highest-volume contact reason in the bank's
-own operational data (35%, vs. 22% for the next-largest category), which is
-exactly the kind of "problem supported by data" evidence item 1 of the
-challenge's rubric asks for. It's also the workflow where full automation is
-safest to attempt: no money movement, no credit decisioning, and a bounded,
-verifiable answer space (numbers that exist in `products`/`transactions`,
-not judgment calls).
+**Runner-up: transaction disputes.** The `complaints` table shows "Cargo no
+reconocido" and "Cobro indebido" as the top subcategories (about 36% of 67K
+complaints), with 20% SLA breaches. Disputes are lower volume, higher effort,
+and legally sensitive. The escalation path built here (fraud evidence packs)
+is the bridge to that workflow.

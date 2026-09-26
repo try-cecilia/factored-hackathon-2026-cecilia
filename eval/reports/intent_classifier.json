@@ -1,0 +1,1988 @@
+{
+  "generated_at": "2026-09-26T01:53:28.169328+00:00",
+  "protocol": "train=templates; held-out written after freezing train+baseline; dev=selection+threshold; test=scored once",
+  "train_n": 182,
+  "train_class_counts": {
+    "balance_inquiry": 40,
+    "transaction_lookup": 36,
+    "payment_status": 42,
+    "exchange_rate_inquiry": 30,
+    "out_of_scope": 18,
+    "requires_escalation": 16
+  },
+  "heldout_n": 174,
+  "dev_n": 88,
+  "test_n": 86,
+  "model_selection_dev": {
+    "char": {
+      "dev_macro_f1": 0.8285
+    },
+    "word": {
+      "dev_macro_f1": 0.8208
+    },
+    "char+word": {
+      "dev_macro_f1": 0.9003
+    }
+  },
+  "chosen_variant": "char+word",
+  "threshold_sweep_dev": [
+    {
+      "tau": 0.1,
+      "recall": 1.0,
+      "false_escalation": 0.3611
+    },
+    {
+      "tau": 0.15,
+      "recall": 1.0,
+      "false_escalation": 0.2639
+    },
+    {
+      "tau": 0.2,
+      "recall": 1.0,
+      "false_escalation": 0.1944
+    },
+    {
+      "tau": 0.25,
+      "recall": 1.0,
+      "false_escalation": 0.1111
+    },
+    {
+      "tau": 0.3,
+      "recall": 1.0,
+      "false_escalation": 0.0833
+    },
+    {
+      "tau": 0.35,
+      "recall": 1.0,
+      "false_escalation": 0.0556
+    },
+    {
+      "tau": 0.4,
+      "recall": 1.0,
+      "false_escalation": 0.0139
+    },
+    {
+      "tau": 0.45,
+      "recall": 1.0,
+      "false_escalation": 0.0
+    },
+    {
+      "tau": 0.5,
+      "recall": 1.0,
+      "false_escalation": 0.0
+    },
+    {
+      "tau": 0.55,
+      "recall": 1.0,
+      "false_escalation": 0.0
+    },
+    {
+      "tau": 0.6,
+      "recall": 0.9375,
+      "false_escalation": 0.0
+    },
+    {
+      "tau": 0.65,
+      "recall": 0.9375,
+      "false_escalation": 0.0
+    },
+    {
+      "tau": 0.7,
+      "recall": 0.9375,
+      "false_escalation": 0.0
+    },
+    {
+      "tau": 0.75,
+      "recall": 0.875,
+      "false_escalation": 0.0
+    },
+    {
+      "tau": 0.8,
+      "recall": 0.8125,
+      "false_escalation": 0.0
+    },
+    {
+      "tau": 0.85,
+      "recall": 0.6875,
+      "false_escalation": 0.0
+    },
+    {
+      "tau": 0.9,
+      "recall": 0.6875,
+      "false_escalation": 0.0
+    }
+  ],
+  "escalation_threshold": 0.55,
+  "max_false_escalation_constraint": 0.05,
+  "dev": {
+    "n": 88,
+    "class_counts": {
+      "balance_inquiry": 16,
+      "transaction_lookup": 16,
+      "payment_status": 15,
+      "exchange_rate_inquiry": 10,
+      "out_of_scope": 15,
+      "requires_escalation": 16
+    },
+    "baseline_keywords": {
+      "accuracy": {
+        "k": 59,
+        "n": 88,
+        "rate": 0.6705,
+        "ci95": [
+          0.5669,
+          0.7597
+        ]
+      },
+      "macro_f1": 0.6995,
+      "per_class": {
+        "balance_inquiry": {
+          "precision": 0.8571,
+          "recall": {
+            "k": 12,
+            "n": 16,
+            "rate": 0.75,
+            "ci95": [
+              0.505,
+              0.8982
+            ]
+          },
+          "f1": 0.8,
+          "support": 16
+        },
+        "exchange_rate_inquiry": {
+          "precision": 1.0,
+          "recall": {
+            "k": 9,
+            "n": 10,
+            "rate": 0.9,
+            "ci95": [
+              0.5958,
+              0.9821
+            ]
+          },
+          "f1": 0.9474,
+          "support": 10
+        },
+        "out_of_scope": {
+          "precision": 0.3571,
+          "recall": {
+            "k": 15,
+            "n": 15,
+            "rate": 1.0,
+            "ci95": [
+              0.7961,
+              1.0
+            ]
+          },
+          "f1": 0.5263,
+          "support": 15
+        },
+        "payment_status": {
+          "precision": 1.0,
+          "recall": {
+            "k": 5,
+            "n": 15,
+            "rate": 0.3333,
+            "ci95": [
+              0.1518,
+              0.5829
+            ]
+          },
+          "f1": 0.5,
+          "support": 15
+        },
+        "requires_escalation": {
+          "precision": 1.0,
+          "recall": {
+            "k": 11,
+            "n": 16,
+            "rate": 0.6875,
+            "ci95": [
+              0.444,
+              0.8584
+            ]
+          },
+          "f1": 0.8148,
+          "support": 16
+        },
+        "transaction_lookup": {
+          "precision": 1.0,
+          "recall": {
+            "k": 7,
+            "n": 16,
+            "rate": 0.4375,
+            "ci95": [
+              0.231,
+              0.6682
+            ]
+          },
+          "f1": 0.6087,
+          "support": 16
+        }
+      },
+      "by_language": {
+        "es": {
+          "k": 26,
+          "n": 40,
+          "rate": 0.65,
+          "ci95": [
+            0.4951,
+            0.7787
+          ]
+        },
+        "pt": {
+          "k": 33,
+          "n": 48,
+          "rate": 0.6875,
+          "ci95": [
+            0.5467,
+            0.8005
+          ]
+        }
+      },
+      "by_style": {
+        "abbreviated": {
+          "k": 10,
+          "n": 11,
+          "rate": 0.9091,
+          "ci95": [
+            0.6226,
+            0.9838
+          ]
+        },
+        "colloquial": {
+          "k": 24,
+          "n": 37,
+          "rate": 0.6486,
+          "ci95": [
+            0.4876,
+            0.7817
+          ]
+        },
+        "formal": {
+          "k": 20,
+          "n": 28,
+          "rate": 0.7143,
+          "ci95": [
+            0.5294,
+            0.8475
+          ]
+        },
+        "no_accents": {
+          "k": 1,
+          "n": 1,
+          "rate": 1.0,
+          "ci95": [
+            0.2065,
+            1.0
+          ]
+        },
+        "regional_ar": {
+          "k": 2,
+          "n": 3,
+          "rate": 0.6667,
+          "ci95": [
+            0.2077,
+            0.9385
+          ]
+        },
+        "regional_co": {
+          "k": 1,
+          "n": 3,
+          "rate": 0.3333,
+          "ci95": [
+            0.0615,
+            0.7923
+          ]
+        },
+        "regional_mx": {
+          "k": 0,
+          "n": 1,
+          "rate": 0.0,
+          "ci95": [
+            0.0,
+            0.7935
+          ]
+        },
+        "slang": {
+          "k": 1,
+          "n": 4,
+          "rate": 0.25,
+          "ci95": [
+            0.0456,
+            0.6994
+          ]
+        }
+      },
+      "by_source": {
+        "team_heldout": {
+          "k": 59,
+          "n": 88,
+          "rate": 0.6705,
+          "ci95": [
+            0.5669,
+            0.7597
+          ]
+        }
+      },
+      "confusion": {
+        "labels": [
+          "balance_inquiry",
+          "exchange_rate_inquiry",
+          "out_of_scope",
+          "payment_status",
+          "requires_escalation",
+          "transaction_lookup"
+        ],
+        "matrix": [
+          [
+            12,
+            0,
+            4,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            9,
+            1,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            15,
+            0,
+            0,
+            0
+          ],
+          [
+            2,
+            0,
+            8,
+            5,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            5,
+            0,
+            11,
+            0
+          ],
+          [
+            0,
+            0,
+            9,
+            0,
+            0,
+            7
+          ]
+        ]
+      }
+    },
+    "learned": {
+      "accuracy": {
+        "k": 79,
+        "n": 88,
+        "rate": 0.8977,
+        "ci95": [
+          0.8169,
+          0.9453
+        ]
+      },
+      "macro_f1": 0.9003,
+      "per_class": {
+        "balance_inquiry": {
+          "precision": 0.8889,
+          "recall": {
+            "k": 16,
+            "n": 16,
+            "rate": 1.0,
+            "ci95": [
+              0.8064,
+              1.0
+            ]
+          },
+          "f1": 0.9412,
+          "support": 16
+        },
+        "exchange_rate_inquiry": {
+          "precision": 1.0,
+          "recall": {
+            "k": 10,
+            "n": 10,
+            "rate": 1.0,
+            "ci95": [
+              0.7225,
+              1.0
+            ]
+          },
+          "f1": 1.0,
+          "support": 10
+        },
+        "out_of_scope": {
+          "precision": 0.8667,
+          "recall": {
+            "k": 13,
+            "n": 15,
+            "rate": 0.8667,
+            "ci95": [
+              0.6212,
+              0.9626
+            ]
+          },
+          "f1": 0.8667,
+          "support": 15
+        },
+        "payment_status": {
+          "precision": 0.9091,
+          "recall": {
+            "k": 10,
+            "n": 15,
+            "rate": 0.6667,
+            "ci95": [
+              0.4171,
+              0.8482
+            ]
+          },
+          "f1": 0.7692,
+          "support": 15
+        },
+        "requires_escalation": {
+          "precision": 0.7895,
+          "recall": {
+            "k": 15,
+            "n": 16,
+            "rate": 0.9375,
+            "ci95": [
+              0.7167,
+              0.9889
+            ]
+          },
+          "f1": 0.8571,
+          "support": 16
+        },
+        "transaction_lookup": {
+          "precision": 1.0,
+          "recall": {
+            "k": 15,
+            "n": 16,
+            "rate": 0.9375,
+            "ci95": [
+              0.7167,
+              0.9889
+            ]
+          },
+          "f1": 0.9677,
+          "support": 16
+        }
+      },
+      "by_language": {
+        "es": {
+          "k": 37,
+          "n": 40,
+          "rate": 0.925,
+          "ci95": [
+            0.8014,
+            0.9742
+          ]
+        },
+        "pt": {
+          "k": 42,
+          "n": 48,
+          "rate": 0.875,
+          "ci95": [
+            0.753,
+            0.9414
+          ]
+        }
+      },
+      "by_style": {
+        "abbreviated": {
+          "k": 11,
+          "n": 11,
+          "rate": 1.0,
+          "ci95": [
+            0.7412,
+            1.0
+          ]
+        },
+        "colloquial": {
+          "k": 33,
+          "n": 37,
+          "rate": 0.8919,
+          "ci95": [
+            0.7529,
+            0.9571
+          ]
+        },
+        "formal": {
+          "k": 26,
+          "n": 28,
+          "rate": 0.9286,
+          "ci95": [
+            0.7735,
+            0.9802
+          ]
+        },
+        "no_accents": {
+          "k": 1,
+          "n": 1,
+          "rate": 1.0,
+          "ci95": [
+            0.2065,
+            1.0
+          ]
+        },
+        "regional_ar": {
+          "k": 3,
+          "n": 3,
+          "rate": 1.0,
+          "ci95": [
+            0.4385,
+            1.0
+          ]
+        },
+        "regional_co": {
+          "k": 2,
+          "n": 3,
+          "rate": 0.6667,
+          "ci95": [
+            0.2077,
+            0.9385
+          ]
+        },
+        "regional_mx": {
+          "k": 0,
+          "n": 1,
+          "rate": 0.0,
+          "ci95": [
+            0.0,
+            0.7935
+          ]
+        },
+        "slang": {
+          "k": 3,
+          "n": 4,
+          "rate": 0.75,
+          "ci95": [
+            0.3006,
+            0.9544
+          ]
+        }
+      },
+      "by_source": {
+        "team_heldout": {
+          "k": 79,
+          "n": 88,
+          "rate": 0.8977,
+          "ci95": [
+            0.8169,
+            0.9453
+          ]
+        }
+      },
+      "confusion": {
+        "labels": [
+          "balance_inquiry",
+          "exchange_rate_inquiry",
+          "out_of_scope",
+          "payment_status",
+          "requires_escalation",
+          "transaction_lookup"
+        ],
+        "matrix": [
+          [
+            16,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            10,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            13,
+            1,
+            1,
+            0
+          ],
+          [
+            2,
+            0,
+            1,
+            10,
+            2,
+            0
+          ],
+          [
+            0,
+            0,
+            1,
+            0,
+            15,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            1,
+            15
+          ]
+        ]
+      }
+    },
+    "escalation_guard": {
+      "lexicon_only": {
+        "recall": {
+          "k": 11,
+          "n": 16,
+          "rate": 0.6875,
+          "ci95": [
+            0.444,
+            0.8584
+          ]
+        },
+        "false_escalation": {
+          "k": 0,
+          "n": 72,
+          "rate": 0.0,
+          "ci95": [
+            0.0,
+            0.0507
+          ]
+        },
+        "missed": 5,
+        "missed_upper_bound_if_zero": null
+      },
+      "classifier_only": {
+        "recall": {
+          "k": 12,
+          "n": 16,
+          "rate": 0.75,
+          "ci95": [
+            0.505,
+            0.8982
+          ]
+        },
+        "false_escalation": {
+          "k": 0,
+          "n": 72,
+          "rate": 0.0,
+          "ci95": [
+            0.0,
+            0.0507
+          ]
+        },
+        "missed": 4,
+        "missed_upper_bound_if_zero": null
+      },
+      "lexicon_or_classifier (runtime)": {
+        "recall": {
+          "k": 16,
+          "n": 16,
+          "rate": 1.0,
+          "ci95": [
+            0.8064,
+            1.0
+          ]
+        },
+        "false_escalation": {
+          "k": 0,
+          "n": 72,
+          "rate": 0.0,
+          "ci95": [
+            0.0,
+            0.0507
+          ]
+        },
+        "missed": 0,
+        "missed_upper_bound_if_zero": 0.1875
+      }
+    },
+    "errors": [
+      {
+        "utterance": "tenho grana suficiente na conta?",
+        "gold": "balance_inquiry",
+        "baseline": "out_of_scope",
+        "learned": "balance_inquiry",
+        "language": "pt",
+        "style": "slang"
+      },
+      {
+        "utterance": "mostrame los saldos de todas mis cuentas",
+        "gold": "balance_inquiry",
+        "baseline": "out_of_scope",
+        "learned": "balance_inquiry",
+        "language": "es",
+        "style": "regional_ar"
+      },
+      {
+        "utterance": "Oi, pode me dizer quanto dinheiro tenho?",
+        "gold": "balance_inquiry",
+        "baseline": "out_of_scope",
+        "learned": "balance_inquiry",
+        "language": "pt",
+        "style": "colloquial"
+      },
+      {
+        "utterance": "quero ver quanto sobrou no cartão de débito",
+        "gold": "balance_inquiry",
+        "baseline": "out_of_scope",
+        "learned": "balance_inquiry",
+        "language": "pt",
+        "style": "colloquial"
+      },
+      {
+        "utterance": "ultimos movs de la tarjeta",
+        "gold": "transaction_lookup",
+        "baseline": "out_of_scope",
+        "learned": "transaction_lookup",
+        "language": "es",
+        "style": "abbreviated"
+      },
+      {
+        "utterance": "¿qué cargos tengo este mes en la tarjeta?",
+        "gold": "transaction_lookup",
+        "baseline": "out_of_scope",
+        "learned": "transaction_lookup",
+        "language": "es",
+        "style": "formal"
+      },
+      {
+        "utterance": "quais pagamentos fiz em janeiro",
+        "gold": "transaction_lookup",
+        "baseline": "out_of_scope",
+        "learned": "transaction_lookup",
+        "language": "pt",
+        "style": "formal"
+      },
+      {
+        "utterance": "onde gastei meu dinheiro semana passada",
+        "gold": "transaction_lookup",
+        "baseline": "out_of_scope",
+        "learned": "transaction_lookup",
+        "language": "pt",
+        "style": "colloquial"
+      },
+      {
+        "utterance": "tem alguma compra recusada hoje?",
+        "gold": "transaction_lookup",
+        "baseline": "out_of_scope",
+        "learned": "requires_escalation",
+        "language": "pt",
+        "style": "colloquial"
+      },
+      {
+        "utterance": "o que foi debitado da minha conta ontem",
+        "gold": "transaction_lookup",
+        "baseline": "out_of_scope",
+        "learned": "transaction_lookup",
+        "language": "pt",
+        "style": "colloquial"
+      },
+      {
+        "utterance": "en qué gasté la semana pasada",
+        "gold": "transaction_lookup",
+        "baseline": "out_of_scope",
+        "learned": "transaction_lookup",
+        "language": "es",
+        "style": "colloquial"
+      },
+      {
+        "utterance": "quero ver os saques do mês",
+        "gold": "transaction_lookup",
+        "baseline": "out_of_scope",
+        "learned": "transaction_lookup",
+        "language": "pt",
+        "style": "formal"
+      },
+      {
+        "utterance": "quiero revisar los pagos que hice en enero",
+        "gold": "transaction_lookup",
+        "baseline": "out_of_scope",
+        "learned": "transaction_lookup",
+        "language": "es",
+        "style": "formal"
+      },
+      {
+        "utterance": "quanto falta pagar do empréstimo",
+        "gold": "payment_status",
+        "baseline": "out_of_scope",
+        "learned": "payment_status",
+        "language": "pt",
+        "style": "formal"
+      },
+      {
+        "utterance": "cuánto me falta pagar de la hipoteca",
+        "gold": "payment_status",
+        "baseline": "out_of_scope",
+        "learned": "payment_status",
+        "language": "es",
+        "style": "formal"
+      },
+      {
+        "utterance": "tô devendo algo no banco?",
+        "gold": "payment_status",
+        "baseline": "out_of_scope",
+        "learned": "requires_escalation",
+        "language": "pt",
+        "style": "slang"
+      },
+      {
+        "utterance": "cuánto debo de la tarjeta",
+        "gold": "payment_status",
+        "baseline": "out_of_scope",
+        "learned": "payment_status",
+        "language": "es",
+        "style": "colloquial"
+      },
+      {
+        "utterance": "cuál es el límite disponible de mi tarjeta de crédito",
+        "gold": "payment_status",
+        "baseline": "balance_inquiry",
+        "learned": "out_of_scope",
+        "language": "es",
+        "style": "formal"
+      },
+      {
+        "utterance": "mi tarjeta está al corriente?",
+        "gold": "payment_status",
+        "baseline": "out_of_scope",
+        "learned": "balance_inquiry",
+        "language": "es",
+        "style": "regional_mx"
+      },
+      {
+        "utterance": "cuánto crédito me queda para usar",
+        "gold": "payment_status",
+        "baseline": "out_of_scope",
+        "learned": "payment_status",
+        "language": "es",
+        "style": "colloquial"
+      },
+      {
+        "utterance": "cual es mi cupo disponible",
+        "gold": "payment_status",
+        "baseline": "balance_inquiry",
+        "learned": "balance_inquiry",
+        "language": "es",
+        "style": "regional_co"
+      },
+      {
+        "utterance": "a fatura já está paga?",
+        "gold": "payment_status",
+        "baseline": "out_of_scope",
+        "learned": "requires_escalation",
+        "language": "pt",
+        "style": "colloquial"
+      },
+      {
+        "utterance": "estou inadimplente?",
+        "gold": "payment_status",
+        "baseline": "out_of_scope",
+        "learned": "payment_status",
+        "language": "pt",
+        "style": "formal"
+      },
+      {
+        "utterance": "¿cuál es la TRM de hoy?",
+        "gold": "exchange_rate_inquiry",
+        "baseline": "out_of_scope",
+        "learned": "exchange_rate_inquiry",
+        "language": "es",
+        "style": "regional_co"
+      },
+      {
+        "utterance": "quais as taxas do financiamento imobiliário",
+        "gold": "out_of_scope",
+        "baseline": "out_of_scope",
+        "learned": "payment_status",
+        "language": "pt",
+        "style": "formal"
+      },
+      {
+        "utterance": "não lembro minha senha do app",
+        "gold": "out_of_scope",
+        "baseline": "out_of_scope",
+        "learned": "requires_escalation",
+        "language": "pt",
+        "style": "colloquial"
+      },
+      {
+        "utterance": "hay una compra rara en mi tarjeta que no conozco",
+        "gold": "requires_escalation",
+        "baseline": "out_of_scope",
+        "learned": "requires_escalation",
+        "language": "es",
+        "style": "colloquial"
+      },
+      {
+        "utterance": "limparam minha conta",
+        "gold": "requires_escalation",
+        "baseline": "out_of_scope",
+        "learned": "requires_escalation",
+        "language": "pt",
+        "style": "slang"
+      },
+      {
+        "utterance": "invadiram meu aplicativo",
+        "gold": "requires_escalation",
+        "baseline": "requires_escalation",
+        "learned": "out_of_scope",
+        "language": "pt",
+        "style": "colloquial"
+      },
+      {
+        "utterance": "alguém tirou dinheiro da minha conta",
+        "gold": "requires_escalation",
+        "baseline": "out_of_scope",
+        "learned": "requires_escalation",
+        "language": "pt",
+        "style": "colloquial"
+      },
+      {
+        "utterance": "tem uma compra estranha no cartão que não conheço",
+        "gold": "requires_escalation",
+        "baseline": "out_of_scope",
+        "learned": "requires_escalation",
+        "language": "pt",
+        "style": "colloquial"
+      },
+      {
+        "utterance": "hay un retiro de cajero que no fui yo",
+        "gold": "requires_escalation",
+        "baseline": "out_of_scope",
+        "learned": "requires_escalation",
+        "language": "es",
+        "style": "colloquial"
+      }
+    ],
+    "guard_misses": []
+  },
+  "test": {
+    "n": 86,
+    "class_counts": {
+      "balance_inquiry": 16,
+      "transaction_lookup": 15,
+      "payment_status": 15,
+      "exchange_rate_inquiry": 10,
+      "out_of_scope": 15,
+      "requires_escalation": 15
+    },
+    "baseline_keywords": {
+      "accuracy": {
+        "k": 54,
+        "n": 86,
+        "rate": 0.6279,
+        "ci95": [
+          0.5223,
+          0.7225
+        ]
+      },
+      "macro_f1": 0.6515,
+      "per_class": {
+        "balance_inquiry": {
+          "precision": 0.9091,
+          "recall": {
+            "k": 10,
+            "n": 16,
+            "rate": 0.625,
+            "ci95": [
+              0.3864,
+              0.8152
+            ]
+          },
+          "f1": 0.7407,
+          "support": 16
+        },
+        "exchange_rate_inquiry": {
+          "precision": 0.9,
+          "recall": {
+            "k": 9,
+            "n": 10,
+            "rate": 0.9,
+            "ci95": [
+              0.5958,
+              0.9821
+            ]
+          },
+          "f1": 0.9,
+          "support": 10
+        },
+        "out_of_scope": {
+          "precision": 0.3182,
+          "recall": {
+            "k": 14,
+            "n": 15,
+            "rate": 0.9333,
+            "ci95": [
+              0.7018,
+              0.9881
+            ]
+          },
+          "f1": 0.4746,
+          "support": 15
+        },
+        "payment_status": {
+          "precision": 1.0,
+          "recall": {
+            "k": 3,
+            "n": 15,
+            "rate": 0.2,
+            "ci95": [
+              0.0705,
+              0.4519
+            ]
+          },
+          "f1": 0.3333,
+          "support": 15
+        },
+        "requires_escalation": {
+          "precision": 1.0,
+          "recall": {
+            "k": 12,
+            "n": 15,
+            "rate": 0.8,
+            "ci95": [
+              0.5481,
+              0.9295
+            ]
+          },
+          "f1": 0.8889,
+          "support": 15
+        },
+        "transaction_lookup": {
+          "precision": 1.0,
+          "recall": {
+            "k": 6,
+            "n": 15,
+            "rate": 0.4,
+            "ci95": [
+              0.1982,
+              0.6425
+            ]
+          },
+          "f1": 0.5714,
+          "support": 15
+        }
+      },
+      "by_language": {
+        "es": {
+          "k": 30,
+          "n": 45,
+          "rate": 0.6667,
+          "ci95": [
+            0.5207,
+            0.7864
+          ]
+        },
+        "mixed": {
+          "k": 2,
+          "n": 4,
+          "rate": 0.5,
+          "ci95": [
+            0.15,
+            0.85
+          ]
+        },
+        "pt": {
+          "k": 22,
+          "n": 37,
+          "rate": 0.5946,
+          "ci95": [
+            0.4349,
+            0.7365
+          ]
+        }
+      },
+      "by_style": {
+        "abbreviated": {
+          "k": 1,
+          "n": 4,
+          "rate": 0.25,
+          "ci95": [
+            0.0456,
+            0.6994
+          ]
+        },
+        "code_switch": {
+          "k": 2,
+          "n": 4,
+          "rate": 0.5,
+          "ci95": [
+            0.15,
+            0.85
+          ]
+        },
+        "colloquial": {
+          "k": 17,
+          "n": 29,
+          "rate": 0.5862,
+          "ci95": [
+            0.4074,
+            0.7449
+          ]
+        },
+        "formal": {
+          "k": 27,
+          "n": 34,
+          "rate": 0.7941,
+          "ci95": [
+            0.632,
+            0.8965
+          ]
+        },
+        "no_accents": {
+          "k": 2,
+          "n": 3,
+          "rate": 0.6667,
+          "ci95": [
+            0.2077,
+            0.9385
+          ]
+        },
+        "regional_ar": {
+          "k": 0,
+          "n": 3,
+          "rate": 0.0,
+          "ci95": [
+            0.0,
+            0.5615
+          ]
+        },
+        "regional_co": {
+          "k": 2,
+          "n": 3,
+          "rate": 0.6667,
+          "ci95": [
+            0.2077,
+            0.9385
+          ]
+        },
+        "regional_mx": {
+          "k": 1,
+          "n": 2,
+          "rate": 0.5,
+          "ci95": [
+            0.0945,
+            0.9055
+          ]
+        },
+        "slang": {
+          "k": 1,
+          "n": 3,
+          "rate": 0.3333,
+          "ci95": [
+            0.0615,
+            0.7923
+          ]
+        },
+        "typo": {
+          "k": 1,
+          "n": 1,
+          "rate": 1.0,
+          "ci95": [
+            0.2065,
+            1.0
+          ]
+        }
+      },
+      "by_source": {
+        "dataset_transcript": {
+          "k": 2,
+          "n": 2,
+          "rate": 1.0,
+          "ci95": [
+            0.3424,
+            1.0
+          ]
+        },
+        "team_heldout": {
+          "k": 52,
+          "n": 84,
+          "rate": 0.619,
+          "ci95": [
+            0.5122,
+            0.7155
+          ]
+        }
+      },
+      "confusion": {
+        "labels": [
+          "balance_inquiry",
+          "exchange_rate_inquiry",
+          "out_of_scope",
+          "payment_status",
+          "requires_escalation",
+          "transaction_lookup"
+        ],
+        "matrix": [
+          [
+            10,
+            0,
+            6,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            9,
+            1,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            1,
+            14,
+            0,
+            0,
+            0
+          ],
+          [
+            1,
+            0,
+            11,
+            3,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            3,
+            0,
+            12,
+            0
+          ],
+          [
+            0,
+            0,
+            9,
+            0,
+            0,
+            6
+          ]
+        ]
+      }
+    },
+    "learned": {
+      "accuracy": {
+        "k": 73,
+        "n": 86,
+        "rate": 0.8488,
+        "ci95": [
+          0.7584,
+          0.9095
+        ]
+      },
+      "macro_f1": 0.8493,
+      "per_class": {
+        "balance_inquiry": {
+          "precision": 0.8889,
+          "recall": {
+            "k": 16,
+            "n": 16,
+            "rate": 1.0,
+            "ci95": [
+              0.8064,
+              1.0
+            ]
+          },
+          "f1": 0.9412,
+          "support": 16
+        },
+        "exchange_rate_inquiry": {
+          "precision": 0.9091,
+          "recall": {
+            "k": 10,
+            "n": 10,
+            "rate": 1.0,
+            "ci95": [
+              0.7225,
+              1.0
+            ]
+          },
+          "f1": 0.9524,
+          "support": 10
+        },
+        "out_of_scope": {
+          "precision": 0.6667,
+          "recall": {
+            "k": 12,
+            "n": 15,
+            "rate": 0.8,
+            "ci95": [
+              0.5481,
+              0.9295
+            ]
+          },
+          "f1": 0.7273,
+          "support": 15
+        },
+        "payment_status": {
+          "precision": 1.0,
+          "recall": {
+            "k": 11,
+            "n": 15,
+            "rate": 0.7333,
+            "ci95": [
+              0.4805,
+              0.891
+            ]
+          },
+          "f1": 0.8462,
+          "support": 15
+        },
+        "requires_escalation": {
+          "precision": 0.9,
+          "recall": {
+            "k": 9,
+            "n": 15,
+            "rate": 0.6,
+            "ci95": [
+              0.3575,
+              0.8018
+            ]
+          },
+          "f1": 0.72,
+          "support": 15
+        },
+        "transaction_lookup": {
+          "precision": 0.8333,
+          "recall": {
+            "k": 15,
+            "n": 15,
+            "rate": 1.0,
+            "ci95": [
+              0.7961,
+              1.0
+            ]
+          },
+          "f1": 0.9091,
+          "support": 15
+        }
+      },
+      "by_language": {
+        "es": {
+          "k": 39,
+          "n": 45,
+          "rate": 0.8667,
+          "ci95": [
+            0.7382,
+            0.9374
+          ]
+        },
+        "mixed": {
+          "k": 4,
+          "n": 4,
+          "rate": 1.0,
+          "ci95": [
+            0.5101,
+            1.0
+          ]
+        },
+        "pt": {
+          "k": 30,
+          "n": 37,
+          "rate": 0.8108,
+          "ci95": [
+            0.6579,
+            0.9052
+          ]
+        }
+      },
+      "by_style": {
+        "abbreviated": {
+          "k": 4,
+          "n": 4,
+          "rate": 1.0,
+          "ci95": [
+            0.5101,
+            1.0
+          ]
+        },
+        "code_switch": {
+          "k": 4,
+          "n": 4,
+          "rate": 1.0,
+          "ci95": [
+            0.5101,
+            1.0
+          ]
+        },
+        "colloquial": {
+          "k": 24,
+          "n": 29,
+          "rate": 0.8276,
+          "ci95": [
+            0.6545,
+            0.924
+          ]
+        },
+        "formal": {
+          "k": 28,
+          "n": 34,
+          "rate": 0.8235,
+          "ci95": [
+            0.6649,
+            0.9165
+          ]
+        },
+        "no_accents": {
+          "k": 3,
+          "n": 3,
+          "rate": 1.0,
+          "ci95": [
+            0.4385,
+            1.0
+          ]
+        },
+        "regional_ar": {
+          "k": 3,
+          "n": 3,
+          "rate": 1.0,
+          "ci95": [
+            0.4385,
+            1.0
+          ]
+        },
+        "regional_co": {
+          "k": 3,
+          "n": 3,
+          "rate": 1.0,
+          "ci95": [
+            0.4385,
+            1.0
+          ]
+        },
+        "regional_mx": {
+          "k": 2,
+          "n": 2,
+          "rate": 1.0,
+          "ci95": [
+            0.3424,
+            1.0
+          ]
+        },
+        "slang": {
+          "k": 1,
+          "n": 3,
+          "rate": 0.3333,
+          "ci95": [
+            0.0615,
+            0.7923
+          ]
+        },
+        "typo": {
+          "k": 1,
+          "n": 1,
+          "rate": 1.0,
+          "ci95": [
+            0.2065,
+            1.0
+          ]
+        }
+      },
+      "by_source": {
+        "dataset_transcript": {
+          "k": 2,
+          "n": 2,
+          "rate": 1.0,
+          "ci95": [
+            0.3424,
+            1.0
+          ]
+        },
+        "team_heldout": {
+          "k": 71,
+          "n": 84,
+          "rate": 0.8452,
+          "ci95": [
+            0.753,
+            0.9073
+          ]
+        }
+      },
+      "confusion": {
+        "labels": [
+          "balance_inquiry",
+          "exchange_rate_inquiry",
+          "out_of_scope",
+          "payment_status",
+          "requires_escalation",
+          "transaction_lookup"
+        ],
+        "matrix": [
+          [
+            16,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            10,
+            0,
+            0,
+            0,
+            0
+          ],
+          [
+            2,
+            1,
+            12,
+            0,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            2,
+            11,
+            1,
+            1
+          ],
+          [
+            0,
+            0,
+            4,
+            0,
+            9,
+            2
+          ],
+          [
+            0,
+            0,
+            0,
+            0,
+            0,
+            15
+          ]
+        ]
+      }
+    },
+    "escalation_guard": {
+      "lexicon_only": {
+        "recall": {
+          "k": 12,
+          "n": 15,
+          "rate": 0.8,
+          "ci95": [
+            0.5481,
+            0.9295
+          ]
+        },
+        "false_escalation": {
+          "k": 0,
+          "n": 71,
+          "rate": 0.0,
+          "ci95": [
+            0.0,
+            0.0513
+          ]
+        },
+        "missed": 3,
+        "missed_upper_bound_if_zero": null
+      },
+      "classifier_only": {
+        "recall": {
+          "k": 7,
+          "n": 15,
+          "rate": 0.4667,
+          "ci95": [
+            0.2481,
+            0.6988
+          ]
+        },
+        "false_escalation": {
+          "k": 0,
+          "n": 71,
+          "rate": 0.0,
+          "ci95": [
+            0.0,
+            0.0513
+          ]
+        },
+        "missed": 8,
+        "missed_upper_bound_if_zero": null
+      },
+      "lexicon_or_classifier (runtime)": {
+        "recall": {
+          "k": 14,
+          "n": 15,
+          "rate": 0.9333,
+          "ci95": [
+            0.7018,
+            0.9881
+          ]
+        },
+        "false_escalation": {
+          "k": 0,
+          "n": 71,
+          "rate": 0.0,
+          "ci95": [
+            0.0,
+            0.0513
+          ]
+        },
+        "missed": 1,
+        "missed_upper_bound_if_zero": null
+      }
+    },
+    "errors": [
+      {
+        "utterance": "che, cuánta guita me queda en la caja de ahorro?",
+        "gold": "balance_inquiry",
+        "baseline": "out_of_scope",
+        "learned": "balance_inquiry",
+        "language": "es",
+        "style": "regional_ar"
+      },
+      {
+        "utterance": "cuanto me queda en la tarjeta",
+        "gold": "balance_inquiry",
+        "baseline": "out_of_scope",
+        "learned": "balance_inquiry",
+        "language": "es",
+        "style": "no_accents"
+      },
+      {
+        "utterance": "cuanta lana tengo en la cuenta",
+        "gold": "balance_inquiry",
+        "baseline": "out_of_scope",
+        "learned": "balance_inquiry",
+        "language": "es",
+        "style": "regional_mx"
+      },
+      {
+        "utterance": "cuánto tenho na conta",
+        "gold": "balance_inquiry",
+        "baseline": "out_of_scope",
+        "learned": "balance_inquiry",
+        "language": "mixed",
+        "style": "code_switch"
+      },
+      {
+        "utterance": "tengo plata suficiente en la cuenta para pagar el arriendo?",
+        "gold": "balance_inquiry",
+        "baseline": "out_of_scope",
+        "learned": "balance_inquiry",
+        "language": "es",
+        "style": "regional_co"
+      },
+      {
+        "utterance": "quanto ainda tem na minha conta salário",
+        "gold": "balance_inquiry",
+        "baseline": "out_of_scope",
+        "learned": "balance_inquiry",
+        "language": "pt",
+        "style": "colloquial"
+      },
+      {
+        "utterance": "extrato da conta corrente",
+        "gold": "transaction_lookup",
+        "baseline": "out_of_scope",
+        "learned": "transaction_lookup",
+        "language": "pt",
+        "style": "abbreviated"
+      },
+      {
+        "utterance": "meus depósitos do mês",
+        "gold": "transaction_lookup",
+        "baseline": "out_of_scope",
+        "learned": "transaction_lookup",
+        "language": "pt",
+        "style": "abbreviated"
+      },
+      {
+        "utterance": "¿se acreditó la transferencia que me hicieron?",
+        "gold": "transaction_lookup",
+        "baseline": "out_of_scope",
+        "learned": "transaction_lookup",
+        "language": "es",
+        "style": "regional_ar"
+      },
+      {
+        "utterance": "listame las operaciones de mi cuenta corriente",
+        "gold": "transaction_lookup",
+        "baseline": "out_of_scope",
+        "learned": "transaction_lookup",
+        "language": "es",
+        "style": "regional_ar"
+      },
+      {
+        "utterance": "extrato dos últimos 30 dias",
+        "gold": "transaction_lookup",
+        "baseline": "out_of_scope",
+        "learned": "transaction_lookup",
+        "language": "pt",
+        "style": "abbreviated"
+      },
+      {
+        "utterance": "me mostra os últimos lançamentos",
+        "gold": "transaction_lookup",
+        "baseline": "out_of_scope",
+        "learned": "transaction_lookup",
+        "language": "pt",
+        "style": "colloquial"
+      },
+      {
+        "utterance": "quiero ver mis depósitos recientes",
+        "gold": "transaction_lookup",
+        "baseline": "out_of_scope",
+        "learned": "transaction_lookup",
+        "language": "es",
+        "style": "formal"
+      },
+      {
+        "utterance": "a transferência que recebi já caiu?",
+        "gold": "transaction_lookup",
+        "baseline": "out_of_scope",
+        "learned": "transaction_lookup",
+        "language": "pt",
+        "style": "slang"
+      },
+      {
+        "utterance": "quiero ver los retiros del cajero de este mes",
+        "gold": "transaction_lookup",
+        "baseline": "out_of_scope",
+        "learned": "transaction_lookup",
+        "language": "es",
+        "style": "formal"
+      },
+      {
+        "utterance": "ya está pagada mi tarjeta este mes?",
+        "gold": "payment_status",
+        "baseline": "out_of_scope",
+        "learned": "transaction_lookup",
+        "language": "es",
+        "style": "colloquial"
+      },
+      {
+        "utterance": "devo alguma coisa?",
+        "gold": "payment_status",
+        "baseline": "out_of_scope",
+        "learned": "payment_status",
+        "language": "pt",
+        "style": "colloquial"
+      },
+      {
+        "utterance": "situação do meu empréstimo pessoal",
+        "gold": "payment_status",
+        "baseline": "out_of_scope",
+        "learned": "payment_status",
+        "language": "pt",
+        "style": "formal"
+      },
+      {
+        "utterance": "tengo algo vencido en el préstamo?",
+        "gold": "payment_status",
+        "baseline": "out_of_scope",
+        "learned": "payment_status",
+        "language": "es",
+        "style": "colloquial"
+      },
+      {
+        "utterance": "debo algo?",
+        "gold": "payment_status",
+        "baseline": "out_of_scope",
+        "learned": "payment_status",
+        "language": "es",
+        "style": "colloquial"
+      },
+      {
+        "utterance": "tenho algo vencido no empréstimo?",
+        "gold": "payment_status",
+        "baseline": "out_of_scope",
+        "learned": "payment_status",
+        "language": "pt",
+        "style": "colloquial"
+      },
+      {
+        "utterance": "quanto devo no cartão",
+        "gold": "payment_status",
+        "baseline": "out_of_scope",
+        "learned": "payment_status",
+        "language": "pt",
+        "style": "colloquial"
+      },
+      {
+        "utterance": "limite livre do cartão",
+        "gold": "payment_status",
+        "baseline": "out_of_scope",
+        "learned": "out_of_scope",
+        "language": "pt",
+        "style": "slang"
+      },
+      {
+        "utterance": "qual meu limite disponível",
+        "gold": "payment_status",
+        "baseline": "balance_inquiry",
+        "learned": "out_of_scope",
+        "language": "pt",
+        "style": "formal"
+      },
+      {
+        "utterance": "tem pagamento pendente no cartão de crédito?",
+        "gold": "payment_status",
+        "baseline": "out_of_scope",
+        "learned": "payment_status",
+        "language": "pt",
+        "style": "formal"
+      },
+      {
+        "utterance": "cuándo tengo que pagar la tarjeta",
+        "gold": "payment_status",
+        "baseline": "out_of_scope",
+        "learned": "requires_escalation",
+        "language": "es",
+        "style": "colloquial"
+      },
+      {
+        "utterance": "tengo pagos pendientes del préstamo personal?",
+        "gold": "payment_status",
+        "baseline": "out_of_scope",
+        "learned": "payment_status",
+        "language": "es",
+        "style": "formal"
+      },
+      {
+        "utterance": "a cuánto me compran los dólares",
+        "gold": "exchange_rate_inquiry",
+        "baseline": "out_of_scope",
+        "learned": "exchange_rate_inquiry",
+        "language": "es",
+        "style": "colloquial"
+      },
+      {
+        "utterance": "cómo cambio mi correo electrónico",
+        "gold": "out_of_scope",
+        "baseline": "exchange_rate_inquiry",
+        "learned": "out_of_scope",
+        "language": "es",
+        "style": "formal"
+      },
+      {
+        "utterance": "qual o horário de atendimento",
+        "gold": "out_of_scope",
+        "baseline": "out_of_scope",
+        "learned": "balance_inquiry",
+        "language": "pt",
+        "style": "formal"
+      },
+      {
+        "utterance": "cuál es el horario de atención",
+        "gold": "out_of_scope",
+        "baseline": "out_of_scope",
+        "learned": "exchange_rate_inquiry",
+        "language": "es",
+        "style": "formal"
+      },
+      {
+        "utterance": "quero encerrar minha conta",
+        "gold": "out_of_scope",
+        "baseline": "out_of_scope",
+        "learned": "balance_inquiry",
+        "language": "pt",
+        "style": "formal"
+      },
+      {
+        "utterance": "vou processar o banco",
+        "gold": "requires_escalation",
+        "baseline": "out_of_scope",
+        "learned": "out_of_scope",
+        "language": "pt",
+        "style": "colloquial"
+      },
+      {
+        "utterance": "desconheço essa transferência",
+        "gold": "requires_escalation",
+        "baseline": "requires_escalation",
+        "learned": "transaction_lookup",
+        "language": "pt",
+        "style": "formal"
+      },
+      {
+        "utterance": "tem um saque que não fui eu",
+        "gold": "requires_escalation",
+        "baseline": "out_of_scope",
+        "learned": "requires_escalation",
+        "language": "pt",
+        "style": "colloquial"
+      },
+      {
+        "utterance": "me estafaron por teléfono y di mis datos",
+        "gold": "requires_escalation",
+        "baseline": "requires_escalation",
+        "learned": "out_of_scope",
+        "language": "es",
+        "style": "colloquial"
+      },
+      {
+        "utterance": "no reconheço essa compra",
+        "gold": "requires_escalation",
+        "baseline": "out_of_scope",
+        "learned": "requires_escalation",
+        "language": "mixed",
+        "style": "code_switch"
+      },
+      {
+        "utterance": "entraron a mi app y cambiaron la clave",
+        "gold": "requires_escalation",
+        "baseline": "requires_escalation",
+        "learned": "out_of_scope",
+        "language": "es",
+        "style": "colloquial"
+      },
+      {
+        "utterance": "desconozco esta transferencia",
+        "gold": "requires_escalation",
+        "baseline": "requires_escalation",
+        "learned": "transaction_lookup",
+        "language": "es",
+        "style": "formal"
+      },
+      {
+        "utterance": "caí num golpe pelo whatsapp",
+        "gold": "requires_escalation",
+        "baseline": "requires_escalation",
+        "learned": "out_of_scope",
+        "language": "pt",
+        "style": "slang"
+      }
+    ],
+    "guard_misses": [
+      "vou processar o banco"
+    ]
+  },
+  "versions": {
+    "sklearn": "1.9.1",
+    "train_sha256": "b7c35dd8b895865d9f85de3c8e27b5b68aeba187e4ab6fa6b0ac6c77db028cdd",
+    "heldout_sha256": "965fe0942bc289b2190ca884ade3b29c7df24242a4657d023176e4c3f8773a64"
+  }
+}

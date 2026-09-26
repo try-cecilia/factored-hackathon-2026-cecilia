@@ -118,3 +118,66 @@ Roubaram meu cartão e já fizeram compras,requires_escalation,pt,esc_pt_2
 Alguém clonou meu cartão de crédito,requires_escalation,pt,esc_pt_3
 Quero fazer uma denúncia por uma cobrança não autorizada,requires_escalation,pt,esc_pt_4
 Tem uma movimentação na minha conta que eu não fiz,requires_escalation,pt,esc_pt_5
+¿Cuánto dinero me queda en la cuenta de ahorros?,balance_inquiry,es,bal_es_6
+¿Cuánto dinero me queda en la cuenta corriente?,balance_inquiry,es,bal_es_6
+¿Cuánto dinero me queda en la tarjeta de débito?,balance_inquiry,es,bal_es_6
+Consultar saldo de cuenta de ahorros,balance_inquiry,es,bal_es_7
+Consultar saldo de cuenta corriente,balance_inquiry,es,bal_es_7
+Consultar saldo de tarjeta de débito,balance_inquiry,es,bal_es_7
+Me podrías decir el saldo disponible de mis cuentas,balance_inquiry,es,bal_es_8
+Quanto dinheiro sobrou na conta poupança?,balance_inquiry,pt,bal_pt_6
+Quanto dinheiro sobrou na conta corrente?,balance_inquiry,pt,bal_pt_6
+Quanto dinheiro sobrou na cartão de débito?,balance_inquiry,pt,bal_pt_6
+Consultar saldo da conta poupança,balance_inquiry,pt,bal_pt_7
+Consultar saldo da conta corrente,balance_inquiry,pt,bal_pt_7
+Consultar saldo da cartão de débito,balance_inquiry,pt,bal_pt_7
+Pode me informar o saldo disponível das minhas contas,balance_inquiry,pt,bal_pt_8
+¿Cuáles fueron mis últimas transacciones con la cuenta de ahorros?,transaction_lookup,es,txn_es_6
+¿Cuáles fueron mis últimas transacciones con la cuenta corriente?,transaction_lookup,es,txn_es_6
+¿Cuáles fueron mis últimas transacciones con la tarjeta de débito?,transaction_lookup,es,txn_es_6
+Quiero ver los retiros y depósitos de este mes,transaction_lookup,es,txn_es_7
+¿Ya se reflejó la transferencia que hice ayer?,transaction_lookup,es,txn_es_8
+Quais foram minhas últimas transações com o conta poupança?,transaction_lookup,pt,txn_pt_6
+Quais foram minhas últimas transações com o conta corrente?,transaction_lookup,pt,txn_pt_6
+Quais foram minhas últimas transações com o cartão de débito?,transaction_lookup,pt,txn_pt_6
+Quero ver os saques e depósitos deste mês,transaction_lookup,pt,txn_pt_7
+A transferência que fiz ontem já aparece?,transaction_lookup,pt,txn_pt_8
+¿Cuánto debo de mi tarjeta de crédito?,payment_status,es,pay_es_5
+¿Cuánto debo de mi préstamo personal?,payment_status,es,pay_es_5
+¿Cuánto debo de mi préstamo hipotecario?,payment_status,es,pay_es_5
+¿Tengo alguna cuota vencida del tarjeta de crédito?,payment_status,es,pay_es_6
+¿Tengo alguna cuota vencida del préstamo personal?,payment_status,es,pay_es_6
+¿Tengo alguna cuota vencida del préstamo hipotecario?,payment_status,es,pay_es_6
+¿Cuándo vence el pago de mi tarjeta de crédito?,payment_status,es,pay_es_7
+¿Cuándo vence el pago de mi préstamo personal?,payment_status,es,pay_es_7
+¿Cuándo vence el pago de mi préstamo hipotecario?,payment_status,es,pay_es_7
+Quanto eu devo no cartão de crédito?,payment_status,pt,pay_pt_5
+Quanto eu devo no empréstimo pessoal?,payment_status,pt,pay_pt_5
+Quanto eu devo no empréstimo imobiliário?,payment_status,pt,pay_pt_5
+Tenho alguma parcela vencida do cartão de crédito?,payment_status,pt,pay_pt_6
+Tenho alguma parcela vencida do empréstimo pessoal?,payment_status,pt,pay_pt_6
+Tenho alguma parcela vencida do empréstimo imobiliário?,payment_status,pt,pay_pt_6
+Quando vence o pagamento do meu cartão de crédito?,payment_status,pt,pay_pt_7
+Quando vence o pagamento do meu empréstimo pessoal?,payment_status,pt,pay_pt_7
+Quando vence o pagamento do meu empréstimo imobiliário?,payment_status,pt,pay_pt_7
+¿Cuántos pesos me dan por un dólar?,exchange_rate_inquiry,es,fx_es_4
+¿Cuántos pesos me dan por un peso mexicano?,exchange_rate_inquiry,es,fx_es_4
+¿Cuántos pesos me dan por un peso colombiano?,exchange_rate_inquiry,es,fx_es_4
+¿Cuántos pesos me dan por un peso argentino?,exchange_rate_inquiry,es,fx_es_4
+Tipo de cambio de hoy,exchange_rate_inquiry,es,fx_es_5
+Quantos pesos vale um dólar?,exchange_rate_inquiry,pt,fx_pt_4
+Quantos pesos vale um peso mexicano?,exchange_rate_inquiry,pt,fx_pt_4
+Quantos pesos vale um peso colombiano?,exchange_rate_inquiry,pt,fx_pt_4
+Câmbio de hoje,exchange_rate_inquiry,pt,fx_pt_5
+Quiero cancelar mi tarjeta de crédito,out_of_scope,es,oos_es_7
+¿Dónde queda la sucursal más cercana?,out_of_scope,es,oos_es_8
+Olvidé la clave de la aplicación,out_of_scope,es,oos_es_9
+Quero cancelar meu cartão de crédito,out_of_scope,pt,oos_pt_7
+Onde fica a agência mais próxima?,out_of_scope,pt,oos_pt_8
+Esqueci a senha do aplicativo,out_of_scope,pt,oos_pt_9
+Me hicieron un cargo que no autoricé,requires_escalation,es,esc_es_6
+Me sacaron dinero de la cuenta sin permiso,requires_escalation,es,esc_es_7
+Creo que hackearon mi banca en línea,requires_escalation,es,esc_es_8
+Fizeram uma cobrança que eu não autorizei,requires_escalation,pt,esc_pt_6
+Tiraram dinheiro da minha conta sem permissão,requires_escalation,pt,esc_pt_7
+Acho que invadiram meu internet banking,requires_escalation,pt,esc_pt_8

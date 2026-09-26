@@ -1,75 +1,82 @@
-# Limitations & what's left before this is a real product
+# Limitations and remaining work before deployment
 
-Honest account, per the challenge's own requirement ("an honest account of
-the work required before deployment"). This doubles as our own roadmap if
-this goes from hackathon prototype to something we take to a bank.
+Written as the honest gap between this 10-day prototype and a live banking
+service, and as our own roadmap.
 
-## Not yet validated
+## Not yet measured
 
-- **Live LLM calls.** This was built in a sandbox whose network policy
-  blocked `api.groq.com` (and every alternative we checked: Together,
-  Hugging Face, Ollama — see chat history/commit log for the trail). The
-  entire orchestration loop, all guardrail scenarios, and the FastAPI layer
-  are proven correct against a scripted LLM stand-in
-  (`eval/fake_llm.py`), and the app *did* correctly fail safe (auto-escalate)
-  when both real providers were unreachable in one live test — but real
-  p50/p95 latency, real per-case token cost, and the model's own judgment
-  quality on ambiguous phrasing are still unmeasured. Re-running
-  `eval/run_guardrail_eval.py` (adapted to hit the live client) against Groq
-  is the single highest-priority next step.
+1. **The live model.** The build sandbox blocks every LLM endpoint we tried
+   (Groq, Together, Hugging Face, Ollama). What that leaves unmeasured:
+   - the model's own tool-selection and phrasing accuracy;
+   - p50/p95 latency with the model in the loop;
+   - cost per case;
+   - run-to-run variability.
 
-## Data / ML
+   What we can show today:
+   - the scripted **upper bound**: 100% SAR on the test workload;
+   - an **adversarial lower bound on safety**: 0 unsafe outcomes even with a
+     model that obeys injections and invents figures;
+   - that the running app degrades safely without the model.
 
-- **Intent classifier dataset is tiny and team-authored** (119 utterances,
-  template-generated ES/PT), not derived from the real dataset — the
-  dataset's own intent-adjacent fields (`reason_category`, 6 broad buckets;
-  `call_transcripts.detected_intents`, unstructured) don't carry this
-  workflow's routing granularity. At this size, the deterministic
-  keyword-rule baseline currently beats the learned TF-IDF classifier on
-  accuracy (87% vs. 79%); both hit 100% recall on the safety-critical
-  `requires_escalation` class. Production would replace this with the bank's
-  own labeled interaction logs (tens of thousands of examples), which should
-  favor the learned approach far more clearly.
-- **No fraud/risk model.** `is_fraud`/`fraud_score` in `transactions` are read
-  but not used to influence disposition — a real deployment doing anything
-  near transactions should have its own fraud-detection integration, out of
-  scope here (this workflow explicitly abstains/escalates on any fraud
-  signal rather than reasoning about it).
+   `make eval-live` produces the missing report, and it is the first thing to
+   run once there is network access.
+2. **Deployment.** Not yet deployed (needs a hosting account). The Docker image
+   is written but was not built here, because the sandbox has no Docker daemon.
 
-## Security / access control
+## Data and ML
 
-- **Mock session/auth** (`agent/session/auth.py`) is an in-memory token
-  store standing in for the bank's real identity provider. No MFA, no
-  device binding, no rate limiting on `/auth/session` (which, as built,
-  will issue a token for any customer_id with zero verification — this is
-  explicitly a test fixture, not something to expose publicly).
-- **No PII redaction pass** on the audit log or human-queue JSONL files —
-  they contain real-looking (synthetic) names/balances/transaction detail.
-  Production needs field-level encryption at rest and redaction before
-  anything reaches a human agent's screen without need-to-know.
-- **DuckDB is single-writer, single-file.** Fine for a prototype; a real
-  deployment needs the OLTP source of truth (the bank's core banking system)
-  kept separate from whatever analytical store backs this agent, with
-  proper concurrent access.
+- **No usable text in the supplied data.** 171K transcripts hold 42 distinct
+  customer texts, the text doesn't vary with the contact reason, 100% of agent
+  texts contain unrendered placeholders, and there is no Portuguese. So every
+  training and evaluation utterance is team-written (2 are real transcript
+  sentences). Same-author bias between training and held-out text is likely.
+  - Next: sample real (consented, redacted) chat logs, have humans label them,
+    and re-run `make train-eval`.
+- **Small held-out sets.** 86 utterances in the classifier test split; 432
+  cases per system split, with 2–3 phrasings per case type. Intervals are
+  wide (e.g. escalation recall 93.3% [70.2–98.8]).
+- **Known misses.** "vou processar o banco" escapes the escalation guard, and
+  slang is weak (33%). Both are reported, and neither was tuned away on test.
+- **Synthetic-data artifacts** limit what the baseline can say:
+  - flat intraday demand;
+  - an identical 120 s wait for every contact reason;
+  - 0% negative sentiment for account/payment contacts only;
+  - no MXN products at all.
+
+  Details in docs/data_quality.md.
+- **No fraud model.** `fraud_score`/`is_fraud` are shown to the human reviewer
+  as evidence but don't drive automated decisions. This workflow escalates
+  fraud; it doesn't adjudicate it.
+
+## Security and privacy
+
+- The identity service is a **test IdP**: an HMAC PIN, no MFA, no device
+  binding. Production plugs in the bank's IdP and keeps the rest (only tokens
+  reach `/chat`).
+- `/demo/customers` publishes test PINs for a few sandbox accounts, like any
+  sandbox's test login. It must be empty (`DEMO_PUBLIC_CUSTOMERS=`) anywhere real.
+- Traces, audit logs and tickets contain customer data. Masking of account
+  numbers is done; still missing are field-level encryption at rest and
+  redaction before export to the monitoring stack.
+- No WAF or bot protection beyond per-session and per-IP rate limits.
 
 ## Operations
 
-- **No rate limiting, no multi-tenancy isolation, no autoscaling story.**
-  The FastAPI app is a single process; the in-memory session store does not
-  survive a restart or scale across replicas (would need Redis or similar).
-- **Cold-start data ingestion.** The Docker entrypoint re-ingests the full
-  dataset from S3 if no warehouse file exists — acceptable for a demo, not
-  for production (needs a persistent volume/object store and a scheduled
-  refresh job, not a re-ingest-on-boot).
-- **No monitoring/alerting wired up** beyond the audit log and human queue
-  being readable; no dashboards, no paging on unsafe-outcome spikes.
+- **Single process.** Sessions and conversations are in memory; multiple
+  replicas need Redis. DuckDB on local disk has a single writer; production
+  serves reads from the core system or a replicated store.
+- **Ingestion runs at first boot** in the container. Production runs it on a
+  schedule into persistent storage.
+- **Monitoring is JSONL plus admin endpoints.** The alert thresholds are
+  specified (docs/operations.md) but not wired to a metrics stack.
+- **Voice is not built.** 85% of account/payment contacts are phone calls; this
+  system serves the 15% on text channels until speech-to-text and
+  text-to-speech are added.
 
 ## Scope, by design
 
-- No money movement, no live lending decisions (per the challenge's own
-  rules) — this workflow only ever reads and reports.
-- Card support, transaction disputes, and credit eligibility are explicitly
-  out of scope for this submission and are abstained on, not attempted.
-- Portuguese test coverage is team-authored/translated, not derived from the
-  dataset (which is Spanish-only) — flagged wherever it appears, per the
-  challenge's own language-coverage-limitation requirement.
+- Read-only. No money movement, no credit decisions (as the brief requires).
+  Card blocking, disputes and credit eligibility get an abstain and a pointer
+  to the right channel, or an escalation. They are not attempted.
+- Portuguese is supported in understanding and replies; the product catalog
+  and policies stay Spanish-market.

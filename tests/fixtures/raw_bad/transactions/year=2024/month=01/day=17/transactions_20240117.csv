@@ -1,0 +1,6 @@
+transaction_id,transaction_date,process_date,product_id,customer_id,transaction_type,transaction_category,amount,currency,amount_usd,channel,branch_id,merchant_name,merchant_category,transaction_country,transaction_city,transaction_status,response_code,is_fraud,fraud_score,latitude,longitude
+TXN-FIX0101,2024-01-17 09:00:00,2024-01-17,PRD-FIX0001,CLI-FIX0001,Deposit,,10.00,USD,10.00,App,,,,México,,Approved,00,false,1.00,,
+TXN-FIX0102,2024-01-17 09:05:00,2024-01-17,PRD-FIX0001,CLI-FIX0001,Deposit,,11.00,USD,11.00,App,,,,México,,Unknown,00,false,1.00,,
+TXN-FIX0103,2024-01-17 09:10:00,2024-01-17,PRD-FIX0001,CLI-FIX0001,Deposit,,abc,USD,,App,,,,México,,Approved,00,false,1.00,,
+TXN-FIX0104,2024-01-17 09:15:00,2024-01-17,PRD-FIX0003,CLI-FIX0001,Deposit,,12.00,USD,12.00,App,,,,México,,Approved,00,false,1.00,,
+TXN-FIX0105,2024-01-17 09:20:00,2024-01-17,PRD-FIX0003,CLI-FIX0001,Deposit,,13.00,USD,13.00,App,,,,México,,Approved,00,false,1.00,,

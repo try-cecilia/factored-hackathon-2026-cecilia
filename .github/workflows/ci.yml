@@ -1,0 +1,32 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Hermetic test suite (fixture warehouse, no S3, no API keys)
+        run: python -m pytest tests/ -q
+      - name: Intent classifier evaluation is reproducible
+        run: |
+          python -m eval.evaluate_intent_classifier > /dev/null
+          python - <<'EOF'
+          import json
+          r = json.load(open("eval/reports/intent_classifier.json"))
+          t = r["test"]
+          learned, base = t["learned"]["accuracy"]["rate"], t["baseline_keywords"]["accuracy"]["rate"]
+          guard = t["escalation_guard"]["lexicon_or_classifier (runtime)"]
+          print(f"learned={learned} baseline={base} guard_recall={guard['recall']['rate']} false_esc={guard['false_escalation']['rate']}")
+          assert learned > base, "learned classifier no longer beats the keyword baseline"
+          assert guard["false_escalation"]["rate"] <= 0.05
+          EOF
