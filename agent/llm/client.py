@@ -65,6 +65,10 @@ class ModelRefusal(ValueError):
     """The model declined the request (stop_reason "refusal"): not an answer, and not worth retrying."""
 
 
+class IncompleteResponse(ValueError):
+    """The answer was cut off (token or context limit): a tool call in it may be truncated, so it is not acted on."""
+
+
 @dataclass(frozen=True)
 class Provider:
     name: str
@@ -83,6 +87,8 @@ def openai_compatible_call(sdk, p: Provider, messages, tools, temperature: float
         kwargs["tools"] = tools
         kwargs["tool_choice"] = "auto"
     completion = sdk.chat.completions.create(**kwargs)
+    if getattr(completion.choices[0], "finish_reason", None) == "length":
+        raise IncompleteResponse(f"{p.model} hit its output limit")
     msg = completion.choices[0].message
     tool_calls = [{"id": tc.id, "name": tc.function.name, "arguments": tc.function.arguments}
                   for tc in (getattr(msg, "tool_calls", None) or [])]
@@ -98,10 +104,10 @@ def anthropic_call(sdk, p: Provider, messages, tools, temperature: float, timeou
     """Claude Messages API. No sampling parameters (current models reject
     them); effort instead, except on Haiku, which rejects effort. A refusal
     raises ModelRefusal so the next provider, or an escalation, takes over."""
-    kwargs: dict[str, Any] = {
-        "model": p.model, "max_tokens": ANTHROPIC_MAX_TOKENS, "timeout": timeout,
-        "messages": [{"role": m["role"], "content": m["content"]} for m in messages if m["role"] in ("user", "assistant")],
-    }
+    turns = [{"role": m["role"], "content": m["content"]} for m in messages if m["role"] in ("user", "assistant")]
+    while turns and turns[0]["role"] != "user":  # the Messages API requires the customer to speak first
+        turns.pop(0)
+    kwargs: dict[str, Any] = {"model": p.model, "max_tokens": ANTHROPIC_MAX_TOKENS, "timeout": timeout, "messages": turns}
     system = [{"type": "text", "text": m["content"]} for m in messages if m["role"] == "system"]
     if system:
         # Cache breakpoint on the first (fixed) system block: tools render before it, so both are cached;
@@ -120,6 +126,8 @@ def anthropic_call(sdk, p: Provider, messages, tools, temperature: float, timeou
     msg = sdk.beta.messages.create(**kwargs)
     if msg.stop_reason == "refusal":
         raise ModelRefusal(f"{p.model} declined the request")
+    if msg.stop_reason not in ("end_turn", "tool_use", "stop_sequence"):
+        raise IncompleteResponse(f"{p.model} stopped with {msg.stop_reason}")
     text = "".join(b.text for b in msg.content if b.type == "text") or None
     tool_calls = [{"id": b.id, "name": b.name, "arguments": json.dumps(b.input, ensure_ascii=False)}
                   for b in msg.content if b.type == "tool_use"]

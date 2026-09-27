@@ -322,7 +322,7 @@ def write_report(run_id: str, results: list[LoadResult], path: str, failure: dic
         "checks": checks,
     }
     Path(path).parent.mkdir(parents=True, exist_ok=True)
-    Path(path).write_text(json.dumps(report, indent=2, default=str))
+    Path(path).write_text(json.dumps(report, indent=2, default=str), encoding="utf-8")
     return report
 
 

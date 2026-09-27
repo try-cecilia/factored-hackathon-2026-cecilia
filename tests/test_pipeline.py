@@ -102,9 +102,9 @@ def test_schema_evolution_adds_new_column(fresh_db, tmp_path):
     part = raw / "transactions" / "year=2024" / "month=01" / "day=18"
     part.mkdir(parents=True)
     src = FIXTURES / "raw" / "transactions" / "year=2024" / "month=01" / "day=16" / "transactions_20240116.csv"
-    lines = src.read_text().splitlines()
+    lines = src.read_text(encoding="utf-8").splitlines()
     lines = [lines[0] + ",loyalty_points"] + [l.replace("2024-01-16", "2024-01-18").replace("TXN-FIX00", "TXN-EVO00") + ",7" for l in lines[1:]]
-    (part / "transactions_20240118.csv").write_text("\n".join(lines) + "\n")
+    (part / "transactions_20240118.csv").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     _, [r] = run_pipeline(["transactions"], RunConfig(source="local", raw_dir=raw))
     drift = [c for c in r.checks if c.check == "schema_new_columns"][0]

@@ -143,16 +143,16 @@ def main() -> None:
         "model_selection_dev": variants, "chosen_variant": chosen,
         "threshold_sweep_dev": sweep, "escalation_threshold": tau, "max_false_escalation_constraint": MAX_FALSE_ESCALATION,
         "dev": evaluate(dev), "test": evaluate(test),
-        "versions": {"sklearn": sklearn.__version__, "train_sha256": _h(Path(TRAIN).read_text()), "heldout_sha256": _h(Path(HELDOUT).read_text())},
+        "versions": {"sklearn": sklearn.__version__, "train_sha256": _h(Path(TRAIN).read_text(encoding="utf-8")), "heldout_sha256": _h(Path(HELDOUT).read_text())},
     }
     MODEL_OUT.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(model, MODEL_OUT)
     META_OUT.write_text(json.dumps({"escalation_threshold": tau, "variant": chosen, "trained_on": TRAIN, "train_n": len(train_rows),
-                                    "sklearn": sklearn.__version__, "generated_at": report["generated_at"]}, indent=2))
+                                    "sklearn": sklearn.__version__, "generated_at": report["generated_at"]}, indent=2), encoding="utf-8")
     REPORT_JSON.parent.mkdir(parents=True, exist_ok=True)
-    REPORT_JSON.write_text(json.dumps(report, indent=2, ensure_ascii=False, default=lambda o: o.item() if hasattr(o, "item") else str(o)))
-    REPORT_MD.write_text(to_markdown(report))
-    print(REPORT_MD.read_text())
+    REPORT_JSON.write_text(json.dumps(report, indent=2, ensure_ascii=False, default=lambda o: o.item() if hasattr(o, "item") else str(o)), encoding="utf-8")
+    REPORT_MD.write_text(to_markdown(report), encoding="utf-8")
+    print(REPORT_MD.read_text(encoding="utf-8"))
 
 
 def to_markdown(r: dict) -> str:

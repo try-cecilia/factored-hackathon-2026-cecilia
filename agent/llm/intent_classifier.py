@@ -24,7 +24,7 @@ VARIANTS = ("char", "word", "char+word")
 
 
 def load_rows(path: str) -> list[dict]:
-    with open(path, newline="") as f:
+    with open(path, newline="", encoding="utf-8") as f:
         return list(csv.DictReader(f))
 
 

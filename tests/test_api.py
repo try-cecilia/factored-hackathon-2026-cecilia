@@ -85,6 +85,15 @@ def test_escalation_ticket_and_trace_never_expose_the_token(client):
     assert any(a["tool_name"] == "recent_activity_for_review" for a in trace.json()["tool_audit"])
 
 
+def test_the_8_character_code_a_customer_quotes_finds_the_trace(client):
+    token = login(client).json()["token"]
+    r = client.post("/chat", json={"session_token": token, "message": "Me clonaron la tarjeta"}).json()
+    headers = {"X-Admin-Key": "test-admin-key"}
+    found = client.get(f"/admin/traces/{r['trace_id'][:8]}", headers=headers)
+    assert found.status_code == 200 and found.json()["trace_id"] == r["trace_id"]
+    assert client.get(f"/admin/traces/{r['trace_id'][:7]}", headers=headers).status_code == 404  # too short to be a code
+
+
 def test_demo_customers_only_lists_configured_sandbox_accounts(client, monkeypatch):
     assert client.get("/demo/customers").json() == []
     monkeypatch.setenv("DEMO_PUBLIC_CUSTOMERS", "CLI-FIX0001")

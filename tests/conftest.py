@@ -51,6 +51,10 @@ def fixture_warehouse(tmp_path_factory):
     mp.setenv("GROQ_API_KEY", "")
     mp.setenv("TOGETHER_API_KEY", "")
     mp.setenv("ANTHROPIC_API_KEY", "")  # hermetic: no test may reach a real model
+    # agent/tools/db.py loads a local .env at import; model settings from it must not change test outcomes.
+    for var in ("LLM_PROVIDERS", "LLM_MODEL", "GROQ_MODEL", "TOGETHER_MODEL", "ANTHROPIC_MODEL", "ANTHROPIC_EFFORT",
+                "ANTHROPIC_FALLBACKS", "FRESHNESS_ENFORCE", "FRESHNESS_SLO_HOURS"):
+        mp.delenv(var, raising=False)
     mp.setenv("DUCKDB_PATH", str(db_path))
     build_fixture_warehouse()
     db.close_all()

@@ -108,13 +108,31 @@ def render_result(tool: str, result: dict, lang: str) -> str:
     return str(result)
 
 
+RANGE = {"es": ("del {a} al {b}", "desde el {a}", "hasta el {b}", "Movimientos"),
+         "pt": ("de {a} a {b}", "desde {a}", "até {b}", "Movimentações")}
+
+
+def _date_scope(result: dict, lang: str) -> str:
+    f = result.get("filters") or {}
+    a, b = f.get("start_date"), f.get("end_date")
+    both, since, until, _ = RANGE[lang]
+    if a and b:
+        return both.format(a=fmt_date(a), b=fmt_date(b))
+    return since.format(a=fmt_date(a)) if a else until.format(b=fmt_date(b)) if b else ""
+
+
 def render_answer(results: list[dict], lang: str, catalog: list[dict] | None = None) -> str:
-    """Verified facts as text. A transaction list is headed by its product, so two lists never blur together."""
+    """Verified facts as text. Every product-specific answer is headed by its product (two cards never blur
+    together), and a filtered transaction list says which dates it covers."""
     labels = {p["product_id"]: product_label(p, lang) for p in catalog or []}
     parts = []
     for r in results:
-        body = render_result(r["tool"], r["result"], lang)
-        pid = (r["result"].get("filters") or {}).get("product_id") if r["tool"] == "list_transactions" else None
-        parts.append(f"{labels[pid]}:\n{body}" if pid in labels else body)
+        res = r["result"]
+        body = render_result(r["tool"], res, lang)
+        label = labels.get(res.get("product_id") or (res.get("filters") or {}).get("product_id"), "")
+        scope = _date_scope(res, lang) if r["tool"] == "list_transactions" else ""
+        if scope:
+            label = f"{label or RANGE[lang][3]} ({scope})"
+        parts.append(f"{label}:\n{body}" if label else body)
     as_of = next((r["result"].get("as_of") for r in results if isinstance(r.get("result"), dict) and r["result"].get("as_of")), None)
     return "\n".join(p for p in parts + [as_of_line(as_of, lang)] if p)

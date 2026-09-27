@@ -7,7 +7,7 @@ service, and as our own roadmap.
 
 1. **The live model on the held-out workload.** The live path has run end to
    end on Claude Opus 5, Sonnet 5 and Haiku 4.5, over 13 fixture turns
-   ([`eval/reports/LIVE_SMOKE.md`](eval/reports/LIVE_SMOKE.md)): 1.3–2.5 s p50
+   ([`eval/reports/LIVE_SMOKE.md`](eval/reports/LIVE_SMOKE.md)): 1.2–3.0 s p50
    per turn and USD 0.002–0.005 per model call with prompt caching. Groq has
    not run yet: it needs a key. Its default is now the open-weights
    `openai/gpt-oss-120b`, because Llama 3.3 70B left Groq's self-serve tiers
@@ -69,8 +69,10 @@ service, and as our own roadmap.
   does receive the customer's own words, masked. Production would run the
   model under the bank's data-processing terms: provider retention,
   zero-data-retention, region.
-- The masking is pattern-based (runs of 8+ digits, emails). A name or an
-  address typed in free text reaches the model as written.
+- The masking is pattern-based: internal ids, runs of 8+ digits, CURP/RFC
+  codes and emails. A name, an address or an amount the customer types in
+  free text reaches the model as written. An amount of 8+ digits is masked
+  for the model but kept in the human agent's ticket.
 - No WAF or bot protection beyond per-session and per-IP rate limits.
 
 ## Operations

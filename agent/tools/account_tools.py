@@ -118,8 +118,9 @@ def foreign_product_refs(customer_id: str, text: str) -> list[str]:
 
 
 def get_customer_profile(customer_id: str) -> dict:
-    """Segment/status plus the product catalog (masked) — the context the LLM
-    needs to pick the right product without ever seeing full numbers."""
+    """Segment/status plus the product catalog (masked). The orchestrator turns
+    the catalog into aliases; the model sees only alias, type, currency and
+    status (ADR-001)."""
 
     def _run():
         cust = _rows("SELECT customer_id, segment, country, customer_status FROM customers WHERE customer_id = ?", [customer_id])

@@ -50,7 +50,7 @@ def _load():
 
     threshold = DEFAULT_THRESHOLD
     if Path(META_PATH).exists():
-        threshold = float(json.loads(Path(META_PATH).read_text()).get("escalation_threshold", DEFAULT_THRESHOLD))
+        threshold = float(json.loads(Path(META_PATH).read_text(encoding="utf-8")).get("escalation_threshold", DEFAULT_THRESHOLD))
     return joblib.load(MODEL_PATH), threshold
 
 

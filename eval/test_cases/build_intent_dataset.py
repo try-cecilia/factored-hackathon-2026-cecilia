@@ -154,7 +154,7 @@ def build(out_path: str = "eval/test_cases/intent_dataset.csv") -> int:
 
     path = Path(out_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w", newline="") as f:
+    with open(path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=["utterance", "intent", "language", "template_id"])
         writer.writeheader()
         writer.writerows(rows)

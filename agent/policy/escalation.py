@@ -58,14 +58,14 @@ class HumanQueue:
         return p
 
     def enqueue(self, ticket: EscalationTicket) -> None:
-        with open(self.path, "a") as f:
+        with open(self.path, "a", encoding="utf-8") as f:
             f.write(json.dumps(asdict(ticket), default=str, ensure_ascii=False) + "\n")
 
     def get(self, ticket_id: str) -> dict | None:
         # ponytail: linear scan of a local JSONL file; the bank's case system answers this by id
         if not self.path.exists():
             return None
-        for line in self.path.read_text().splitlines():
+        for line in self.path.read_text(encoding="utf-8").splitlines():
             if f'"{ticket_id}"' in line:
                 ticket = json.loads(line)
                 if ticket.get("ticket_id") == ticket_id:

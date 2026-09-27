@@ -4,9 +4,11 @@ The only module that talks to both the LLM and the deterministic layers.
 Invariants:
 - The LLM never receives or sets `customer_id`; it's injected from the
   validated session on every tool call.
-- The LLM never sees a customer record: it gets the customer's masked words
-  (agent/llm/privacy.py), a catalog of aliases and a figure-free history.
-  Tool results never go back to it.
+- The system never gives the LLM a customer record. Tool results never go
+  back to it, the catalog holds aliases, type, currency and status only,
+  and the history is figure-free. What the customer types is sent with
+  identifiers masked (agent/llm/privacy.py); a name or an amount they type
+  is sent as written.
 - The LLM never writes to the customer. One call per turn chooses tools;
   every reply is rendered from verified tool results or fixed templates
   (agent/core/render.py). No figure, and no claimed action, can come from
@@ -30,7 +32,7 @@ from agent.core import render
 from agent.llm import prompts
 from agent.llm.client import LLMUnavailable, Usage, get_default_client
 from agent.llm.pricing import cost_usd
-from agent.llm.privacy import redact
+from agent.llm.privacy import mask_card_numbers, redact
 from agent.policy import escalation, router
 from agent.policy.router import Decision, Disposition
 from agent.policy.signals import detect_language, normalize
@@ -74,14 +76,16 @@ class TurnResult:
 
 @dataclass
 class _Conversation:
-    messages: list[dict] = field(default_factory=list)
+    messages: list[dict] = field(default_factory=list)  # what the model may see
+    requests: list[str] = field(default_factory=list)  # what a human agent may see: card numbers masked only
     language: str = "es"
     pending_clarification: bool = False
 
 
 class ConversationStore:
-    """Bounded LRU of per-session histories as the model sees them: the
-    customer's masked words and figure-free summaries of our replies."""
+    """Bounded LRU of per-session histories: for the model, the customer's
+    masked words and figure-free summaries of our replies; for tickets, the
+    customer's requests with card numbers masked."""
 
     def __init__(self, max_conversations: int = MAX_CONVERSATIONS, max_messages: int = MAX_HISTORY_MESSAGES):
         self._data: OrderedDict[str, _Conversation] = OrderedDict()
@@ -97,6 +101,10 @@ class ConversationStore:
     def append(self, conv: _Conversation, role: str, content: str) -> None:
         conv.messages.append({"role": role, "content": content})
         del conv.messages[:-self.max_messages]
+
+    def append_request(self, conv: _Conversation, request: str) -> None:
+        conv.requests.append(request)
+        del conv.requests[:-self.max_messages]
 
     def __len__(self) -> int:
         return len(self._data)
@@ -205,19 +213,19 @@ class Orchestrator:
         return result
 
     # -- helpers --
-    def _finish(self, conv, safe_text, result: TurnResult) -> TurnResult:
+    def _finish(self, conv, model_text, ticket_text, result: TurnResult) -> TurnResult:
         conv.pending_clarification = result.disposition == Disposition.CLARIFY.value
-        self.conversations.append(conv, "user", safe_text)
+        self.conversations.append(conv, "user", model_text)
         self.conversations.append(conv, "assistant", result.model_view or result.response_text)
+        self.conversations.append_request(conv, ticket_text)
         return result
 
-    def _escalate(self, decision: Decision, session, conv, safe_text, lang, trace_id, actions, facts, llm_meta) -> TurnResult:
+    def _escalate(self, decision: Decision, session, conv, ticket_text, lang, trace_id, actions, facts, llm_meta) -> TurnResult:
         """File the ticket, read it back, and only then tell the customer they were transferred."""
-        prior = [m["content"] for m in conv.messages if m["role"] == "user"]
         try:
-            ticket = escalation.escalate(decision, session.customer_id, session.ref, safe_text, lang, actions,
+            ticket = escalation.escalate(decision, session.customer_id, session.ref, ticket_text, lang, actions,
                                          [{"tool": f["tool"], "result": f["result"]} for f in facts],
-                                         prior, session.attributes, trace_id)
+                                         list(conv.requests), session.attributes, trace_id)
             filed = escalation.default_queue.get(ticket.ticket_id) is not None
         except Exception:  # noqa: BLE001 - an unwritable queue must not crash the turn; it is reported as unfiled
             filed = False
@@ -264,7 +272,9 @@ class Orchestrator:
         conv = self.conversations.get(session.ref)
         lang = guess.language if (guess.pt_score or guess.es_score) else conv.language
         conv.language = lang
-        safe_text = redact(text)  # all that is kept or sent anywhere; the raw text only feeds local policy checks
+        # The raw text only feeds local policy checks. The model gets `model_text` (identifiers masked, own product
+        # ids as aliases); a human agent's ticket gets `ticket_text` (card numbers masked, amounts kept).
+        model_text, ticket_text = redact(text), mask_card_numbers(text)
         trace.update({"session_ref": session.ref, "segment": session.attributes.get("segment"),
                       "country": session.attributes.get("country"), "language_scores": [guess.pt_score, guess.es_score]})
 
@@ -275,23 +285,29 @@ class Orchestrator:
             return {"provider": provider, "model": model, "usage": usage, "llm_calls": llm_calls,
                     "cost_usd": None if (not costs or any(c is None for c in costs)) else round(sum(costs), 8)}
 
+        def done(result: TurnResult) -> TurnResult:
+            return self._finish(conv, model_text, ticket_text, result)
+
+        def escalate(decision: Decision, actions: list[dict], facts: list[dict]) -> TurnResult:
+            return done(self._escalate(decision, session, conv, ticket_text, lang, trace_id, actions, facts, llm_meta()))
+
         # Decide (pre-LLM): compliance hold, safety lexicon, classifier guard.
         pre, reading = router.pre_llm(text, session.attributes.get("customer_status"), conv.pending_clarification)
         trace["intent_reading"] = asdict(reading)
         if pre:
-            return self._finish(conv, safe_text, self._escalate(pre, session, conv, safe_text, lang, trace_id, [], [], llm_meta()))
+            return escalate(pre, [], [])
         foreign = account_tools.foreign_product_refs(session.customer_id, text)
         if foreign:  # caught in code, whatever a model would have done with it
-            denied = [{"tool": "ownership_check", "args": {"product_id": pid}, "success": False, "error_type": "PermissionDenied"}
-                      for pid in foreign]
-            return self._finish(conv, safe_text, self._escalate(router.foreign_reference(foreign), session, conv, safe_text, lang,
-                                                                trace_id, denied, [], llm_meta()))
+            return escalate(router.foreign_reference(foreign), [
+                {"tool": "ownership_check", "args": {"product_id": pid}, "success": False, "error_type": "PermissionDenied"}
+                for pid in foreign], [])
 
         profile = account_tools.get_customer_profile(session.customer_id)
         catalog = with_aliases(profile["products"])
+        model_text = redact(text, {p["product_id"]: p["alias"] for p in catalog})
         messages = [{"role": "system", "content": prompts.SYSTEM_PROMPT},
                     {"role": "system", "content": prompts.context_block(profile.get("as_of"), catalog)},
-                    *conv.messages, {"role": "user", "content": safe_text}]
+                    *conv.messages, {"role": "user", "content": model_text}]
 
         # Understand: one model call chooses the tools. Its prose is never used.
         try:
@@ -299,10 +315,7 @@ class Orchestrator:
         except LLMUnavailable as exc:
             trace["llm_steps"].append({"step": 0, "outcome": "unavailable", "attempts": exc.attempts})
             degraded = self._degraded(reading, text, session, catalog, lang, trace_id, trace, llm_meta())
-            if degraded is not None:
-                return self._finish(conv, safe_text, degraded)
-            return self._finish(conv, safe_text, self._escalate(router.llm_unavailable(exc.attempts), session, conv, safe_text,
-                                                                lang, trace_id, [], [], llm_meta()))
+            return done(degraded) if degraded is not None else escalate(router.llm_unavailable(exc.attempts), [], [])
         llm_calls = 1
         usage = resp.usage
         provider, model = resp.provider, resp.model
@@ -315,9 +328,8 @@ class Orchestrator:
         if not calls:  # nothing to look up: abstain or ask, always with a fixed template
             decision = router.no_tool_answer(reading, text)
             reply = render.MSG["abstain" if decision.disposition == Disposition.ABSTAIN else "clarify_generic"][lang]
-            res = TurnResult(trace_id, decision.disposition.value, reply, lang, decision.category, decision.rule,
-                             None, [], [], **llm_meta())
-            return self._finish(conv, safe_text, res)
+            return done(TurnResult(trace_id, decision.disposition.value, reply, lang, decision.category, decision.rule,
+                                   None, [], [], **llm_meta()))
 
         # Act: sanitized arguments, identity from the session, ownership checked in the tool.
         facts: list[dict] = []
@@ -354,17 +366,15 @@ class Orchestrator:
                 if decision.disposition == Disposition.CLARIFY:
                     missing = decision.missing_slots or getattr(error, "missing_slots", [])
                     reply = render.clarify(missing, catalog, lang)
-                    res = TurnResult(trace_id, Disposition.CLARIFY.value, reply, lang, decision.category, decision.rule,
-                                     None, facts, actions, **llm_meta(), model_view=_clarify_view(missing, catalog, reply))
-                    return self._finish(conv, safe_text, res)
-                return self._finish(conv, safe_text, self._escalate(decision, session, conv, safe_text, lang, trace_id,
-                                                                    actions, facts, llm_meta()))
+                    return done(TurnResult(trace_id, Disposition.CLARIFY.value, reply, lang, decision.category, decision.rule,
+                                           None, facts, actions, **llm_meta(), model_view=_clarify_view(missing, catalog, reply)))
+                return escalate(decision, actions, facts)
             facts.append({"tool": name, "args": action["args"], "result": result})
 
         # Verify + reply: rendered from the verified results only.
-        res = TurnResult(trace_id, Disposition.AUTO_RESOLVE.value, render.render_answer(facts, lang, catalog), lang, "resolved",
-                         "verified_tool_results", None, facts, actions, **llm_meta(), model_view=_answered_view(facts, catalog))
-        return self._finish(conv, safe_text, res)
+        return done(TurnResult(trace_id, Disposition.AUTO_RESOLVE.value, render.render_answer(facts, lang, catalog), lang,
+                               "resolved", "verified_tool_results", None, facts, actions, **llm_meta(),
+                               model_view=_answered_view(facts, catalog)))
 
 
 default_orchestrator = Orchestrator()

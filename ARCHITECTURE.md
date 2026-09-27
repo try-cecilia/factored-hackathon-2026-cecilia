@@ -5,9 +5,10 @@ One turn = Understand → Decide → Act → Verify → Escalate, orchestrated b
 the deterministic layers.
 
 **The model interprets; the code speaks** ([ADR-001](docs/decisions/ADR-001-model-interprets-code-speaks.md)):
-one model call per turn chooses tools. The model never sees a customer
-record (no balance, transaction, internal id, account number, name or
-segment), and it never writes to the customer. Every reply is rendered from
+one model call per turn chooses tools. The system never gives the model a
+customer record (no balance, transaction, internal id, account number, name
+or segment). Identifiers the customer types are masked before they leave,
+and the model never writes to the customer. Every reply is rendered from
 verified tool results or fixed templates.
 
 ## The turn, step by step
@@ -32,8 +33,12 @@ verified tool results or fixed templates.
 3. **Understand** (`agent/llm/`). One call to the first configured provider
    in `LLM_PROVIDERS` (Groq `openai/gpt-oss-120b`, Together, or Claude). The model
    sees only:
-   - the customer's words, masked by `agent/llm/privacy.py` (runs of 8+
-     digits → `[···1234]`, emails → `[email]`, dates kept);
+   - the customer's words, masked by `agent/llm/privacy.py`:
+     - the customer's own product ids become their alias;
+     - other internal ids, CURP/RFC → `[id]`;
+     - runs of 8+ digits → `[···1234]`;
+     - emails → `[email]`;
+     - dates are kept;
    - a catalog of per-session aliases (`P1`, `P2`...) with product type,
      currency and status;
    - a history in which our replies are figure-free summaries.

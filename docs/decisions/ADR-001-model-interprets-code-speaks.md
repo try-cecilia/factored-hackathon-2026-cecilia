@@ -15,16 +15,22 @@ A numeric grounding check then compared the model's figures against the tool res
 
 ## Decision
 
-The model only understands the request and chooses tools. It never sees a customer record and never writes to the customer.
+The model only understands the request and chooses tools. The system never gives it a customer record, and the model never writes to the customer.
 
 1. **One model call per turn.** It returns tool calls: up to two, run in parallel. Tool results never go back to the model.
 2. **Every reply is rendered in code**, from verified tool results or fixed ES/PT templates (`agent/core/render.py`). The model's prose is discarded. No figure and no claimed action can come from it, so the grounding verifier had nothing left to check and was removed.
 3. **What the model sees:**
-   - the customer's words, masked by `agent/llm/privacy.py`: any run of 8+ digits (card, account, CLABE, CBU, national ID, phone) becomes `[···1234]`, and emails become `[email]`;
+   - the customer's words, masked by `agent/llm/privacy.py`:
+     - the customer's own product ids become their alias;
+     - other internal ids and CURP/RFC codes become `[id]`;
+     - any run of 8+ digits (card, account, CLABE, CBU, national ID, CUIL, phone) becomes `[···1234]`;
+     - emails become `[email]`;
    - a catalog of per-session aliases (`P1`, `P2`...) with product type, currency and status only;
    - a history in which our replies are figure-free summaries.
 
-   It never sees an internal id, an account number, a last-4, a balance, a transaction, a name or the customer's segment.
+   The system never gives it an internal id, an account number, a last-4, a balance, a transaction, a name or the customer's segment. What the customer chooses to type is a different matter: a name, an address or an amount goes out as written, because masking is pattern-based.
+
+   Tickets for the bank's own agents keep more. Only card-length numbers are masked there, so an agent can still read "me cobraron 15.000.000".
 4. **References resolve in code.** The model passes an alias, the digits the customer gave, or the product type. `resolve_product_ref` maps it onto one of the session customer's products, or asks which one. Every tool then checks ownership against the session.
 5. **Two checks that don't depend on the model** run before it is called:
    - the safety lexicon and classifier guard (from v2);
@@ -34,7 +40,9 @@ The model only understands the request and chooses tools. It never sees a custom
 ## Consequences
 
 Gains:
-- **Compliance by construction.** `tests/test_privacy.py` runs a whole multi-turn conversation: balances, movements, payment status, a product clarification and its answer. It asserts that none of the customer's records reaches the model. Those records are the balances, amounts, merchants, internal ids, account numbers, name, document, email, phone and segment, all read straight from the warehouse.
+- **Compliance by construction, and measured.**
+  - `tests/test_privacy.py` runs a whole multi-turn conversation: balances, movements, payment status, a product clarification and its answer. It asserts that none of the customer's records reaches the model. Those records are the balances, amounts, merchants, internal ids, account numbers, name, document, email, phone and segment, all read straight from the warehouse.
+  - The evaluation harness runs the same check on every case of every run (`records_sent_to_model`), including the adversarial model and live models.
 - **No hallucinated figure or unverified action can reach a customer.** This is a property of the architecture, not the output of a check that could miss.
 - **Half the model calls.** v2 made about 2 calls per resolved turn: choose tools, then phrase. v3 makes 1. On Claude, the tools and the fixed rules are also prompt-cached: about 1.7K of about 2.1K input tokens per call, billed at a tenth of the input price (`tokens (cached)` in the live smoke report).
 - **Injection handling no longer depends on the model**, as point 5 explains.
@@ -53,5 +61,5 @@ Costs:
 ## Evidence
 
 - **Tests:** `tests/test_privacy.py`, and in `tests/test_orchestrator.py` the handoff read-back and the foreign-reference guard.
-- **Live smoke runs:** `eval/reports/LIVE_SMOKE.md`, 13 turns on Claude Opus 5, Sonnet 5 and Haiku 4.5 over the synthetic fixtures, each graded against the outcome written for it before the run. Opus 5 and Sonnet 5 got 13/13. Haiku 4.5 got 12/13: on one ambiguous turn it asked a generic question instead of letting the system list the products, which is safe but less precise.
+- **Live smoke runs:** `eval/reports/LIVE_SMOKE.md`, 13 turns on Claude Opus 5, Sonnet 5 and Haiku 4.5 over the synthetic fixtures, each graded against the outcome written for it before the run. All three got 13/13 in the committed run. Haiku 4.5 got 12/13 in an earlier run of the same script: on one ambiguous turn it asked a generic question instead of letting the system list the products, which is safe but less precise. Single runs vary, which is why the held-out live run repeats every case 3 times.
 - **Held-out measurement:** `python -m eval.run_system_eval --llm live` on the organizer's warehouse.

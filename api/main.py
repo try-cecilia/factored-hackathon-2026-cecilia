@@ -144,7 +144,7 @@ def demo_customers() -> list[dict]:
 def _tail(path: Path, limit: int) -> list[dict]:
     if not path.exists():
         return []
-    return [json.loads(line) for line in path.read_text().splitlines()[-limit:]]
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()[-limit:]]
 
 
 @app.get("/admin/human_queue", dependencies=[Depends(require_admin)])
@@ -159,9 +159,12 @@ def audit_log(limit: int = 50) -> list[dict]:
 
 @app.get("/admin/traces/{trace_id}", dependencies=[Depends(require_admin)])
 def trace(trace_id: str) -> dict:
+    """A full trace id, or the 8-character code a customer was given when a handoff could not be filed."""
+    if len(trace_id) < 8:
+        raise HTTPException(404, "trace not found")
     for rec in reversed(_tail(default_trace_log.path, 5000)):
-        if rec.get("trace_id") == trace_id:
-            rec["tool_audit"] = [a for a in _tail(default_audit_log.path, 5000) if a.get("trace_id") == trace_id]
+        if str(rec.get("trace_id", "")).startswith(trace_id):
+            rec["tool_audit"] = [a for a in _tail(default_audit_log.path, 5000) if a.get("trace_id") == rec["trace_id"]]
             return rec
     raise HTTPException(404, "trace not found")
 
@@ -176,6 +179,6 @@ def data_quality() -> dict:
     path = Path(os.environ.get("DQ_REPORT_PATH", "data/reports/quality_report.json"))
     if not path.exists():
         raise HTTPException(404, "no quality report")
-    rep = json.loads(path.read_text())
+    rep = json.loads(path.read_text(encoding="utf-8"))
     return {k: rep[k] for k in ("run_id", "contract_version", "summary", "tables", "contract_deviations") if k in rep} | {
         "failed_checks": [c for c in rep["checks"] if c["passed"] is False]}

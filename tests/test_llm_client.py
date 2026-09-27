@@ -150,6 +150,37 @@ def test_a_refusal_is_not_an_answer_and_the_next_provider_takes_the_turn(monkeyp
     assert r.attempts[0]["provider"] == "anthropic" and r.attempts[0]["kind"] == "permanent"
 
 
+@pytest.mark.parametrize("stop_reason", ["max_tokens", "model_context_window_exceeded"])
+def test_a_cut_off_tool_call_is_never_acted_on(monkeypatch, stop_reason):
+    monkeypatch.setenv("ANTHROPIC_KEY_TEST", "k")
+    monkeypatch.setenv("P2_KEY", "k2")
+    truncated = beta_message([SimpleNamespace(type="tool_use", id="t", name="get_account_summary", input={"product_id": "P1"})],
+                             stop_reason)  # "P1" may be the first half of "P12"
+    c = LLMClient([anthropic_provider("claude-opus-5", [truncated], []), fake_provider("p2", ["ok"], [])], sleep=lambda s: None)
+    r = c.chat([{"role": "user", "content": "saldo de la P12"}], tools=[TOOL])
+    assert r.provider == "p2" and r.attempts[0]["kind"] == "permanent"
+
+
+def test_an_openai_compatible_answer_cut_off_by_length_is_never_acted_on(monkeypatch):
+    monkeypatch.setenv("P1_KEY", "k1")
+    msg = SimpleNamespace(content=None, tool_calls=[SimpleNamespace(id="c", function=SimpleNamespace(name="get_account_summary",
+                                                                                                    arguments='{"product_id": "P1'))])
+    sdk = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=lambda **k: SimpleNamespace(
+        choices=[SimpleNamespace(message=msg, finish_reason="length")], usage=None))))
+    c = LLMClient([Provider("p1", "m", "P1_KEY", lambda key, timeout: sdk)], sleep=lambda s: None)
+    with pytest.raises(LLMUnavailable):
+        c.chat([{"role": "user", "content": "saldo"}], tools=[TOOL])
+
+
+def test_the_first_message_claude_receives_is_the_customers(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_KEY_TEST", "k")
+    requests = []
+    c = LLMClient([anthropic_provider("claude-opus-5", [beta_message([], "end_turn")], requests)])
+    c.chat([{"role": "system", "content": "reglas"}, {"role": "assistant", "content": "[resumen]"},
+            {"role": "user", "content": "¿y el saldo?"}], tools=[TOOL])
+    assert requests[0]["messages"] == [{"role": "user", "content": "¿y el saldo?"}]
+
+
 def test_provider_order_follows_LLM_PROVIDERS(monkeypatch):
     monkeypatch.setenv("LLM_PROVIDERS", "anthropic, groq")
     assert [p.name for p in default_providers()] == ["anthropic", "groq"]

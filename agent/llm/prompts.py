@@ -1,8 +1,8 @@
 """What the model sees: system prompt, product catalog and tool schemas.
 
-The model only interprets and chooses tools; it never writes the reply and
-never sees a customer record (the challenge forbids private records in
-external model requests). So:
+The model only interprets and chooses tools; it never writes the reply, and
+the system never gives it a customer record (the challenge forbids private
+records in external model requests). So:
 - No tool schema includes `customer_id`: the orchestrator injects the
   authenticated session's id on every call. The model chooses *which of
   this customer's products*, never *whose*.

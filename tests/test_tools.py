@@ -61,6 +61,6 @@ def test_retention_prunes_only_expired_records(tmp_path):
 
     f = tmp_path / "traces.jsonl"
     now = time.time()
-    f.write_text("".join(json.dumps({"ts": now - d * 86400, "id": d}) + "\n" for d in (1, 29, 31, 400)))
+    f.write_text("".join(json.dumps({"ts": now - d * 86400, "id": d}) + "\n" for d in (1, 29, 31, 400)), encoding="utf-8")
     assert prune(f, "ts", 30, now=now) == (2, 2)
-    assert [json.loads(l)["id"] for l in f.read_text().splitlines()] == [1, 29]
+    assert [json.loads(l)["id"] for l in f.read_text(encoding="utf-8").splitlines()] == [1, 29]

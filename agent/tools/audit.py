@@ -59,7 +59,7 @@ class _JsonlSink:
         line = json.dumps(record, default=str, ensure_ascii=False)
         with self._lock:
             self._recent.append(record)
-            with open(self.path, "a") as f:
+            with open(self.path, "a", encoding="utf-8") as f:
                 f.write(line + "\n")
 
     def recent(self) -> list[dict]:

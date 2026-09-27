@@ -149,9 +149,9 @@ def main() -> None:
     con = duckdb.connect(os.environ.get("DUCKDB_PATH", "data/warehouse/bank.duckdb"), read_only=True)
     m = compute(con)
     OUT_JSON.parent.mkdir(parents=True, exist_ok=True)
-    OUT_JSON.write_text(json.dumps(m, indent=2, default=str, ensure_ascii=False))
-    OUT_MD.write_text(to_markdown(m))
-    print(OUT_MD.read_text())
+    OUT_JSON.write_text(json.dumps(m, indent=2, default=str, ensure_ascii=False), encoding="utf-8")
+    OUT_MD.write_text(to_markdown(m), encoding="utf-8")
+    print(OUT_MD.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

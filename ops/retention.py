@@ -25,14 +25,14 @@ def prune(path: Path, ts_field: str, max_age_days: int, now: float | None = None
         return 0, 0
     cutoff = (now or time.time()) - max_age_days * 86400
     kept, dropped = [], 0
-    for line in path.read_text().splitlines():
+    for line in path.read_text(encoding="utf-8").splitlines():
         ts = json.loads(line).get(ts_field)
         if isinstance(ts, (int, float)) and ts < cutoff:
             dropped += 1
         else:
             kept.append(line)
     tmp = path.with_suffix(".tmp")
-    tmp.write_text("".join(k + "\n" for k in kept))
+    tmp.write_text("".join(k + "\n" for k in kept), encoding="utf-8")
     tmp.replace(path)
     return len(kept), dropped
 
