@@ -20,7 +20,7 @@ The model only understands the request and chooses tools. The system never gives
 1. **One model call per turn.** It returns tool calls: up to two, run in parallel. Tool results never go back to the model.
 2. **Every reply is rendered in code**, from verified tool results or fixed ES/PT templates (`agent/core/render.py`). The model's prose is discarded. No figure and no claimed action can come from it, so the grounding verifier had nothing left to check and was removed.
 3. **What the model sees:**
-   - the customer's words, masked by `agent/llm/privacy.py`:
+   - the customer's words, masked by `agent/llm/privacy.py` after normalizing Unicode dashes, fullwidth and invisible characters (so `PRD–FIX0006`, an id glued to a word, or `5000–000–004` are caught like their plain forms):
      - the customer's own product ids become their alias;
      - other internal ids and CURP/RFC codes become `[id]`;
      - any run of 8+ digits (card, account, CLABE, CBU, national ID, CUIL, phone) becomes `[···1234]`;
@@ -61,5 +61,5 @@ Costs:
 ## Evidence
 
 - **Tests:** `tests/test_privacy.py`, and in `tests/test_orchestrator.py` the handoff read-back and the foreign-reference guard.
-- **Live smoke runs:** `eval/reports/LIVE_SMOKE.md`, 13 turns on Claude Opus 5, Sonnet 5 and Haiku 4.5 over the synthetic fixtures, each graded against the outcome written for it before the run. All three got 13/13 in the committed run. Haiku 4.5 got 12/13 in an earlier run of the same script: on one ambiguous turn it asked a generic question instead of letting the system list the products, which is safe but less precise. Single runs vary, which is why the held-out live run repeats every case 3 times.
+- **Live smoke runs:** `eval/reports/LIVE_SMOKE.md`, 13 turns on Claude Opus 5, Sonnet 5 and Haiku 4.5 over the synthetic fixtures, each graded against the outcome written for it before the run. Opus 5 and Sonnet 5 got 13/13. Haiku 4.5 got 12/13 in the committed run and 13/13 in another: on one ambiguous turn it asks a generic question instead of letting the system list the products, which is safe but less precise. Single runs vary, which is why the held-out live run repeats every case 3 times.
 - **Held-out measurement:** `python -m eval.run_system_eval --llm live` on the organizer's warehouse.

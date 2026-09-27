@@ -28,7 +28,7 @@ projections are labeled as such and never mixed.
 - **Time is the win.** Humans already resolve 91.5%. The customer's pain is
   the 120 s wait plus a 3.7-minute call, and this system removes the wait.
   Without the LLM its own layers answer in milliseconds (≈72–100 turns/s).
-  With a live model, the smoke run measured p50 per turn of 2.0 s on Sonnet 5,
+  With a live model, the smoke run measured p50 per turn of 1.7 s on Sonnet 5,
   3.0 s on Opus 5 and 1.2 s on Haiku 4.5
   ([`LIVE_SMOKE.md`](eval/reports/LIVE_SMOKE.md)). That run covers 13 fixture
   turns, not the held-out workload.
@@ -119,6 +119,12 @@ diversity mitigates it; a human-authored or production-sampled set is the fix
 - v3 adds a 19th, `injection_no_id`. It is an injection with no literal id for
   the pre-LLM check to catch, so the model's own behavior and the tool layer
   are what get tested.
+  - Any outcome is acceptable as long as nothing unsafe happens, so these
+    cases count toward safety metrics, not toward correct disposition.
+  - They form their own category, `prompt_injection_no_id`.
+  - The committed `eval/workload/cases_{dev,test}.jsonl` predate this type:
+    regenerating them on the organizer's warehouse (`make workload`) yields
+    456 cases per split.
 - Stratified: × 12 country·segment cells × ES/PT = 432 cases per split.
 - **Oracle labels come from each customer's actual data and the written policy**,
   never from running the system. Examples:
@@ -217,7 +223,7 @@ SAR must replace the upper bound before this number is used externally.
 
 ## 4. Unit and integration tests
 
-`make test`: 112 hermetic tests on a hand-made fixture warehouse. CI runs them
+`make test`: 149 hermetic tests on a hand-made fixture warehouse. CI runs them
 on every push, plus the classifier evaluation. They cover:
 - pipeline idempotency, late-arrival update, quarantine and rollback, schema evolution;
 - tool ownership, masking, freshness, FX fallback;

@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import sys
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -143,7 +144,7 @@ def main() -> None:
         "model_selection_dev": variants, "chosen_variant": chosen,
         "threshold_sweep_dev": sweep, "escalation_threshold": tau, "max_false_escalation_constraint": MAX_FALSE_ESCALATION,
         "dev": evaluate(dev), "test": evaluate(test),
-        "versions": {"sklearn": sklearn.__version__, "train_sha256": _h(Path(TRAIN).read_text(encoding="utf-8")), "heldout_sha256": _h(Path(HELDOUT).read_text())},
+        "versions": {"sklearn": sklearn.__version__, "train_sha256": _h(Path(TRAIN).read_text(encoding="utf-8")), "heldout_sha256": _h(Path(HELDOUT).read_text(encoding="utf-8"))},
     }
     MODEL_OUT.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(model, MODEL_OUT)
@@ -152,6 +153,7 @@ def main() -> None:
     REPORT_JSON.parent.mkdir(parents=True, exist_ok=True)
     REPORT_JSON.write_text(json.dumps(report, indent=2, ensure_ascii=False, default=lambda o: o.item() if hasattr(o, "item") else str(o)), encoding="utf-8")
     REPORT_MD.write_text(to_markdown(report), encoding="utf-8")
+    sys.stdout.reconfigure(encoding="utf-8")  # the report has non-cp1252 characters (Windows consoles)
     print(REPORT_MD.read_text(encoding="utf-8"))
 
 

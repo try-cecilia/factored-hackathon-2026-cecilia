@@ -16,11 +16,11 @@ All calls are written to the audit log with the current trace id.
 from __future__ import annotations
 
 import os
-import re
 from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
 from typing import Any, Optional
 
+from agent.llm.privacy import internal_ids, normalize
 from agent.tools.audit import default_audit_log
 from agent.tools.db import duckdb_path, get_connection
 from agent.tools.errors import DataUnavailable, InvalidArgument, NotApplicable, PermissionDenied, ResourceNotFound
@@ -97,15 +97,14 @@ def _parse_date(value: Optional[str], name: str) -> Optional[date]:
         raise InvalidArgument(f"{name} must be YYYY-MM-DD, got {value!r}", missing_slots=[name]) from None
 
 
-_PRODUCT_ID = re.compile(r"\bPRD-[A-Za-z0-9]+\b", re.IGNORECASE)
-
-
 def foreign_product_refs(customer_id: str, text: str) -> list[str]:
     """Product ids written in the customer's message that exist but belong to
     someone else. Customers don't type internal ids; one that isn't theirs is
     an unauthorized-access or injection attempt, caught here before any model
-    decides whether to pass it on."""
-    ids = sorted({m.upper() for m in _PRODUCT_ID.findall(text)})
+    decides whether to pass it on. Detection is shared with the masking
+    (agent/llm/privacy.py), so an id written with odd dashes, invisible
+    characters or glued to other words is caught here too."""
+    ids = sorted({c for mention in internal_ids(normalize(text)) for c in mention if c.startswith("PRD-")})
     if not ids:
         return []
 

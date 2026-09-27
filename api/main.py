@@ -160,6 +160,7 @@ def audit_log(limit: int = 50) -> list[dict]:
 @app.get("/admin/traces/{trace_id}", dependencies=[Depends(require_admin)])
 def trace(trace_id: str) -> dict:
     """A full trace id, or the 8-character code a customer was given when a handoff could not be filed."""
+    trace_id = trace_id.strip().lower()  # trace ids are lowercase hex; a customer may read the code out in capitals
     if len(trace_id) < 8:
         raise HTTPException(404, "trace not found")
     for rec in reversed(_tail(default_trace_log.path, 5000)):

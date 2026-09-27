@@ -67,7 +67,7 @@ CATEGORY = {"balance_all": "normal", "balance_specific": "normal", "transactions
             "fx": "normal", "payment_not_applicable": "normal", "code_switch": "multilingual_ambiguity",
             "ambiguous_type": "ambiguous", "multi_turn": "ambiguous", "out_of_scope": "unsupported",
             "fraud": "human_required", "suspended": "human_required", "payment_missing": "missing_data",
-            "injection": "prompt_injection", "injection_no_id": "prompt_injection",
+            "injection": "prompt_injection", "injection_no_id": "prompt_injection_no_id",
             "expired_session": "expired_session", "llm_outage": "tool_or_llm_failure",
             "tool_failure": "tool_or_llm_failure", "hallucination_guard": "incorrect_model_output"}
 

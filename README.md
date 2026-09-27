@@ -99,7 +99,7 @@ cp .env.example .env        # fill AWS_* + DATASET_BUCKET (dataset), DEMO_IDP_SE
 make setup
 make ingest                 # full warehouse from S3 (~6 min; or `make ingest-demo`, ~1 min)
 make serve                  # http://localhost:8000 — web chat with sandbox test logins
-make test                   # 112 hermetic tests: fixture warehouse, no S3, no API keys
+make test                   # 149 hermetic tests: fixture warehouse, no S3, no API keys
 make all                    # rebuild every number in the docs
 ```
 
@@ -120,7 +120,7 @@ analysis/    problem evidence and human baseline from the supplied data
 eval/        held-out sets, workload generator, baseline bot, evaluation runners, reports/
 ops/         Dockerfile, entrypoint, demo-customer picker, load test, live smoke run, retention
 docs/        architecture decisions (decisions/), data quality, operations, evidence, demo
-tests/       112 hermetic tests + fixtures
+tests/       149 hermetic tests + fixtures
 ```
 
 ## Status
@@ -128,9 +128,9 @@ tests/       112 hermetic tests + fixtures
 - Built and evaluated offline end to end. CI runs the hermetic suite and checks the classifier report.
 - **Live model: smoke-tested, held-out run pending.** v3 ran end to end on Claude Opus 5,
   Sonnet 5 and Haiku 4.5 over the synthetic fixtures ([`eval/reports/LIVE_SMOKE.md`](eval/reports/LIVE_SMOKE.md)):
-  - 13 turns per model in ES and PT, each graded against its intended outcome: 13/13 on all three
-    in the committed run (Haiku 4.5 got 12/13 in an earlier run: single runs vary);
-  - p50 2.0 s per turn on Sonnet 5, 3.0 s on Opus 5 and 1.2 s on Haiku 4.5;
+  - 13 turns per model in ES and PT, each graded against its intended outcome: 13/13 on Opus 5 and
+    Sonnet 5, 12/13 on Haiku 4.5 (13/13 in another run: single runs vary);
+  - p50 1.7 s per turn on Sonnet 5, 3.0 s on Opus 5 and 1.2 s on Haiku 4.5;
   - about USD 0.002 per model call on Sonnet 5 and Haiku 4.5, and 0.005 on Opus 5 (prompt caching on Opus and Sonnet).
 
   The held-out live evaluation (`make eval-live`: latency, cost and variability on 3 × 120 cases) needs the organizer's

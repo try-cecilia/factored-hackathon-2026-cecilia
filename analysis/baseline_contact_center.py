@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -151,6 +152,7 @@ def main() -> None:
     OUT_JSON.parent.mkdir(parents=True, exist_ok=True)
     OUT_JSON.write_text(json.dumps(m, indent=2, default=str, ensure_ascii=False), encoding="utf-8")
     OUT_MD.write_text(to_markdown(m), encoding="utf-8")
+    sys.stdout.reconfigure(encoding="utf-8")  # the report has non-cp1252 characters (Windows consoles)
     print(OUT_MD.read_text(encoding="utf-8"))
 
 

@@ -12,6 +12,13 @@ import pytest
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
+# Some settings are read when modules are imported (rate limiters, classifier paths), before any fixture runs,
+# and agent/tools/db.py loads a local .env at import without overriding what is already set. Pinning them
+# here, at collection time, keeps a developer's .env from changing test outcomes.
+os.environ.update({"CHAT_RATE_PER_MIN": "20", "LOGIN_RATE_PER_MIN": "10", "SESSION_TTL_SECONDS": "900"})
+for _var in ("INTENT_MODEL_PATH", "INTENT_META_PATH", "DQ_REPORT_PATH"):
+    os.environ.pop(_var, None)
+
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "integration: needs S3 access and credentials (RUN_INTEGRATION=1)")
@@ -53,7 +60,7 @@ def fixture_warehouse(tmp_path_factory):
     mp.setenv("ANTHROPIC_API_KEY", "")  # hermetic: no test may reach a real model
     # agent/tools/db.py loads a local .env at import; model settings from it must not change test outcomes.
     for var in ("LLM_PROVIDERS", "LLM_MODEL", "GROQ_MODEL", "TOGETHER_MODEL", "ANTHROPIC_MODEL", "ANTHROPIC_EFFORT",
-                "ANTHROPIC_FALLBACKS", "FRESHNESS_ENFORCE", "FRESHNESS_SLO_HOURS"):
+                "ANTHROPIC_FALLBACKS", "FRESHNESS_ENFORCE", "FRESHNESS_SLO_HOURS", "DEMO_PUBLIC_CUSTOMERS"):
         mp.delenv(var, raising=False)
     mp.setenv("DUCKDB_PATH", str(db_path))
     build_fixture_warehouse()

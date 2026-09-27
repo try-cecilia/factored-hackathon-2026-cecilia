@@ -33,7 +33,8 @@ verified tool results or fixed templates.
 3. **Understand** (`agent/llm/`). One call to the first configured provider
    in `LLM_PROVIDERS` (Groq `openai/gpt-oss-120b`, Together, or Claude). The model
    sees only:
-   - the customer's words, masked by `agent/llm/privacy.py`:
+   - the customer's words, masked by `agent/llm/privacy.py` after normalizing
+     Unicode dashes, fullwidth and invisible characters:
      - the customer's own product ids become their alias;
      - other internal ids, CURP/RFC → `[id]`;
      - runs of 8+ digits → `[···1234]`;

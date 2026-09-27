@@ -70,9 +70,16 @@ service, and as our own roadmap.
   model under the bank's data-processing terms: provider retention,
   zero-data-retention, region.
 - The masking is pattern-based: internal ids, runs of 8+ digits, CURP/RFC
-  codes and emails. A name, an address or an amount the customer types in
-  free text reaches the model as written. An amount of 8+ digits is masked
-  for the model but kept in the human agent's ticket.
+  codes and emails, after normalizing dashes, fullwidth and invisible
+  characters. Some things the customer types reach the model as written:
+  - a name, an address or an amount;
+  - an ID shorter than 8 digits, such as an older Argentine DNI (5.123.456),
+    because it cannot be told apart from an amount;
+  - two last-4 references separated only by a space ("0001 0002"), which
+    read as one 8-digit number and get masked together.
+
+  An amount of 8+ digits is masked for the model but kept in the human
+  agent's ticket.
 - No WAF or bot protection beyond per-session and per-IP rate limits.
 
 ## Operations

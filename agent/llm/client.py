@@ -159,7 +159,8 @@ def _anthropic_factory(api_key: str, timeout: float):
 
 
 def default_providers() -> list[Provider]:
-    """In LLM_PROVIDERS order (default: groq, together, anthropic); a provider without its key is skipped at call time."""
+    """In LLM_PROVIDERS order (default: anthropic, groq, together: Claude is the provider measured live so far);
+    a provider without its key is skipped at call time."""
     known = {
         # llama-3.3-70b-versatile left Groq's free/developer tiers on 2026-08-16; gpt-oss-120b is Groq's replacement.
         "groq": Provider("groq", os.environ.get("GROQ_MODEL", os.environ.get("LLM_MODEL", "openai/gpt-oss-120b")),
@@ -169,7 +170,7 @@ def default_providers() -> list[Provider]:
         "anthropic": Provider("anthropic", os.environ.get("ANTHROPIC_MODEL", "claude-opus-5"), "ANTHROPIC_API_KEY",
                               _anthropic_factory, call=anthropic_call),
     }
-    order = [n.strip() for n in os.environ.get("LLM_PROVIDERS", "groq,together,anthropic").split(",")]
+    order = [n.strip() for n in os.environ.get("LLM_PROVIDERS", "anthropic,groq,together").split(",")]
     return [known[n] for n in order if n in known]
 
 
