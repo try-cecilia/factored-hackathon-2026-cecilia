@@ -1,9 +1,8 @@
-"""Tool-layer policies and the numeric grounding verifier, on fixture data."""
+"""Tool-layer policies on fixture data: masking, ownership, semantics, freshness, retention."""
 from __future__ import annotations
 
 import pytest
 
-from agent.core import grounding
 from agent.tools import account_tools as t
 from agent.tools.errors import DataUnavailable, InvalidArgument, NotApplicable, PermissionDenied
 
@@ -52,21 +51,6 @@ def test_freshness_policy_blocks_stale_answers_when_enforced(monkeypatch):
 
 def test_transaction_limit_is_clamped_in_the_tool_too():
     assert t.list_transactions("CLI-FIX0001", limit=10_000)["limit"] == 50
-
-
-@pytest.mark.parametrize("answer,ok", [
-    ("Tu saldo es 2,455.81 USD.", True),
-    ("Tu saldo es 2.455,81 USD.", True),          # LATAM decimal comma
-    ("Tu saldo es $ 2 455,81.", True),            # space thousands separator
-    ("Tienes 2455.8 USD.", True),                 # rounding within tolerance
-    ("Tu saldo es 2,555.81 USD.", False),         # wrong figure
-    ("Entre ambas cuentas tienes 2,605.81.", False),  # model-computed sum
-    ("1. Cuenta ···0001\n2. Cuenta ···0002", True),  # list markers and last-4s are fine
-    ("Datos al 2024-01-16, a las 10:00.", True),  # dates and times are not figures
-])
-def test_grounding_check(answer, ok):
-    facts = [{"items": [{"current_balance": 2455.81, "last4": "0001"}, {"current_balance": 150.0, "last4": "0002"}]}]
-    assert grounding.check(answer, facts).ok is ok
 
 
 def test_retention_prunes_only_expired_records(tmp_path):

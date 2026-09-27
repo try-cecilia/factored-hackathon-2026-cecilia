@@ -26,7 +26,7 @@ Visuals: the slides (`docs/demo/README.md`) and the captioned app recording `doc
    keywords on unseen slang, and the data-quality gate that caught and rolled
    back a real contract violation.
 
-6. **Honesty (20 s).** The live-model numbers are pending network access; here
+6. **Honesty (20 s).** The held-out live-model numbers are pending the warehouse (the live smoke run is in `eval/reports/LIVE_SMOKE.md`); here
    is exactly how they get produced (`make eval-live`). Here is what production
    needs: IdP, Redis, PII encryption, voice.
 

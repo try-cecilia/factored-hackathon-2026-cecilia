@@ -1,7 +1,7 @@
 # Reproducible entry points. Every number in the docs comes from one of these.
 PY ?= python3
 
-.PHONY: retention loadtest setup ingest ingest-demo analysis train-eval workload eval eval-adversarial eval-live test serve docker-build all
+.PHONY: retention loadtest setup ingest ingest-demo analysis train-eval workload eval eval-adversarial eval-live live-smoke test serve docker-build all
 
 setup:            ## install pinned dependencies
 	$(PY) -m pip install -r requirements.txt
@@ -28,8 +28,11 @@ eval:             ## baseline vs proposed on the test workload (offline, scripte
 eval-adversarial: ## same workload with a deliberately bad model: safety must not depend on the model
 	$(PY) -m eval.run_system_eval --split test --system proposed --llm adversarial
 
-eval-live:        ## live model (needs GROQ_API_KEY and network): 3 repeats on a 120-case sample
+eval-live:        ## live model (needs a model key: LLM_PROVIDERS + GROQ_/ANTHROPIC_API_KEY): 3 repeats on a 120-case sample
 	$(PY) -m eval.run_system_eval --split test --system proposed --llm live --repeats 3 --limit 120
+
+live-smoke:       ## live model on the fixture warehouse: every required path, ES/PT, per-turn cost and latency
+	$(PY) -m ops.live_smoke --out eval/reports/LIVE_SMOKE.md
 
 test:             ## hermetic test suite (fixture warehouse; no S3, no API keys)
 	$(PY) -m pytest tests/ -q

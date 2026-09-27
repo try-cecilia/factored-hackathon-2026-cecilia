@@ -6,7 +6,7 @@
 make docker-build
 docker run -p 8000:8000 \
   -e AWS_ACCESS_KEY_ID=... -e AWS_SECRET_ACCESS_KEY=... \
-  -e GROQ_API_KEY=... -e TOGETHER_API_KEY=... \
+  -e DATASET_BUCKET=... -e LLM_PROVIDERS=anthropic -e ANTHROPIC_API_KEY=... \
   -e DEMO_IDP_SECRET=$(openssl rand -hex 24) -e ADMIN_API_KEY=$(openssl rand -hex 24) \
   -v warehouse:/app/data/warehouse latam-bank-agent
 ```
@@ -28,8 +28,9 @@ at `/app/data/warehouse` so restarts don't re-ingest.
 
 | Layer | Measured / known limit | Notes |
 |---|---|---|
-| Deterministic layers (policy, tools, grounding, tracing) | 71.7 turns/s on 1 thread, 99.7 turns/s on 8 threads, p95 39 ms / 128 ms | `make loadtest` on the full 4.4M-transaction warehouse, LLM excluded; GIL-bound |
-| LLM calls per case | 1.33 on the test workload (2 per resolved turn: tool choice + phrasing; up to 4 with multi-step) | scripted run, `llm_calls_per_case` |
+| Deterministic layers (policy, tools, rendering, tracing) | 71.7 turns/s on 1 thread, 99.7 turns/s on 8 threads, p95 39 ms / 128 ms | `make loadtest` on the full 4.4M-transaction warehouse, LLM excluded; GIL-bound (design v2) |
+| LLM calls per turn | at most 1 (design v3); turns decided by the pre-LLM checks make none | `llm_calls_per_case` in the eval reports |
+| LLM latency and cost | Claude Sonnet 5 / Opus 5: ≈1.8 / 2.5 s p50 per turn, ≈USD 0.002 / 0.005 per call with the tools + rules prompt-cached (≈1.7K of ≈2.1K input tokens) | live smoke run on fixtures, `eval/reports/LIVE_SMOKE.md` |
 | LLM provider | the real ceiling: provider rate limits (per key, per minute) and per-call latency, **not measured here** | measure with `make eval-live`; scale with paid tiers, multiple keys, or the smaller 8B model for tool routing |
 | DuckDB | single writer; many readers (the API opens read-only) | ingestion and serving can run side by side |
 | In-memory state | sessions ≤ 50k, conversations ≤ 10k × 8 messages | per process; multi-replica needs Redis |
@@ -44,13 +45,16 @@ Scaling path:
 ## Monitoring
 
 Every turn writes a trace (`traces.jsonl`) with the disposition, the policy
-rule, LLM attempts, token usage, grounding result, latency and cost. Every
+rule, LLM attempts, token usage (including cached tokens), latency and cost. Every
 tool call writes an audit record. Signals to alert on, from those records:
 
 | Signal | Why | Starting threshold |
 |---|---|---|
 | `category=security` escalations/hour | injection or enumeration attempts | > 5/h per customer, or any spike |
-| grounding `fallback_used` rate | the model stating unverified figures | > 5% of AUTO_RESOLVE |
+| `handoff_unverified` in `policy_rule` | a ticket that did not read back: the customer was told to call | any |
+| `reference_to_foreign_product` escalations | explicit attempts to read another customer's product | any spike |
+| CLARIFY rate and `MissingSlot`/`InvalidArgument` share | drift in how well the model understands requests | ±50% week over week |
+| model refusals (`ModelRefusal` in LLM attempts) | provider safety classifiers declining banking requests | any sustained |
 | `llm_unavailable` + `circuit_open` attempts | provider outage | any sustained |
 | escalation rate by category | drift in data quality (e.g. `data_unavailable`) or demand | ±50% week over week |
 | p95 turn latency | UX and budget | > 8 s |

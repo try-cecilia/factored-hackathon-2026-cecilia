@@ -4,7 +4,7 @@ offline evaluation harness.
 Anything built on this is an OFFLINE SIMULATION: the scripted responses
 encode what a well-behaved model *should* do for a given utterance, not what
 a live model decided. It exercises every deterministic layer (policy, tools,
-grounding, escalation) for real; it measures nothing about the model's own
+rendering, escalation) for real; it measures nothing about the model's own
 judgment, latency or cost. Reports that use it say so in their header.
 """
 from __future__ import annotations

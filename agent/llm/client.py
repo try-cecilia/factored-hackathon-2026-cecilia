@@ -153,7 +153,8 @@ def _anthropic_factory(api_key: str, timeout: float):
 def default_providers() -> list[Provider]:
     """In LLM_PROVIDERS order (default: groq, together, anthropic); a provider without its key is skipped at call time."""
     known = {
-        "groq": Provider("groq", os.environ.get("GROQ_MODEL", os.environ.get("LLM_MODEL", "llama-3.3-70b-versatile")),
+        # llama-3.3-70b-versatile left Groq's free/developer tiers on 2026-08-16; gpt-oss-120b is Groq's replacement.
+        "groq": Provider("groq", os.environ.get("GROQ_MODEL", os.environ.get("LLM_MODEL", "openai/gpt-oss-120b")),
                          "GROQ_API_KEY", _groq_factory),
         "together": Provider("together", os.environ.get("TOGETHER_MODEL", "meta-llama/Llama-3.3-70B-Instruct-Turbo"),
                              "TOGETHER_API_KEY", _together_factory, per_request_timeout=False),

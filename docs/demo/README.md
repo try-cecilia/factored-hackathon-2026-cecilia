@@ -29,7 +29,7 @@ mode** (deterministic answers where safe). The first caption says so.
 
 The submission asks for a pitch video with voice explaining the solution and
 the architectural decisions. That needs a human recording:
-1. Start the server with `GROQ_API_KEY` in a network that allows `api.groq.com`.
+1. Start the server with a model key (`ANTHROPIC_API_KEY` or `GROQ_API_KEY`, order in `LLM_PROVIDERS`).
 2. Re-record the walkthrough with `python -m ops.record_demo`, adding the
    multi-turn clarification and the injection attempt that need the live model.
 3. Record the voice-over following `docs/video_pitch_script.md` (≈4 min),

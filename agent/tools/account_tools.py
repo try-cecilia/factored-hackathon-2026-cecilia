@@ -125,9 +125,11 @@ def get_customer_profile(customer_id: str) -> dict:
         cust = _rows("SELECT customer_id, segment, country, customer_status FROM customers WHERE customer_id = ?", [customer_id])
         if not cust:
             raise ResourceNotFound(f"Customer {customer_id} not found.")
+        # A total order: aliases (P1, P2...) and the options listed to the customer must mean
+        # the same product on every turn, even for two products of one type opened the same day.
         products = _rows(
             """SELECT product_id, product_type, product_number, currency, product_status
-               FROM products WHERE customer_id = ? ORDER BY product_type, opening_date""", [customer_id])
+               FROM products WHERE customer_id = ? ORDER BY product_type, opening_date, product_id""", [customer_id])
         for p in products:
             p["last4"] = _last4(p.pop("product_number"))
         return {**cust[0], "products": products, "as_of": data_as_of()}

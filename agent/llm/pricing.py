@@ -11,11 +11,12 @@ import re
 
 PRICING_AS_OF = "2026-09 (assumed list prices; verify before external use)"
 
-# (provider, model) -> (input_usd_per_mtok, output_usd_per_mtok). Anthropic: list
+# (provider, model) -> (input_usd_per_mtok, output_usd_per_mtok). Groq: console.groq.com/docs/models,
+# read 2026-09-27 (Llama 3.3 70B is "contact sales" since it left the self-serve tiers). Anthropic: list
 # prices from Anthropic's model reference (cached 2026-06-24); thinking tokens bill as output.
 PRICES_USD_PER_MTOK = {
-    ("groq", "llama-3.3-70b-versatile"): (0.59, 0.79),
-    ("groq", "llama-3.1-8b-instant"): (0.05, 0.08),
+    ("groq", "openai/gpt-oss-120b"): (0.15, 0.60),
+    ("groq", "openai/gpt-oss-20b"): (0.075, 0.30),
     ("together", "meta-llama/Llama-3.3-70B-Instruct-Turbo"): (0.88, 0.88),
     ("anthropic", "claude-opus-5"): (5.0, 25.0),
     ("anthropic", "claude-opus-4-8"): (5.0, 25.0),  # server-side refusal fallback target

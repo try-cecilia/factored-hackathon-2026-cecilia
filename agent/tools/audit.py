@@ -5,7 +5,7 @@ end to end (the "execution records" an auditor reads instead of any hidden
 model reasoning):
 - audit_log.jsonl: one line per tool call (args, outcome, duration).
 - traces.jsonl:    one line per turn (LLM attempts + usage, tool calls,
-                   policy decision, grounding check, latency, cost).
+                   policy decision, latency, cost).
 Only a bounded window of recent records is kept in memory.
 """
 from __future__ import annotations

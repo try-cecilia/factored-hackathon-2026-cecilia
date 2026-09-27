@@ -1,8 +1,9 @@
 """Deterministic ES/PT renderings of verified tool results and canned messages.
 
-Used whenever an answer must not depend on the LLM: grounding-check
-fallbacks, LLM outages mid-turn, clarifications, and escalation notices.
-Also the output layer of the no-LLM baseline bot (eval/baseline_bot.py).
+Everything the customer reads comes from here: answers, clarifications,
+abstentions, escalation notices and the degraded mode. The model never
+writes to the customer (ADR-001). Also the output layer of the no-LLM
+baseline bot (eval/baseline_bot.py).
 """
 from __future__ import annotations
 

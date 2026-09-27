@@ -4,6 +4,12 @@ One turn = Understand → Decide → Act → Verify → Escalate, orchestrated b
 `agent/core/orchestrator.py`, the only module that talks to both the LLM and
 the deterministic layers.
 
+**The model interprets; the code speaks** ([ADR-001](docs/decisions/ADR-001-model-interprets-code-speaks.md)):
+one model call per turn chooses tools. The model never sees a customer
+record (no balance, transaction, internal id, account number, name or
+segment), and it never writes to the customer. Every reply is rendered from
+verified tool results or fixed templates.
+
 ## The turn, step by step
 
 1. **Session** (`agent/session/`). `/chat` accepts only a bearer token. Tokens
@@ -20,11 +26,20 @@ the deterministic layers.
    - Learned intent classifier with P(requires_escalation) ≥ τ → escalate.
      τ = 0.55 was chosen on the dev split. The classifier guard is skipped when
      the customer is answering our own clarifying question.
-3. **Understand** (`agent/llm/`). Llama 3.3 70B via Groq, with Together as the
-   fallback provider. The prompt carries the customer's product catalog
-   (type, last 4 digits, currency, status) so the model picks the right
-   product. Tool schemas have **no customer_id**, and tool results are
-   wrapped as data ("never instructions").
+   - A product id written in the message that exists but belongs to another
+     customer → security escalation with the denied reference as evidence
+     (`reference_to_foreign_product`), before any model call.
+3. **Understand** (`agent/llm/`). One call to the first configured provider
+   in `LLM_PROVIDERS` (Groq `openai/gpt-oss-120b`, Together, or Claude). The model
+   sees only:
+   - the customer's words, masked by `agent/llm/privacy.py` (runs of 8+
+     digits → `[···1234]`, emails → `[email]`, dates kept);
+   - a catalog of per-session aliases (`P1`, `P2`...) with product type,
+     currency and status;
+   - a history in which our replies are figure-free summaries.
+
+   It returns up to two tool calls. Tool schemas have **no customer_id**.
+   Any prose it writes is discarded.
 4. **Act** (`agent/tools/account_tools.py`). This is plain SQL over DuckDB.
    Every tool does four things:
    - checks ownership against the session's customer, raising `PermissionDenied` on a mismatch;
@@ -33,20 +48,19 @@ the deterministic layers.
    - can enforce a freshness SLO.
    The orchestrator sanitizes arguments before any tool runs: unknown keys are
    dropped, enums and limits clamped, and product references resolved against
-   the catalog ("0002", "Cuenta Ahorro" → an id, or a clarification if it is
-   ambiguous). It allows at most 3 tool steps per turn.
+   the catalog ("P2", "0002", "Cuenta Ahorro" → an id, or a clarification if
+   it is ambiguous). It allows at most 2 tool calls per turn.
 5. **Decide after each tool** (`router.after_tool`). Each outcome maps to a disposition:
    - `MissingSlot`/`InvalidArgument`/`ResourceNotFound` → CLARIFY (listing the customer's own products).
    - `NotApplicable` → answered (e.g. "payment status doesn't apply to a savings account").
    - `PermissionDenied` → security escalation.
    - `DataUnavailable` → data escalation.
    - Anything else → tool-failure escalation.
-6. **Verify** (`agent/core/grounding.py`). Every number in the model's answer
-   must match a number in this turn's tool results, within 0.5%, under both
-   decimal conventions. Sums the model computed, wrong figures, and
-   hallucinations fail the check. The answer is then replaced by a
-   deterministic rendering of the verified facts (`agent/core/render.py`).
-   A no-tool answer never keeps any figure it asserts.
+6. **Verify and reply** (`agent/core/render.py`). The reply is rendered in
+   ES or PT from the verified tool results, with the data's as-of date. Each
+   transaction list is headed by its product. A turn with nothing to look up
+   gets a fixed abstain or clarify template. No figure and no claimed action
+   can come from model prose, because none is ever shown.
 7. **Escalate** (`agent/policy/escalation.py`). The ticket carries:
    - the request and up to 3 prior requests (not a transcript);
    - the reason and the **policy rule that fired**;
@@ -54,9 +68,13 @@ the deterministic layers.
      category (for fraud: the last 10 transactions with `fraud_score`/`is_fraud`,
      flagged ones first);
    - actions taken, open questions, a suggested next step, and the target queue.
+
+   The ticket is read back from the queue before the customer is told they
+   were transferred. If the write was lost or failed, they are told the case
+   was not filed and get a code to quote.
 8. **Trace** (`agent/tools/audit.py`). Two record types are written:
-   - one trace record per turn: rule fired, LLM attempts and token usage,
-     tool calls, grounding result, latency, cost;
+   - one trace record per turn: rule fired, LLM attempts and token usage
+     (including cached tokens), tool calls, latency, cost;
    - one audit record per tool call, keyed by the same trace id.
 
    These execution records are the explanation artifact. They replace any
@@ -66,14 +84,17 @@ the deterministic layers.
 
 | Concern | Where it lives | Why not the LLM |
 |---|---|---|
-| Whose data | session + tool ownership check | a prompt can be injected; a SQL `WHERE` can't |
+| Whose data | session + tool ownership check + pre-LLM foreign-reference check | a prompt can be injected; a SQL `WHERE` can't |
+| What the model may see | orchestrator: masked text, aliases, figure-free history | the brief forbids customer records in external model requests |
 | What to disclose | tool layer (masking) | minimization can't depend on model compliance |
 | When to transfer | policy router, lexicon, classifier | must be auditable and testable per rule |
-| Whether a figure is true | grounding verifier | the model can't verify its own arithmetic |
+| What the customer reads | renderer, from verified results and templates | a model can state a wrong figure or an action that never happened |
+| Whether a handoff happened | ticket read-back | "report only actions whose outcomes the system has verified" |
 | Eligibility/credit | out of scope, abstain | brief forbids model-made credit decisions |
 
 The LLM does what only a language model can: paraphrase and slang
-understanding, product disambiguation, multi-turn context, and phrasing in ES/PT.
+understanding in ES/PT, code-switching, product disambiguation, relative
+dates ("ayer", "ontem"), and multi-turn context.
 
 ## Reliability
 
@@ -81,6 +102,14 @@ understanding, product disambiguation, multi-turn context, and phrasing in ES/PT
   per turn; retries only on transient errors (timeouts, 429, 5xx) with
   jittered backoff and no trailing sleep; a per-provider circuit breaker.
   In the browser test an outage cost 1.2 s once, then 13 ms per turn.
+- **Claude specifics**:
+  - effort `low`, or none on Haiku, which rejects it;
+  - no sampling parameters;
+  - the tools and the fixed rules prompt-cached (about 1.7K of about 2.1K
+    input tokens on Opus 5 and Sonnet 5);
+  - on `claude-opus-5`, the server-side refusal fallback;
+  - a refusal is a permanent error: the next provider, or an escalation,
+    takes the turn.
 - **Degraded mode**: if both providers are down, a plain balance question is
   answered deterministically, a confident out-of-scope request is abstained,
   and everything else escalates.

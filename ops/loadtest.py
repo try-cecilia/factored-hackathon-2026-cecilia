@@ -1,7 +1,7 @@
 """Throughput of everything except the LLM, on the real warehouse.
 
 Runs the full orchestrator (session, policy, classifier guard, tools on the
-4.4M-row warehouse, grounding, escalation, tracing) with the scripted model
+4.4M-row warehouse, rendering, escalation, tracing) with the scripted model
 from eval/, across N threads, and reports turns/second and latency
 percentiles. The LLM provider's own rate limit and latency are NOT included
 — they dominate in production and are covered by `make eval-live`.

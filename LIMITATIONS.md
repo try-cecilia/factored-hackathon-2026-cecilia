@@ -5,21 +5,26 @@ service, and as our own roadmap.
 
 ## Not yet measured
 
-1. **The live model.** The build sandbox blocks every LLM endpoint we tried
-   (Groq, Together, Hugging Face, Ollama). What that leaves unmeasured:
-   - the model's own tool-selection and phrasing accuracy;
-   - p50/p95 latency with the model in the loop;
-   - cost per case;
+1. **The live model on the held-out workload.** The live path has run end to
+   end on Claude Opus 5, Sonnet 5 and Haiku 4.5, over 13 fixture turns
+   ([`eval/reports/LIVE_SMOKE.md`](eval/reports/LIVE_SMOKE.md)): 1.3–2.5 s p50
+   per turn and USD 0.002–0.005 per model call with prompt caching. Groq has
+   not run yet: it needs a key. Its default is now the open-weights
+   `openai/gpt-oss-120b`, because Llama 3.3 70B left Groq's self-serve tiers
+   on 2026-08-16. Still unmeasured on the
+   held-out workload, which needs the organizer's warehouse:
+   - the model's own tool-selection accuracy (SAR with a live model);
+   - p50/p95 latency and cost per case at scale;
    - run-to-run variability.
 
    What we can show today:
-   - the scripted **upper bound**: 100% SAR on the test workload;
+   - the scripted **upper bound**: 100% SAR on the test workload (design v2);
    - an **adversarial lower bound on safety**: 0 unsafe outcomes even with a
-     model that obeys injections and invents figures;
+     model that obeys injections and invents figures. Under v3 a model's
+     figures can no longer reach the customer at all;
    - that the running app degrades safely without the model.
 
-   `make eval-live` produces the missing report, and it is the first thing to
-   run once there is network access.
+   `make eval-live` produces the missing report once the warehouse is loaded.
 2. **Deployment.** Not yet deployed (needs a hosting account). The Docker image
    is written but was not built here, because the sandbox has no Docker daemon.
 
@@ -56,8 +61,16 @@ service, and as our own roadmap.
 - `/demo/customers` publishes test PINs for a few sandbox accounts, like any
   sandbox's test login. It must be empty (`DEMO_PUBLIC_CUSTOMERS=`) anywhere real.
 - Traces, audit logs and tickets contain customer data. Masking of account
-  numbers is done; still missing are field-level encryption at rest and
+  numbers is done, and card/account/ID numbers typed by the customer are
+  masked in tickets. Still missing are field-level encryption at rest and
   redaction before export to the monitoring stack.
+- The external model never receives a customer record
+  ([ADR-001](docs/decisions/ADR-001-model-interprets-code-speaks.md)), but it
+  does receive the customer's own words, masked. Production would run the
+  model under the bank's data-processing terms: provider retention,
+  zero-data-retention, region.
+- The masking is pattern-based (runs of 8+ digits, emails). A name or an
+  address typed in free text reaches the model as written.
 - No WAF or bot protection beyond per-session and per-IP rate limits.
 
 ## Operations
@@ -80,3 +93,6 @@ service, and as our own roadmap.
   to the right channel, or an escalation. They are not attempted.
 - Portuguese is supported in understanding and replies; the product catalog
   and policies stay Spanish-market.
+- Replies are rendered from templates, not written by the model. They read
+  more like a statement than a conversation. That is the price of "no figure
+  or action the model invented can reach a customer".

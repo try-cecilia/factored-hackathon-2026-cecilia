@@ -16,7 +16,7 @@
 
 ## 3. The model proposes, the code disposes
 - The LLM never sees or sets whose account; ownership is checked in SQL.
-- Every figure in an answer must appear in a tool result, or the answer is re-rendered from the facts.
+- The model never sees a customer record and never writes the reply: every answer is rendered from verified tool results.
 - Policy rules run before the model: fraud lexicon + learned classifier (93% recall, 0 false alarms).
 - **Stress test: a model that obeys injections and invents numbers → 0 unsafe outcomes in 432 cases.**
 
@@ -29,12 +29,12 @@
 | Unsafe outcomes | 0 | 0 | 0 |
 
 - Learned classifier on unseen text: 84.9% vs 62.8% for keywords.
-- Honest labels: ideal = upper bound; the live-model run is pending network access.
+- Honest labels: ideal = upper bound; live smoke run on Claude done (≈2 s p50 per turn); held-out live run pending the warehouse.
 
 ## 5. Data and engineering rigor
 - Contracts with a quarantine gate and rollback; lineage per row, run and partition; incremental loads absorb late arrivals.
 - Findings the data dictionary hides: 57% missing USD amounts; 6.6K credit products with no arrears data; 100% broken branch FKs; no MXN at all; transcripts with 42 distinct texts.
-- 60 hermetic tests + CI, pinned versions, `make all` rebuilds every number.
+- 84 hermetic tests + CI, pinned versions, `make all` rebuilds every number.
 
 ## 6. What it takes to make it real
 - **Now:** run `make eval-live`; deploy (container ready, 512 MB).
