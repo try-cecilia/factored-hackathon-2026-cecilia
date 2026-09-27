@@ -50,6 +50,7 @@ def fixture_warehouse(tmp_path_factory):
     mp.setenv("ADMIN_API_KEY", "test-admin-key")
     mp.setenv("GROQ_API_KEY", "")
     mp.setenv("TOGETHER_API_KEY", "")
+    mp.setenv("ANTHROPIC_API_KEY", "")  # hermetic: no test may reach a real model
     mp.setenv("DUCKDB_PATH", str(db_path))
     build_fixture_warehouse()
     db.close_all()

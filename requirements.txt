@@ -13,6 +13,7 @@ numpy==2.4.6
 scipy==1.17.1
 groq==1.7.0
 together==2.37.0
+anthropic==1.8.0
 httpx==0.28.1
 pandas==3.0.6
 pytest==9.1.1

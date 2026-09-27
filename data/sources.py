@@ -64,7 +64,9 @@ class S3Source:
 
     def __init__(self, raw_dir: Path, bucket: str | None = None):
         self.raw_dir = Path(raw_dir)
-        self.bucket = bucket or os.environ.get("DATASET_BUCKET", "***REMOVED***")
+        self.bucket = bucket or os.environ.get("DATASET_BUCKET", "")
+        if not self.bucket:  # the organizer's bucket name stays out of the public repo, like its keys
+            raise RuntimeError("DATASET_BUCKET is not set: copy it from the organizer's data dictionary into .env")
         self._client = None
 
     def _s3(self):

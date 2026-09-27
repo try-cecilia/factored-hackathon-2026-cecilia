@@ -61,6 +61,17 @@ class HumanQueue:
         with open(self.path, "a") as f:
             f.write(json.dumps(asdict(ticket), default=str, ensure_ascii=False) + "\n")
 
+    def get(self, ticket_id: str) -> dict | None:
+        # ponytail: linear scan of a local JSONL file; the bank's case system answers this by id
+        if not self.path.exists():
+            return None
+        for line in self.path.read_text().splitlines():
+            if f'"{ticket_id}"' in line:
+                ticket = json.loads(line)
+                if ticket.get("ticket_id") == ticket_id:
+                    return ticket
+        return None
+
 
 default_queue = HumanQueue()
 

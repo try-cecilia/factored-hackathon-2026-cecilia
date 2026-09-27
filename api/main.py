@@ -80,7 +80,6 @@ class ChatResponse(BaseModel):
     language: str
     category: str
     ticket_id: str | None = None
-    grounding_fallback: bool | None = None
     latency_ms: float
 
 
@@ -130,7 +129,6 @@ def chat(req: ChatRequest) -> ChatResponse:
     r = default_orchestrator.handle_message(req.session_token, req.message)
     return ChatResponse(trace_id=r.trace_id, disposition=r.disposition, response_text=r.response_text,
                         language=r.language, category=r.category, ticket_id=r.ticket_id,
-                        grounding_fallback=r.grounding.get("fallback_used") if r.grounding else None,
                         latency_ms=round(r.latency_ms, 1))
 
 

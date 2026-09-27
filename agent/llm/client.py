@@ -1,4 +1,5 @@
-"""LLM client: Groq primary, Together AI fallback, with bounded retries.
+"""LLM client: Groq, Together AI and Anthropic (Claude) in a configurable
+order (LLM_PROVIDERS), with bounded retries.
 
 Reliability contract (what "bounded retries, safe fallback" means here):
 - Every request has a timeout; every turn has a total time budget.
@@ -14,6 +15,7 @@ Each response carries token usage and the attempt log for tracing and cost.
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import random
@@ -27,11 +29,18 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class Usage:
-    prompt_tokens: int = 0
+    prompt_tokens: int = 0  # uncached input
     completion_tokens: int = 0
+    cache_read_tokens: int = 0  # Anthropic prompt caching: billed at 0.1x input
+    cache_write_tokens: int = 0  # billed at 1.25x input
 
     def __add__(self, other: "Usage") -> "Usage":
-        return Usage(self.prompt_tokens + other.prompt_tokens, self.completion_tokens + other.completion_tokens)
+        return Usage(self.prompt_tokens + other.prompt_tokens, self.completion_tokens + other.completion_tokens,
+                     self.cache_read_tokens + other.cache_read_tokens, self.cache_write_tokens + other.cache_write_tokens)
+
+    @property
+    def total(self) -> int:
+        return self.prompt_tokens + self.completion_tokens + self.cache_read_tokens + self.cache_write_tokens
 
 
 @dataclass
@@ -52,6 +61,10 @@ class LLMUnavailable(Exception):
         self.attempts = attempts
 
 
+class ModelRefusal(ValueError):
+    """The model declined the request (stop_reason "refusal"): not an answer, and not worth retrying."""
+
+
 @dataclass(frozen=True)
 class Provider:
     name: str
@@ -59,6 +72,61 @@ class Provider:
     api_key_env: str
     factory: Callable[[str, float], Any]
     per_request_timeout: bool = True  # SDK accepts timeout= on create()
+    call: Callable[..., tuple] | None = None  # None: OpenAI-compatible chat.completions
+
+
+def openai_compatible_call(sdk, p: Provider, messages, tools, temperature: float, timeout: float) -> tuple:
+    kwargs: dict[str, Any] = {"model": p.model, "messages": messages, "temperature": temperature}
+    if p.per_request_timeout:
+        kwargs["timeout"] = timeout
+    if tools:
+        kwargs["tools"] = tools
+        kwargs["tool_choice"] = "auto"
+    completion = sdk.chat.completions.create(**kwargs)
+    msg = completion.choices[0].message
+    tool_calls = [{"id": tc.id, "name": tc.function.name, "arguments": tc.function.arguments}
+                  for tc in (getattr(msg, "tool_calls", None) or [])]
+    u = getattr(completion, "usage", None)
+    return msg.content, tool_calls, Usage(getattr(u, "prompt_tokens", 0) or 0, getattr(u, "completion_tokens", 0) or 0), p.model, completion
+
+
+ANTHROPIC_MAX_TOKENS = 4096  # covers adaptive thinking plus the tool call on models that think by default
+SERVER_FALLBACK_MODELS = {"claude-opus-5"}  # server-side refusal fallback ("default" routing by refusal category)
+
+
+def anthropic_call(sdk, p: Provider, messages, tools, temperature: float, timeout: float) -> tuple:
+    """Claude Messages API. No sampling parameters (current models reject
+    them); effort instead, except on Haiku, which rejects effort. A refusal
+    raises ModelRefusal so the next provider, or an escalation, takes over."""
+    kwargs: dict[str, Any] = {
+        "model": p.model, "max_tokens": ANTHROPIC_MAX_TOKENS, "timeout": timeout,
+        "messages": [{"role": m["role"], "content": m["content"]} for m in messages if m["role"] in ("user", "assistant")],
+    }
+    system = [{"type": "text", "text": m["content"]} for m in messages if m["role"] == "system"]
+    if system:
+        # Cache breakpoint on the first (fixed) system block: tools render before it, so both are cached;
+        # per-customer blocks after it are not. Below the model's minimum prefix it silently doesn't cache.
+        system[0]["cache_control"] = {"type": "ephemeral"}
+        kwargs["system"] = system
+    if tools:
+        kwargs["tools"] = [{"name": t["function"]["name"], "description": t["function"].get("description", ""),
+                            "input_schema": t["function"]["parameters"]} for t in tools]
+    effort = os.environ.get("ANTHROPIC_EFFORT", "low")
+    if effort and not p.model.startswith("claude-haiku"):
+        kwargs["output_config"] = {"effort": effort}
+    if p.model in SERVER_FALLBACK_MODELS and os.environ.get("ANTHROPIC_FALLBACKS", "1") != "0":
+        kwargs["betas"] = ["server-side-fallback-2026-07-01"]
+        kwargs["fallbacks"] = "default"
+    msg = sdk.beta.messages.create(**kwargs)
+    if msg.stop_reason == "refusal":
+        raise ModelRefusal(f"{p.model} declined the request")
+    text = "".join(b.text for b in msg.content if b.type == "text") or None
+    tool_calls = [{"id": b.id, "name": b.name, "arguments": json.dumps(b.input, ensure_ascii=False)}
+                  for b in msg.content if b.type == "tool_use"]
+    u = msg.usage
+    usage = Usage(u.input_tokens, u.output_tokens, getattr(u, "cache_read_input_tokens", 0) or 0,
+                  getattr(u, "cache_creation_input_tokens", 0) or 0)
+    return text, tool_calls, usage, msg.model, msg
 
 
 def _groq_factory(api_key: str, timeout: float):
@@ -76,13 +144,24 @@ def _together_factory(api_key: str, timeout: float):
         return Together(api_key=api_key)
 
 
+def _anthropic_factory(api_key: str, timeout: float):
+    import anthropic
+
+    return anthropic.Anthropic(api_key=api_key, timeout=timeout, max_retries=0)
+
+
 def default_providers() -> list[Provider]:
-    return [
-        Provider("groq", os.environ.get("GROQ_MODEL", os.environ.get("LLM_MODEL", "llama-3.3-70b-versatile")),
-                 "GROQ_API_KEY", _groq_factory),
-        Provider("together", os.environ.get("TOGETHER_MODEL", "meta-llama/Llama-3.3-70B-Instruct-Turbo"),
-                 "TOGETHER_API_KEY", _together_factory, per_request_timeout=False),
-    ]
+    """In LLM_PROVIDERS order (default: groq, together, anthropic); a provider without its key is skipped at call time."""
+    known = {
+        "groq": Provider("groq", os.environ.get("GROQ_MODEL", os.environ.get("LLM_MODEL", "llama-3.3-70b-versatile")),
+                         "GROQ_API_KEY", _groq_factory),
+        "together": Provider("together", os.environ.get("TOGETHER_MODEL", "meta-llama/Llama-3.3-70B-Instruct-Turbo"),
+                             "TOGETHER_API_KEY", _together_factory, per_request_timeout=False),
+        "anthropic": Provider("anthropic", os.environ.get("ANTHROPIC_MODEL", "claude-opus-5"), "ANTHROPIC_API_KEY",
+                              _anthropic_factory, call=anthropic_call),
+    }
+    order = [n.strip() for n in os.environ.get("LLM_PROVIDERS", "groq,together,anthropic").split(",")]
+    return [known[n] for n in order if n in known]
 
 
 def classify_error(exc: Exception) -> str:
@@ -160,23 +239,11 @@ class LLMClient:
                     break
                 t0 = time.time()
                 try:
-                    kwargs: dict[str, Any] = {"model": p.model, "messages": messages, "temperature": temperature}
-                    if p.per_request_timeout:
-                        kwargs["timeout"] = min(self.timeout_s, remaining)
-                    if tools:
-                        kwargs["tools"] = tools
-                        kwargs["tool_choice"] = "auto"
-                    completion = self._client(p, api_key).chat.completions.create(**kwargs)
-                    msg = completion.choices[0].message
-                    tool_calls = [
-                        {"id": tc.id, "name": tc.function.name, "arguments": tc.function.arguments}
-                        for tc in (getattr(msg, "tool_calls", None) or [])
-                    ]
-                    u = getattr(completion, "usage", None)
-                    usage = Usage(getattr(u, "prompt_tokens", 0) or 0, getattr(u, "completion_tokens", 0) or 0)
+                    content, tool_calls, usage, served_model, raw = (p.call or openai_compatible_call)(
+                        self._client(p, api_key), p, messages, tools, temperature, min(self.timeout_s, remaining))
                     attempts.append({"provider": p.name, "outcome": "ok", "ms": round((time.time() - t0) * 1000, 1)})
                     self._record_success(p.name)
-                    return LLMResponse(msg.content, tool_calls, p.name, (time.time() - start) * 1000, p.model, usage, attempts, completion)
+                    return LLMResponse(content, tool_calls, p.name, (time.time() - start) * 1000, served_model, usage, attempts, raw)
                 except Exception as exc:  # noqa: BLE001 - SDK error types vary by provider
                     kind = classify_error(exc)
                     attempts.append({"provider": p.name, "outcome": "error", "kind": kind, "error": f"{type(exc).__name__}: {exc}"[:300],

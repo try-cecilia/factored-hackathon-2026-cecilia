@@ -72,6 +72,13 @@ def pre_llm(text: str, customer_status: str | None, answering_clarification: boo
     return None, reading
 
 
+def foreign_reference(product_ids: list[str]) -> Decision:
+    """The message names products owned by another customer (checked in the tool layer, before the model runs)."""
+    return Decision(Disposition.ESCALATE, f"The request names {len(product_ids)} product(s) owned by another customer.", "security",
+                    open_questions=["Possible unauthorized-access or prompt-injection attempt; review the trace."],
+                    rule="reference_to_foreign_product")
+
+
 def after_tool(error: Exception | None) -> Decision | None:
     """None means 'continue': the tool succeeded or the outcome is answerable."""
     if error is None or isinstance(error, NotApplicable):

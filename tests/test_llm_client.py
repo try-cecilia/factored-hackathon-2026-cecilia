@@ -5,7 +5,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from agent.llm.client import LLMClient, LLMUnavailable, Provider
+from agent.llm.client import LLMClient, LLMUnavailable, Provider, anthropic_call, default_providers
+from agent.llm.pricing import cost_usd
 
 
 class StatusError(Exception):
@@ -73,6 +74,90 @@ def test_no_sleep_after_final_attempt_and_unavailable_carries_attempts(keys):
     assert calls == ["p1", "p1", "p2", "p2"]
     assert len(sleeps) == 2  # one between attempts per provider, none after the last
     assert len(exc.value.attempts) == 4
+
+
+def anthropic_provider(model, responses, requests):
+    """A stand-in for the anthropic SDK: records each request, replays responses shaped like BetaMessage."""
+
+    def create(**kwargs):
+        requests.append(kwargs)
+        return responses.pop(0)
+
+    sdk = SimpleNamespace(beta=SimpleNamespace(messages=SimpleNamespace(create=create)))
+    return Provider("anthropic", model, "ANTHROPIC_KEY_TEST", lambda key, timeout: sdk, call=anthropic_call)
+
+
+def beta_message(blocks, stop_reason="tool_use", model="claude-opus-5", tokens=(1200, 80), cache=(0, 0)):
+    return SimpleNamespace(content=blocks, stop_reason=stop_reason, model=model,
+                           usage=SimpleNamespace(input_tokens=tokens[0], output_tokens=tokens[1],
+                                                 cache_read_input_tokens=cache[0], cache_creation_input_tokens=cache[1]))
+
+
+TOOL = {"type": "function", "function": {"name": "get_account_summary", "description": "Saldos.",
+                                         "parameters": {"type": "object", "properties": {"product_id": {"type": "string"}}, "required": []}}}
+
+
+def test_claude_request_carries_system_tools_and_no_sampling_params_and_its_tool_call_is_parsed(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_KEY_TEST", "k")
+    requests = []
+    reply = beta_message([SimpleNamespace(type="thinking", thinking=""), SimpleNamespace(type="text", text="Consulto."),
+                          SimpleNamespace(type="tool_use", id="toolu_1", name="get_account_summary", input={"product_id": "P1"})],
+                         cache=(900, 0))
+    c = LLMClient([anthropic_provider("claude-opus-5", [reply], requests)])
+    r = c.chat([{"role": "system", "content": "reglas"}, {"role": "system", "content": "catálogo"},
+                {"role": "user", "content": "saldo"}, {"role": "assistant", "content": "[respondido]"},
+                {"role": "user", "content": "¿y la otra?"}], tools=[TOOL])
+    sent = requests[0]
+    # the fixed rules (with the tools rendered before them) are cached; the per-customer catalog is not
+    assert sent["model"] == "claude-opus-5" and sent["system"] == [
+        {"type": "text", "text": "reglas", "cache_control": {"type": "ephemeral"}}, {"type": "text", "text": "catálogo"}]
+    assert [m["role"] for m in sent["messages"]] == ["user", "assistant", "user"]
+    assert sent["tools"] == [{"name": "get_account_summary", "description": "Saldos.",
+                              "input_schema": {"type": "object", "properties": {"product_id": {"type": "string"}}, "required": []}}]
+    assert "temperature" not in sent and sent["output_config"] == {"effort": "low"}
+    assert sent["fallbacks"] == "default" and sent["betas"] == ["server-side-fallback-2026-07-01"]
+    assert r.provider == "anthropic" and r.model == "claude-opus-5"
+    assert r.tool_calls == [{"id": "toolu_1", "name": "get_account_summary", "arguments": '{"product_id": "P1"}'}]
+    assert (r.usage.prompt_tokens, r.usage.completion_tokens, r.usage.cache_read_tokens) == (1200, 80, 900)
+
+
+def test_a_dated_model_id_returned_by_the_api_is_priced_like_its_alias():
+    # the API answers claude-haiku-4-5 requests with a dated snapshot id; cost must not become "not defined"
+    assert cost_usd("anthropic", "claude-haiku-4-5-20251001", 1000, 100) == pytest.approx(0.0015)
+
+
+def test_cached_prompt_tokens_are_billed_at_a_tenth_and_cache_writes_at_a_quarter_more():
+    # claude-opus-5 list price: 5 USD/MTok in, 25 out -> 1000*5 + 100*25 + 1000*0.5 + 1000*6.25 = 14,250 USD/1e6
+    assert cost_usd("anthropic", "claude-opus-5", 1000, 100, cache_read_tokens=1000, cache_write_tokens=1000) == pytest.approx(0.01425)
+
+
+def test_haiku_gets_neither_effort_nor_server_side_fallbacks(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_KEY_TEST", "k")
+    requests = []
+    c = LLMClient([anthropic_provider("claude-haiku-4-5", [beta_message([], "end_turn", "claude-haiku-4-5")], requests)])
+    c.chat([{"role": "user", "content": "hola"}], tools=[TOOL])
+    assert not {"output_config", "fallbacks", "betas"} & set(requests[0])
+
+
+def test_a_refusal_is_not_an_answer_and_the_next_provider_takes_the_turn(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_KEY_TEST", "k")
+    monkeypatch.setenv("P2_KEY", "k2")
+    calls, requests = [], []
+    c = LLMClient([anthropic_provider("claude-opus-5", [beta_message([], "refusal")], requests), fake_provider("p2", ["ok"], calls)],
+                  sleep=lambda s: None)
+    r = c.chat([{"role": "user", "content": "hola"}], tools=[TOOL])
+    assert r.provider == "p2" and len(requests) == 1  # permanent: not retried on the same provider
+    assert r.attempts[0]["provider"] == "anthropic" and r.attempts[0]["kind"] == "permanent"
+
+
+def test_provider_order_follows_LLM_PROVIDERS(monkeypatch):
+    monkeypatch.setenv("LLM_PROVIDERS", "anthropic, groq")
+    assert [p.name for p in default_providers()] == ["anthropic", "groq"]
+
+
+def test_every_default_provider_model_has_a_price(monkeypatch):
+    monkeypatch.delenv("LLM_PROVIDERS", raising=False)
+    assert all(cost_usd(p.name, p.model, 1000, 100) is not None for p in default_providers())
 
 
 def test_circuit_breaker_skips_a_provider_that_keeps_failing(keys):

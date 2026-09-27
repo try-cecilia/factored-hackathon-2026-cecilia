@@ -4,14 +4,18 @@ The only module that talks to both the LLM and the deterministic layers.
 Invariants:
 - The LLM never receives or sets `customer_id`; it's injected from the
   validated session on every tool call.
-- Dispositions come from agent/policy/router.py, never from LLM prose.
-- An answer reaches the customer only if every number in it is grounded in
-  this turn's verified tool results (agent/core/grounding.py); otherwise the
-  verified facts are rendered deterministically instead.
-- Bounded everything: tool steps per turn, calls per step, history length,
-  number of live conversations, LLM time budget.
+- The LLM never sees a customer record: it gets the customer's masked words
+  (agent/llm/privacy.py), a catalog of aliases and a figure-free history.
+  Tool results never go back to it.
+- The LLM never writes to the customer. One call per turn chooses tools;
+  every reply is rendered from verified tool results or fixed templates
+  (agent/core/render.py). No figure, and no claimed action, can come from
+  model prose.
+- Dispositions come from agent/policy/router.py, never from the model.
+- Bounded everything: one model call and two tool calls per turn, history
+  length, number of live conversations, LLM time budget.
 Every turn writes one trace record (agent/tools/audit.py) with the policy
-rule that fired, LLM attempts/usage, tool calls, grounding result and cost.
+rule that fired, LLM attempts/usage, tool calls and cost.
 """
 from __future__ import annotations
 
@@ -22,10 +26,11 @@ from collections import OrderedDict
 from dataclasses import asdict, dataclass, field
 from typing import Any, Callable
 
-from agent.core import grounding, render
+from agent.core import render
 from agent.llm import prompts
 from agent.llm.client import LLMUnavailable, Usage, get_default_client
 from agent.llm.pricing import cost_usd
+from agent.llm.privacy import redact
 from agent.policy import escalation, router
 from agent.policy.router import Decision, Disposition
 from agent.policy.signals import detect_language, normalize
@@ -41,8 +46,7 @@ TOOL_FUNCTIONS: dict[str, Callable[..., Any]] = {
     "get_exchange_rate": account_tools.get_exchange_rate,
 }
 _SCHEMAS = {s["function"]["name"]: s["function"]["parameters"] for s in prompts.TOOL_SCHEMAS}
-MAX_TOOL_STEPS = 3
-MAX_CALLS_PER_STEP = 2
+MAX_TOOL_CALLS_PER_TURN = 2
 MAX_HISTORY_MESSAGES = 8
 MAX_CONVERSATIONS = 10_000
 DEGRADED_MIN_CONFIDENCE = 0.6
@@ -65,7 +69,7 @@ class TurnResult:
     cost_usd: float | None = None
     llm_calls: int = 0
     latency_ms: float = 0.0
-    grounding: dict = field(default_factory=dict)
+    model_view: str | None = None  # what the model's history keeps of this reply: no figures, no identifiers
 
 
 @dataclass
@@ -76,7 +80,8 @@ class _Conversation:
 
 
 class ConversationStore:
-    """Bounded LRU of per-session histories (text only, no tool payloads)."""
+    """Bounded LRU of per-session histories as the model sees them: the
+    customer's masked words and figure-free summaries of our replies."""
 
     def __init__(self, max_conversations: int = MAX_CONVERSATIONS, max_messages: int = MAX_HISTORY_MESSAGES):
         self._data: OrderedDict[str, _Conversation] = OrderedDict()
@@ -100,10 +105,13 @@ class ConversationStore:
 # --- argument sanitation ----------------------------------------------------
 
 def resolve_product_ref(value: Any, catalog: list[dict]) -> str:
-    """Map what the model passed (id, last-4, number, or a product type) onto
-    one of *this customer's* products. Values that match nothing pass through
-    unchanged so the tool's ownership check can judge them."""
+    """Map what the model passed (alias, id, last-4, number, or a product type)
+    onto one of *this customer's* products. Values that match nothing pass
+    through unchanged so the tool's ownership check can judge them."""
     v = str(value).strip()
+    by_alias = {p["alias"].lower(): p["product_id"] for p in catalog if p.get("alias")}
+    if v.lower() in by_alias:
+        return by_alias[v.lower()]
     ids = {p["product_id"] for p in catalog}
     if v in ids:
         return v
@@ -153,27 +161,34 @@ def sanitize_args(tool: str, raw: dict, catalog: list[dict]) -> tuple[dict, list
     return args, dropped
 
 
-def _safe_payload(obj: Any, max_str: int = 120) -> Any:
-    """Tool results sent back to the LLM: control chars stripped, long strings cut."""
-    if isinstance(obj, str):
-        return "".join(ch for ch in obj if ch.isprintable())[:max_str]
-    if isinstance(obj, dict):
-        return {k: _safe_payload(v, max_str) for k, v in obj.items()}
-    if isinstance(obj, list):
-        return [_safe_payload(v, max_str) for v in obj]
-    return obj
+def with_aliases(catalog: list[dict]) -> list[dict]:
+    """P1, P2... in catalog order, the same order render.clarify lists them
+    to the customer, so "la segunda" means P2 to the model too."""
+    return [{**p, "alias": f"P{i}"} for i, p in enumerate(catalog, start=1)]
+
+
+def _answered_view(facts: list[dict], catalog: list[dict]) -> str:
+    alias = {p["product_id"]: p["alias"] for p in catalog}
+    used = ", ".join(f"{f['tool']}({alias.get((f.get('args') or {}).get('product_id'), '')})" for f in facts)
+    return f"[Se respondió al cliente con datos verificados de: {used}]"
+
+
+def _clarify_view(missing: list[str], catalog: list[dict], reply_text: str) -> str:
+    if "product_id" in missing and catalog:
+        opts = "; ".join(f"{i}) {p['alias']} {p['product_type']} {p['currency']}" for i, p in enumerate(catalog, start=1))
+        return f"[Se le pidió al cliente elegir producto: {opts}]"
+    return reply_text  # dates / currency / generic questions are fixed templates without customer data
 
 
 # --- orchestrator -------------------------------------------------------------
 
 class Orchestrator:
     def __init__(self, session_store: SessionStore | None = None, llm: Callable[[], Any] | None = None,
-                 conversations: ConversationStore | None = None, max_tool_steps: int = MAX_TOOL_STEPS):
+                 conversations: ConversationStore | None = None):
         # `is None`, not `or`: both stores define __len__, so an empty one is falsy.
         self.session_store = default_store if session_store is None else session_store
         self._llm = llm or get_default_client
         self.conversations = ConversationStore() if conversations is None else conversations
-        self.max_tool_steps = max_tool_steps
 
     def handle_message(self, session_token: str, text: str) -> TurnResult:
         trace_id = uuid.uuid4().hex
@@ -190,26 +205,34 @@ class Orchestrator:
         return result
 
     # -- helpers --
-    def _finish(self, conv, user_text, result: TurnResult) -> TurnResult:
+    def _finish(self, conv, safe_text, result: TurnResult) -> TurnResult:
         conv.pending_clarification = result.disposition == Disposition.CLARIFY.value
-        self.conversations.append(conv, "user", user_text)
-        self.conversations.append(conv, "assistant", result.response_text)
+        self.conversations.append(conv, "user", safe_text)
+        self.conversations.append(conv, "assistant", result.model_view or result.response_text)
         return result
 
-    def _escalate(self, decision: Decision, session, conv, text, lang, trace_id, actions, facts, llm_meta) -> TurnResult:
+    def _escalate(self, decision: Decision, session, conv, safe_text, lang, trace_id, actions, facts, llm_meta) -> TurnResult:
+        """File the ticket, read it back, and only then tell the customer they were transferred."""
         prior = [m["content"] for m in conv.messages if m["role"] == "user"]
-        ticket = escalation.escalate(decision, session.customer_id, session.ref, text, lang, actions,
-                                     [{"tool": f["tool"], "result": f["result"]} for f in facts],
-                                     prior, session.attributes, trace_id)
+        try:
+            ticket = escalation.escalate(decision, session.customer_id, session.ref, safe_text, lang, actions,
+                                         [{"tool": f["tool"], "result": f["result"]} for f in facts],
+                                         prior, session.attributes, trace_id)
+            filed = escalation.default_queue.get(ticket.ticket_id) is not None
+        except Exception:  # noqa: BLE001 - an unwritable queue must not crash the turn; it is reported as unfiled
+            filed = False
+        if not filed:
+            return TurnResult(trace_id, Disposition.ESCALATE.value, render.MSG["escalate_unverified"][lang].format(code=trace_id[:8]),
+                              lang, decision.category, f"{decision.rule}|handoff_unverified", None, facts, actions, **llm_meta)
         msg = render.MSG["escalate_security" if decision.category == "security" else "escalate"][lang]
         return TurnResult(trace_id, Disposition.ESCALATE.value, msg, lang, decision.category, decision.rule,
                           ticket.ticket_id, facts, actions, **llm_meta)
 
     def _degraded(self, reading, text, session, catalog, lang, trace_id, trace, meta) -> TurnResult | None:
-        """LLM down, nothing looked up yet: handle only what needs no language
-        model — a confident out-of-scope request (abstain) or a plain balance
-        question with no product mentioned (deterministic summary). Anything
-        else still goes to a human."""
+        """LLM down: handle only what needs no language model - a confident
+        out-of-scope request (abstain) or a plain balance question with no
+        product mentioned (deterministic summary). Anything else still goes
+        to a human."""
         if not reading.model_available or (reading.p_intent or 0) < DEGRADED_MIN_CONFIDENCE:
             return None
         if reading.intent == "out_of_scope":
@@ -226,7 +249,7 @@ class Orchestrator:
             return TurnResult(trace_id, Disposition.AUTO_RESOLVE.value, render.render_answer(facts, lang), lang, "resolved",
                               "degraded:deterministic_balance", None, facts,
                               [{"tool": "get_account_summary", "args": {}, "success": True, "degraded": True}],
-                              grounding={"numbers_checked": 0, "ungrounded": [], "fallback_used": True}, **meta)
+                              model_view=_answered_view(facts, catalog), **meta)
         return None
 
     def _handle(self, token: str, text: str, trace_id: str, trace: dict) -> TurnResult:
@@ -241,6 +264,7 @@ class Orchestrator:
         conv = self.conversations.get(session.ref)
         lang = guess.language if (guess.pt_score or guess.es_score) else conv.language
         conv.language = lang
+        safe_text = redact(text)  # all that is kept or sent anywhere; the raw text only feeds local policy checks
         trace.update({"session_ref": session.ref, "segment": session.attributes.get("segment"),
                       "country": session.attributes.get("country"), "language_scores": [guess.pt_score, guess.es_score]})
 
@@ -255,104 +279,92 @@ class Orchestrator:
         pre, reading = router.pre_llm(text, session.attributes.get("customer_status"), conv.pending_clarification)
         trace["intent_reading"] = asdict(reading)
         if pre:
-            return self._finish(conv, text, self._escalate(pre, session, conv, text, lang, trace_id, [], [], llm_meta()))
+            return self._finish(conv, safe_text, self._escalate(pre, session, conv, safe_text, lang, trace_id, [], [], llm_meta()))
+        foreign = account_tools.foreign_product_refs(session.customer_id, text)
+        if foreign:  # caught in code, whatever a model would have done with it
+            denied = [{"tool": "ownership_check", "args": {"product_id": pid}, "success": False, "error_type": "PermissionDenied"}
+                      for pid in foreign]
+            return self._finish(conv, safe_text, self._escalate(router.foreign_reference(foreign), session, conv, safe_text, lang,
+                                                                trace_id, denied, [], llm_meta()))
 
         profile = account_tools.get_customer_profile(session.customer_id)
-        catalog = profile["products"]
-        messages = [{"role": "system", "content": prompts.system_prompt(lang)},
-                    {"role": "system", "content": prompts.context_block(profile)},
-                    *conv.messages, {"role": "user", "content": text}]
+        catalog = with_aliases(profile["products"])
+        messages = [{"role": "system", "content": prompts.SYSTEM_PROMPT},
+                    {"role": "system", "content": prompts.context_block(profile.get("as_of"), catalog)},
+                    *conv.messages, {"role": "user", "content": safe_text}]
+
+        # Understand: one model call chooses the tools. Its prose is never used.
+        try:
+            resp = self._llm().chat(messages, tools=prompts.TOOL_SCHEMAS)
+        except LLMUnavailable as exc:
+            trace["llm_steps"].append({"step": 0, "outcome": "unavailable", "attempts": exc.attempts})
+            degraded = self._degraded(reading, text, session, catalog, lang, trace_id, trace, llm_meta())
+            if degraded is not None:
+                return self._finish(conv, safe_text, degraded)
+            return self._finish(conv, safe_text, self._escalate(router.llm_unavailable(exc.attempts), session, conv, safe_text,
+                                                                lang, trace_id, [], [], llm_meta()))
+        llm_calls = 1
+        usage = resp.usage
+        provider, model = resp.provider, resp.model
+        costs.append(cost_usd(resp.provider, resp.model, resp.usage.prompt_tokens, resp.usage.completion_tokens,
+                              resp.usage.cache_read_tokens, resp.usage.cache_write_tokens))
+        trace["llm_steps"].append({"step": 0, "provider": resp.provider, "model": resp.model, "latency_ms": round(resp.latency_ms, 1),
+                                   "usage": asdict(resp.usage), "attempts": resp.attempts, "n_tool_calls": len(resp.tool_calls)})
+
+        calls = resp.tool_calls[:MAX_TOOL_CALLS_PER_TURN]
+        if not calls:  # nothing to look up: abstain or ask, always with a fixed template
+            decision = router.no_tool_answer(reading, text)
+            reply = render.MSG["abstain" if decision.disposition == Disposition.ABSTAIN else "clarify_generic"][lang]
+            res = TurnResult(trace_id, decision.disposition.value, reply, lang, decision.category, decision.rule,
+                             None, [], [], **llm_meta())
+            return self._finish(conv, safe_text, res)
+
+        # Act: sanitized arguments, identity from the session, ownership checked in the tool.
         facts: list[dict] = []
         actions: list[dict] = []
-        final_text: str | None = None
-        client = self._llm()
-
-        for step in range(self.max_tool_steps + 1):
+        for call in calls:
+            name = call["name"]
             try:
-                resp = client.chat(messages, tools=prompts.TOOL_SCHEMAS if step < self.max_tool_steps else None)
-            except LLMUnavailable as exc:
-                trace["llm_steps"].append({"step": step, "outcome": "unavailable", "attempts": exc.attempts})
-                if facts:  # verified facts already in hand: answer deterministically instead of transferring
-                    final_text = None
-                    break
-                degraded = self._degraded(reading, text, session, catalog, lang, trace_id, trace, llm_meta())
-                if degraded is not None:
-                    return self._finish(conv, text, degraded)
-                return self._finish(conv, text, self._escalate(router.llm_unavailable(exc.attempts), session, conv, text, lang,
-                                                               trace_id, actions, facts, llm_meta()))
-            llm_calls += 1
-            usage = usage + resp.usage
-            provider, model = resp.provider, resp.model
-            costs.append(cost_usd(resp.provider, resp.model, resp.usage.prompt_tokens, resp.usage.completion_tokens))
-            trace["llm_steps"].append({"step": step, "provider": resp.provider, "model": resp.model, "latency_ms": round(resp.latency_ms, 1),
-                                       "usage": asdict(resp.usage), "attempts": resp.attempts, "n_tool_calls": len(resp.tool_calls)})
-            if not resp.tool_calls:
-                final_text = resp.content or ""
-                break
+                raw_args = json.loads(call["arguments"] or "{}")
+                raw_args = raw_args if isinstance(raw_args, dict) else {}
+            except json.JSONDecodeError:
+                raw_args = {}
+            raw_args.pop("customer_id", None)  # identity always comes from the session
+            action = {"tool": name, "raw_args": raw_args}
+            result, error = None, None
+            try:
+                if name not in TOOL_FUNCTIONS:
+                    raise ToolError(f"unknown tool {name}")
+                args, dropped = sanitize_args(name, raw_args, catalog)
+                action.update({"args": args, "dropped_args": dropped})
+                result = TOOL_FUNCTIONS[name](session.customer_id, **args)
+            except NotApplicable as exc:
+                result = {"not_applicable": True, "reason": str(exc), **exc.payload}
+            except ToolError as exc:
+                error = exc
+            except Exception as exc:  # noqa: BLE001 - unexpected tool/DB failure -> bounded, safe fallback
+                error = ToolError(f"unexpected failure in {name}: {type(exc).__name__}: {exc}")
+            action.update({"success": error is None, "error_type": type(error).__name__ if error else None,
+                           "error": str(error) if error else None})
+            actions.append(action)
 
-            calls = resp.tool_calls[:MAX_CALLS_PER_STEP]
-            messages.append({"role": "assistant", "content": resp.content, "tool_calls": [
-                {"id": c["id"], "type": "function", "function": {"name": c["name"], "arguments": c["arguments"]}} for c in calls]})
-            for call in calls:
-                name = call["name"]
-                try:
-                    raw_args = json.loads(call["arguments"] or "{}")
-                    raw_args = raw_args if isinstance(raw_args, dict) else {}
-                except json.JSONDecodeError:
-                    raw_args = {}
-                raw_args.pop("customer_id", None)  # identity always comes from the session
-                action = {"tool": name, "raw_args": raw_args}
-                result, error = None, None
-                try:
-                    if name not in TOOL_FUNCTIONS:
-                        raise ToolError(f"unknown tool {name}")
-                    args, dropped = sanitize_args(name, raw_args, catalog)
-                    action.update({"args": args, "dropped_args": dropped})
-                    result = TOOL_FUNCTIONS[name](session.customer_id, **args)
-                except NotApplicable as exc:
-                    result = {"not_applicable": True, "reason": str(exc), **exc.payload}
-                except ToolError as exc:
-                    error = exc
-                except Exception as exc:  # noqa: BLE001 - unexpected tool/DB failure -> bounded, safe fallback
-                    error = ToolError(f"unexpected failure in {name}: {type(exc).__name__}: {exc}")
-                action.update({"success": error is None, "error_type": type(error).__name__ if error else None,
-                               "error": str(error) if error else None})
-                actions.append(action)
+            decision = router.after_tool(error)
+            if decision is not None:
+                trace["rule"] = decision.rule
+                if decision.disposition == Disposition.CLARIFY:
+                    missing = decision.missing_slots or getattr(error, "missing_slots", [])
+                    reply = render.clarify(missing, catalog, lang)
+                    res = TurnResult(trace_id, Disposition.CLARIFY.value, reply, lang, decision.category, decision.rule,
+                                     None, facts, actions, **llm_meta(), model_view=_clarify_view(missing, catalog, reply))
+                    return self._finish(conv, safe_text, res)
+                return self._finish(conv, safe_text, self._escalate(decision, session, conv, safe_text, lang, trace_id,
+                                                                    actions, facts, llm_meta()))
+            facts.append({"tool": name, "args": action["args"], "result": result})
 
-                decision = router.after_tool(error)
-                if decision is not None:
-                    trace["rule"] = decision.rule
-                    if decision.disposition == Disposition.CLARIFY:
-                        missing = decision.missing_slots or getattr(error, "missing_slots", [])
-                        res = TurnResult(trace_id, Disposition.CLARIFY.value, render.clarify(missing, catalog, lang), lang,
-                                         decision.category, decision.rule, None, facts, actions, **llm_meta())
-                        return self._finish(conv, text, res)
-                    return self._finish(conv, text, self._escalate(decision, session, conv, text, lang, trace_id,
-                                                                   actions, facts, llm_meta()))
-                facts.append({"tool": name, "args": action["args"], "result": result})
-                messages.append(prompts.tool_result_message(call["id"], name, _safe_payload(result)))
-
-        if not facts:
-            decision = router.no_tool_answer(reading, text)
-            # Nothing was looked up, so the model's own prose is only kept if it
-            # asserts no figures at all; otherwise use the canned message.
-            check = grounding.check(final_text or "", [], [text])
-            use_llm = bool(final_text) and check.ok and decision.disposition == Disposition.CLARIFY
-            reply = final_text if use_llm else render.MSG["abstain" if decision.disposition == Disposition.ABSTAIN else "clarify_generic"][lang]
-            res = TurnResult(trace_id, decision.disposition.value, reply, lang, decision.category, decision.rule,
-                             None, [], actions, grounding={"numbers_checked": check.numbers_checked,
-                                                           "ungrounded": check.ungrounded, "fallback_used": not use_llm}, **llm_meta())
-            return self._finish(conv, text, res)
-
-        # Verify: every number in the answer must come from this turn's tool results.
-        check = grounding.check(final_text or "", [f["result"] for f in facts], [text])
-        fallback = final_text is None or not final_text.strip() or not check.ok
-        as_of = next((f["result"].get("as_of") for f in facts if isinstance(f["result"], dict) and f["result"].get("as_of")), None)
-        reply = render.render_answer(facts, lang) if fallback else f"{final_text.strip()}\n{render.as_of_line(as_of, lang)}".strip()
-        res = TurnResult(trace_id, Disposition.AUTO_RESOLVE.value, reply, lang, "resolved", "verified_tool_results",
-                         None, facts, actions, grounding={"numbers_checked": check.numbers_checked,
-                                                          "ungrounded": check.ungrounded, "fallback_used": fallback}, **llm_meta())
-        return self._finish(conv, text, res)
+        # Verify + reply: rendered from the verified results only.
+        res = TurnResult(trace_id, Disposition.AUTO_RESOLVE.value, render.render_answer(facts, lang, catalog), lang, "resolved",
+                         "verified_tool_results", None, facts, actions, **llm_meta(), model_view=_answered_view(facts, catalog))
+        return self._finish(conv, safe_text, res)
 
 
 default_orchestrator = Orchestrator()

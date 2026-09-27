@@ -115,5 +115,4 @@ class BaselineBot:
             return esc(decision, [action])
         facts = [{"tool": tool, "args": args, "result": result}]
         return TurnResult(trace_id, "AUTO_RESOLVE", render.render_answer(facts, lang), lang, "resolved", "keyword_routing",
-                          None, facts, [action], grounding={"numbers_checked": 0, "ungrounded": [], "fallback_used": True},
-                          latency_ms=(time.time() - start) * 1000)
+                          None, facts, [action], latency_ms=(time.time() - start) * 1000)

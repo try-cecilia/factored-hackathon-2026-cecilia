@@ -16,6 +16,8 @@ MSG = {
                  "pt": "Entendo. Vou transferir seu caso para um atendente especializado com todos os detalhes, para você não precisar repetir."},
     "escalate_security": {"es": "Por seguridad no puedo mostrar esa información. Un agente revisará tu solicitud y te contactará.",
                           "pt": "Por segurança não posso mostrar essa informação. Um atendente vai revisar sua solicitação e entrar em contato."},
+    "escalate_unverified": {"es": "No pude registrar tu caso en este momento, así que no quedó derivado. Por favor comunícate con la línea de atención del banco y menciona el código {code}.",
+                            "pt": "Não consegui registrar seu caso agora, então ele não foi encaminhado. Por favor, entre em contato com a central de atendimento do banco e informe o código {code}."},
     "abstain": {"es": "Eso está fuera de lo que puedo resolver en consultas de cuenta y pagos (saldos, movimientos, estado de pago y tipo de cambio). Te oriento al área correspondiente.",
                 "pt": "Isso está fora do que posso resolver em consultas de conta e pagamentos (saldos, movimentações, situação de pagamento e câmbio). Vou te orientar para a área correta."},
     "clarify_generic": {"es": "¿Me cuentas un poco más qué necesitas? Puedo ayudarte con saldos, movimientos, estado de pago o tipo de cambio.",
@@ -105,7 +107,13 @@ def render_result(tool: str, result: dict, lang: str) -> str:
     return str(result)
 
 
-def render_answer(results: list[dict], lang: str) -> str:
-    parts = [render_result(r["tool"], r["result"], lang) for r in results]
+def render_answer(results: list[dict], lang: str, catalog: list[dict] | None = None) -> str:
+    """Verified facts as text. A transaction list is headed by its product, so two lists never blur together."""
+    labels = {p["product_id"]: product_label(p, lang) for p in catalog or []}
+    parts = []
+    for r in results:
+        body = render_result(r["tool"], r["result"], lang)
+        pid = (r["result"].get("filters") or {}).get("product_id") if r["tool"] == "list_transactions" else None
+        parts.append(f"{labels[pid]}:\n{body}" if pid in labels else body)
     as_of = next((r["result"].get("as_of") for r in results if isinstance(r.get("result"), dict) and r["result"].get("as_of")), None)
     return "\n".join(p for p in parts + [as_of_line(as_of, lang)] if p)

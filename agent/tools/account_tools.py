@@ -16,6 +16,7 @@ All calls are written to the audit log with the current trace id.
 from __future__ import annotations
 
 import os
+import re
 from datetime import date, datetime, timedelta, timezone
 from functools import lru_cache
 from typing import Any, Optional
@@ -94,6 +95,26 @@ def _parse_date(value: Optional[str], name: str) -> Optional[date]:
         return date.fromisoformat(str(value)[:10])
     except ValueError:
         raise InvalidArgument(f"{name} must be YYYY-MM-DD, got {value!r}", missing_slots=[name]) from None
+
+
+_PRODUCT_ID = re.compile(r"\bPRD-[A-Za-z0-9]+\b", re.IGNORECASE)
+
+
+def foreign_product_refs(customer_id: str, text: str) -> list[str]:
+    """Product ids written in the customer's message that exist but belong to
+    someone else. Customers don't type internal ids; one that isn't theirs is
+    an unauthorized-access or injection attempt, caught here before any model
+    decides whether to pass it on."""
+    ids = sorted({m.upper() for m in _PRODUCT_ID.findall(text)})
+    if not ids:
+        return []
+
+    def _run():
+        rows = _rows(f"SELECT product_id FROM products WHERE product_id IN ({', '.join('?' * len(ids))}) AND customer_id <> ?",
+                     ids + [customer_id])
+        return sorted(r["product_id"] for r in rows)
+
+    return _audited("ownership_check", customer_id, {"product_ids": ids}, _run)
 
 
 def get_customer_profile(customer_id: str) -> dict:
