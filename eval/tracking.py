@@ -16,6 +16,7 @@ prompt versions are compared over time.
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 from contextlib import contextmanager
@@ -24,12 +25,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 STORE = ROOT / "mlruns"
+_NOT_IN_A_METRIC_NAME = re.compile(r"[^/\w.\- ]")  # MLflow's rule on Windows, the strictest (Linux also takes ":")
 
 
 def numbers(values: dict) -> dict[str, float]:
     """The entries MLflow takes as metrics: numbers only, numpy's included (a rate over no cases is None, an
-    undefined cost is text, and a flag is not a metric)."""
-    return {k: float(v) for k, v in values.items() if isinstance(v, Real) and not isinstance(v, bool)}
+    undefined cost is text, and a flag is not a metric), under names it accepts on any system: the judge's
+    "disclosure:foreign_data_in_reply" is logged as "disclosure_foreign_data_in_reply"."""
+    return {_NOT_IN_A_METRIC_NAME.sub("_", k): float(v) for k, v in values.items() if isinstance(v, Real) and not isinstance(v, bool)}
 
 
 def _git(*args: str) -> str | None:

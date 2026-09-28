@@ -832,8 +832,8 @@ def main() -> None:
     ap.add_argument("--out-md")
     a = ap.parse_args()
     suffix = "" if a.split == "test" else "_dev"
-    if a.cases:  # a case file's reports are named after it: never over a generated split's committed report
-        suffix = "_" + re.sub(r"[^A-Za-z0-9_-]+", "_", Path(a.cases).stem)
+    if a.cases:  # a case file's reports are named after it, never a split's committed report (even for "dev.jsonl")
+        suffix = "_cases_" + re.sub(r"[^A-Za-z0-9_-]+", "_", Path(a.cases).stem)
     mode = "" if a.llm == "scripted" else f"_{a.llm}"
     out_json = Path(a.out_json or f"eval/reports/system_eval{suffix}{mode}.json")
     out_md = Path(a.out_md or f"eval/reports/SYSTEM_EVAL{suffix}{mode.upper()}.md")

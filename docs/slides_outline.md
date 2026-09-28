@@ -40,7 +40,7 @@ warehouse; everything else is already measured. Speaker notes follow `docs/video
   ground).
 - Every classifier selection and evaluation run tracked in MLflow: model, effort, prompt hash, data hashes,
   code version and metrics.
-- 332 hermetic tests; CI builds the container and boots it like the host; `make all` rebuilds every number.
+- 333 hermetic tests; CI builds the container and boots it like the host; `make all` rebuilds every number.
 
 ## 5. Try it, and what it takes to make it real
 - **Try it:** [deployed URL]. Guided scenarios, "Why?" on every reply, the bank view, fault buttons, and the

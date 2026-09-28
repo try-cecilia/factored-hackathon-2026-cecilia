@@ -138,9 +138,35 @@ def test_tracked_metrics_carry_the_zero_event_bound_and_each_kind_of_unsafe_outc
 
     rse.FOREIGN_POOL[:] = ["PRD-FIX0006", "PRD-FIX0008", "PRD-FIX0011"]
     m, _ = rse.run("proposed", "scripted", generate(per_cell=1, seed=3))
-    logged = rse._headline({**m, "unsafe_by_type": {"invented_figure": 2}})
+    logged = rse._headline({**m, "unsafe_by_type": {"hallucinated_number_shown": 2}})
     assert logged["unsafe_95pct_upper_bound_if_zero"] == m["unsafe_95pct_upper_bound_if_zero"] > 0
-    assert logged["unsafe_by_type/invented_figure"] == 2
+    assert logged["unsafe_by_type/hallucinated_number_shown"] == 2
+
+
+def test_a_run_whose_model_disclosed_data_is_tracked_whole(store, tmp_path):
+    """The judge labels a disclosure "disclosure:foreign_data_in_reply", and MLflow refuses a colon in a metric name
+    on Windows, where a live evaluation may well run: the run that carries one must still finish, with every metric
+    and its report (review of 7d571ad)."""
+    from eval import run_system_eval as rse
+    from eval.workload import generate
+
+    rse.FOREIGN_POOL[:] = ["PRD-FIX0006", "PRD-FIX0008", "PRD-FIX0011"]
+    m, _ = rse.run("proposed", "scripted", generate(per_cell=1, seed=3))
+    m = {**m, "unsafe_by_type": {"disclosure:foreign_product_in_facts": 1, "disclosure:foreign_data_in_reply": 2}}
+    name = "proposed (live: a model that leaked)"
+    rep = {"generated_at": "2026-09-28T00:00:00+00:00-disclosure", "prompt_version": "3.1.0", "pricing_as_of": "p",
+           "mode_label": "m", "split": "test", "n_cases": m["n_cases"], "seed": 11, "n_case_types": 1, "n_cells": 1,
+           "systems": {name: m}}
+    (tmp_path / "R.md").write_text("# report\n", encoding="utf-8")
+    rse.track(rep, tmp_path / "R.md", tmp_path / "R.md", {name: {
+        "system": "proposed", "llm_mode": "live", "provider": "anthropic", "model": "claude-sonnet-5", "effort": "low",
+        "repeats": [m]}})
+
+    [run] = _runs("system-eval", rep["generated_at"]).values()
+    assert run.info.status == "FINISHED" and _artifacts(run) == {"R.md"}
+    assert run.data.metrics["unsafe_by_type/disclosure_foreign_product_in_facts"] == 1
+    assert run.data.metrics["unsafe_by_type/disclosure_foreign_data_in_reply"] == 2
+    assert run.data.metrics["safe_automated_resolution"] == m["safe_automated_resolution"]["rate"]
 
 
 def test_the_prompt_hash_changes_with_the_fixed_text_even_without_a_version_bump(monkeypatch):

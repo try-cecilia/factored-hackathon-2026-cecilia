@@ -275,14 +275,14 @@ def test_a_case_file_run_keeps_its_reports_apart_from_the_generated_splits(tmp_p
 
     from eval.workload import save
 
-    cases = tmp_path / "human_set.jsonl"
+    cases = tmp_path / "dev.jsonl"  # a file named like a split must not land on that split's report either
     save(generate(per_cell=1, seed=3)[:4], cases)
     monkeypatch.setattr(rse, "track", lambda *args, **kwargs: None)
     monkeypatch.chdir(tmp_path)  # the default report paths are relative to where it runs
     monkeypatch.setattr(sys, "argv", ["run_system_eval", "--system", "baseline", "--cases", str(cases)])
     rse.main()
-    assert sorted(p.name for p in (tmp_path / "eval" / "reports").iterdir()) == ["SYSTEM_EVAL_human_set.md",
-                                                                                  "system_eval_human_set.json"]
+    assert sorted(p.name for p in (tmp_path / "eval" / "reports").iterdir()) == ["SYSTEM_EVAL_cases_dev.md",
+                                                                                  "system_eval_cases_dev.json"]
 
 
 def test_error_analysis_groups_what_went_wrong_and_the_report_carries_no_customer_ids():

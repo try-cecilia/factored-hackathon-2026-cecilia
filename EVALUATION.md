@@ -186,8 +186,8 @@ diversity mitigates it; a human-authored or production-sampled set is the fix
   run exists, there is no claim about model-driven SAR. `--cases FILE` runs
   any case file in the workload format, such as the external human set; its
   report names the file instead of a generated split and its seed, and is
-  written under that name (`eval/reports/system_eval_<file>.json` and
-  `SYSTEM_EVAL_<file>.md`), never over a split's. Case files belong in
+  written under that name (`eval/reports/system_eval_cases_<file>.json` and
+  `SYSTEM_EVAL_cases_<file>.md`), never over a split's. Case files belong in
   `eval/workload/`: they carry the organizer's customer ids, and the public
   export removes that folder's `.jsonl` files and every `system_eval*.json`.
 
@@ -281,7 +281,7 @@ resolved ones. Scripted and adversarial runs bill nothing, so they print no ROI.
 
 ## 4. Unit and integration tests
 
-`make test`: 332 hermetic tests on a hand-made fixture warehouse, plus one
+`make test`: 333 hermetic tests on a hand-made fixture warehouse, plus one
 opt-in integration test (`RUN_INTEGRATION=1`). CI runs them
 on every push, plus the classifier evaluation. They cover:
 - pipeline idempotency, late-arrival update, quarantine and rollback, schema evolution;

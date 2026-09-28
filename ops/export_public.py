@@ -52,10 +52,13 @@ def main(src: Path, target: Path, redactions: Path) -> int:
     for ref in git("branch", "-r", "--format=%(refname:short)", cwd=target).split():  # a local branch per remote one
         if "/" in ref and not ref.endswith("/HEAD"):
             subprocess.run(["git", "branch", "--quiet", ref.split("/", 1)[1], ref], cwd=target, capture_output=True)
-    subprocess.run([os.environ.get("GIT_FILTER_REPO", "git-filter-repo"), "--force", "--invert-paths",
-                    *[a for p in REMOVE for a in ("--path", p)], *[a for g in REMOVE_GLOBS for a in ("--path-glob", g)],
-                    "--replace-text", str(redactions)],
-                   cwd=target, check=True, capture_output=True)
+    filtered = subprocess.run([os.environ.get("GIT_FILTER_REPO", "git-filter-repo"), "--force", "--invert-paths",
+                               *[a for p in REMOVE for a in ("--path", p)], *[a for g in REMOVE_GLOBS for a in ("--path-glob", g)],
+                               "--replace-text", str(redactions)],
+                              cwd=target, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if filtered.returncode:  # say why: the history was not rewritten, so nothing here may be published
+        sys.exit(f"git-filter-repo failed (exit {filtered.returncode}); {target} must not be published:\n"
+                 f"{filtered.stderr or filtered.stdout}")
 
     redacted = [line.split("==>")[0] for line in redactions.read_text(encoding="utf-8").splitlines() if "==>" in line]
     blobs: dict[str, tuple[str, int]] = {}
