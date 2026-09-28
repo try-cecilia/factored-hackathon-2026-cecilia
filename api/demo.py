@@ -13,8 +13,10 @@ import json
 import os
 from collections import OrderedDict
 from functools import cache
+from pathlib import Path
 from typing import Literal
 
+import duckdb
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
@@ -23,8 +25,11 @@ from agent.llm.client import LLMUnavailable
 from agent.policy.escalation import default_queue
 from agent.session.auth import SessionError, default_store, session_ref
 from agent.session.identity import IdentityUnavailable, derive_test_pin
+from agent.tools import account_tools
 from agent.tools.db import get_connection
 from agent.tools.traces import default_traces
+from data.contracts import CONTRACT_DEVIATIONS, CONTRACT_VERSION
+from data.pipeline import CHECK_FIELDS, lineage_summary
 from ops.demo_customers import roles
 
 MAX_FLAGGED_SESSIONS = 10_000
@@ -223,6 +228,41 @@ def scenarios() -> list[dict]:
         return [{**s, "test_pin": derive_test_pin(s["customer_id"])} for s in _scenarios()]
     except IdentityUnavailable:
         return []
+
+
+# --- data quality ------------------------------------------------------------------------------------------------
+
+FULL_RUN_REPORT = Path(__file__).resolve().parents[1] / "data" / "reports" / "quality_report.json"
+
+
+def _full_run() -> dict | None:
+    """The committed report of `make ingest` over the organizer's complete dataset, which a deploy samples from."""
+    if not FULL_RUN_REPORT.exists():
+        return None
+    rep = json.loads(FULL_RUN_REPORT.read_text(encoding="utf-8"))
+    return {"run_id": rep["run_id"], "generated_at": rep["generated_at"], "contract_version": rep["contract_version"],
+            "code_version": rep["code_version"], "summary": rep["summary"],
+            "tables": {t: {k: v[k] for k in ("partitions", "rows_staged", "rows_quarantined", "rows_deduplicated")}
+                       for t, v in rep["tables"].items()},
+            "failed_checks": [{k: c[k] for k in CHECK_FIELDS} for c in rep["checks"] if c["passed"] is False]}
+
+
+@router.get("/data_quality")
+def data_quality() -> dict:
+    """What the assistant answers from and how it got there: this deploy's warehouse as its own lineage tables
+    describe it, how fresh it is and under which policy, the run over the complete dataset, and the contract.
+    Aggregates only: no rows, no source locations, no error text."""
+    served = lineage_summary(get_connection())
+    try:
+        as_of = account_tools.data_as_of()
+    except duckdb.Error:  # a warehouse without transactions has no as-of date
+        as_of = None
+    loaded = [t["last_load"]["finished_at"] for t in served["tables"] if t["last_load"]]
+    return {"served": served,
+            "freshness": {"as_of": str(as_of) if as_of else None, "loaded_at": max(loaded, default=None),
+                          "slo_hours": account_tools.freshness_slo_hours(), "enforced": account_tools.freshness_enforced()},
+            "full_run": _full_run(),
+            "contract": {"version": CONTRACT_VERSION, "deviations": CONTRACT_DEVIATIONS}}
 
 
 # --- "Why?" ------------------------------------------------------------------------------------------------------

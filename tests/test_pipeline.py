@@ -55,6 +55,18 @@ def test_contracts_dedup_and_lineage(fresh_db):
     assert q(fresh_db, "SELECT failed FROM _dq_results WHERE check_name='rule:credit_fields_present'") == [(1,)]
 
 
+def test_lineage_times_are_utc_whatever_the_machine_time_zone(fresh_db):
+    """started_at, finished_at and _ingested_at are plain TIMESTAMPs. DuckDB stores a UTC time in them converted to
+    the machine's zone (Buenos Aires on a laptop, UTC on the deploy), so the same load would read hours apart."""
+    from datetime import datetime, timezone
+
+    build_fixture_warehouse()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    finished = q(fresh_db, "SELECT max(finished_at) FROM _ingestion_log")[0][0]
+    ingested = q(fresh_db, "SELECT max(_ingested_at) FROM transactions")[0][0]
+    assert abs((now - finished).total_seconds()) < 300 and abs((now - ingested).total_seconds()) < 300
+
+
 def test_late_arriving_partition_updates_in_place_and_is_idempotent(fresh_db):
     build_fixture_warehouse()
     before = q(fresh_db, "SELECT count(*) FROM transactions")[0][0]

@@ -276,7 +276,7 @@ resolved ones. Scripted and adversarial runs bill nothing, so they print no ROI.
 
 ## 4. Unit and integration tests
 
-`make test`: 315 hermetic tests on a hand-made fixture warehouse, plus one
+`make test`: 322 hermetic tests on a hand-made fixture warehouse, plus one
 opt-in integration test (`RUN_INTEGRATION=1`). CI runs them
 on every push, plus the classifier evaluation. They cover:
 - pipeline idempotency, late-arrival update, quarantine and rollback, schema evolution;

@@ -101,7 +101,7 @@ cp .env.example .env        # fill AWS_* + DATASET_BUCKET (dataset), DEMO_IDP_SE
 make setup
 make ingest                 # full warehouse from S3 (~6 min; or `make ingest-demo`, ~1 min)
 make serve                  # http://localhost:8000 — web chat with sandbox test logins
-make test                   # 315 hermetic tests: fixture warehouse, no S3, no API keys
+make test                   # 322 hermetic tests: fixture warehouse, no S3, no API keys
 make all                    # rebuild every number in the docs
 ```
 
@@ -126,7 +126,11 @@ picked from it by `ops/demo_customers.py`):
   receive it: trace requests for payments operations, and tickets with
   evidence and open questions, no transcript and no token;
 - buttons to **expire the session** and to **take the model down** for this
-  session only.
+  session only;
+- a **Data quality** view: the loaded warehouse as its own lineage tables
+  describe it (rows, daily partitions and last load of each table, the checks
+  that did not pass, freshness), the run over the complete dataset, the
+  contract's documented deviations and the update policy. Aggregates only.
 
 It must stay off anywhere real (`LIMITATIONS.md`).
 
@@ -142,7 +146,7 @@ analysis/    problem evidence and human baseline from the supplied data
 eval/        held-out sets, workload generator, baseline bot, evaluation runners, reports/
 ops/         Dockerfile, entrypoint, demo-customer picker, load test, live smoke run, retention
 docs/        architecture decisions (decisions/), data quality, operations, evidence, demo
-tests/       315 hermetic tests + fixtures
+tests/       322 hermetic tests + fixtures
 ```
 
 ## Status

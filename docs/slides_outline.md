@@ -35,12 +35,14 @@ warehouse; everything else is already measured. Speaker notes follow `docs/video
 
 ## 4. Data and engineering rigor
 - Contracts with a quarantine gate and rollback; lineage per row, run and partition; a late-arrival fixture.
-- Findings the data dictionary hides: 57% missing USD amounts; 100% broken branch keys; no MXN at all;
+- Findings the data dictionary hides: 57% missing USD amounts; registration branch keys broken for 149,995 of
+  150,000 customers; no MXN at all;
   transcripts with 42 distinct texts; 58K pending movements (the action's ground).
-- 315 hermetic tests; CI builds the container and boots it like the host; `make all` rebuilds every number.
+- 322 hermetic tests; CI builds the container and boots it like the host; `make all` rebuilds every number.
 
 ## 5. Try it, and what it takes to make it real
-- **Try it:** [deployed URL]. Guided scenarios, "Why?" on every reply, the bank view, fault buttons.
+- **Try it:** [deployed URL]. Guided scenarios, "Why?" on every reply, the bank view, fault buttons, and the
+  data-quality view (lineage, failed checks and freshness, live from the warehouse).
 - **Before production:** the bank's IdP instead of the test PIN; Redis sessions; PII encryption and redaction;
   the metrics stack wired to the specified alerts; voice (85% of contacts are calls).
 - **Next workflow:** transaction disputes, on the same spine.

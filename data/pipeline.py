@@ -109,6 +109,8 @@ def get_connection(read_only: bool = False) -> duckdb.DuckDBPyConnection:
     con = duckdb.connect(duckdb_path(), read_only=read_only)
     con.execute(f"SET memory_limit='{os.environ.get('DUCKDB_MEMORY_LIMIT', '2GB')}'")
     con.execute("SET preserve_insertion_order=false")
+    # Lineage times are plain TIMESTAMPs; without this DuckDB writes UTC times in the machine's own zone.
+    con.execute("SET TimeZone = 'UTC'")
     return con
 
 
@@ -134,6 +136,42 @@ def ensure_meta_tables(con) -> None:
 
 def _table_exists(con, name: str) -> bool:
     return bool(con.execute("SELECT count(*) FROM information_schema.tables WHERE table_name = ?", [name]).fetchone()[0])
+
+
+LOAD_FIELDS = ("run_id", "mode", "n_files", "rows_staged", "rows_quarantined", "rows_deduplicated", "rows_new",
+               "rows_updated", "contract_version", "code_version", "params", "finished_at")
+CHECK_FIELDS = ("table", "check", "category", "severity", "failed", "total", "rate", "detail")
+_LAST_LOADS = """SELECT * FROM _ingestion_log WHERE status = 'success'
+                 QUALIFY row_number() OVER (PARTITION BY table_name ORDER BY finished_at DESC) = 1"""
+
+
+def lineage_summary(con) -> dict:
+    """A warehouse described by its own lineage tables: per table, the rows it holds, its daily partitions and its
+    last good load, and the checks of those loads that did not pass. Aggregates only. Where each file came from
+    (`source_root`, `source_uri`: on a deploy, the organizer's bucket) and why a load failed are left out."""
+    present = {r[0] for r in con.execute("SELECT table_name FROM information_schema.tables").fetchall()}
+    if not {"_ingestion_log", "_partition_log", "_dq_results"} <= present:
+        return {"tables": [], "checks": {"run": 0, "errors_failed": 0, "warnings_failed": 0, "failed": []}}
+    last = {r[0]: r[1:] for r in con.execute(f"SELECT table_name, {', '.join(LOAD_FIELDS)} FROM ({_LAST_LOADS})").fetchall()}
+    loads = {(t, s): n for t, s, n in con.execute("SELECT table_name, status, count(*) FROM _ingestion_log GROUP BY ALL").fetchall()}
+    parts = {t: {"n": n, "first": str(a), "last": str(b)} for t, n, a, b in con.execute(
+        "SELECT table_name, count(DISTINCT partition_date), min(partition_date), max(partition_date) FROM _partition_log GROUP BY ALL").fetchall()}
+    tables = []
+    for name in (t.name for t in TABLES if t.name in present):
+        load = dict(zip(LOAD_FIELDS, last[name])) if name in last else None
+        if load:
+            load |= {"params": json.loads(load["params"] or "{}"), "finished_at": str(load["finished_at"])}
+        tables.append({"table": name, "rows": con.execute(f"SELECT count(*) FROM {name}").fetchone()[0],
+                       "partitions": parts.get(name), "loads": loads.get((name, "success"), 0),
+                       "failed_loads": loads.get((name, "failed"), 0), "last_load": load})
+    order = {t.name: i for i, t in enumerate(TABLES)}
+    checks = con.execute(f"""SELECT d.table_name, d.check_name, d.category, d.severity, d.failed, d.total, d.rate, d.detail,
+                                    d.passed
+                             FROM _dq_results d JOIN ({_LAST_LOADS}) l USING (run_id, table_name)""").fetchall()
+    failed = sorted((dict(zip(CHECK_FIELDS, c[:-1])) for c in checks if c[-1] is False),
+                    key=lambda c: (order.get(c["table"], len(order)), c["check"]))
+    return {"tables": tables, "checks": {"run": len(checks), "errors_failed": sum(c["severity"] == "error" for c in failed),
+                                         "warnings_failed": sum(c["severity"] == "warn" for c in failed), "failed": failed}}
 
 
 def watermark(con, table: str) -> date | None:

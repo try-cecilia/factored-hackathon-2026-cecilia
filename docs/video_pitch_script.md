@@ -2,7 +2,7 @@
 
 Narration in English (the language of every official document), over the demo in Spanish and Portuguese with
 English captions. Visuals: the slides (`docs/slides_outline.md`) and the demo segment recorded on the deployed
-app with `python -m ops.record_demo <URL> demo.webm <repo URL>` (about 110 s, silent, captioned). Numbers in
+app with `python -m ops.record_demo <URL> demo.webm <repo URL>` (about 2 minutes, silent, captioned). Numbers in
 brackets come from `eval/reports/SYSTEM_EVAL_LIVE.md` once `make eval-live` has run on the organizer's warehouse:
 fill them in from that report, never from memory.
 
@@ -18,7 +18,7 @@ fill them in from that report, never from memory.
    was sent) and never writes a reply: every answer is rendered from verified data or a fixed template. The
    one action it takes happens only on the customer's own yes, judged in code.
 
-4. **Demo (110 s), the recorded segment.** Narrate over the captions:
+4. **Demo (about 2 minutes), the recorded segment.** Narrate over the captions:
    - a balance question, and "Why?": what the model received, masked, and what the code verified;
    - two savings accounts: it asks which, then understands "la segunda";
    - the action: a transfer that never arrived is found, proposed, and traced only after "Sí"; the trace is
@@ -26,7 +26,8 @@ fill them in from that report, never from memory.
    - a charge the customer does not recognize goes to a person before any model call, with the flagged
      transactions as evidence;
    - an injection naming another customer's product is caught in code, and security gets a ticket;
-   - with the model down, a plain balance is still answered and the rest goes to a person.
+   - with the model down, a plain balance is still answered and the rest goes to a person;
+   - the data-quality view: the warehouse's lineage, the checks that did not pass and the contract, live.
 
 5. **Why it is safe (30 s).** Three measurements, each with its denominator:
    - an adversarial model that obeys injections and invents figures: [0 unsafe in N cases];

@@ -49,7 +49,15 @@ Per table, inside one transaction:
 
    The JSON report is written to `--report` (`data/reports/quality_report.json`
    by default; in the container, next to the warehouse on the persistent disk)
-   and exposed at `/admin/data_quality`.
+   and exposed at `/admin/data_quality`. Lineage times are UTC on any machine.
+
+   In the jury demo (`DEMO_MODE=1`), the **Data quality** view
+   (`/demo/data_quality`) shows anyone the warehouse being served as these
+   tables describe it (rows, daily partitions, loads and the last good one,
+   the checks of that load that did not pass, the as-of date and the freshness
+   policy), the committed report of the complete-dataset run and the contract
+   with its deviations. Aggregates only: no rows, no source locations (on a
+   deploy they name the organizer's bucket) and no error text.
 
 Contracts live in `data/contracts.py`, contract version 2.0.0.
 

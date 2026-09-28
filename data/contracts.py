@@ -223,7 +223,8 @@ DOMAIN_RULES: dict[str, list[tuple[str, str, str]]] = {
 # (as a warn rule) on every load, so it can't silently get worse.
 CONTRACT_DEVIATIONS = [
     {"table": "call_transcripts", "column": "duration_seconds", "dictionary": "INTEGER NOT NULL",
-     "observed": "~13.7% null", "decision": "warn rule instead of quarantine; analysis-only table, column unused"},
+     "observed": "14.0% null (24,029 of 171,321 in the full run)",
+     "decision": "warn rule instead of quarantine; analysis-only table, column unused"},
 ]
 
 # (check_name, SQL returning (failed_rows, total_rows)) run after load, when referenced tables exist.

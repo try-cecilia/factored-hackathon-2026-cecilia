@@ -6,6 +6,7 @@ Fixture customers: see tests/test_orchestrator.py.
 from __future__ import annotations
 
 import json
+import re
 
 import pytest
 from fastapi.testclient import TestClient
@@ -61,6 +62,7 @@ def test_without_demo_mode_the_demo_does_not_exist(client, monkeypatch):
     assert client.get("/demo/scenarios").status_code == 404
     assert client.post("/demo/tickets", json={"session_token": token}).status_code == 404
     assert client.post("/demo/fault", json={"session_token": token, "fault": "llm_outage"}).status_code == 404
+    assert client.get("/demo/data_quality").status_code == 404
     r = chat(client, token, "Me clonaron la tarjeta")
     # Nor does the rule that decided: it is for the operator's trace, and in the chat it would tell an attacker which
     # layer stopped them (review minor #4). The operator still finds it in /admin/traces.
@@ -187,3 +189,98 @@ def test_the_trace_scenario_can_start_clean_after_an_earlier_run_without_touchin
     assert default_traces.find("CLI-FIX0004", "TXN-FIX0006") is None and default_traces.find("CLI-FIX0001", "TXN-X")
     model(monkeypatch, tool("request_trace", {}))
     assert chat(client, token, "¿Pueden rastrear mi transferencia? Sigue pendiente")["policy_rule"] == "action:trace_proposed"
+
+
+# --- data quality ---------------------------------------------------------------------------------------------------
+# Expected values are counted by hand on tests/fixtures/raw: customers.csv has 6 rows and 5 ids, the transactions
+# have 11 rows and 10 ids over three daily files (14 to 16 January 2024), 3 of them without amount_usd, and 1 of the
+# 12 products is a credit card without days past due.
+
+def test_the_data_quality_page_describes_the_warehouse_being_served(client):
+    dq = client.get("/demo/data_quality").json()
+    tables = {t["table"]: t for t in dq["served"]["tables"]}
+    assert list(tables) == ["branches", "daily_exchange_rates", "customers", "products", "transactions"]
+    assert {name: t["rows"] for name, t in tables.items()} == {"branches": 2, "daily_exchange_rates": 7, "customers": 5,
+                                                              "products": 12, "transactions": 10}
+    assert tables["transactions"]["partitions"] == {"n": 3, "first": "2024-01-14", "last": "2024-01-16"}
+    assert tables["customers"]["partitions"] is None  # one flat file, not daily partitions
+    last = tables["customers"]["last_load"]
+    assert (last["mode"], last["rows_staged"], last["rows_deduplicated"], last["rows_quarantined"]) == ("full", 6, 1, 0)
+    assert last["contract_version"] == "2.0.0" and last["params"]["sample_customers"] is None
+    assert (tables["transactions"]["loads"], tables["transactions"]["failed_loads"]) == (1, 0)
+    assert dq["freshness"] == {"as_of": "2024-01-16", "loaded_at": dq["freshness"]["loaded_at"], "slo_hours": 36,
+                               "enforced": False}
+    assert dq["freshness"]["loaded_at"].startswith(last["finished_at"][:10])
+
+
+def test_the_data_quality_page_lists_the_checks_that_failed_with_their_numbers(client):
+    checks = client.get("/demo/data_quality").json()["served"]["checks"]
+    failed = {(c["table"], c["check"]): (c["severity"], c["failed"], c["total"]) for c in checks["failed"]}
+    assert failed == {("customers", "pk_duplicates_in_batch"): ("warn", 1, 6),
+                      ("products", "rule:credit_fields_present"): ("warn", 1, 12),
+                      ("transactions", "pk_duplicates_in_batch"): ("warn", 1, 11),
+                      ("transactions", "rule:usd_amount_present"): ("warn", 3, 11)}
+    assert (checks["errors_failed"], checks["warnings_failed"]) == (0, 4) and checks["run"] > len(failed)
+
+
+def test_a_failed_load_is_counted_without_hiding_the_one_being_served(client, tmp_path, monkeypatch):
+    """tests/fixtures/raw_bad breaks the contract in 2 of its 5 rows, so the quality gate rolls that load back and
+    the previous transactions keep serving: the page says a load failed and still describes the good one."""
+    from agent.tools import db
+    from data.pipeline import PipelineError, RunConfig, run_pipeline
+    from tests.conftest import FIXTURES, build_fixture_warehouse
+
+    monkeypatch.setenv("DUCKDB_PATH", str(tmp_path / "w.duckdb"))
+    build_fixture_warehouse()
+    with pytest.raises(PipelineError):
+        run_pipeline(["transactions"], RunConfig(source="local", raw_dir=FIXTURES / "raw_bad"))
+    db.close_all()
+    tx = next(t for t in client.get("/demo/data_quality").json()["served"]["tables"] if t["table"] == "transactions")
+    assert (tx["loads"], tx["failed_loads"], tx["rows"], tx["last_load"]["rows_staged"]) == (1, 1, 10, 11)
+
+
+def test_after_a_late_partition_the_page_describes_the_newest_load_and_the_rows_now_held(client, tmp_path, monkeypatch):
+    """tests/fixtures/raw_late re-delivers 16 January with one corrected amount and one new transaction (4 rows):
+    the table now holds 11 rows over the same three days, and its last load is that one-day reload."""
+    from datetime import date
+
+    from agent.tools import db
+    from data.pipeline import RunConfig, run_pipeline
+    from tests.conftest import FIXTURES, build_fixture_warehouse
+
+    monkeypatch.setenv("DUCKDB_PATH", str(tmp_path / "w.duckdb"))
+    build_fixture_warehouse()
+    run_pipeline(["transactions"], RunConfig(source="local", raw_dir=FIXTURES / "raw_late", only_date=date(2024, 1, 16)))
+    db.close_all()
+    tx = next(t for t in client.get("/demo/data_quality").json()["served"]["tables"] if t["table"] == "transactions")
+    assert (tx["loads"], tx["rows"], tx["partitions"]["n"]) == (2, 11, 3)
+    assert (tx["last_load"]["mode"], tx["last_load"]["rows_staged"], tx["last_load"]["rows_new"]) == ("partition", 4, 1)
+
+
+def test_the_data_quality_page_carries_the_complete_dataset_run_and_the_contract(client):
+    """The committed report of the run over the organizer's complete dataset, read as it is on disk, and the
+    contract with its documented deviation from the data dictionary."""
+    report = json.load(open("data/reports/quality_report.json", encoding="utf-8"))
+    dq = client.get("/demo/data_quality").json()
+    full = dq["full_run"]
+    assert (full["run_id"], full["summary"]) == (report["run_id"], report["summary"])
+    assert {(c["table"], c["check"], c["failed"], c["total"]) for c in full["failed_checks"]} == {
+        (c["table"], c["check"], c["failed"], c["total"]) for c in report["checks"] if c["passed"] is False}
+    assert full["tables"]["transactions"]["rows_staged"] == report["tables"]["transactions"]["rows_staged"]
+    assert dq["contract"]["version"] == "2.0.0"
+    assert [(d["table"], d["column"]) for d in dq["contract"]["deviations"]] == [("call_transcripts", "duration_seconds")]
+
+
+def _keys(value) -> set[str]:
+    if isinstance(value, dict):
+        return set(value) | {k for v in value.values() for k in _keys(v)}
+    return {k for v in value for k in _keys(v)} if isinstance(value, list) else set()
+
+
+def test_the_data_quality_page_shows_no_customer_data_and_no_source_location(client):
+    """Aggregates only. The lineage tables also record where each file came from, which on the deploy names the
+    organizer's bucket (the public repository redacts it), and why a load failed: none of it leaves."""
+    r = client.get("/demo/data_quality")
+    assert not re.search(r"\b(?:CLI|PRD|TXN|SUC)-", r.text)
+    assert "s3://" not in r.text and "file:" not in r.text and "fixtures" not in r.text
+    assert not {"source_root", "source_uri", "error", "_source_file"} & _keys(r.json())

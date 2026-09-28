@@ -67,11 +67,19 @@ def data_as_of() -> date | None:
     return _as_of_for(duckdb_path())
 
 
+def freshness_enforced() -> bool:
+    return os.environ.get("FRESHNESS_ENFORCE") == "1"
+
+
+def freshness_slo_hours() -> float:
+    return float(os.environ.get("FRESHNESS_SLO_HOURS", "36"))
+
+
 def _check_freshness() -> None:
-    if os.environ.get("FRESHNESS_ENFORCE") != "1":
+    if not freshness_enforced():
         return
     as_of = data_as_of()
-    slo_h = float(os.environ.get("FRESHNESS_SLO_HOURS", "36"))
+    slo_h = freshness_slo_hours()
     age_h = (datetime.now(timezone.utc).date() - as_of).days * 24 if as_of else float("inf")
     if age_h > slo_h:
         raise DataUnavailable(f"warehouse data as of {as_of} exceeds freshness SLO of {slo_h:.0f}h", field="as_of")

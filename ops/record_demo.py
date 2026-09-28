@@ -25,8 +25,10 @@ CAPTION_JS = """t => {
   let c = document.getElementById('__cap');
   if (!c) { c = document.createElement('div'); c.id = '__cap';
     c.style.cssText = 'position:fixed;left:50%;bottom:22px;transform:translateX(-50%);max-width:1120px;background:rgba(14,47,43,.95);'
-      + 'color:#f2f4f1;font:600 21px/1.4 system-ui,sans-serif;padding:12px 22px;border-radius:12px;z-index:9999;text-align:center';
-    document.body.appendChild(c); }
+      + 'color:#f2f4f1;font:600 21px/1.4 system-ui,sans-serif;padding:12px 22px;border-radius:12px;z-index:9999;text-align:center'; }
+  // An open modal dialog sits in the browser's top layer, above any z-index: the caption goes inside it.
+  const host = document.querySelector('dialog[open]') || document.body;
+  if (c.parentElement !== host) host.appendChild(c);
   c.textContent = t; }"""
 
 
@@ -88,6 +90,12 @@ def main(base: str, out: Path, repo: str) -> None:
         run_scenario(page, "The language model goes down", "Now the language model goes down.",
                      then="A plain balance is still answered from verified data…",
                      after="…and anything that needs understanding goes to a person.")
+        page.click("#btnDq")
+        page.wait_for_selector("#dqBody table.dqt")
+        caption(page, "Data quality, live from the warehouse's lineage: rows, partitions and last load of each table, and every check that did not pass.", 6500)
+        page.locator("#dq").evaluate("d => d.scrollTo({top: d.scrollHeight, behavior: 'smooth'})")
+        caption(page, "Also the run over the complete dataset, the contract's documented deviations and the update policy. Aggregates only.", 6000)
+        page.keyboard.press("Escape")
         page.set_content(CARD.format(body=f"""
           <h2 style="font-size:42px;margin:0 0 22px">Every reply is verified data or a fixed template.</h2>
           <p style="font-size:25px;color:#c6d3cf;line-height:1.5">No customer record ever reaches the model.<br>

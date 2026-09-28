@@ -129,6 +129,32 @@
   pre.json { margin: 4px 0 0; font-size: 12px; background: var(--code); border-radius: 6px; padding: 6px 8px; overflow-x: auto; max-height: 220px; }
   .empty { color: var(--muted); font-size: 13px; border: 1px dashed var(--line); border-radius: 10px; padding: 14px; text-align: center; }
   footer { max-width: 1480px; margin: 0 auto; padding: 0 16px 24px; color: var(--muted); font-size: 12px; }
+
+  dialog#dq { width: min(1100px, calc(100vw - 32px)); max-height: calc(100vh - 32px); padding: 0; border: 1px solid var(--line);
+              border-radius: 14px; background: var(--panel); color: var(--ink); }
+  dialog#dq::backdrop { background: rgb(0 0 0 / .45); }
+  @media (max-width: 780px) { dialog#dq { width: 100%; max-width: 100%; height: 100%; max-height: 100%; margin: 0; border: 0; border-radius: 0; } }
+  .dq-head { position: sticky; top: 0; z-index: 1; display: flex; justify-content: space-between; align-items: center; gap: 10px;
+             padding: 14px 16px 10px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  #dq h2 { font-size: 17px; margin: 0; line-height: 1.3; }
+  .dq-body { padding: 4px 16px 18px; }
+  .dq-body h3 { font-size: 14px; margin: 20px 0 2px; }
+  .dq-body .hint { margin: 0 0 8px; }
+  .dq-body .lead { margin-top: 10px; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; margin: 12px 0 4px; }
+  .kpi { background: var(--soft); border-radius: 10px; padding: 8px 10px; min-width: 0; }
+  .kpi span { display: block; font-size: 12px; color: var(--muted); }
+  .kpi b { display: block; font-size: 16px; overflow-wrap: anywhere; }
+  .tablewrap { overflow-x: auto; }
+  table.dqt { width: 100%; border-collapse: collapse; font-size: 13px; }
+  @media (max-width: 780px) { table.dqt { min-width: 680px; } }  /* scroll sideways instead of squeezing the columns */
+  table.dqt th, table.dqt td { text-align: left; padding: 5px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  table.dqt th { font-size: 12px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+  table.dqt .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  table.dqt .rule code { white-space: normal; overflow-wrap: anywhere; font-size: 12px; }
+  .sub2 { display: block; color: var(--muted); font-size: 12px; }
+  .sev { font-size: 11px; font-weight: 700; border: 1px solid currentColor; border-radius: 6px; padding: 0 6px; white-space: nowrap; }
+  .sev-error, .bad { color: var(--escalate); } .sev-warn { color: var(--abstain); }
 </style>
 </head>
 <body>
@@ -141,6 +167,7 @@
     </div>
   </div>
   <div class="top-actions">
+    <button type="button" class="ghost demo-only" id="btnDq" aria-haspopup="dialog" data-t="dqButton"></button>
     <span id="modelStatus" class="pill" role="status"></span>
     <div class="lang" role="group" aria-label="Language">
       <button type="button" data-lang="en" aria-pressed="true">EN</button>
@@ -197,6 +224,19 @@
 </main>
 <footer data-t="footer"></footer>
 
+<dialog id="dq" aria-labelledby="dqH">
+  <div>
+    <div class="dq-head">
+      <h2 id="dqH" data-t="dqTitle"></h2>
+      <button type="button" class="ghost" id="dqClose" data-t="close"></button>
+    </div>
+    <div class="dq-body">
+      <p class="hint lead" data-t="dqHint"></p>
+      <div id="dqBody"></div>
+    </div>
+  </div>
+</dialog>
+
 <script>
 "use strict";
 const T = {
@@ -231,6 +271,32 @@ const T = {
     examples: ["¿Cuál es mi saldo?", "¿Estoy al día con mi tarjeta de crédito?", "Mis últimos movimientos", "¿A cuánto está el dólar?",
                "Qual é o meu saldo?", "Quiero bloquear mi tarjeta", "No reconozco un cargo"],
     errGeneric: "Something went wrong", errRate: "Too many messages; wait a moment.",
+    dqButton: "Data quality", dqTitle: "Data quality · what every answer comes from",
+    dqHint: "Contracts, quality checks, lineage and freshness of the data behind every answer. Aggregates only: no customer rows, no file locations.",
+    dq: {
+      loading: "Loading…", failed: "The data-quality report could not be loaded.",
+      asOf: "Data as of", loaded: "Loaded (UTC)", checksRun: "Checks run", failedChecks: "Failed: errors · warnings",
+      slo: "Freshness SLO", sloOn: h => `${h} h, enforced`, sloOff: h => `${h} h, not enforced (static snapshot)`,
+      servedTitle: "This deploy's warehouse",
+      servedHint: "Read live from the warehouse's own lineage tables: _ingestion_log, _partition_log and _dq_results.",
+      table: "Table", rows: "Rows", partitions: "Daily partitions", lastLoad: "Last load", loads: "Loads ok · failed", contract: "Contract",
+      staged: (s, q, d) => `read ${s} · quarantined ${q} · deduplicated ${d}`,
+      failedTitle: "Checks that did not pass, in the last load of each table", allPassed: "Every check passed.",
+      fullFailedTitle: "Checks that did not pass in that run",
+      check: "Check", severity: "Severity", failedTotal: "Failed / total", rate: "Rate", rule: "Rule",
+      sev: { error: "error", warn: "warning" },
+      fullTitle: "Run over the complete dataset",
+      fullHint: "The committed report of make ingest over the organizer's full dataset, which this deploy samples from.",
+      run: "Run", rowsRead: "Rows read", files: "Files read", quarantined: "Quarantined", duplicates: "Deduplicated",
+      contractTitle: "Contract and documented deviations",
+      contractHint: v => `Contract version ${v}: types, NOT NULL and keys from the data dictionary, domain rules and cross-table checks. Where the data contradicts the dictionary, the deviation is written down and still measured on every load:`,
+      column: "Column", dictionary: "Data dictionary", observed: "Observed", decision: "Decision",
+      policyTitle: "Update and freshness policy",
+      policy: ["Batch, not streaming: the source is daily files, and no answer needs data fresher than a day.",
+               "The unit of update is the daily partition. An incremental load reloads from the latest partition minus 3 days, so late or re-delivered partitions are absorbed, and upserts by primary key make a replay change nothing (tested with a labeled fixture).",
+               "A load that quarantines more than 1% of its rows rolls back, and the previous data keeps serving.",
+               "Every answer states the date of the data it comes from."],
+    },
   },
   es: {
     title: "Asistente de cuenta y pagos", subtitle: "Sandbox de LATAM Bank · Factored AI & Data Hackathon 2026 · equipo Marvaq · datos 100% sintéticos",
@@ -263,6 +329,32 @@ const T = {
     examples: ["¿Cuál es mi saldo?", "¿Estoy al día con mi tarjeta de crédito?", "Mis últimos movimientos", "¿A cuánto está el dólar?",
                "Qual é o meu saldo?", "Quiero bloquear mi tarjeta", "No reconozco un cargo"],
     errGeneric: "Algo salió mal", errRate: "Demasiados mensajes; espera un momento.",
+    dqButton: "Calidad de datos", dqTitle: "Calidad de datos · de dónde sale cada respuesta",
+    dqHint: "Contratos, controles de calidad, linaje y frescura de los datos detrás de cada respuesta. Solo agregados: ninguna fila de clientes ni ubicación de archivos.",
+    dq: {
+      loading: "Cargando…", failed: "No se pudo cargar el reporte de calidad de datos.",
+      asOf: "Datos al", loaded: "Cargado (UTC)", checksRun: "Controles corridos", failedChecks: "Fallidos: errores · advertencias",
+      slo: "SLO de frescura", sloOn: h => `${h} h, aplicado`, sloOff: h => `${h} h, no aplicado (foto fija)`,
+      servedTitle: "El warehouse de este deploy",
+      servedHint: "Leído en vivo de las tablas de linaje del propio warehouse: _ingestion_log, _partition_log y _dq_results.",
+      table: "Tabla", rows: "Filas", partitions: "Particiones diarias", lastLoad: "Última carga", loads: "Cargas ok · fallidas", contract: "Contrato",
+      staged: (s, q, d) => `leídas ${s} · en cuarentena ${q} · duplicadas ${d}`,
+      failedTitle: "Controles que no pasaron, en la última carga de cada tabla", allPassed: "Pasaron todos los controles.",
+      fullFailedTitle: "Controles que no pasaron en esa corrida",
+      check: "Control", severity: "Severidad", failedTotal: "Fallidas / total", rate: "Tasa", rule: "Regla",
+      sev: { error: "error", warn: "advertencia" },
+      fullTitle: "Corrida sobre el dataset completo",
+      fullHint: "El reporte commiteado de make ingest sobre el dataset completo del organizador, del que este deploy toma una muestra.",
+      run: "Corrida", rowsRead: "Filas leídas", files: "Archivos leídos", quarantined: "En cuarentena", duplicates: "Duplicadas",
+      contractTitle: "Contrato y desvíos documentados",
+      contractHint: v => `Contrato versión ${v}: tipos, NOT NULL y claves del diccionario de datos, reglas de dominio y controles entre tablas. Donde los datos contradicen el diccionario, el desvío queda escrito y se sigue midiendo en cada carga:`,
+      column: "Columna", dictionary: "Diccionario de datos", observed: "Observado", decision: "Decisión",
+      policyTitle: "Política de actualización y frescura",
+      policy: ["Por lotes, no streaming: la fuente son archivos diarios, y ninguna respuesta necesita datos de menos de un día.",
+               "La unidad de actualización es la partición diaria. Una carga incremental recarga desde la última partición menos 3 días, así se absorben particiones tardías o reenviadas, y el upsert por clave primaria hace que repetir una carga no cambie nada (probado con un fixture rotulado).",
+               "Una carga que pone en cuarentena más del 1% de sus filas se revierte, y siguen sirviendo los datos anteriores.",
+               "Cada respuesta dice la fecha de los datos de los que sale."],
+    },
   },
 };
 
@@ -299,7 +391,7 @@ function paintStatic() {
   $("#m").placeholder = t().placeholder;
   $("#btnOutage").textContent = state.modelDown ? t().outageOn : t().outage;
   $("#btnOutage").setAttribute("aria-pressed", String(state.modelDown));
-  paintModelStatus(); paintChips(); paintScenarios(); paintSteps(); repaintWhy(); refreshTickets(false);
+  paintModelStatus(); paintChips(); paintScenarios(); paintSteps(); repaintWhy(); refreshTickets(false); paintDq();
 }
 function paintModelStatus() {
   const el = $("#modelStatus");
@@ -553,8 +645,88 @@ function ticketCard(tk, fresh) {
       h("dt", {}, L.ids), h("dd", { class: "mono" }, `${t().trace} ${String(tk.trace_id || "").slice(0, 8)} · ${t().sessionRef} ${tk.session_ref}`)));
 }
 
+// ---------- data quality ----------
+let dqData = null;
+const locale = () => (state.lang === "es" ? "es" : "en");
+const fmtN = n => (n === null || n === undefined) ? "—" : Number(n).toLocaleString(locale());
+const fmtPct = r => {  // one decimal; a rate that is not 0 or 1 never rounds to "0.0%" or "100.0%"
+  if (r === null || r === undefined) return "—";
+  if (r > 0 && r < 0.0005) return `<${(0.1).toLocaleString(locale(), { minimumFractionDigits: 1 })}%`;
+  if (r < 1 && r >= 0.9995) return `>${(99.9).toLocaleString(locale(), { minimumFractionDigits: 1 })}%`;
+  return `${(100 * r).toLocaleString(locale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+};
+const kpi = (label, value) => h("div", { class: "kpi" }, h("span", {}, label), h("b", {}, value));
+function dqTable(head, rows) {
+  return h("div", { class: "tablewrap" }, h("table", { class: "dqt" },
+    h("thead", {}, h("tr", {}, head.map(([c, num]) => h("th", { scope: "col", class: num ? "num" : null }, c)))), h("tbody", {}, rows)));
+}
+function checksTable(list) {
+  const L = t().dq;
+  if (!list.length) return h("p", { class: "muted" }, L.allPassed);
+  return dqTable([[L.table], [L.check], [L.severity], [L.failedTotal, true], [L.rate, true], [L.rule]], list.map(c => h("tr", {},
+    h("td", {}, c.table), h("td", {}, h("code", {}, c.check)), h("td", {}, h("span", { class: "sev sev-" + c.severity }, L.sev[c.severity] || c.severity)),
+    h("td", { class: "num" }, `${fmtN(c.failed)} / ${fmtN(c.total)}`), h("td", { class: "num" }, fmtPct(c.rate)),
+    h("td", { class: "rule" }, c.detail ? h("code", {}, c.detail) : "—"))));
+}
+function loadParams(load) {  // what shaped the load: a sample, a date range, a single day
+  return Object.entries(load.params || {})
+    .filter(([k, v]) => v !== null && v !== false && k !== "sample_mode" && (k !== "lookback_days" || load.mode === "incremental"))
+    .map(([k, v]) => `${k}=${v}`).join(" · ");
+}
+async function openDq() {
+  $("#dq").showModal();
+  if (!dqData) {
+    $("#dqBody").replaceChildren(h("p", { class: "muted" }, t().dq.loading));
+    const r = await api("GET", "/demo/data_quality");
+    if (!r.ok) { $("#dqBody").replaceChildren(h("p", { class: "err" }, t().dq.failed)); return; }
+    dqData = r.data;
+  }
+  paintDq();
+}
+function paintDq() {
+  if (!dqData || !$("#dq").open) return;
+  const L = t().dq, { served, freshness: f, full_run: full, contract } = dqData;
+  const body = [
+    h("div", { class: "kpis" },
+      kpi(L.asOf, f.as_of || "—"), kpi(L.loaded, f.loaded_at ? f.loaded_at.slice(0, 16) : "—"),
+      kpi(L.checksRun, fmtN(served.checks.run)), kpi(L.failedChecks, `${served.checks.errors_failed} · ${served.checks.warnings_failed}`),
+      kpi(L.slo, (f.enforced ? L.sloOn : L.sloOff)(fmtN(f.slo_hours)))),
+    h("h3", {}, L.servedTitle), h("p", { class: "hint" }, L.servedHint),
+    dqTable([[L.table], [L.rows, true], [L.partitions], [L.lastLoad], [L.loads, true], [L.contract]], served.tables.map(tb => {
+      const ld = tb.last_load, p = tb.partitions, params = ld ? loadParams(ld) : "";
+      return h("tr", {},
+        h("td", {}, h("code", {}, tb.table)), h("td", { class: "num" }, fmtN(tb.rows)),
+        h("td", {}, p ? `${fmtN(p.n)} · ${p.first} → ${p.last}` : "—"),
+        h("td", {}, ld ? [h("code", {}, ld.mode), " · ", L.staged(fmtN(ld.rows_staged), fmtN(ld.rows_quarantined), fmtN(ld.rows_deduplicated)),
+                          params ? h("span", { class: "sub2 mono" }, params) : null] : "—"),
+        h("td", { class: "num" }, fmtN(tb.loads), " · ", h("span", { class: tb.failed_loads ? "bad" : null }, fmtN(tb.failed_loads))),
+        h("td", {}, ld ? ld.contract_version : "—"));
+    })),
+    h("h3", {}, L.failedTitle), checksTable(served.checks.failed),
+  ];
+  if (full) {
+    const rowsRead = Object.values(full.tables).reduce((a, x) => a + x.rows_staged, 0);
+    body.push(h("h3", {}, L.fullTitle), h("p", { class: "hint" }, L.fullHint),
+      h("div", { class: "kpis" },
+        kpi(L.run, `${full.run_id} · ${full.generated_at.slice(0, 10)}`), kpi(L.rowsRead, fmtN(rowsRead)),
+        kpi(L.checksRun, fmtN(full.summary.checks_run)), kpi(L.failedChecks, `${full.summary.errors_failed} · ${full.summary.warnings_failed}`)),
+      dqTable([[L.table], [L.rowsRead, true], [L.files, true], [L.quarantined, true], [L.duplicates, true]],
+        Object.entries(full.tables).map(([name, x]) => h("tr", {}, h("td", {}, h("code", {}, name)), h("td", { class: "num" }, fmtN(x.rows_staged)),
+          h("td", { class: "num" }, fmtN(x.partitions)), h("td", { class: "num" }, fmtN(x.rows_quarantined)), h("td", { class: "num" }, fmtN(x.rows_deduplicated))))),
+      h("h3", {}, L.fullFailedTitle), checksTable(full.failed_checks));
+  }
+  body.push(h("h3", {}, L.contractTitle), h("p", { class: "hint" }, L.contractHint(contract.version)),
+    dqTable([[L.column], [L.dictionary], [L.observed], [L.decision]], contract.deviations.map(d => h("tr", {},
+      h("td", {}, h("code", {}, `${d.table}.${d.column}`)), h("td", {}, h("code", {}, d.dictionary)), h("td", {}, d.observed), h("td", {}, d.decision)))),
+    h("h3", {}, L.policyTitle), h("ul", { class: "plainlist" }, L.policy.map(x => h("li", {}, x))));
+  $("#dqBody").replaceChildren(...body);
+}
+
 // ---------- wiring ----------
 document.querySelectorAll(".lang button").forEach(b => b.addEventListener("click", () => { state.lang = b.dataset.lang; store.set("demo.lang", state.lang); paintStatic(); tick(); }));
+$("#btnDq").addEventListener("click", openDq);
+$("#dqClose").addEventListener("click", () => $("#dq").close());
+$("#dq").addEventListener("click", e => { if (e.target === $("#dq")) $("#dq").close(); });  // a click on the backdrop
 $("#f").addEventListener("submit", e => { e.preventDefault(); send($("#m").value); });
 $("#go").addEventListener("click", () => signIn($("#cid").value.trim(), $("#pin").value.trim()));
 $("#btnOut").addEventListener("click", signOut);
