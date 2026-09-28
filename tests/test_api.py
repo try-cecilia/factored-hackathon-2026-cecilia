@@ -46,6 +46,17 @@ def test_health(client):
     assert body["llm_budget_exhausted"] is False  # a monitor can alert on it; the amounts stay behind the admin key
 
 
+def test_the_operations_summary_counts_what_an_operator_watches(client):
+    token = login(client).json()["token"]
+    client.post("/chat", json={"session_token": token, "message": "Me clonaron la tarjeta"})  # theft, before any model
+    client.post("/chat", json={"session_token": token, "message": "¿Cuál es mi saldo?"})  # no model key here: degraded mode
+    assert client.get("/admin/ops").status_code == 401
+    s = client.get("/admin/ops", headers={"X-Admin-Key": "test-admin-key"}).json()
+    assert s["turns"] >= 2 and s["dispositions"]["ESCALATE"] >= 1 and s["escalations_by_category"]["theft"] >= 1
+    assert s["degraded_turns"] >= 1 and s["handoff_unverified"] == 0
+    assert {"latency_ms_p50", "latency_ms_p95", "cost_usd", "models", "traces_opened", "llm_budget", "top_rules"} <= set(s)
+
+
 def test_the_daily_model_budget_is_reported_to_operators_only(client, monkeypatch):
     from agent.llm.budget import DailyBudget
 

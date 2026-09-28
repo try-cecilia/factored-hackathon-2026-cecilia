@@ -19,7 +19,7 @@ import json
 import os
 import threading
 import time
-from collections import defaultdict, deque
+from collections import Counter, defaultdict, deque
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
@@ -186,6 +186,31 @@ def trace(trace_id: str) -> dict:
             rec["tool_audit"] = [a for a in _tail(default_audit_log.path, 5000) if a.get("trace_id") == rec["trace_id"]]
             return rec
     raise HTTPException(404, "trace not found")
+
+
+@app.get("/admin/ops", dependencies=[Depends(require_admin)])
+def ops(limit: int = 1000) -> dict:
+    """What an operator watches while the demo is live, from the last turns' trace records (docs/operations.md)."""
+    rows = _tail(default_trace_log.path, min(max(limit, 1), 5000))
+    rules = [str(r.get("policy_rule") or "") for r in rows]
+    lat = sorted(float(r.get("latency_ms") or 0) for r in rows)
+    pct = lambda p: round(lat[min(len(lat) - 1, int(round(p * (len(lat) - 1))))], 1) if lat else None  # noqa: E731
+    return {
+        "turns": len(rows), "from_ts": rows[0].get("ts") if rows else None, "to_ts": rows[-1].get("ts") if rows else None,
+        "dispositions": dict(Counter(r.get("disposition") for r in rows)),
+        "escalations_by_category": dict(Counter(r.get("category") for r in rows if r.get("disposition") == "ESCALATE")),
+        "top_rules": dict(Counter(rules).most_common(15)),
+        "degraded_turns": sum(rule.startswith("degraded:") for rule in rules),
+        "llm_unavailable": sum(rule.startswith("llm_unavailable") for rule in rules),
+        "handoff_unverified": sum(rule.endswith("|handoff_unverified") for rule in rules),
+        "traces_opened": rules.count("action:trace_opened"),
+        "llm_calls": sum(int(r.get("llm_calls") or 0) for r in rows),
+        "cost_usd": round(sum(float(r["cost_usd"]) for r in rows if r.get("cost_usd") is not None), 6),
+        "unpriced_turns": sum(r.get("cost_usd") is None for r in rows),
+        "latency_ms_p50": pct(0.5), "latency_ms_p95": pct(0.95),
+        "models": dict(Counter(f"{r.get('provider')}/{r.get('model')}" for r in rows if r.get("llm_calls"))),
+        "llm_budget": llm_budget(),
+    }
 
 
 @app.get("/admin/llm_budget", dependencies=[Depends(require_admin)])

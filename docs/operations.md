@@ -128,6 +128,13 @@ tool call writes an audit record. Signals to alert on, from those records:
 Production would ship these to a metrics stack (e.g. OpenTelemetry → Grafana)
 instead of reading JSONL. The field names are already stable for that.
 
+While the demo is live, `GET /admin/ops` (with `X-Admin-Key`) summarizes the
+last 1,000 turns (`?limit=` up to 5,000): dispositions, escalations by
+category, the top rules, degraded-mode turns, `llm_unavailable`,
+`handoff_unverified`, traces opened, model calls, cost and unpriced turns,
+p50/p95 latency, the models that answered and the day's model budget. Check
+it once a day during the judging window, alongside `/health`.
+
 ## Access control
 
 | Surface | Control |
