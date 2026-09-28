@@ -62,7 +62,9 @@ def test_without_demo_mode_the_demo_does_not_exist(client, monkeypatch):
     assert client.post("/demo/tickets", json={"session_token": token}).status_code == 404
     assert client.post("/demo/fault", json={"session_token": token, "fault": "llm_outage"}).status_code == 404
     r = chat(client, token, "Me clonaron la tarjeta")
-    assert r["policy_rule"] == "lexicon:theft" and r["why"] is None
+    # Nor does the rule that decided: it is for the operator's trace, and in the chat it would tell an attacker which
+    # layer stopped them (review minor #4). The operator still finds it in /admin/traces.
+    assert r["disposition"] == "ESCALATE" and r["policy_rule"] == "" and r["why"] is None
 
 
 def test_guided_scenarios_cover_every_path_with_customers_that_can_sign_in(client):

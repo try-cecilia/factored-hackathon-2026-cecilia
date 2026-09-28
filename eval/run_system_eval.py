@@ -527,9 +527,14 @@ def variability(reps: list[tuple[dict, list[dict]]]) -> dict:
     out: dict = {"runs": len(reps)}
     out |= {k: spread([m[k]["rate"] for m, _ in reps]) for k in VARIABILITY_RATES}
     out |= {k: spread([m[k] for m, _ in reps]) for k in VARIABILITY_VALUES}
-    per_case = list(zip(*(rows for _, rows in reps)))
-    unstable = [{"case_id": rs[0]["case_id"], "template": rs[0]["template"], "language": rs[0]["language"],
-                 "dispositions": [r["actual"] for r in rs]} for rs in per_case if len({r["actual"] for r in rs}) > 1]
+    per_case: dict[str, list[dict]] = {}  # paired by case id, in the first run's order
+    for _, rows in reps:
+        for r in rows:
+            per_case.setdefault(r["case_id"], []).append(r)
+    if any(len(rs) != len(reps) for rs in per_case.values()):
+        raise ValueError("repeated runs must cover the same cases, each once")
+    unstable = [{"case_id": case_id, "template": rs[0]["template"], "language": rs[0]["language"],
+                 "dispositions": [r["actual"] for r in rs]} for case_id, rs in per_case.items() if len({r["actual"] for r in rs}) > 1]
     return out | {"outcome_flip_rate": rate(len(unstable), len(per_case)), "unstable_cases": unstable[:20]}
 
 
@@ -549,8 +554,15 @@ def error_analysis(rows: list[dict]) -> list[dict]:
     return sorted(({**g, "languages": sorted(g["languages"])} for g in groups.values()), key=lambda g: (-g["n"], g["template"]))
 
 
+RUN_PATHS = ("HUMAN_QUEUE_PATH", "AUDIT_LOG_PATH", "TRACE_LOG_PATH", "TRACE_REQUESTS_PATH")
+
+
 def run(system: str, llm_mode: str, cases: list[Case], live_client=None) -> tuple[dict, list[dict]]:
+    repeated = sorted(case_id for case_id, n in Counter(c.case_id for c in cases).items() if n > 1)
+    if repeated:  # each case is its own conversation with its own trace store, and repeats are paired by case id
+        raise ValueError(f"case ids must be unique; repeated: {', '.join(repeated[:5])}")
     tmp = Path(tempfile.mkdtemp(prefix=f"eval_{system}_"))
+    caller = {k: os.environ.get(k) for k in RUN_PATHS}  # the run's files are its own; the caller's come back after
     os.environ.update({"HUMAN_QUEUE_PATH": str(tmp / "queue.jsonl"), "AUDIT_LOG_PATH": str(tmp / "audit.jsonl"),
                        "TRACE_LOG_PATH": str(tmp / "traces.jsonl"), "TRACE_REQUESTS_PATH": str(tmp / "trace_requests.jsonl")})
     def one(c: Case) -> dict:
@@ -558,8 +570,15 @@ def run(system: str, llm_mode: str, cases: list[Case], live_client=None) -> tupl
         os.environ["TRACE_REQUESTS_PATH"] = str(tmp / f"trace_requests_{c.case_id}.jsonl")
         return run_case(c, system, llm_mode, live_client) | {"traces": _traces(tmp / f"trace_requests_{c.case_id}.jsonl")}
 
-    outs = [(c, one(c)) for c in cases]
-    tickets = _tickets(tmp / "queue.jsonl")
+    try:
+        outs = [(c, one(c)) for c in cases]
+        tickets = _tickets(tmp / "queue.jsonl")
+    finally:
+        for k, v in caller.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
     rows = [judge(c, o["results"], tickets, o["sent"], o["traces"]) for c, o in outs]
     m = metrics(rows)
     if system == "baseline":  # no model at all: the metric does not apply

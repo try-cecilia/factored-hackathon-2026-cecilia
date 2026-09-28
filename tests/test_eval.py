@@ -6,6 +6,8 @@ the oracle disposition; with a deliberately bad model nothing unsafe happens.
 """
 from __future__ import annotations
 
+import os
+
 import pytest
 
 from eval import run_system_eval as rse
@@ -200,6 +202,49 @@ def test_repeat_variability_covers_every_headline_metric_and_names_the_cases_tha
     assert all(len(set(c["dispositions"])) > 1 for c in v["unstable_cases"])
     steady = rse.variability([ideal, ideal])
     assert steady["outcome_flip_rate"]["k"] == 0 and steady["safe_automated_resolution"]["stdev"] == 0
+
+
+def _steady_metrics() -> dict:
+    return {k: {"rate": 1.0} for k in rse.VARIABILITY_RATES} | {k: 1.0 for k in rse.VARIABILITY_VALUES}
+
+
+def _row(case_id: str, actual: str) -> dict:
+    return {"case_id": case_id, "template": "balance_all", "language": "es", "actual": actual}
+
+
+def test_repeat_variability_pairs_runs_by_case_not_by_position():
+    """Two runs that agree on every case show no change, whatever order their rows come back in (review minor #11:
+    pairing by position compared different cases)."""
+    m = _steady_metrics()
+    first = [_row("c1", "AUTO_RESOLVE"), _row("c2", "ESCALATE")]
+    v = rse.variability([(m, first), (m, first[::-1])])
+    assert v["outcome_flip_rate"]["k"] == 0 and v["outcome_flip_rate"]["n"] == 2 and v["unstable_cases"] == []
+
+
+def test_repeat_variability_refuses_runs_of_different_cases():
+    m = _steady_metrics()
+    with pytest.raises(ValueError, match="same cases"):
+        rse.variability([(m, [_row("c1", "AUTO_RESOLVE"), _row("c2", "ESCALATE")]),
+                         (m, [_row("c1", "AUTO_RESOLVE"), _row("c3", "ESCALATE")])])
+
+
+def test_an_eval_run_leaves_the_environment_as_it_found_it(monkeypatch):
+    """A run points the queue, the logs and the trace store at its own temporary files; afterwards the caller's
+    settings are back, including one that was not set (review minor #11)."""
+    monkeypatch.setenv("HUMAN_QUEUE_PATH", "caller/queue.jsonl")
+    monkeypatch.delenv("TRACE_REQUESTS_PATH")
+    before = {k: os.environ.get(k) for k in ("HUMAN_QUEUE_PATH", "AUDIT_LOG_PATH", "TRACE_LOG_PATH", "TRACE_REQUESTS_PATH")}
+    rse.FOREIGN_POOL[:] = ["PRD-FIX0006", "PRD-FIX0008", "PRD-FIX0011"]
+    rse.run("proposed", "scripted", generate(per_cell=1, seed=3)[:3])
+    assert {k: os.environ.get(k) for k in before} == before
+
+
+def test_a_case_list_with_a_repeated_id_is_refused():
+    """Each case is its own conversation, with its own trace store, and repeated runs are paired by case id: two
+    cases with one id would share both."""
+    case = generate(per_cell=1, seed=3)[0]
+    with pytest.raises(ValueError, match="unique"):
+        rse.run("proposed", "scripted", [case, case])
 
 
 def test_error_analysis_groups_what_went_wrong_and_the_report_carries_no_customer_ids():

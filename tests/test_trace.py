@@ -146,6 +146,24 @@ def test_a_trace_id_collision_never_announces_another_customers_trace(monkeypatc
     assert r.policy_rule == "action:trace_proposed"  # not "already open" with the other customer's number
 
 
+def test_clearing_a_customers_traces_never_leaves_the_file_half_written(trace_store, monkeypatch):
+    """The demo's reset rewrites the file other visitors are reading: the new content must appear whole or not at
+    all (review minor #6). If the swap fails, every request is still there and no temporary file is left behind."""
+    service = traces.TraceService()
+    service.open("CLI-FIX0004", "TXN-FIX0006", "PRD-FIX0010", "a-jury-run")
+    service.open("CLI-FIX0001", "TXN-OTHER", "PRD-FIX0001", "someone-else")
+    before = trace_store.read_text(encoding="utf-8")
+
+    def swap_fails(src, dst):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(os, "replace", swap_fails)
+    with pytest.raises(OSError):
+        service.clear("CLI-FIX0004")
+    assert trace_store.read_text(encoding="utf-8") == before
+    assert [p.name for p in trace_store.parent.iterdir()] == [trace_store.name]
+
+
 def test_trace_ids_are_long_enough_that_a_bank_never_sees_two_alike():
     assert len(traces.TraceService.trace_id("CLI-FIX0004", "TXN-FIX0006")) == len("TR-") + 16
 

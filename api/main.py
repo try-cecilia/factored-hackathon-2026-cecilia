@@ -145,9 +145,11 @@ def chat(req: ChatRequest) -> ChatResponse:
     if not chat_limiter.allow(req.session_token):
         raise HTTPException(429, "rate limit exceeded for this session")
     r = demo.orchestrator_for(req.session_token).handle_message(req.session_token, req.message)
+    shown = demo.enabled()  # which rule decided is for the trace log; outside the jury demo it would guide an attacker
     return ChatResponse(trace_id=r.trace_id, disposition=r.disposition, response_text=r.response_text,
-                        language=r.language, category=r.category, policy_rule=r.policy_rule, ticket_id=r.ticket_id,
-                        latency_ms=round(r.latency_ms, 1), why=demo.explain(r, req.session_token) if demo.enabled() else None)
+                        language=r.language, category=r.category, policy_rule=r.policy_rule if shown else "",
+                        ticket_id=r.ticket_id, latency_ms=round(r.latency_ms, 1),
+                        why=demo.explain(r, req.session_token) if shown else None)
 
 
 @app.get("/demo/customers")
