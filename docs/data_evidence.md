@@ -11,9 +11,11 @@ The full, regenerable numbers are in [`evidence/baseline_metrics.md`](evidence/b
    are facts the bank already holds (balances, movements, arrears, rates). That
    makes it the safest workflow to automate: read-only, no money movement, no
    credit judgment.
-3. **Still a bad experience.** CSAT is 2.91/5 and NPS −70, with a 120 s queue
-   wait before a 3.7-minute call. The pain is waiting, not resolution.
-   Automation removes the wait.
+3. **Still a bad experience.** CSAT is 2.91/5 and NPS −70, and each of these
+   contacts waits 120 s in the queue before a 3.7-minute call. The data does not
+   say why the score is low: the wait is 120 s for every reason and segment (a
+   constant of the synthetic data), so it cannot explain a difference between
+   them. Automation removes the queue and the call either way.
 4. **Reachable now on text channels.** 15.0% of these contacts come by
    chat/WhatsApp/app/email/web, about 1,005 a month. The remaining 85% are phone
    calls and need speech I/O (LIMITATIONS.md).

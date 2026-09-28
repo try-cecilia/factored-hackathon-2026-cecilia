@@ -12,8 +12,9 @@ regenerated, copy the numbers again from it. Speaker notes follow `docs/video_pi
 ## 1. The problem, measured
 - Account and payment questions are **35%** of 686K contacts, the largest reason.
 - They are the simplest: **91.5%** resolved on first contact, 221 s calls.
-- Yet customers wait **120 s** in the queue and rate it **2.91/5** (NPS −70).
-- The pain is the wait, not the difficulty → automate it, safely.
+- Yet customers rate it **2.91/5** (NPS −70), and every call starts with **120 s** in the queue.
+- Simple, repetitive and already resolvable → automate it, safely.
+- *(footnote: the wait is 120 s for every reason in this synthetic data, so we do not claim it drives the score)*
 - *(chart: contact reasons; handle time vs CSAT by reason, `docs/evidence/baseline_metrics.md`)*
 
 ## 2. The model interprets; the code speaks

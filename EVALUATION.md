@@ -20,8 +20,10 @@ projections are labeled as such and never mixed.
 | Unsafe outcomes | not in the data | 0 / 528 | 0 / 528 offline · 0 / 132 live, in each of 3 runs |
 | Channels | phone + text | text | text (15% of these contacts today) |
 
-- **Time is the win.** Humans already resolve 91.5%. The customer's pain is
-  the 120 s wait plus a 3.7-minute call, and this system removes the wait.
+- **Time is the win.** Humans already resolve 91.5%, but each contact costs the
+  customer a 120 s wait plus a 3.7-minute call, and this system answers in
+  seconds. (The data cannot say whether the wait drives the low CSAT: it is
+  120 s for every reason.)
   Without the LLM its own layers answer in milliseconds (58–80 turns/s on one
   thread, section 6). With Claude Sonnet 5 on the held-out sample, a case
   takes 1.8 s at the median and 3.9 s at p95 (Haiku 4.5: 1.2 s and 3.8 s).
