@@ -12,6 +12,8 @@ Mantenemos la decisión original de no entrenar un modelo propio. La consigna pe
 
 El hallazgo técnico principal es que un registro puede cumplir el schema y aun así ser inadecuado para un uso concreto. Antes de confiar en un join, la app y el evaluador deben verificar ownership, consistencia temporal, evidencia disponible y significado de los labels.
 
+La revisión posterior contra las 260 columnas del diccionario está documentada en el [catálogo de validaciones](data-validation-catalog.md). Agrega conflictos en campos alternativos `UNIQUE`, importes sin moneda y reglas concretas de ingesta. Distingue restricciones explícitas, consistencia semántica y evidencia insuficiente.
+
 ## Cobertura y reproducibilidad
 
 La auditoría inventarió las 13 tablas. Procesó todos los archivos de 11 tablas y una muestra por fechas de las otras dos tablas de eventos. En total analizó 6.311.493 filas de 5.516 archivos, equivalentes a 1.309.213.022 bytes. Son conteos obtenidos al parsear los archivos, no estimaciones del PDF.
@@ -77,6 +79,8 @@ Los reclamos incluyen 12.297 casos en la subcategoría Cargo no reconocido y 12.
 
 | Hallazgo | Resultado medido | Consecuencia |
 | --- | --- | --- |
+| Número de producto declarado `UNIQUE` | 6 números aparecen en 12 productos de clientes distintos, sobre 400.000 productos. | Bloquear la resolución de identidad por esos números. No fusionar productos ni propietarios. |
+| Código de empleado declarado `UNIQUE` | 13 códigos aparecen en 26 agentes, sobre 1.200 agentes. | No identificar ni autorizar empleados solo por ese código. |
 | Ownership entre reclamo y producto | Las 44.570 referencias no nulas apuntan a un producto de otro cliente. | Bloquear ese join en serving y labeling. No cambiar silenciosamente ninguno de los propietarios. |
 | Vínculo entre reclamo e interacción | `origin_interaction_id` es nulo en los 67.095 reclamos. | No se pueden usar como resultados vinculados a conversaciones. |
 | Sucursal de registro del cliente | 149.995 de 150.000 referencias apuntan a sucursales inexistentes. | Excluir features y atribuciones basadas en esa sucursal. |
@@ -84,6 +88,8 @@ Los reclamos incluyen 12.297 casos en la subcategoría Cargo no reconocido y 12.
 | Contacto anterior al registro | 128.453 de 686.296 contactos, un 18,72%. | Excluir cronologías imposibles de la cohorte histórica candidata. |
 | Cronología de pagos | 1.451.309 de 4.425.008 transacciones, un 32,80%, son anteriores al registro del cliente, la apertura del producto o ambos. | Solo 2.973.699 pasan los dos controles. |
 | Duración obligatoria de transcripción | 24.029 duraciones nulas, aunque el diccionario exige el campo. | Registrar la violación del contrato. No imputar duración para evaluar resultados. |
+| Importe reclamado sin moneda | 1.040 de los 21.751 reclamos con importe no tienen moneda. Ambos campos son opcionales en el diccionario. | Bloquear decisiones monetarias basadas en ese importe hasta obtener evidencia de la moneda. |
+| Resolución con evidencia incompleta | 1.549 de los 16.121 reclamos `Resolved` o `Closed` carecen de fecha de resolución, descripción o ambas. Son campos opcionales. | Informar el estado registrado sin afirmar una acción verificada ni usarlo como prueba suficiente de resolución. |
 | Dimensiones históricas | Clientes y productos son archivos únicos. No se exponen snapshots mensuales. Algunos `last_updated` llegan a junio de 2027. | No usar saldos y estados actuales como features históricas al inicio de una consulta ni como observaciones en vivo. |
 | Cobertura de moneda | No hay transacciones MXN. Las 2.216.431 transacciones de clientes de México están en USD. | Documentar la cobertura real. Estos registros no respaldan una demo en MXN. |
 | Conciliación de conversión a USD | 749.769 filas ARS y 1.031.847 COP con importe USD informado difieren en más de un centavo de la conversión con el tipo de cambio de ese día calendario. | No usar `amount_usd` como evidencia financiera verificada hasta resolver la convención de conversión. |
@@ -92,7 +98,7 @@ Verificar solo la existencia de foreign keys no detectaría el defecto de owners
 
 El origen no incluye saldo de apertura, asientos con signo de débito o crédito ni un historial completo de saldos. Todos los importes observados son positivos. Sumarlos no permite conciliar `current_balance`. Aunque las consultas de saldo quedaron fuera del alcance, esta limitación sigue afectando cualquier reversión opcional. Para verificarla se necesita el ledger independiente del simulador.
 
-Todos los archivos seleccionados pudieron parsearse, cada tabla presentó un único header schema y no aparecieron business keys duplicadas en las entradas analizadas. Esto difiere de la tasa aproximada de duplicados que describe el diccionario. No descarta defectos en archivos digitales o de campañas no muestreados ni en futuras entregas. El pipeline exploratorio local incluye fixtures controlados de duplicación, conflictos, truncamiento y cambios de schema para probar esos comportamientos. Esos fixtures no están incluidos en esta entrega de documentación.
+Todos los archivos seleccionados pudieron parsearse, cada tabla presentó un único header schema y no aparecieron primary keys duplicadas en las entradas analizadas. La revisión posterior sí encontró repeticiones en `product_number` y `employee_code`, que tienen una restricción `UNIQUE` adicional. Esto corrige la afirmación anterior demasiado amplia sobre ausencia de claves de negocio duplicadas. La tasa aproximada de duplicados del diccionario no determina el conteo que debe aparecer en cada tabla. No se descartan defectos en archivos digitales o de campañas no muestreados ni en futuras entregas. El pipeline exploratorio local incluye fixtures controlados de duplicación, conflictos, truncamiento y cambios de schema para probar esos comportamientos. Esos fixtures no están incluidos en esta entrega de documentación.
 
 Un vínculo inválido con un producto no obliga a descartar todo el reclamo. Se puede conservar para análisis agregado por categoría y prohibir el join inseguro. La decisión de calidad depende del uso.
 

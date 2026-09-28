@@ -72,6 +72,8 @@ El texto generado por un modelo no puede conceder acceso, cambiar políticas ni 
 
 La auditoría inicial se ejecutó con scripts exploratorios locales, excluidos del control de versiones. Sus resultados están documentados en [dataset-audit.md](dataset-audit.md). Inventarió las 13 tablas y procesó 6.311.493 filas de 5.516 archivos. Incluye 11 tablas completas y muestras explícitas de eventos digitales y envíos de campañas. Una lectura independiente coincidió en el conteo de filas y el SHA256 de cada archivo analizado.
 
+El [catálogo de validaciones](data-validation-catalog.md) contrasta el diccionario con los errores observados y define controles de ingesta por uso. Incluye primary keys, restricciones `UNIQUE` adicionales, ownership, cronología, parsing sin pérdida y evidencia faltante para operar con importes.
+
 El pipeline definitivo debe cubrir estas etapas, con el lenguaje que elija el equipo:
 
 1. Inventariar y descargar un conjunto declarado de objetos de origen.

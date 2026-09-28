@@ -19,6 +19,8 @@ Cumplir un schema CSV no prueba ownership. Clasificar bien no demuestra que una 
 
 ## 1. Publicar datos con contratos y lineage
 
+Implementar las reglas del [catálogo de validaciones](data-validation-catalog.md) que correspondan al flujo elegido. El catálogo distingue incumplimientos del diccionario de gates de uso y diferencias de representación. Sus conteos corresponden a la versión auditada, no son umbrales permanentes de aceptación.
+
 Usar ingesta batch para los archivos estáticos provistos. La auditoría implementada incluye fetch, carga estructural, profiling semántico, construcción de datasets de evaluación y quality gates. El pipeline de la app deberá conservar un manifest inmutable por release publicado. Fijar versiones de objetos o usar lecturas condicionales cuando estén disponibles. Conservar SHA256 local y lineage por registro.
 
 Clasificar los defectos por uso. Por ejemplo, el vínculo roto entre reclamo y producto impide recuperar el producto para ese cliente, pero permite contar el reclamo en un informe por categoría. Nunca reparar la relación asignando el reclamo al otro cliente. Conservar registros inválidos y motivos en quarantine o en un manifest de usos rechazados.
