@@ -123,9 +123,9 @@ findings: [`docs/data_quality.md`](docs/data_quality.md). Running it:
 ```bash
 cp .env.example .env        # fill AWS_* + DATASET_BUCKET (dataset), DEMO_IDP_SECRET, ADMIN_API_KEY, and GROQ_API_KEY or ANTHROPIC_API_KEY
 make setup
-make ingest                 # full warehouse from S3 (~6 min; or `make ingest-demo`, ~1 min)
+make ingest                 # full warehouse from S3 (~6 min: 1.1 GB of daily files in ~80 s, then the load; or `make ingest-demo`, ~1 min)
 make serve                  # http://localhost:8000 — web chat with sandbox test logins
-make test                   # 342 hermetic tests: fixture warehouse, no S3, no API keys
+make test                   # 343 hermetic tests: fixture warehouse, no S3, no API keys
 make all                    # rebuild every number in the docs
 make mlflow-ui              # every classifier selection and evaluation run, tracked in MLflow
 ```
@@ -171,7 +171,7 @@ analysis/    problem evidence and human baseline from the supplied data
 eval/        held-out sets, workload generator, baseline bot, evaluation runners, MLflow tracking, reports/
 ops/         Dockerfile, entrypoint, demo-customer picker, load test, live smoke run, retention
 docs/        architecture decisions (decisions/), data quality, operations, evidence, demo
-tests/       342 hermetic tests + fixtures
+tests/       343 hermetic tests + fixtures
 ```
 
 ## Status

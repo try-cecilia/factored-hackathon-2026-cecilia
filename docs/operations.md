@@ -15,6 +15,8 @@ First boot ingests `INGEST_ARGS`. The default is a deterministic 5,000-customer
 sample with the last 12 months of transactions: about 14 MB, 20 s of load
 after download, DuckDB capped at 400 MB. It picks sandbox demo customers,
 then serves on `$PORT`.
+- Daily files download 24 at a time: the whole dataset's 4,388 (1.1 GB) took
+  78 s from Argentina, where one at a time they took hours.
 - The load's quality report is written next to the warehouse, on the same
   disk (`DQ_REPORT_PATH`), and `/admin/data_quality` serves it.
 - The warehouse is built under a temporary name and renamed only when the load

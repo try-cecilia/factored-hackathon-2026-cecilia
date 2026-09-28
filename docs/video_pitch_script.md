@@ -40,11 +40,11 @@ report is regenerated, copy them again from it, never from memory.
    runs each. Claude Sonnet 5: 95.0% safe automated resolution, 72.7% containment, 1.8 s p50 and 3.9 s p95 per
    case, USD 0.0029 per safe resolution, 3.0% of cases changed outcome between runs. Claude Haiku 4.5: 78.3%,
    75.0%, 1.2 s and 3.8 s, USD 0.0057, 4.5%. Both: 0 unsafe in every run. Sonnet 5, the model the demo runs,
-   has the lowest cost per safe resolution. Groq's gpt-oss-120b did not run (no key). The scripted ideal model
+   has the lower cost per safe resolution of the two. Groq's gpt-oss-120b did not run (no key). The scripted ideal model
    stays labeled as an upper bound (98.8%).
 
 7. **Engineering (15 s).** Contracts with a quarantine gate, lineage and a late-arrival fixture; every
-   classifier selection and evaluation run tracked in MLflow, with its model, prompt hash and data hashes; 342
+   classifier selection and evaluation run tracked in MLflow, with its model, prompt hash and data hashes; 343
    hermetic tests; CI builds the container and boots it the way the host does; `make all` rebuilds every number.
 
 8. **Honest limits and next (15 s).** Synthetic data with no real text and no Portuguese, the team wrote every

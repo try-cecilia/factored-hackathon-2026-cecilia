@@ -136,6 +136,54 @@ def test_schema_evolution_adds_new_column(fresh_db, tmp_path):
     assert q(fresh_db, "SELECT count(*) FROM transactions WHERE loyalty_points = 7") == [(3,)]
 
 
+def test_s3_daily_files_download_in_parallel_once_each_skipping_the_cache(tmp_path, monkeypatch):
+    """One at a time, the dataset's 4,392 daily files took hours from a slow link (about 18 a minute): the round
+    trips dominate. Two downloads must be in flight at once, each file fetched once, a cached file not at all."""
+    import threading
+
+    from data.sources import S3Source
+
+    days = {d: f"data/transactions/year=2024/month=01/day={d:02d}/part-0.csv" for d in (1, 2, 3, 4)}
+    body = {key: f"rows of day {d}\n".encode() for d, key in days.items()}
+    listing = [{"Key": key, "Size": len(data)} for key, data in body.items()]
+    listing.append({"Key": "data/transactions/year=2024/month=01/day=03/_SUCCESS", "Size": 0})
+    both_in_flight = threading.Barrier(2, timeout=3)  # sequential downloads break it
+    fetched = []
+
+    class Chunks:
+        def __init__(self, data: bytes):
+            self.data = data
+
+        def iter_chunks(self, chunk_size: int):
+            yield self.data
+
+    class FakeS3:
+        def get_paginator(self, name):
+            return self
+
+        def paginate(self, Bucket, Prefix):
+            return [{"Contents": [o for o in listing if o["Key"].startswith(Prefix)]}]
+
+        def get_object(self, Bucket, Key):
+            fetched.append(Key)
+            both_in_flight.wait()
+            return {"Body": Chunks(body[Key])}
+
+    monkeypatch.setattr(S3Source, "_s3", lambda self: FakeS3())
+    raw = tmp_path / "raw"
+    cached = raw / days[2].removeprefix("data/")
+    cached.parent.mkdir(parents=True)
+    cached.write_bytes(body[days[2]])  # same size: already downloaded
+
+    files = S3Source(raw, bucket="bucket").partitions("transactions", since=date(2024, 1, 2))
+
+    assert sorted(fetched) == [days[3], days[4]]  # day 1 is outside the window, day 2 is cached, _SUCCESS is no csv
+    assert [f.uri for f in files] == [f"s3://bucket/{days[d]}" for d in (2, 3, 4)]
+    assert [f.partition for f in files] == [date(2024, 1, d) for d in (2, 3, 4)]
+    assert all(f.local_path.read_bytes() == body[days[d]] and f.size == len(body[days[d]])
+               for f, d in zip(files, (2, 3, 4)))
+
+
 @pytest.mark.integration
 def test_s3_partition_replay_is_idempotent(fresh_db, tmp_path):
     cfg = RunConfig(source="s3", raw_dir=tmp_path / "raw", only_date=date(2023, 6, 17))
