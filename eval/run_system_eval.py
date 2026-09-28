@@ -570,14 +570,18 @@ def error_analysis(rows: list[dict]) -> list[dict]:
 
 def sample(cases: list[Case], n: int) -> list[Case]:
     """About n cases for a limited run: the same number per case type and language, spread evenly over each group's
-    country-segment cells, in file order. A plain stride fell in step with the workload's order and kept 11 of its
-    22 case types."""
+    country-segment cells, starting one cell further in each group so that together they reach every cell; in file
+    order. A plain stride fell in step with the workload's order and kept 11 of its 22 case types, and one start for
+    every group kept a single segment."""
     groups: dict[tuple[str, str], list[int]] = defaultdict(list)
     for i, c in enumerate(cases):
         groups[(c.template, c.language)].append(i)
     per = max(1, n // len(groups)) if groups else 0
-    keep = sorted(idx[(j * len(idx)) // min(per, len(idx))] for idx in groups.values() for j in range(min(per, len(idx))))
-    return [cases[i] for i in keep]
+    keep = []
+    for g, idx in enumerate(groups.values()):
+        k = min(per, len(idx))
+        keep += [idx[(g + (j * len(idx)) // k) % len(idx)] for j in range(k)]
+    return [cases[i] for i in sorted(keep)]
 
 
 RUN_PATHS = ("HUMAN_QUEUE_PATH", "AUDIT_LOG_PATH", "TRACE_LOG_PATH", "TRACE_REQUESTS_PATH")
@@ -639,7 +643,7 @@ def roi(m: dict, text_contacts: float, sar: float, aht_s: float) -> dict | None:
             "model_cost_basis": "every text contact is sent to the model once per turn (cost per attempted case)", "rows": rows}
 
 
-def projection(m: dict, base: dict | None = None) -> dict | None:
+def projection(m: dict, base: dict | None = None, live: bool = False) -> dict | None:
     path = Path("docs/evidence/baseline_metrics.json")
     if not path.exists() or not m or not m["safe_automated_resolution"]["n"]:
         return None
@@ -652,7 +656,8 @@ def projection(m: dict, base: dict | None = None) -> dict | None:
     return {"label": "PROJECTION — not a measurement", "sar_floor_baseline_bot": floor,
             "roi": roi(m, text_contacts, sar, aht),
             "assumptions": ["all text-channel Transaccional contacts are in scope for this workflow (upper bound)",
-                            "the offline SAR transfers to production traffic (unverified)",
+                            ("the live model's SAR on held-out synthetic cases" if live else "the offline SAR")
+                            + " transfers to production traffic (unverified)",
                             "no phone channel (voice needs STT; not built)"],
             "monthly_text_channel_contacts_measured": round(text_contacts),
             "sar_used": sar,
@@ -734,9 +739,12 @@ def to_markdown(rep: dict) -> str:
     proj = rep.get("projection")
     ptxt = ""
     if proj:
+        caveat = ("This SAR is a live model's on held-out synthetic cases; production traffic may differ."
+                  if rep.get("llm_mode") == "live" else
+                  "A scripted-LLM SAR is an upper bound; replace with the live-model SAR before using this externally.")
         ptxt = f"""## {proj['label']}
 Assumptions: {'; '.join(proj['assumptions'])}.
-Measured text-channel Transaccional contacts/month ≈ {proj['monthly_text_channel_contacts_measured']:,}. Using this run's SAR ({proj['sar_used']:.2f}) ⇒ ≈ {proj['projected_monthly_automated_contacts']:,} contacts/month and ≈ {proj['projected_monthly_agent_hours_saved']} agent-hours/month, each skipping a measured ~{proj['customer_wait_avoided_s_per_contact']:.0f}s queue wait{f"; with the keyword bot's SAR ({proj['sar_floor_baseline_bot']:.2f}) as a floor ⇒ ≈ {round(proj['monthly_text_channel_contacts_measured'] * proj['sar_floor_baseline_bot']):,} contacts/month" if proj.get('sar_floor_baseline_bot') is not None else ''}. A scripted-LLM SAR is an upper bound; replace with the live-model SAR before using this externally. Not a production measurement.
+Measured text-channel Transaccional contacts/month ≈ {proj['monthly_text_channel_contacts_measured']:,}. Using this run's SAR ({proj['sar_used']:.2f}) ⇒ ≈ {proj['projected_monthly_automated_contacts']:,} contacts/month and ≈ {proj['projected_monthly_agent_hours_saved']} agent-hours/month, each skipping a measured ~{proj['customer_wait_avoided_s_per_contact']:.0f}s queue wait{f"; with the keyword bot's SAR ({proj['sar_floor_baseline_bot']:.2f}) as a floor ⇒ ≈ {round(proj['monthly_text_channel_contacts_measured'] * proj['sar_floor_baseline_bot']):,} contacts/month" if proj.get('sar_floor_baseline_bot') is not None else ''}. {caveat} Not a production measurement.
 """
         r = proj.get("roi")
         if r:
@@ -897,7 +905,8 @@ def main() -> None:
         "split": "external" if a.cases else a.split, "n_cases": len(cases), "seed": None if a.cases else SEEDS[a.split],
         "cases_file": cases_path.name, "systems": systems,
         "n_case_types": len({c.template for c in cases}), "n_cells": len({(c.country, c.segment) for c in cases}),
-        "projection": projection(proposed, systems.get("baseline")) if a.llm != "adversarial" else None,
+        "llm_mode": a.llm,
+        "projection": projection(proposed, systems.get("baseline"), live=a.llm == "live") if a.llm != "adversarial" else None,
         "cases": runs,
     }
     out_json.parent.mkdir(parents=True, exist_ok=True)

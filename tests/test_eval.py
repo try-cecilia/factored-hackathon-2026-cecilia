@@ -220,6 +220,21 @@ def test_a_limited_run_samples_every_case_type_in_each_language():
             assert len({(c.country, c.segment) for c in picked if (c.template, c.language) == group}) == 2
 
 
+
+def test_a_limited_run_reaches_every_country_segment_cell():
+    """The workload lists each case type and language over the same 12 cells in the same order. Every group picking
+    the same positions covered only the Basic segment in the second live run; the start rotates from group to group,
+    so together the picks reach every cell."""
+    from dataclasses import replace
+
+    base = generate(per_cell=1, seed=3)[0]
+    cells = [(country, segment) for country in ("México", "Colombia", "Argentina") for segment in ("Premium", "Plus", "Basic", "Student")]
+    workload = [replace(base, case_id=f"{t}-{lang}-{i}", template=t, language=lang, country=country, segment=segment)
+                for t in ("a", "b", "c", "d") for lang in ("es", "pt") for i, (country, segment) in enumerate(cells)]
+    picked = rse.sample(workload, 3 * 8)  # 3 per case type and language, as make eval-live takes them
+    assert len(picked) == 24 and {(c.country, c.segment) for c in picked} == set(cells)
+
+
 def _steady_metrics() -> dict:
     return {k: {"rate": 1.0} for k in rse.VARIABILITY_RATES} | {k: 1.0 for k in rse.VARIABILITY_VALUES}
 
@@ -393,6 +408,20 @@ def test_the_report_counts_case_types_and_cells_and_labels_the_run_it_shows():
     md = rse.to_markdown(rep)
     assert "22 case types × 5 country·segment cells" in md and "18 case types" not in md
     assert "proposed (live: x), run 1 of 3" in md
+
+
+def test_a_live_report_does_not_call_its_own_resolution_rate_an_upper_bound():
+    """The projection told the reader to replace a scripted upper bound with the live rate, also in the live report,
+    where the rate already is the live model's."""
+    m, rows = _run("scripted")
+    live = {**m, "cost_per_attempted_case_usd": 0.002, "cost_per_safe_resolution_usd": 0.004}
+    rep = {"generated_at": "t", "prompt_version": "3", "pricing_as_of": "p", "mode_label": "m", "split": "test",
+           "n_cases": len(rows), "seed": 11, "llm_mode": "live", "systems": {"proposed (live: x)": live},
+           "projection": rse.projection(live, live=True), "cases": {}}
+    projected = rse.to_markdown(rep).split("## PROJECTION")[1]
+    assert "upper bound" not in projected.replace("(upper bound)", "") and "live model" in projected
+    offline = rse.to_markdown({**rep, "llm_mode": "scripted", "projection": rse.projection(m)}).split("## PROJECTION")[1]
+    assert "A scripted-LLM SAR is an upper bound" in offline
 
 
 def test_roi_per_resolution_is_computed_only_from_measured_model_costs_and_labels_its_assumption():
