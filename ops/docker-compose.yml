@@ -25,6 +25,7 @@ services:
       - DEMO_IDP_SECRET=${DEMO_IDP_SECRET}
       - ADMIN_API_KEY=${ADMIN_API_KEY}
       - DEMO_PUBLIC_CUSTOMERS=${DEMO_PUBLIC_CUSTOMERS:-}
+      - DEMO_MODE=${DEMO_MODE:-0}
     volumes:
       - warehouse:/app/data/warehouse
       - raw:/app/data/raw

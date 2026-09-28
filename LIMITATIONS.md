@@ -60,6 +60,11 @@ service, and as our own roadmap.
   reach `/chat`).
 - `/demo/customers` publishes test PINs for a few sandbox accounts, like any
   sandbox's test login. It must be empty (`DEMO_PUBLIC_CUSTOMERS=`) anywhere real.
+- `DEMO_MODE=1` turns on the jury sandbox: scenarios with those test PINs, a
+  "Why?" that shows policy rules and what the model received, the session's
+  own tickets, and buttons that expire the session or take the model down for
+  it. Everything acts on the caller's own session, but it is a demo surface:
+  it must stay off anywhere real.
 - Traces, audit logs and tickets contain customer data. Masking of account
   numbers is done, and card/account/ID numbers typed by the customer are
   masked in tickets. Still missing are field-level encryption at rest and

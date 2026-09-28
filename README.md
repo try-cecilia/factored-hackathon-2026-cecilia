@@ -99,7 +99,7 @@ cp .env.example .env        # fill AWS_* + DATASET_BUCKET (dataset), DEMO_IDP_SE
 make setup
 make ingest                 # full warehouse from S3 (~6 min; or `make ingest-demo`, ~1 min)
 make serve                  # http://localhost:8000 — web chat with sandbox test logins
-make test                   # 232 hermetic tests: fixture warehouse, no S3, no API keys
+make test                   # 243 hermetic tests: fixture warehouse, no S3, no API keys
 make all                    # rebuild every number in the docs
 ```
 
@@ -108,6 +108,23 @@ accepted). The web UI lists sandbox accounts from `DEMO_PUBLIC_CUSTOMERS`.
 Operators can fetch any test PIN with `X-Admin-Key` at `/admin/demo_pin/{id}`.
 Traces, tickets, audit log and the data-quality report are under `/admin/*`.
 
+**Jury demo (`DEMO_MODE=1`).** The same web app becomes a guided tour of the
+required paths, on whatever warehouse is loaded (the scenario customers are
+picked from it by `ops/demo_customers.py`):
+- 12 guided scenarios: normal (balance, arrears in Portuguese, exchange rate),
+  ambiguous (two turns), out of scope, needs a person (fraud, suspended
+  account, missing data), attack (another customer's product, jailbreak) and
+  failure (model down, expired session). Each states what to look for and
+  checks the outcome it promises;
+- a **"Why?"** on every reply: the policy rule that decided it, what the model
+  received (masked) and chose, what the code verified, and the cost;
+- the **bank view**: the session's tickets as the human agent receives them,
+  with evidence and open questions, no transcript and no token;
+- buttons to **expire the session** and to **take the model down** for this
+  session only.
+
+It must stay off anywhere real (`LIMITATIONS.md`).
+
 ## Repository map
 
 ```
@@ -115,12 +132,12 @@ data/        pipeline (S3/local → DuckDB), contracts, quality checks, lineage,
 agent/       core/ orchestrator, render · policy/ router, signals, classifier guard, escalation
              tools/ permissioned account tools, audit/trace logs · llm/ client, prompts, privacy masking, pricing, classifiers
              session/ session store, demo identity provider
-api/         FastAPI + static web chat
+api/         FastAPI + static web chat; demo.py: the jury demo (DEMO_MODE=1)
 analysis/    problem evidence and human baseline from the supplied data
 eval/        held-out sets, workload generator, baseline bot, evaluation runners, reports/
 ops/         Dockerfile, entrypoint, demo-customer picker, load test, live smoke run, retention
 docs/        architecture decisions (decisions/), data quality, operations, evidence, demo
-tests/       232 hermetic tests + fixtures
+tests/       243 hermetic tests + fixtures
 ```
 
 ## Status

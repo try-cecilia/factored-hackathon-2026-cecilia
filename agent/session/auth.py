@@ -79,6 +79,12 @@ class SessionStore:
         with self._lock:
             self._sessions.pop(token, None)
 
+    def expire(self, token: str) -> None:
+        """Ends a session as if its time had run out (the demo's "expire session" button)."""
+        with self._lock:
+            if token in self._sessions:
+                self._sessions[token].expires_at = time.time() - 1
+
     def _evict_expired(self, now: float) -> None:
         for tok in [t for t, s in self._sessions.items() if s.expires_at < now]:
             del self._sessions[tok]

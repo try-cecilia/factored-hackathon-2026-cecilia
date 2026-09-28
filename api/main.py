@@ -8,6 +8,9 @@
 - Input size limits and per-session / per-IP rate limits bound abuse and
   cost. /demo/customers publishes test credentials only for the sandbox
   accounts listed in DEMO_PUBLIC_CUSTOMERS (like any sandbox's test login).
+- With DEMO_MODE=1 (the jury sandbox), api/demo.py adds guided scenarios, the
+  bank view of the session's own tickets, fault buttons and a "why" on every
+  /chat reply.
 """
 from __future__ import annotations
 
@@ -23,15 +26,16 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from agent.core.orchestrator import default_orchestrator
 from agent.llm.client import default_providers
 from agent.policy import intent_guard
 from agent.session.identity import AuthError, IdentityUnavailable, LockedOut, default_identity, derive_test_pin
 from agent.tools import account_tools
 from agent.tools.audit import default_audit_log, default_trace_log
 from agent.policy.escalation import default_queue
+from api import demo
 
 app = FastAPI(title="LATAM Bank — Account/Payment Inquiries Agent", version="2.0.0")
+app.include_router(demo.router)
 STATIC = Path(__file__).parent / "static"
 
 
@@ -66,6 +70,7 @@ class SessionResponse(BaseModel):
     token: str
     session_ref: str
     expires_at: float
+    expires_in: int  # seconds left, independent of the client's clock
 
 
 class ChatRequest(BaseModel):
@@ -79,8 +84,10 @@ class ChatResponse(BaseModel):
     response_text: str
     language: str
     category: str
+    policy_rule: str = ""
     ticket_id: str | None = None
     latency_ms: float
+    why: dict | None = None  # DEMO_MODE only: the rule, what the model received and chose, what the code verified
 
 
 def require_admin(x_admin_key: str | None = Header(default=None)) -> None:
@@ -119,17 +126,17 @@ def create_session(req: SessionRequest, request: Request) -> SessionResponse:
         raise HTTPException(429, "too many failed attempts; try later") from None
     except AuthError:
         raise HTTPException(401, "invalid credentials") from None
-    return SessionResponse(token=s.token, session_ref=s.ref, expires_at=s.expires_at)
+    return SessionResponse(token=s.token, session_ref=s.ref, expires_at=s.expires_at, expires_in=round(s.expires_at - s.issued_at))
 
 
 @app.post("/chat", response_model=ChatResponse)
 def chat(req: ChatRequest) -> ChatResponse:
     if not chat_limiter.allow(req.session_token):
         raise HTTPException(429, "rate limit exceeded for this session")
-    r = default_orchestrator.handle_message(req.session_token, req.message)
+    r = demo.orchestrator_for(req.session_token).handle_message(req.session_token, req.message)
     return ChatResponse(trace_id=r.trace_id, disposition=r.disposition, response_text=r.response_text,
-                        language=r.language, category=r.category, ticket_id=r.ticket_id,
-                        latency_ms=round(r.latency_ms, 1))
+                        language=r.language, category=r.category, policy_rule=r.policy_rule, ticket_id=r.ticket_id,
+                        latency_ms=round(r.latency_ms, 1), why=demo.explain(r, req.session_token) if demo.enabled() else None)
 
 
 @app.get("/demo/customers")

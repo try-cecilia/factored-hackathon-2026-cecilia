@@ -236,7 +236,7 @@ SAR must replace the upper bound before this number is used externally.
 
 ## 4. Unit and integration tests
 
-`make test`: 232 hermetic tests on a hand-made fixture warehouse, plus one
+`make test`: 243 hermetic tests on a hand-made fixture warehouse, plus one
 opt-in integration test (`RUN_INTEGRATION=1`). CI runs them
 on every push, plus the classifier evaluation. They cover:
 - pipeline idempotency, late-arrival update, quarantine and rollback, schema evolution;
@@ -270,6 +270,12 @@ on every push, plus the classifier evaluation. They cover:
     as plain text, tool schemas included;
   - an unfiled handoff is not counted as an escalation;
   - the ideal model never uses internal ids;
+- the jury demo:
+  - every guided scenario does what it promises, rehearsed with an ideal model;
+  - the bank view shows only the session's own tickets, never its token;
+  - a simulated outage or an expired session affects only its own session;
+  - "Why?" shows the masked text the model received, never the raw number,
+    and never reveals another customer's product;
 - retention.
 
 ## 5. Capacity (measured, LLM excluded)

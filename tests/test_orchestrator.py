@@ -38,6 +38,14 @@ def test_balance_resolves_with_the_verified_figure_and_the_as_of_date():
     assert "2,455.81" in r.response_text and "16/01/2024" in r.response_text  # as-of line appended
 
 
+def test_a_turn_records_the_customers_words_as_the_model_received_them():
+    orch, tok, fake = make([tool_call_response("get_payment_status", {"product_id": "0004"}), unavailable()])
+    r = orch.handle_message(tok, "¿estoy al día con la tarjeta 5000000004?")
+    assert r.model_input == "¿estoy al día con la tarjeta [···0004]?" == fake.calls[0][-1]["content"]
+    assert orch.handle_message(tok, "Me clonaron la tarjeta").model_input is None  # decided before any model call
+    assert orch.handle_message(tok, "¿Cuál es mi saldo?").model_input is None  # the model was down: it received nothing
+
+
 def test_two_tool_calls_in_one_model_response_are_both_verified_and_answered():
     orch, tok, _ = make([tool_call_response("get_account_summary", {}, ("get_payment_status", {"product_id": "0004"}))])
     r = orch.handle_message(tok, "¿Cuánto tengo y estoy al día con mi tarjeta de crédito?")

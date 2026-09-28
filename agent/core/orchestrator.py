@@ -72,6 +72,7 @@ class TurnResult:
     llm_calls: int = 0
     latency_ms: float = 0.0
     model_view: str | None = None  # what the model's history keeps of this reply: no figures, no identifiers
+    model_input: str | None = None  # the customer's words as the model received them (masked); None if it received nothing
 
 
 @dataclass
@@ -279,10 +280,10 @@ class Orchestrator:
                       "country": session.attributes.get("country"), "language_scores": [guess.pt_score, guess.es_score]})
 
         usage, costs, llm_calls = Usage(), [], 0
-        provider = model = None
+        provider = model = model_input = None
 
         def llm_meta() -> dict:
-            return {"provider": provider, "model": model, "usage": usage, "llm_calls": llm_calls,
+            return {"provider": provider, "model": model, "usage": usage, "llm_calls": llm_calls, "model_input": model_input,
                     "cost_usd": None if (not costs or any(c is None for c in costs)) else round(sum(costs), 8)}
 
         def done(result: TurnResult) -> TurnResult:
@@ -316,7 +317,7 @@ class Orchestrator:
             trace["llm_steps"].append({"step": 0, "outcome": "unavailable", "attempts": exc.attempts})
             degraded = self._degraded(reading, text, session, catalog, lang, trace_id, trace, llm_meta())
             return done(degraded) if degraded is not None else escalate(router.llm_unavailable(exc.attempts), [], [])
-        llm_calls = 1
+        llm_calls, model_input = 1, model_text
         usage = resp.usage
         provider, model = resp.provider, resp.model
         costs.append(cost_usd(resp.provider, resp.model, resp.usage.prompt_tokens, resp.usage.completion_tokens,

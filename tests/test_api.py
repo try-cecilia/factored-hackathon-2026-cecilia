@@ -37,6 +37,7 @@ def test_customer_id_alone_is_not_enough(client):
     assert login(client, pin="000000" if derive_test_pin("CLI-FIX0001") != "000000" else "111111").status_code == 401
     ok = login(client)
     assert ok.status_code == 200 and "token" in ok.json()
+    assert ok.json()["expires_in"] == 900  # seconds, so a client clock that is off does not matter
 
 
 def test_unknown_customer_gets_the_same_generic_error(client):
