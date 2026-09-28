@@ -148,9 +148,15 @@ def main() -> None:
         "versions": {"sklearn": sklearn.__version__, "train_sha256": _h(Path(TRAIN).read_text(encoding="utf-8")), "heldout_sha256": _h(Path(HELDOUT).read_text(encoding="utf-8"))},
     }
     MODEL_OUT.parent.mkdir(parents=True, exist_ok=True)
+    # The same model must be the same bytes (it is an input of every system evaluation): sklearn caches the memory
+    # address of the stop-word list in each vectorizer, and it recomputes it when missing.
+    for part in model.get_params().values():
+        if hasattr(part, "_stop_words_id"):
+            del part._stop_words_id
     joblib.dump(model, MODEL_OUT)
     META_OUT.write_text(json.dumps({"escalation_threshold": tau, "variant": chosen, "trained_on": TRAIN, "train_n": len(train_rows),
-                                    "sklearn": sklearn.__version__, "generated_at": report["generated_at"]}, indent=2), encoding="utf-8")
+                                    "train_sha256": report["versions"]["train_sha256"], "sklearn": sklearn.__version__},
+                                   indent=2), encoding="utf-8")
     REPORT_JSON.parent.mkdir(parents=True, exist_ok=True)
     REPORT_JSON.write_text(json.dumps(report, indent=2, ensure_ascii=False, default=lambda o: o.item() if hasattr(o, "item") else str(o)), encoding="utf-8")
     REPORT_MD.write_text(to_markdown(report), encoding="utf-8")

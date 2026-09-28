@@ -74,6 +74,24 @@ def test_the_classifier_selection_is_tracked_as_its_report_says(store, tmp_path,
     assert {"intent_classifier.md", "intent_classifier.json", "intent_clf.joblib", "intent_clf_meta.json"} <= _artifacts(parent)
 
 
+def test_retraining_the_classifier_in_a_new_process_rewrites_the_same_bytes(tmp_path):
+    """The model and its metadata are inputs of every system evaluation: if retraining the same model wrote different
+    bytes (a memory address sklearn caches, a timestamp), `make all` from a clean checkout would read as changed."""
+    import subprocess
+
+    script = ("import sys; from pathlib import Path; from eval import evaluate_intent_classifier as e\n"
+              "for name in ('MODEL_OUT', 'META_OUT', 'REPORT_JSON', 'REPORT_MD'):\n"
+              "    setattr(e, name, Path(sys.argv[1]) / getattr(e, name).name)\n"
+              "e.track = lambda report: None\n"
+              "e.main()\n")
+    for run in ("a", "b"):
+        (tmp_path / run).mkdir()
+        subprocess.run([sys.executable, "-c", script, str(tmp_path / run)], cwd=tracking.ROOT, check=True,
+                       capture_output=True)
+    for name in ("intent_clf.joblib", "intent_clf_meta.json"):
+        assert (tmp_path / "a" / name).read_bytes() == (tmp_path / "b" / name).read_bytes(), name
+
+
 def test_each_system_of_an_evaluation_is_tracked_with_its_model_prompt_data_and_metrics(store, tmp_path, monkeypatch):
     from agent.llm.prompts import PROMPT_VERSION
     from eval import run_system_eval as rse
@@ -178,6 +196,41 @@ def test_every_metric_name_is_one_mlflow_accepts_on_any_system(store):
         mlflow.log_metrics(named)
     [run] = _runs("system-eval", "odd-names").values()
     assert run.info.status == "FINISHED" and set(run.data.metrics) == set(named)
+
+
+def test_a_run_is_dirty_when_its_code_or_inputs_changed_never_for_regenerated_reports(tmp_path, monkeypatch):
+    """Every evaluation rewrites its own report before it is tracked, and `make all` regenerates the evidence and the
+    quality report first: were those counted, every run would read dirty and the tag would say nothing."""
+    import subprocess
+
+    def git(*args: str) -> None:
+        subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *args], cwd=tmp_path, check=True,
+                       capture_output=True)
+
+    def write(path: str, text: str) -> None:
+        (tmp_path / path).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / path).write_text(text, encoding="utf-8")
+
+    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path.parent))  # no enclosing checkout is found instead
+    monkeypatch.setattr(tracking, "ROOT", tmp_path)
+    assert tracking.dirty() == "unknown"  # not a checkout: the container
+    git("init", "-q")
+    reports = ("eval/reports/SYSTEM_EVAL.md", "docs/evidence/baseline_metrics.md", "data/reports/quality_report.json")
+    for path in (*reports, "eval/workload/cases_test.jsonl", "agent/core/orchestrator.py"):
+        write(path, "committed\n")
+    git("add", "-A")
+    git("commit", "-q", "-m", "c")
+    assert tracking.dirty() == "false"
+
+    for path in reports:
+        write(path, "regenerated\n")
+    write("scratch.txt", "untracked\n")
+    assert tracking.dirty() == "false"
+    write("eval/workload/cases_test.jsonl", "other cases\n")  # an input that lives next to the reports
+    assert tracking.dirty() == "true"
+    git("checkout", "--", "eval/workload")
+    write("agent/core/orchestrator.py", "changed\n")
+    assert tracking.dirty() == "true"
 
 
 def test_the_prompt_hash_changes_with_the_fixed_text_even_without_a_version_bump(monkeypatch):
