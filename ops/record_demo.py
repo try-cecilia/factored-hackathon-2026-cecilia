@@ -1,108 +1,107 @@
-"""Records docs/demo/demo_app.webm: a captioned walkthrough of the running app.
+"""Records the demo segment of the pitch video: the jury demo, driven through its guided scenarios, with captions.
 
-Start the server first on port 8765 (`uvicorn api.main:app --port 8765`, with
-ADMIN_API_KEY and DEMO_IDP_SECRET in .env and DEMO_PUBLIC_CUSTOMERS set, e.g.
-`export DEMO_PUBLIC_CUSTOMERS=$(python -m ops.demo_customers)`), then:
-    python -m ops.record_demo
-The captions describe the degraded (no-LLM) run recorded in the build sandbox;
-re-record once the live LLM is reachable to show multi-turn clarification.
+    python -m ops.record_demo BASE_URL OUT.webm [REPO_URL]
+
+BASE_URL is the deployed app (or a local `uvicorn api.main:app` with DEMO_MODE=1 and a model key). The result is
+a silent 1280x720 video, about two minutes, with English captions over the Spanish and Portuguese chat: the voice-over
+and the slides are added when the pitch is edited (docs/video_pitch_script.md). Needs Playwright
+(`pip install playwright`); PW_CHANNEL picks an installed browser ("msedge", "chrome"), otherwise Playwright's own
+Chromium (`playwright install chromium`).
 """
-import glob
-import os
-import shutil
-import tempfile
+from __future__ import annotations
 
-from dotenv import dotenv_values
+import os
+import re
+import shutil
+import sys
+import tempfile
+from pathlib import Path
+
 from playwright.sync_api import sync_playwright
 
-BASE = "http://localhost:8765"
-OUT = tempfile.mkdtemp(prefix="demo_video_")
-ADMIN = dotenv_values(".env")["ADMIN_API_KEY"]
-exe = sorted(glob.glob("/opt/pw-browsers/chromium-*/chrome-linux/chrome"))[-1]
-
 CARD = """<html><body style="margin:0;height:100vh;display:flex;flex-direction:column;justify-content:center;
-padding:0 96px;background:#13233A;color:#F4F1EA;font-family:system-ui,sans-serif">{body}</body></html>"""
-
+padding:0 96px;background:#0e2f2b;color:#f2f4f1;font-family:system-ui,sans-serif">{body}</body></html>"""
 CAPTION_JS = """t => {
   let c = document.getElementById('__cap');
   if (!c) { c = document.createElement('div'); c.id = '__cap';
-    c.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);max-width:1100px;background:rgba(19,35,58,.94);color:#F4F1EA;font:600 22px/1.4 system-ui,sans-serif;padding:14px 22px;border-radius:12px;z-index:9999;text-align:center';
+    c.style.cssText = 'position:fixed;left:50%;bottom:22px;transform:translateX(-50%);max-width:1120px;background:rgba(14,47,43,.95);'
+      + 'color:#f2f4f1;font:600 21px/1.4 system-ui,sans-serif;padding:12px 22px;border-radius:12px;z-index:9999;text-align:center';
     document.body.appendChild(c); }
   c.textContent = t; }"""
 
 
-def cap(page, text, wait=3500):
+def caption(page, text: str, ms: int = 4000) -> None:
     page.evaluate(CAPTION_JS, text)
-    page.wait_for_timeout(wait)
+    page.wait_for_timeout(ms)
 
 
-def send(page, text, caption):
-    n = page.locator(".msg.bot").count()
-    cap(page, caption, 1500)
-    page.fill("#m", "")
-    page.type("#m", text, delay=35)
-    page.click("#send")
-    page.wait_for_function(f"document.querySelectorAll('.msg.bot').length > {n}", timeout=40000)
-    page.wait_for_timeout(3500)
+def run_scenario(page, title: str, first: str, why: bool = False, then: str | None = None, after: str | None = None) -> None:
+    """Run one guided scenario by its exact title; caption before the first step, optionally after each step."""
+    card = page.locator("article.scard").filter(has=page.locator(".stitle", has_text=re.compile("^" + re.escape(title) + "$")))
+    card.get_by_role("button").click()
+    page.wait_for_function("t => document.querySelector('#steps .steps-head strong')?.textContent === t", arg=title)
+    caption(page, first, 3500)
+    steps = page.locator("#steps li").count()
+    for i in range(steps):
+        before = page.locator(".msg.bot").count()
+        page.locator("#steps li button").first.click()
+        page.wait_for_function(f"document.querySelectorAll('.msg.bot').length > {before}", timeout=90000)
+        page.wait_for_timeout(1200)
+        if i == 0 and then and steps > 1:
+            caption(page, then, 4500)
+    if why:
+        page.locator(".msg.bot .linkbtn").last.click()
+        page.wait_for_timeout(800)
+    if after:
+        caption(page, after, 6000)
 
 
-with sync_playwright() as p:
-    b = p.chromium.launch(executable_path=exe)
-    ctx = b.new_context(viewport={"width": 1280, "height": 720}, record_video_dir=OUT, record_video_size={"width": 1280, "height": 720})
-    page = ctx.new_page()
+def main(base: str, out: Path, repo: str) -> None:
+    tmp = tempfile.mkdtemp(prefix="demo_video_")
+    with sync_playwright() as p:
+        channel = os.environ.get("PW_CHANNEL")
+        browser = p.chromium.launch(channel=channel) if channel else p.chromium.launch()
+        ctx = browser.new_context(viewport={"width": 1280, "height": 720}, record_video_dir=tmp,
+                                  record_video_size={"width": 1280, "height": 720}, color_scheme="light")
+        page = ctx.new_page()
+        page.set_content(CARD.format(body="""
+          <p style="font-size:19px;letter-spacing:3px;text-transform:uppercase;color:#7fd1c4;font-weight:600">Factored AI &amp; Data Hackathon 2026 · team Marvaq</p>
+          <h1 style="font-size:52px;line-height:1.1;margin:12px 0">An account &amp; payments assistant<br>that only says what it can verify</h1>
+          <p style="font-size:24px;color:#c6d3cf;line-height:1.45">The deployed app, with a live language model. Synthetic data only.</p>"""))
+        page.wait_for_timeout(5000)
 
-    page.set_content(CARD.format(body="""
-      <p style="font-size:20px;letter-spacing:3px;text-transform:uppercase;color:#8DB4FF;font-weight:600">Factored AI &amp; Data Hackathon 2026</p>
-      <h1 style="font-size:54px;line-height:1.1;margin:12px 0">Asistente AI de Cuenta y Pagos</h1>
-      <p style="font-size:26px;color:#C3CFDC;line-height:1.4">Demo grabada sobre la app real y el warehouse completo (datos sintéticos).<br>
-      En este entorno el LLM está bloqueado por la red: se ve el <b>modo degradado</b> real, no un modelo simulado.</p>"""))
-    page.wait_for_timeout(5500)
+        page.goto(base)
+        page.wait_for_selector("article.scard")
+        caption(page, "Guided scenarios on the left, the customer's chat in the middle, what the bank's teams receive on the right.", 5000)
+        run_scenario(page, "Balance question", "A balance question, in Spanish.", why=True,
+                     after="The model only chose the lookup. It received the customer's words, masked, and never the balances shown here.")
+        run_scenario(page, "Which account? (two turns)", "Two savings accounts match.",
+                     then="It asks which one instead of guessing…",
+                     after="…and understands “la segunda” from the conversation.")
+        run_scenario(page, "Trace a pending transfer (two turns)", "The one action it takes: tracing a transfer that never arrived.",
+                     then="It finds the pending transfer and asks for a plain yes. Nothing is opened yet.", why=True,
+                     after="The yes is judged in code, not by the model. The trace is opened, read back, and only then announced. Operations sees it on the right.")
+        run_scenario(page, "Unrecognized charge", "A charge the customer does not recognize.",
+                     after="Fraud goes to a person before any model call, with the flagged transactions, open questions and the next step. No transcript.")
+        run_scenario(page, "Prompt injection naming another customer's product", "An injection naming another customer's product.", why=True,
+                     after="Caught in code before the model: nothing about that product is revealed, and security gets a ticket.")
+        run_scenario(page, "The language model goes down", "Now the language model goes down.",
+                     then="A plain balance is still answered from verified data…",
+                     after="…and anything that needs understanding goes to a person.")
+        page.set_content(CARD.format(body=f"""
+          <h2 style="font-size:42px;margin:0 0 22px">Every reply is verified data or a fixed template.</h2>
+          <p style="font-size:25px;color:#c6d3cf;line-height:1.5">No customer record ever reaches the model.<br>
+          Its one action happens only on the customer's own yes, and is announced only after it reads back.</p>
+          <p style="font-size:21px;color:#7fd1c4;margin-top:26px">Code, evaluation and limits: {repo}</p>"""))
+        page.wait_for_timeout(6000)
+        ctx.close()
+        browser.close()
+    videos = list(Path(tmp).glob("*.webm"))
+    assert len(videos) == 1, videos
+    out.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy(videos[0], out)
+    print(f"saved {out} ({out.stat().st_size // 1024} KB)")
 
-    page.goto(BASE)
-    page.wait_for_selector("#cid option", state="attached")
-    cap(page, "Login: número de cliente + PIN de prueba. El número de cliente solo no alcanza para abrir sesión.", 4000)
-    page.click("#go")
-    page.wait_for_selector("#chat:not([hidden])")
 
-    send(page, "¿Cuál es mi saldo?", "Consulta de saldo en español")
-    cap(page, "Sin LLM, un saldo general se responde igual: datos verificados, cuentas enmascaradas y fecha de corte.", 5000)
-    send(page, "Qual é o meu saldo?", "La misma consulta en portugués")
-    cap(page, "Detecta el idioma y responde en portugués.", 3500)
-    send(page, "Hay un cargo en mi tarjeta que no reconozco", "Un posible fraude")
-    cap(page, "El fraude se detecta antes del LLM (léxico + clasificador aprendido) y pasa a un humano con ticket.", 5000)
-    send(page, "Quiero bloquear mi tarjeta", "Un pedido fuera del alcance de este flujo")
-    cap(page, "Fuera de alcance: no lo resuelve y orienta al canal correcto, en vez de inventar.", 4500)
-
-    admin = page
-    admin.set_extra_http_headers({"X-Admin-Key": ADMIN})
-    admin.goto(f"{BASE}/admin/human_queue?limit=1")
-    admin.evaluate("""() => { const j = JSON.parse(document.body.innerText)[0];
-      const keep = {category: j.category, priority: j.priority, queue: j.queue, policy_rule: j.policy_rule, request: j.request,
-        evidence: (j.evidence || []).slice(0, 3), open_questions: j.open_questions, suggested_next_step: j.suggested_next_step,
-        session_ref: j.session_ref};
-      document.body.innerHTML = '<pre style="font:17px/1.45 ui-monospace,monospace;padding:28px;margin:0;white-space:pre-wrap;background:#FDFCF9;color:#13233A;min-height:100vh">' +
-        JSON.stringify(keep, null, 2).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])) + '</pre>'; }""")
-    cap(admin, "Lo que recibe el agente humano: la regla que se activó, evidencia (transacciones marcadas primero) y preguntas abiertas.", 6000)
-    admin.evaluate("window.scrollTo(0, 400)")
-    cap(admin, "Solo una referencia hasheada de la sesión: el token nunca aparece en tickets ni trazas.", 4500)
-
-    page.set_content(CARD.format(body="""
-      <h2 style="font-size:40px;margin:0 0 24px">Resultados en 432 casos de prueba (ES + PT)</h2>
-      <table style="font-size:22px;border-collapse:collapse;color:#F4F1EA">
-      <tr style="color:#8DB4FF"><td style="padding:8px 28px 8px 0"></td><td style="padding:8px 28px">Humano</td><td style="padding:8px 28px">Bot de keywords</td><td style="padding:8px 28px">Nuestro sistema</td></tr>
-      <tr><td style="padding:8px 28px 8px 0">Espera + atención</td><td style="padding:8px 28px">120 s + 221 s</td><td style="padding:8px 28px">ms</td><td style="padding:8px 28px">ms + LLM (a medir)</td></tr>
-      <tr><td style="padding:8px 28px 8px 0">Resuelve</td><td style="padding:8px 28px">91,5%</td><td style="padding:8px 28px">76,8%</td><td style="padding:8px 28px">100% techo · 64,8% modelo malo</td></tr>
-      <tr><td style="padding:8px 28px 8px 0">Fraude no escalado</td><td style="padding:8px 28px">—</td><td style="padding:8px 28px">24 / 120</td><td style="padding:8px 28px">0 / 120</td></tr>
-      <tr><td style="padding:8px 28px 8px 0">Resultados inseguros</td><td style="padding:8px 28px">—</td><td style="padding:8px 28px">0 / 432</td><td style="padding:8px 28px">0 / 432</td></tr>
-      </table>
-      <p style="font-size:20px;color:#C3CFDC;margin-top:28px">Métodos y reportes completos: EVALUATION.md · eval/reports/</p>"""))
-    page.wait_for_timeout(8000)
-    ctx.close()
-    b.close()
-
-vids = glob.glob(f"{OUT}/*.webm")
-assert len(vids) == 1, vids
-vid = vids[0]
-os.makedirs("docs/demo", exist_ok=True)
-shutil.copy(vid, "docs/demo/demo_app.webm")
-print("saved", os.path.getsize("docs/demo/demo_app.webm") // 1024, "KB")
+if __name__ == "__main__":
+    main(sys.argv[1].rstrip("/"), Path(sys.argv[2]), sys.argv[3] if len(sys.argv) > 3 else "github.com/marvaq-ai")
