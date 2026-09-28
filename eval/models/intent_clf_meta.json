@@ -4,5 +4,5 @@
   "trained_on": "eval/test_cases/intent_dataset.csv",
   "train_n": 182,
   "sklearn": "1.9.1",
-  "generated_at": "2026-09-26T01:53:28.169328+00:00"
+  "generated_at": "2026-09-28T15:41:53.360016+00:00"
 }

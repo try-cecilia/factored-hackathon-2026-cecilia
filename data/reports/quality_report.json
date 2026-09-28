@@ -1,8 +1,8 @@
 {
-  "run_id": "20260926T012329Z-4d717a",
+  "run_id": "20260928T153707Z-22c3dc",
   "contract_version": "2.0.0",
-  "code_version": "ed02ab5",
-  "generated_at": "2026-09-26T01:28:41.544658+00:00",
+  "code_version": "184f55b",
+  "generated_at": "2026-09-28T15:41:05.121877+00:00",
   "tables": {
     "branches": {
       "partitions": 1,
@@ -11,7 +11,7 @@
       "rows_deduplicated": 0,
       "rows_new": 350,
       "rows_updated": 0,
-      "seconds": 1.09
+      "seconds": 2.26
     },
     "daily_exchange_rates": {
       "partitions": 1,
@@ -20,7 +20,7 @@
       "rows_deduplicated": 0,
       "rows_new": 13164,
       "rows_updated": 0,
-      "seconds": 0.27
+      "seconds": 0.61
     },
     "customers": {
       "partitions": 1,
@@ -29,7 +29,7 @@
       "rows_deduplicated": 0,
       "rows_new": 150000,
       "rows_updated": 0,
-      "seconds": 3.31
+      "seconds": 4.96
     },
     "products": {
       "partitions": 1,
@@ -38,7 +38,7 @@
       "rows_deduplicated": 0,
       "rows_new": 400000,
       "rows_updated": 0,
-      "seconds": 4.53
+      "seconds": 7.95
     },
     "transactions": {
       "partitions": 1097,
@@ -47,7 +47,7 @@
       "rows_deduplicated": 0,
       "rows_new": 4425008,
       "rows_updated": 0,
-      "seconds": 171.03
+      "seconds": 155.93
     },
     "call_center_interactions": {
       "partitions": 1097,
@@ -56,7 +56,7 @@
       "rows_deduplicated": 0,
       "rows_new": 686296,
       "rows_updated": 0,
-      "seconds": 21.63
+      "seconds": 32.55
     },
     "call_transcripts": {
       "partitions": 1097,
@@ -65,7 +65,7 @@
       "rows_deduplicated": 0,
       "rows_new": 171321,
       "rows_updated": 0,
-      "seconds": 5.46
+      "seconds": 16.22
     },
     "satisfaction_surveys": {
       "partitions": 1097,
@@ -74,7 +74,7 @@
       "rows_deduplicated": 0,
       "rows_new": 212759,
       "rows_updated": 0,
-      "seconds": 104.62
+      "seconds": 17.02
     }
   },
   "summary": {
@@ -89,7 +89,7 @@
       "table": "call_transcripts",
       "column": "duration_seconds",
       "dictionary": "INTEGER NOT NULL",
-      "observed": "~13.7% null",
+      "observed": "14.0% null (24,029 of 171,321 in the full run)",
       "decision": "warn rule instead of quarantine; analysis-only table, column unused"
     }
   ],
