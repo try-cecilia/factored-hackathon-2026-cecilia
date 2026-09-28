@@ -24,6 +24,7 @@ from agent.policy.escalation import default_queue
 from agent.session.auth import SessionError, default_store, session_ref
 from agent.session.identity import IdentityUnavailable, derive_test_pin
 from agent.tools.db import get_connection
+from agent.tools.traces import default_traces
 from ops.demo_customers import roles
 
 MAX_FLAGGED_SESSIONS = 10_000
@@ -62,16 +63,20 @@ class TokenIn(BaseModel):
 
 
 class FaultIn(TokenIn):
-    fault: Literal["expire_session", "llm_outage", "llm_restore"]
+    fault: Literal["expire_session", "llm_outage", "llm_restore", "clear_traces"]
 
 
 @router.post("/fault")
 def fault(req: FaultIn) -> dict:
+    """A fault or a sandbox reset, for this session only. clear_traces forgets the session customer's trace requests,
+    so the trace scenario shows its proposal even after an earlier run opened one (idempotency is per customer)."""
     try:
-        default_store.validate(req.session_token)
+        session = default_store.validate(req.session_token)
     except SessionError:
         raise HTTPException(401, "no live session for this token") from None
     ref = session_ref(req.session_token)
+    if req.fault == "clear_traces":
+        return {"traces_cleared": default_traces.clear(session.customer_id)}
     if req.fault == "expire_session":
         default_store.expire(req.session_token)
         return {"session": "expired"}
@@ -86,14 +91,25 @@ def fault(req: FaultIn) -> dict:
 
 # --- the bank view -----------------------------------------------------------------------------------------------
 
-@router.post("/tickets")
-def tickets(req: TokenIn) -> list[dict]:
-    """Tickets this session filed, newest first, exactly as the human agent receives them."""
-    ref, path = session_ref(req.session_token), default_queue.path
+def _of_session(path, token: str) -> list[dict]:
+    """What one session left in a JSONL store, newest first (looked up in its last 2,000 records)."""
+    ref = session_ref(token)
     if not path.exists():
         return []
     lines = path.read_text(encoding="utf-8").splitlines()[-2000:]
-    return [t for t in (json.loads(line) for line in reversed(lines) if ref in line) if t.get("session_ref") == ref][:20]
+    return [r for r in (json.loads(line) for line in reversed(lines) if ref in line) if r.get("session_ref") == ref][:20]
+
+
+@router.post("/tickets")
+def tickets(req: TokenIn) -> list[dict]:
+    """Tickets this session filed, exactly as the human agent receives them."""
+    return _of_session(default_queue.path, req.session_token)
+
+
+@router.post("/traces")
+def traces(req: TokenIn) -> list[dict]:
+    """Trace requests this session opened, as payments operations receives them."""
+    return _of_session(default_traces.path, req.session_token)
 
 
 # --- guided scenarios --------------------------------------------------------------------------------------------
@@ -182,7 +198,20 @@ def _scenarios() -> tuple[dict, ...]:
             ("Suspended account", "Cuenta suspendida"),
             ("Compliance hold: not even a plain balance is disclosed; the ticket goes to compliance, before any model call.",
              "Retención de cumplimiento: ni siquiera un saldo simple se muestra; el ticket va a cumplimiento, antes de llamar al modelo.")))
-    order = ("normal", "ambiguous", "out_of_scope", "human", "attack", "failure")
+    if pending := r.get("pending"):
+        en, es_title, mine = {"Transfer": ("transfer", "una transferencia", "mi transferencia"),
+                              "Payment": ("payment", "un pago", "mi pago"),
+                              "Deposit": ("deposit", "un depósito", "mi depósito")}[pending["transaction_type"]]
+        out.append(_scenario(
+            "action_trace", "action", pending, [f"¿Pueden rastrear {mine}? Sigue pendiente", "Sí"], ["CLARIFY", "AUTO_RESOLVE"],
+            (f"Trace a pending {en} (two turns)", f"Rastrear {es_title} pendiente (dos turnos)"),
+            ("The one action this assistant takes. It finds the pending movement, shows it and asks for a plain yes; the yes is "
+             "judged in code, not by the model. The trace is opened, read back, and only then announced with its number. "
+             "The bank view shows it as operations receives it.",
+             "La única acción que toma este asistente. Encuentra el movimiento pendiente, lo muestra y pide un sí; el sí lo evalúa "
+             "el código, no el modelo. El pedido se abre, se relee y recién ahí se anuncia con su número. La vista del banco lo "
+             "muestra como lo recibe operaciones."), fault="clear_traces"))
+    order = ("normal", "ambiguous", "out_of_scope", "action", "human", "attack", "failure")
     return tuple(sorted(out, key=lambda s: order.index(s["path"])))
 
 
@@ -197,6 +226,31 @@ def scenarios() -> list[dict]:
 # --- "Why?" ------------------------------------------------------------------------------------------------------
 
 _BECAUSE = [  # (policy rule prefix, English, Spanish); first match wins
+    ("action:trace_proposed",
+     "One pending movement matches. The code shows it and asks for a plain yes or no. Nothing is opened yet, and the answer "
+     "will be judged in code, not by the model.",
+     "Coincide un movimiento pendiente. El código lo muestra y pide un sí o un no. Todavía no se abre nada, y la respuesta la "
+     "evalúa el código, no el modelo."),
+    ("action:trace_opened",
+     "The customer said yes. The code opened the trace in the tracing service and read it back before giving its number: "
+     "only a verified action is reported. The model was not asked.",
+     "El cliente dijo que sí. El código abrió el pedido en el servicio de rastreo y lo releyó antes de dar el número: solo "
+     "se informa una acción verificada. No se le preguntó al modelo."),
+    ("action:trace_already_open",
+     "A trace for this movement already exists, so the same number is given instead of opening another one.",
+     "Ya hay un pedido para este movimiento, así que se da el mismo número en vez de abrir otro."),
+    ("action:trace_cancelled",
+     "The customer said no: nothing was opened.",
+     "El cliente dijo que no: no se abrió nada."),
+    ("action:trace_choose",
+     "Several pending movements match, so it asks which one instead of guessing.",
+     "Coinciden varios movimientos pendientes, así que pregunta cuál en vez de adivinar."),
+    ("action:trace_unmatched",
+     "Nothing of the customer's is pending, so a person checks it with operations or the sending bank.",
+     "El cliente no tiene nada pendiente, así que una persona lo revisa con operaciones o con el banco que envió."),
+    ("action:trace_unverified",
+     "The trace could not be read back, so the customer is not told it exists; a person opens it.",
+     "El pedido no se pudo releer, así que no se le dice al cliente que existe; lo abre una persona."),
     ("verified_tool_results",
      "Answered from verified tool results. The model only chose which lookup to run; the code checked that the product is the customer's, ran it and wrote the reply from a template.",
      "Respuesta con resultados verificados. El modelo solo eligió qué consultar; el código comprobó que el producto es del cliente, hizo la consulta y escribió la respuesta con una plantilla."),

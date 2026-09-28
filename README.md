@@ -10,7 +10,9 @@ permissioned tools, answers only with verified data, and hands off to a human
 with evidence when it shouldn't act. **The model interprets; the code speaks**:
 the system never gives the language model a customer record, identifiers the
 customer types are masked before they leave, and the model never writes to
-the customer ([ADR-001](docs/decisions/ADR-001-model-interprets-code-speaks.md)).
+the customer ([ADR-001](docs/decisions/ADR-001-model-interprets-code-speaks.md)). Its one action, tracing a
+movement that is still pending, happens only on the customer's own yes, judged in code, and is
+announced only after it reads back ([ADR-002](docs/decisions/ADR-002-one-action-confirmed-in-code.md)).
 
 ## Why this workflow (measured on the supplied data)
 
@@ -99,7 +101,7 @@ cp .env.example .env        # fill AWS_* + DATASET_BUCKET (dataset), DEMO_IDP_SE
 make setup
 make ingest                 # full warehouse from S3 (~6 min; or `make ingest-demo`, ~1 min)
 make serve                  # http://localhost:8000 — web chat with sandbox test logins
-make test                   # 251 hermetic tests: fixture warehouse, no S3, no API keys
+make test                   # 281 hermetic tests: fixture warehouse, no S3, no API keys
 make all                    # rebuild every number in the docs
 ```
 
@@ -111,15 +113,17 @@ Traces, tickets, audit log and the data-quality report are under `/admin/*`.
 **Jury demo (`DEMO_MODE=1`).** The same web app becomes a guided tour of the
 required paths, on whatever warehouse is loaded (the scenario customers are
 picked from it by `ops/demo_customers.py`):
-- 12 guided scenarios: normal (balance, arrears in Portuguese, exchange rate),
-  ambiguous (two turns), out of scope, needs a person (fraud, suspended
-  account, missing data), attack (another customer's product, jailbreak) and
-  failure (model down, expired session). Each states what to look for and
-  checks the outcome it promises;
+- 13 guided scenarios: normal (balance, arrears in Portuguese, exchange rate),
+  ambiguous (two turns), out of scope, the verified action (trace a pending
+  transfer, two turns), needs a person (fraud, suspended account, missing
+  data), attack (another customer's product, jailbreak) and failure (model
+  down, expired session). Each states what to look for and checks the outcome
+  it promises;
 - a **"Why?"** on every reply: the policy rule that decided it, what the model
   received (masked) and chose, what the code verified, and the cost;
-- the **bank view**: the session's tickets as the human agent receives them,
-  with evidence and open questions, no transcript and no token;
+- the **bank view**: what the session sent to the bank's teams, as they
+  receive it: trace requests for payments operations, and tickets with
+  evidence and open questions, no transcript and no token;
 - buttons to **expire the session** and to **take the model down** for this
   session only.
 
@@ -137,7 +141,7 @@ analysis/    problem evidence and human baseline from the supplied data
 eval/        held-out sets, workload generator, baseline bot, evaluation runners, reports/
 ops/         Dockerfile, entrypoint, demo-customer picker, load test, live smoke run, retention
 docs/        architecture decisions (decisions/), data quality, operations, evidence, demo
-tests/       251 hermetic tests + fixtures
+tests/       281 hermetic tests + fixtures
 ```
 
 ## Status

@@ -116,9 +116,31 @@ service, and as our own roadmap.
   system serves the 15% on text channels until speech-to-text and
   text-to-speech are added.
 
+## The action
+
+- The one action, tracing a pending movement
+  ([ADR-002](docs/decisions/ADR-002-one-action-confirmed-in-code.md)), runs
+  against a **sandbox tracing service**: JSONL next to the human queue. The
+  2-business-day deadline is a synthetic policy. A bank plugs its
+  payments-operations API behind the same `open` and `get` calls.
+- Only pending transfers, payments and deposits are traced; a pending card
+  purchase just posts.
+- Only a plain yes or no counts as an answer to the proposal. "Sí, y además
+  dime mi saldo" drops the proposal, and the customer has to ask again.
+- The pre-LLM intent classifier predates the action. It reads 1 of 12
+  team-written trace requests as a possible dispute ("necesito que rastreen
+  un pago que no se acreditó"), and that customer goes to a person: safe, but
+  not self-served. Retraining with trace examples fixed it but lost a fraud
+  report on the classifier's held-out test ("no reconheço essa compra"), so
+  the classifier was kept. That choice was made after seeing the test split.
+- The demo's trace scenario starts by clearing the customer's earlier trace
+  requests (`clear_traces`, sandbox only), because idempotency is per
+  customer and every jury member runs the same test customer.
+
 ## Scope, by design
 
-- Read-only. No money movement, no credit decisions (as the brief requires).
+- No money movement, no credit decisions (as the brief requires). Besides
+  handoff tickets, the only write is the trace request above.
   Card blocking, disputes and credit eligibility get an abstain and a pointer
   to the right channel, or an escalation. They are not attempted.
 - Portuguese is supported in understanding and replies; the product catalog

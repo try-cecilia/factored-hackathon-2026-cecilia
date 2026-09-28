@@ -58,5 +58,13 @@ class TraceService:
                 f.write(json.dumps(request, ensure_ascii=False) + "\n")
             return request
 
+    def clear(self, customer_id: str) -> int:
+        """Sandbox only: forget a customer's requests, so a demo scenario starts from a clean state."""
+        with self._lock:
+            everything = self._all()
+            keep = [t for t in everything if t["customer_id"] != customer_id]
+            self.path.write_text("".join(json.dumps(t, ensure_ascii=False) + "\n" for t in keep), encoding="utf-8")
+            return len(everything) - len(keep)
+
 
 default_traces = TraceService()

@@ -113,6 +113,8 @@
 
   .ticket { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--escalate); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
   .ticket.fresh { box-shadow: 0 0 0 2px var(--escalate); }
+  .ticket.trace { border-left-color: var(--ok); } .ticket.trace.fresh { box-shadow: 0 0 0 2px var(--ok); }
+  .bankh { font-size: 12px; font-weight: 600; color: var(--muted); margin: 10px 0 6px; }
   .thead { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px; font-size: 13px; }
   .q { font-weight: 700; }
   .prio { font-size: 11px; font-weight: 700; border-radius: 6px; padding: 0 6px; border: 1px solid currentColor; }
@@ -206,12 +208,15 @@ const T = {
     customer: "Sandbox customer", pin: "Test PIN", signIn: "Sign in", signInAgain: "Sign in again", signOut: "Sign out",
     expire: "Expire session", outage: "Simulate model outage", outageOn: "Model is down: restore",
     send: "Send", placeholder: "Write your question…", bank: "Bank view · human agent queue",
-    bankHint: "Tickets this session filed, exactly as the agent receives them: request, verified facts, evidence, open questions. No transcript, no session token.",
-    noTickets: "No handoffs yet. Try \"Unrecognized charge\" or the attack scenarios.",
+    bankHint: "What this session sent to the bank's teams, as they receive it: trace requests for payments operations, and handoffs with the request, verified facts, evidence and open questions. No transcript, no session token.",
+    noTickets: "No handoffs or actions yet. Try \"Unrecognized charge\", the trace scenario or the attacks.",
+    tracesTitle: "Payments operations · trace requests", ticketsTitle: "Human agents · handoffs",
+    tr: { movement: "Movement", product: "Product", sla: "Answer within", slaText: n => `${n} business days (synthetic policy)`, ids: "Codes" },
     footer: "Prototype for the Factored AI & Data Hackathon 2026. Synthetic data only; test PINs are public on purpose. Not a real bank.",
     run: "Run", running: "Running", playAll: "Play all", close: "Close", sendStep: "Send", expected: "expected", any: "any safe outcome",
-    got: "got", langES: "ES", langPT: "PT", faultNote: { llm_outage: "starts with the model down", expire_session: "starts with an expired session" },
-    paths: { normal: "Normal", ambiguous: "Ambiguous", out_of_scope: "Out of scope", human: "Needs a person", attack: "Attack", failure: "Failure" },
+    got: "got", langES: "ES", langPT: "PT",
+    faultNote: { llm_outage: "starts with the model down", expire_session: "starts with an expired session", clear_traces: "starts with no earlier trace" },
+    paths: { normal: "Normal", ambiguous: "Ambiguous", out_of_scope: "Out of scope", action: "Verified action", human: "Needs a person", attack: "Attack", failure: "Failure" },
     disp: { AUTO_RESOLVE: "Resolved", CLARIFY: "Asks", ABSTAIN: "Declines", ESCALATE: "To a person", REAUTH_REQUIRED: "Sign in again" },
     why: "Why?", hide: "Hide", because: "Because", rule: "Rule", modelSaw: "The model received", modelChose: "The model chose",
     checks: "The code verified", cost: "Cost", nothingPre: "Nothing: decided before any model call.",
@@ -235,12 +240,15 @@ const T = {
     customer: "Cliente de prueba", pin: "PIN de prueba", signIn: "Iniciar sesión", signInAgain: "Volver a iniciar sesión", signOut: "Cerrar sesión",
     expire: "Vencer la sesión", outage: "Simular caída del modelo", outageOn: "Modelo caído: restaurar",
     send: "Enviar", placeholder: "Escribe tu consulta…", bank: "Vista del banco · cola de agentes",
-    bankHint: "Los tickets que generó esta sesión, tal como los recibe el agente: pedido, hechos verificados, evidencia y preguntas abiertas. Sin transcripción y sin el token de sesión.",
-    noTickets: "Todavía no hay derivaciones. Prueba \"Cargo no reconocido\" o los escenarios de ataque.",
+    bankHint: "Lo que esta sesión mandó a los equipos del banco, tal como lo reciben: pedidos de rastreo para operaciones de pagos, y derivaciones con el pedido, hechos verificados, evidencia y preguntas abiertas. Sin transcripción y sin el token de sesión.",
+    noTickets: "Todavía no hay derivaciones ni acciones. Prueba \"Cargo no reconocido\", el rastreo o los ataques.",
+    tracesTitle: "Operaciones de pagos · pedidos de rastreo", ticketsTitle: "Agentes humanos · derivaciones",
+    tr: { movement: "Movimiento", product: "Producto", sla: "Responde en", slaText: n => `${n} días hábiles (política sintética)`, ids: "Códigos" },
     footer: "Prototipo para el Factored AI & Data Hackathon 2026. Solo datos sintéticos; los PIN de prueba son públicos a propósito. No es un banco real.",
     run: "Ejecutar", running: "En curso", playAll: "Enviar todo", close: "Cerrar", sendStep: "Enviar", expected: "esperado", any: "cualquier resultado seguro",
-    got: "obtuvo", langES: "ES", langPT: "PT", faultNote: { llm_outage: "empieza con el modelo caído", expire_session: "empieza con la sesión vencida" },
-    paths: { normal: "Normal", ambiguous: "Ambiguo", out_of_scope: "Fuera de alcance", human: "Requiere una persona", attack: "Ataque", failure: "Fallas" },
+    got: "obtuvo", langES: "ES", langPT: "PT",
+    faultNote: { llm_outage: "empieza con el modelo caído", expire_session: "empieza con la sesión vencida", clear_traces: "empieza sin pedidos anteriores" },
+    paths: { normal: "Normal", ambiguous: "Ambiguo", out_of_scope: "Fuera de alcance", action: "Acción verificada", human: "Requiere una persona", attack: "Ataque", failure: "Fallas" },
     disp: { AUTO_RESOLVE: "Resuelto", CLARIFY: "Pregunta", ABSTAIN: "Declina", ESCALATE: "A una persona", REAUTH_REQUIRED: "Reingresar" },
     why: "¿Por qué?", hide: "Ocultar", because: "Motivo", rule: "Regla", modelSaw: "El modelo recibió", modelChose: "El modelo eligió",
     checks: "El código verificó", cost: "Costo", nothingPre: "Nada: se decidió antes de llamar al modelo.",
@@ -389,13 +397,13 @@ async function signIn(customerId, pin) {
                          expired: false, modelDown: false, active: null, turns: [] });
   $("#signin").hidden = true; $("#chat").hidden = false; $("#btnAgain").hidden = true;
   $("#who").textContent = customerId;
-  $("#log").replaceChildren(); lastTickets = [];
+  $("#log").replaceChildren(); lastTickets = []; lastTraces = [];
   paintStatic(); tick(); $("#m").focus({ preventScroll: true });
   return true;
 }
 function signOut() {
   Object.assign(state, { token: null, customer: null, pin: null, active: null, turns: [], modelDown: false });
-  $("#chat").hidden = true; $("#signin").hidden = false; $("#log").replaceChildren(); lastTickets = [];
+  $("#chat").hidden = true; $("#signin").hidden = false; $("#log").replaceChildren(); lastTickets = []; lastTraces = [];
   paintStatic();
 }
 async function applyFault(fault) {
@@ -471,20 +479,44 @@ async function send(text, fromStep) {
     if (!r.ok) { $("#log").append(h("div", { class: "msg bot" }, r.status === 429 ? t().errRate : ((r.data && r.data.detail) || t().errGeneric))); return null; }
     addBot(r.data);
     if (r.data.disposition === "REAUTH_REQUIRED") { state.expired = true; $("#btnAgain").hidden = !state.pin; tick(); }
-    if (state.demo) await refreshTickets(true, r.data.ticket_id);
+    if (state.demo) await refreshTickets(true, r.data.ticket_id, r.data.policy_rule === "action:trace_opened");
     return r.data;
   } finally { state.busy = false; $("#send").disabled = false; paintScenarios(); if (fromStep) paintSteps(); }
 }
 
 // ---------- bank view ----------
-let lastTickets = [];
-async function refreshTickets(fetchNew, freshId) {
+let lastTickets = [], lastTraces = [];
+async function refreshTickets(fetchNew, freshId, freshTrace) {
   if (!state.demo) return;
-  if (fetchNew && state.token) { const r = await api("POST", "/demo/tickets", { session_token: state.token }); if (r.ok) lastTickets = r.data; }
-  if (!state.token) lastTickets = [];
+  if (fetchNew && state.token) {
+    const [tk, tr] = await Promise.all([api("POST", "/demo/tickets", { session_token: state.token }),
+                                        api("POST", "/demo/traces", { session_token: state.token })]);
+    if (tk.ok) lastTickets = tk.data;
+    if (tr.ok) lastTraces = tr.data;
+  }
+  if (!state.token) { lastTickets = []; lastTraces = []; }
   const box = $("#tickets"); box.replaceChildren();
-  if (!lastTickets.length) { box.append(h("div", { class: "empty" }, t().noTickets)); return; }
-  lastTickets.forEach(tk => box.append(ticketCard(tk, tk.ticket_id === freshId)));
+  if (!lastTickets.length && !lastTraces.length) { box.append(h("div", { class: "empty" }, t().noTickets)); return; }
+  if (lastTraces.length) {
+    box.append(h("h3", { class: "bankh" }, t().tracesTitle));
+    lastTraces.forEach((tr, i) => box.append(traceCard(tr, freshTrace && i === 0)));
+  }
+  if (lastTickets.length) {
+    box.append(h("h3", { class: "bankh" }, t().ticketsTitle));
+    lastTickets.forEach(tk => box.append(ticketCard(tk, tk.ticket_id === freshId)));
+  }
+}
+function traceCard(tr, fresh) {
+  const L = t().tr;
+  const when = new Date(tr.created_at * 1000).toLocaleTimeString(state.lang === "es" ? "es" : "en");
+  return h("article", { class: "ticket trace" + (fresh ? " fresh" : "") },
+    h("div", { class: "thead" }, h("span", { class: "q" }, tr.queue), h("span", { class: "prio p-Low" }, tr.status),
+      h("span", { class: "muted mono" }, `${tr.trace_id} · ${when}`)),
+    h("dl", {},
+      h("dt", {}, L.movement), h("dd", { class: "mono" }, tr.transaction_id),
+      h("dt", {}, L.product), h("dd", { class: "mono" }, tr.product_id),
+      h("dt", {}, L.sla), h("dd", {}, L.slaText(tr.sla_business_days)),
+      h("dt", {}, L.ids), h("dd", { class: "mono" }, `${t().sessionRef} ${tr.session_ref}`)));
 }
 function ticketCard(tk, fresh) {
   const L = t().tk;

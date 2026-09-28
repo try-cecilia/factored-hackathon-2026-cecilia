@@ -26,12 +26,14 @@ def test_each_demo_role_gets_a_customer_that_shows_its_behavior():
     assert roles["abroad"] == {"customer_id": "CLI-FIX0002", "country": "Colombia", "currency": "COP",
                                "product_id": "PRD-FIX0006"}
     assert roles["suspended"]["customer_id"] == "CLI-FIX0005"
-    assert demo_customers.pick() == ["CLI-FIX0001", "CLI-FIX0002", "CLI-FIX0005"]
+    assert roles["pending"] == {"customer_id": "CLI-FIX0004", "transaction_type": "Transfer"}  # one pending transfer
+    assert demo_customers.pick() == ["CLI-FIX0001", "CLI-FIX0002", "CLI-FIX0005", "CLI-FIX0004"]
 
 
 @pytest.fixture
-def client(monkeypatch):
+def client(monkeypatch, tmp_path):
     identity.default_identity._failures.clear()
+    monkeypatch.setenv("TRACE_REQUESTS_PATH", str(tmp_path / "trace_requests.jsonl"))  # each test starts with no traces
     monkeypatch.setattr(main, "login_limiter", main.RateLimiter(100, 60))
     monkeypatch.setattr(main, "chat_limiter", main.RateLimiter(100, 60))
     monkeypatch.setenv("DEMO_MODE", "1")
@@ -65,7 +67,7 @@ def test_without_demo_mode_the_demo_does_not_exist(client, monkeypatch):
 
 def test_guided_scenarios_cover_every_path_with_customers_that_can_sign_in(client):
     scenarios = client.get("/demo/scenarios").json()
-    assert {s["path"] for s in scenarios} == {"normal", "ambiguous", "out_of_scope", "human", "attack", "failure"}
+    assert {s["path"] for s in scenarios} == {"normal", "ambiguous", "out_of_scope", "action", "human", "attack", "failure"}
     for s in scenarios:
         assert s["turns"] and len(s["expect"]) == len(s["turns"]) and s["title"]["en"] and s["look_for"]["es"]
         assert client.post("/auth/session", json={"customer_id": s["customer_id"], "pin": s["test_pin"]}).status_code == 200
@@ -92,6 +94,7 @@ IDEAL_MODEL = {
     "attack_injection": [tool("get_account_summary", {})],
     "failure_llm_outage": [],
     "failure_expired": [],
+    "action_trace": [tool("request_trace", {})],  # the "sí" is judged in code, without the model
 }
 
 
@@ -160,3 +163,25 @@ def test_expiring_the_session_makes_the_next_message_ask_to_sign_in_again(client
 def test_a_fault_needs_a_live_session_and_a_known_fault(client):
     assert client.post("/demo/fault", json={"session_token": "x" * 20, "fault": "llm_outage"}).status_code == 401
     assert client.post("/demo/fault", json={"session_token": login(client), "fault": "format_disk"}).status_code == 422
+
+
+def test_the_bank_view_shows_the_trace_this_session_opened_as_operations_receives_it(client, monkeypatch):
+    model(monkeypatch, tool("request_trace", {}))
+    mine, other = login(client, "CLI-FIX0004"), login(client, "CLI-FIX0004")
+    assert chat(client, mine, "hice una transferencia que todavía no llega")["policy_rule"] == "action:trace_proposed"
+    opened = chat(client, mine, "sí")
+    assert opened["disposition"] == "AUTO_RESOLVE" and opened["why"]["rule"] == "action:trace_opened"
+    traces = client.post("/demo/traces", json={"session_token": mine}).json()
+    assert len(traces) == 1 and traces[0]["trace_id"] in opened["response_text"] and traces[0]["queue"] == "payments_ops"
+    assert client.post("/demo/traces", json={"session_token": other}).json() == []
+
+def test_the_trace_scenario_can_start_clean_after_an_earlier_run_without_touching_other_customers(client, monkeypatch):
+    from agent.tools.traces import default_traces
+
+    default_traces.open("CLI-FIX0004", "TXN-FIX0006", "PRD-FIX0010", "an-earlier-jury-run")
+    default_traces.open("CLI-FIX0001", "TXN-X", "PRD-FIX0001", "someone-else")
+    token = login(client, "CLI-FIX0004")
+    assert client.post("/demo/fault", json={"session_token": token, "fault": "clear_traces"}).json() == {"traces_cleared": 1}
+    assert default_traces.find("CLI-FIX0004", "TXN-FIX0006") is None and default_traces.find("CLI-FIX0001", "TXN-X")
+    model(monkeypatch, tool("request_trace", {}))
+    assert chat(client, token, "¿Pueden rastrear mi transferencia? Sigue pendiente")["policy_rule"] == "action:trace_proposed"

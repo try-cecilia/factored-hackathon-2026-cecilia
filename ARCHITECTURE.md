@@ -56,6 +56,21 @@ verified tool results or fixed templates.
    dropped, enums and limits clamped, and product references resolved against
    the catalog ("P2", "0002", "Cuenta Ahorro" → an id, or a clarification if
    it is ambiguous). It allows at most 2 tool calls per turn.
+   **The one action: tracing a pending movement** ([ADR-002](docs/decisions/ADR-002-one-action-confirmed-in-code.md)).
+   When the customer says a transfer, payment or deposit did not arrive, the
+   model picks `request_trace`. The tool only finds the customer's pending
+   movements that match; it never opens anything.
+   - One match: the code shows it (kind, amount, date, product) and asks for
+     a plain yes or no. The proposal is kept server side and lives one turn.
+   - The next message is judged in code, never by the model
+     (`router.confirmation`): a plain yes opens the trace in the tracing
+     service (`agent/tools/traces.py`, a sandbox mock), **reads it back**, and
+     only then gives its number and deadline. A trace that does not read back
+     is never announced: a person opens it. A plain no opens nothing. Any
+     other message lets the proposal lapse and goes through every check above.
+   - Asking again returns the same trace (idempotent per customer and
+     movement). Several matches ask which one. Nothing pending goes to a
+     person in payments operations.
 5. **Decide after each tool** (`router.after_tool`). Each outcome maps to a disposition:
    - `MissingSlot`/`InvalidArgument`/`ResourceNotFound` → CLARIFY (listing the customer's own products).
    - `NotApplicable` → answered (e.g. "payment status doesn't apply to a savings account").
@@ -96,6 +111,7 @@ verified tool results or fixed templates.
 | When to transfer | policy router, lexicon, classifier | must be auditable and testable per rule |
 | What the customer reads | renderer, from verified results and templates | a model can state a wrong figure or an action that never happened |
 | Whether a handoff happened | ticket read-back | "report only actions whose outcomes the system has verified" |
+| Whether to act, and whether it happened | the customer's plain yes, judged in code; trace read-back | an action must not hinge on how a model reads "sí, pero..." |
 | Eligibility/credit | out of scope, abstain | brief forbids model-made credit decisions |
 
 The LLM does what only a language model can: paraphrase and slang

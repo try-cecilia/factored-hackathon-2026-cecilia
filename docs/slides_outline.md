@@ -34,7 +34,7 @@
 ## 5. Data and engineering rigor
 - Contracts with a quarantine gate and rollback; lineage per row, run and partition; incremental loads absorb late arrivals.
 - Findings the data dictionary hides: 57% missing USD amounts; 6.6K credit products with no arrears data; 100% broken branch FKs; no MXN at all; transcripts with 42 distinct texts.
-- 251 hermetic tests + CI, pinned versions, `make all` rebuilds every number.
+- 281 hermetic tests + CI, pinned versions, `make all` rebuilds every number.
 
 ## 6. What it takes to make it real
 - **Now:** run `make eval-live`; deploy (container ready, 512 MB).
