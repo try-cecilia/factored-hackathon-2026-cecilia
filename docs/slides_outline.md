@@ -47,8 +47,8 @@ regenerated, copy the numbers again from it. Speaker notes follow `docs/video_pi
 ## 4. Data and engineering rigor
 - Contracts with a quarantine gate and rollback; lineage per row, run and partition; a late-arrival fixture.
 - Findings the data dictionary hides: 57% missing USD amounts; registration branch keys broken for 149,995 of
-  150,000 customers; no MXN at all; transcripts with 42 distinct texts; 58K pending movements (the action's
-  ground).
+  150,000 customers; no MXN at all; transcripts with 42 distinct texts; a third of movements dated before their
+  product or customer existed; 58K pending movements (the action's ground). Full load: 246 checks, 0 errors.
 - Every classifier selection and evaluation run tracked in MLflow: model, effort, prompt hash, data hashes,
   code version and metrics.
 - 343 hermetic tests; CI builds the container and boots it like the host; `make all` rebuilds every number.

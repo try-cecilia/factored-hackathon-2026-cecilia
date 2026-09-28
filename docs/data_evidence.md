@@ -24,4 +24,8 @@ The full, regenerable numbers are in [`evidence/baseline_metrics.md`](evidence/b
 reconocido" and "Cobro indebido" as the top subcategories (about 36% of 67K
 complaints), with 20% SLA breaches. Disputes are lower volume, higher effort,
 and legally sensitive. The escalation path built here (fraud evidence packs)
-is the bridge to that workflow.
+is the bridge to that workflow. Its data needs work first: each of the 44,570
+complaints that names an affected product names a product of another customer,
+and none links to the contact it came from (Matías Enrique's audit of the
+dataset; this pipeline does not load complaints), so a disputes workflow could
+trust neither link.

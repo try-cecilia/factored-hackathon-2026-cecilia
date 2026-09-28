@@ -1,8 +1,8 @@
 {
-  "run_id": "20260928T153707Z-22c3dc",
+  "run_id": "20260928T204248Z-31184c",
   "contract_version": "2.0.0",
-  "code_version": "184f55b",
-  "generated_at": "2026-09-28T15:41:05.121877+00:00",
+  "code_version": "996774d",
+  "generated_at": "2026-09-28T20:45:32.662419+00:00",
   "tables": {
     "branches": {
       "partitions": 1,
@@ -11,7 +11,7 @@
       "rows_deduplicated": 0,
       "rows_new": 350,
       "rows_updated": 0,
-      "seconds": 2.26
+      "seconds": 2.15
     },
     "daily_exchange_rates": {
       "partitions": 1,
@@ -20,7 +20,7 @@
       "rows_deduplicated": 0,
       "rows_new": 13164,
       "rows_updated": 0,
-      "seconds": 0.61
+      "seconds": 0.5
     },
     "customers": {
       "partitions": 1,
@@ -29,7 +29,7 @@
       "rows_deduplicated": 0,
       "rows_new": 150000,
       "rows_updated": 0,
-      "seconds": 4.96
+      "seconds": 3.55
     },
     "products": {
       "partitions": 1,
@@ -38,7 +38,7 @@
       "rows_deduplicated": 0,
       "rows_new": 400000,
       "rows_updated": 0,
-      "seconds": 7.95
+      "seconds": 5.14
     },
     "transactions": {
       "partitions": 1097,
@@ -47,7 +47,7 @@
       "rows_deduplicated": 0,
       "rows_new": 4425008,
       "rows_updated": 0,
-      "seconds": 155.93
+      "seconds": 109.95
     },
     "call_center_interactions": {
       "partitions": 1097,
@@ -56,7 +56,7 @@
       "rows_deduplicated": 0,
       "rows_new": 686296,
       "rows_updated": 0,
-      "seconds": 32.55
+      "seconds": 22.32
     },
     "call_transcripts": {
       "partitions": 1097,
@@ -65,7 +65,7 @@
       "rows_deduplicated": 0,
       "rows_new": 171321,
       "rows_updated": 0,
-      "seconds": 16.22
+      "seconds": 9.63
     },
     "satisfaction_surveys": {
       "partitions": 1097,
@@ -74,14 +74,14 @@
       "rows_deduplicated": 0,
       "rows_new": 212759,
       "rows_updated": 0,
-      "seconds": 17.02
+      "seconds": 10.65
     }
   },
   "summary": {
     "status": "success",
     "errors_failed": 0,
-    "warnings_failed": 6,
-    "checks_run": 238
+    "warnings_failed": 12,
+    "checks_run": 246
   },
   "failure": null,
   "contract_deviations": [
@@ -407,6 +407,17 @@
       "check": "pydantic_row_contract_sample",
       "category": "contract_sample",
       "severity": "error",
+      "failed": 0,
+      "total": 350,
+      "detail": "",
+      "rate": 0.0,
+      "passed": true
+    },
+    {
+      "table": "branches",
+      "check": "cross:branch_code_unique",
+      "category": "cross_table",
+      "severity": "warn",
       "failed": 0,
       "total": 350,
       "detail": "",
@@ -1019,6 +1030,17 @@
       "passed": false
     },
     {
+      "table": "customers",
+      "check": "cross:document_number_unique",
+      "category": "cross_table",
+      "severity": "warn",
+      "failed": 0,
+      "total": 150000,
+      "detail": "",
+      "rate": 0.0,
+      "passed": true
+    },
+    {
       "table": "products",
       "check": "schema_missing_required_columns",
       "category": "schema",
@@ -1358,6 +1380,17 @@
       "detail": "",
       "rate": 0.0,
       "passed": true
+    },
+    {
+      "table": "products",
+      "check": "cross:product_number_unique",
+      "category": "cross_table",
+      "severity": "warn",
+      "failed": 6,
+      "total": 400000,
+      "detail": "",
+      "rate": 1.5e-05,
+      "passed": false
     },
     {
       "table": "transactions",
@@ -1789,6 +1822,50 @@
       "passed": true
     },
     {
+      "table": "transactions",
+      "check": "cross:tx_not_before_product_opening",
+      "category": "cross_table",
+      "severity": "warn",
+      "failed": 827610,
+      "total": 4425008,
+      "detail": "",
+      "rate": 0.18703,
+      "passed": false
+    },
+    {
+      "table": "transactions",
+      "check": "cross:tx_not_before_customer_registration",
+      "category": "cross_table",
+      "severity": "warn",
+      "failed": 829540,
+      "total": 4425008,
+      "detail": "",
+      "rate": 0.187466,
+      "passed": false
+    },
+    {
+      "table": "transactions",
+      "check": "cross:products_not_updated_after_as_of",
+      "category": "cross_table",
+      "severity": "warn",
+      "failed": 25113,
+      "total": 400000,
+      "detail": "",
+      "rate": 0.062783,
+      "passed": false
+    },
+    {
+      "table": "transactions",
+      "check": "cross:customers_not_updated_after_as_of",
+      "category": "cross_table",
+      "severity": "warn",
+      "failed": 9316,
+      "total": 150000,
+      "detail": "",
+      "rate": 0.062107,
+      "passed": false
+    },
+    {
       "table": "call_center_interactions",
       "check": "schema_missing_required_columns",
       "category": "schema",
@@ -2117,6 +2194,17 @@
       "detail": "",
       "rate": 0.0,
       "passed": true
+    },
+    {
+      "table": "call_center_interactions",
+      "check": "cross:contact_not_before_registration",
+      "category": "cross_table",
+      "severity": "warn",
+      "failed": 128316,
+      "total": 686296,
+      "detail": "",
+      "rate": 0.186969,
+      "passed": false
     },
     {
       "table": "call_transcripts",

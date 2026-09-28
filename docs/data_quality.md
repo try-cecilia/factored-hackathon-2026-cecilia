@@ -40,7 +40,9 @@ Per table, inside one transaction:
    source file, i.e. the later partition), then upsert by primary key.
    Replays are idempotent.
 7. **Cross-table checks.** FK orphans, transaction/product ownership
-   agreement, currency vs country.
+   agreement, currency vs country, keys the dictionary declares unique besides
+   the primary key, dates before the product's opening or the customer's
+   registration, and dimension rows updated after the data's as-of date.
 8. **Lineage.**
    - `_ingestion_log`: one row per table per run (mode, files, bytes,
      partition range, row counts, contract version, code version, parameters).
@@ -83,9 +85,10 @@ Contracts live in `data/contracts.py`, contract version 2.0.0.
 
 ## Findings on the supplied data
 
-Full run 20260928T153707Z (`data/reports/quality_report.json`, also shown in the demo's Data quality view):
-8 tables, 6.06M rows, 238 checks, **0 errors, 6 warnings**, 0 rows quarantined. It reproduces the run of
-2026-09-26 (20260926T012329Z) check for check.
+Full run 20260928T204248Z (`data/reports/quality_report.json`, also shown in the demo's Data quality view):
+8 tables, 6.06M rows, 246 checks, **0 errors, 12 warnings**, 0 rows quarantined. Its first 238 checks give the
+same results as the runs of 2026-09-28 (20260928T153707Z) and 2026-09-26 (20260926T012329Z), check for check;
+the other 8 came from Matías Enrique's audit of the dataset (the last four rows below).
 
 | Finding | Evidence | What the system does about it |
 |---|---|---|
@@ -99,6 +102,10 @@ Full run 20260928T153707Z (`data/reports/quality_report.json`, also shown in the
 | `call_transcripts.duration_seconds` null in **14.0%** though the dictionary says NOT NULL | warn `dictionary_not_null:duration_seconds` | documented **contract deviation** (warn, not quarantine; analysis-only column), in `CONTRACT_DEVIATIONS` |
 | Dictionary lists product types in English; data ships them in Spanish (`Tarjeta Crédito`) | enum rules | contracts follow the data; the mismatch is recorded here, not "fixed" |
 | Documented ~2% duplicates and late arrivals **not observed** in these tables | `pk_duplicates_in_batch` = 0, `not_late_arrival` = 0 | dedup and lookback stay in place (and are tested with fixtures) because the dictionary says they can happen |
+| **827,610** movements (18.7%) are dated before their product was opened and **829,540** (18.7%) before their customer registered; 1,450,689 (32.8%) break one or the other, and 11.9% do in the last 12 months (the window the demo serves) | warn `cross:tx_not_before_product_opening`, `cross:tx_not_before_customer_registration` | kept as delivered: answers show every movement with its date, and the checks count them on every load |
+| **128,316** contacts (18.7%) happened before the customer registered | warn `cross:contact_not_before_registration` | the baseline counts them; leaving them out moves the transactional share from 35.0% to 34.9% |
+| **25,113** products and **9,316** customers were last updated after the data's as-of date, as late as 2027-06-15 | warn `cross:products_not_updated_after_as_of`, `cross:customers_not_updated_after_as_of` | dedup keeps the latest `last_updated`, so a later, real correction would lose to one of these rows; no duplicate reached dedup in this dataset, so no answer changes today |
+| **6** product numbers are shared by two customers' products, though the dictionary declares the number unique | warn `cross:product_number_unique` | ownership is checked by `product_id`, and the number is only ever shown as its last 4 digits (`document_number` and `branch_code`, also declared unique, pass) |
 
 The quality gate was exercised on real data at least once: the first full run
 quarantined 14% of `call_transcripts` over the `duration_seconds` NOT NULL rule

@@ -202,8 +202,10 @@ tests/       343 hermetic tests + fixtures
   in MLflow: model, effort, prompt hash, data hashes, code version and metrics
   ([`EVALUATION.md`](EVALUATION.md#5-experiment-tracking-mlflow)).
 - Reproduced from scratch on 2026-09-28: `make all` on a fresh clone of the public repository, in a new
-  Python 3.11 environment, rebuilt the evaluation cases and the classifier byte for byte, the same 238 quality
-  checks, and every offline metric case by case (latencies aside, which depend on the machine).
+  Python 3.11 environment, rebuilt the evaluation cases and the classifier byte for byte, the same quality
+  checks with the same results (238 then; 8 were added afterwards, see
+  [`docs/data_quality.md`](docs/data_quality.md)), and every offline metric case by case (latencies aside,
+  which depend on the machine).
 - **Live model: measured on the held-out workload** (above). Before that, a smoke run over the synthetic
   fixtures also covered Claude Opus 5: 13/13 turns graded against their intended outcome, p50 3.0 s per turn
   and about USD 0.005 per model call ([`eval/reports/LIVE_SMOKE.md`](eval/reports/LIVE_SMOKE.md)).

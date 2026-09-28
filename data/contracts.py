@@ -227,8 +227,25 @@ CONTRACT_DEVIATIONS = [
      "decision": "warn rule instead of quarantine; analysis-only table, column unused"},
 ]
 
+# Excess rows over a key the dictionary declares UNIQUE (beyond the primary key), measured on the whole table.
+def _unique(table: str, col: str) -> str:
+    return (f"SELECT coalesce(sum(n - 1), 0), (SELECT count(*) FROM {table}) FROM "
+            f"(SELECT count(*) AS n FROM {table} WHERE {col} IS NOT NULL GROUP BY {col}) WHERE n > 1")
+
+
+# A dimension row "updated" after the data's as-of date (the last processed day of transactions). Dedup keeps the
+# latest `last_updated`, so a row stamped in the future would win over any later, real correction.
+def _updated_after_as_of(table: str) -> str:
+    return (f"SELECT count(*) FILTER (WHERE CAST(last_updated AS DATE) > (SELECT max(process_date) FROM transactions)), "
+            f"count(*) FROM {table}")
+
+
 # (check_name, SQL returning (failed_rows, total_rows)) run after load, when referenced tables exist.
+# The unique-key, chronology and as-of checks come from Matías Enrique's audit of the dataset (2026-09-28).
 CROSS_TABLE_CHECKS: dict[str, list[tuple[str, list[str], str]]] = {
+    "branches": [
+        ("branch_code_unique", [], _unique("branches", "branch_code")),
+    ],
     "products": [
         ("fk_customer", ["customers"],
          "SELECT count(*) FILTER (WHERE c.customer_id IS NULL), count(*) FROM products p LEFT JOIN customers c USING (customer_id)"),
@@ -236,6 +253,9 @@ CROSS_TABLE_CHECKS: dict[str, list[tuple[str, list[str], str]]] = {
          "SELECT count(*) FILTER (WHERE NOT (p.currency = 'USD' OR p.currency = CASE c.country "
          "WHEN 'México' THEN 'MXN' WHEN 'Colombia' THEN 'COP' WHEN 'Argentina' THEN 'ARS' END)), count(*) "
          "FROM products p JOIN customers c USING (customer_id)"),
+        # Only the last 4 digits are ever shown and ownership is checked by product_id, so a repeated number
+        # misleads nobody here; it would, if a customer were identified by product number.
+        ("product_number_unique", [], _unique("products", "product_number")),
     ],
     "transactions": [
         ("fk_product", ["products"],
@@ -244,10 +264,27 @@ CROSS_TABLE_CHECKS: dict[str, list[tuple[str, list[str], str]]] = {
         # customer disagreed with its product's owner, answers would diverge.
         ("customer_owns_product", ["products"],
          "SELECT count(*) FILTER (WHERE p.customer_id <> t.customer_id), count(*) FROM transactions t JOIN products p USING (product_id)"),
+        # A movement dated before its product was opened, or before its customer registered, is recorded as given:
+        # the answers show it with its date, and these checks count it.
+        ("tx_not_before_product_opening", ["products"],
+         "SELECT count(*) FILTER (WHERE CAST(t.transaction_date AS DATE) < p.opening_date), count(*) "
+         "FROM transactions t JOIN products p USING (product_id)"),
+        ("tx_not_before_customer_registration", ["customers"],
+         "SELECT count(*) FILTER (WHERE CAST(t.transaction_date AS DATE) < CAST(c.registration_date AS DATE)), count(*) "
+         "FROM transactions t JOIN customers c USING (customer_id)"),
+        # Here, not under customers or products: the as-of date exists once transactions are loaded.
+        ("products_not_updated_after_as_of", ["products"], _updated_after_as_of("products")),
+        ("customers_not_updated_after_as_of", ["customers"], _updated_after_as_of("customers")),
     ],
     "customers": [
         ("fk_registration_branch", ["branches"],
          "SELECT count(*) FILTER (WHERE b.branch_id IS NULL), count(*) FROM customers c LEFT JOIN branches b ON b.branch_id = c.registration_branch_id"),
+        ("document_number_unique", [], _unique("customers", "document_number")),
+    ],
+    "call_center_interactions": [
+        ("contact_not_before_registration", ["customers"],
+         "SELECT count(*) FILTER (WHERE CAST(i.interaction_date AS DATE) < CAST(c.registration_date AS DATE)), count(*) "
+         "FROM call_center_interactions i JOIN customers c USING (customer_id)"),
     ],
 }
 

@@ -216,11 +216,15 @@ def test_the_data_quality_page_describes_the_warehouse_being_served(client):
 def test_the_data_quality_page_lists_the_checks_that_failed_with_their_numbers(client):
     checks = client.get("/demo/data_quality").json()["served"]["checks"]
     failed = {(c["table"], c["check"]): (c["severity"], c["failed"], c["total"]) for c in checks["failed"]}
+    # The fixture's customers and products were last updated on 2026-06-01, after its as-of date (its transactions
+    # end on 2024-01-16), so the as-of checks flag every one of them.
     assert failed == {("customers", "pk_duplicates_in_batch"): ("warn", 1, 6),
                       ("products", "rule:credit_fields_present"): ("warn", 1, 12),
                       ("transactions", "pk_duplicates_in_batch"): ("warn", 1, 11),
-                      ("transactions", "rule:usd_amount_present"): ("warn", 3, 11)}
-    assert (checks["errors_failed"], checks["warnings_failed"]) == (0, 4) and checks["run"] > len(failed)
+                      ("transactions", "rule:usd_amount_present"): ("warn", 3, 11),
+                      ("transactions", "cross:products_not_updated_after_as_of"): ("warn", 12, 12),
+                      ("transactions", "cross:customers_not_updated_after_as_of"): ("warn", 5, 5)}
+    assert (checks["errors_failed"], checks["warnings_failed"]) == (0, 6) and checks["run"] > len(failed)
 
 
 def test_a_failed_load_is_counted_without_hiding_the_one_being_served(client, tmp_path, monkeypatch):
