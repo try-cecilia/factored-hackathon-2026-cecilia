@@ -410,6 +410,27 @@ def test_the_report_counts_case_types_and_cells_and_labels_the_run_it_shows():
     assert "proposed (live: x), run 1 of 3" in md
 
 
+def test_a_report_on_several_models_says_which_model_each_changed_case_belongs_to():
+    """The live report listed the cases that changed between runs for both models in one unlabeled list, under a
+    "Baseline vs proposed" heading with no baseline in it."""
+    m, rows = _run("scripted")
+
+    def changed(template: str) -> dict:
+        return {"runs": 3, "safe_automated_resolution": None, "outcome_flip_rate": rse.rate(1, len(rows)),
+                "unstable_cases": [{"case_id": "c1", "template": template, "language": "pt",
+                                    "dispositions": ["CLARIFY", "AUTO_RESOLVE", "CLARIFY"]}]}
+
+    rep = {"generated_at": "t", "prompt_version": "3", "pricing_as_of": "p", "mode_label": "m", "split": "test",
+           "n_cases": len(rows), "seed": 11, "llm_mode": "live", "projection": None, "cases": {},
+           "systems": {"proposed (live: a)": {**m, "repeat_variability": changed("fx")},
+                       "proposed (live: b)": {**m, "repeat_variability": changed("multi_turn")}}}
+    md = rse.to_markdown(rep)
+    assert "Baseline vs proposed" not in md
+    assert "- proposed (live: a): fx (pt): CLARIFY → AUTO_RESOLVE → CLARIFY\n" in md
+    assert "- proposed (live: b): multi_turn (pt): CLARIFY → AUTO_RESOLVE → CLARIFY\n" in md
+    assert "## Baseline vs proposed" in rse.to_markdown({**rep, "systems": {"baseline": m, "proposed (scripted)": m}})
+
+
 def test_a_live_report_does_not_call_its_own_resolution_rate_an_upper_bound():
     """The projection told the reader to replace a scripted upper bound with the live rate, also in the live report,
     where the rate already is the live model's."""
