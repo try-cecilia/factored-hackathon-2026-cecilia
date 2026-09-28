@@ -1,9 +1,19 @@
 #!/bin/sh
 set -e
 
+# Started as root: only to hand the data directories to the app user (a persistent disk may be mounted owned by
+# root), then everything below runs as that user.
+if [ "$(id -u)" = "0" ]; then
+  mkdir -p /app/data/warehouse /app/data/raw /app/data/reports
+  chown -R agent:agent /app/data
+  exec setpriv --reuid=agent --regid=agent --init-groups "$0" "$@"
+fi
+
 # First boot with no warehouse: ingest. Default INGEST_ARGS is a deterministic
-# 5k-customer / 12-month sample (~15 MB, fits a 512 MB free tier). For the full
+# 5k-customer / 12-month sample (~15 MB, fits a 512 MB instance). For the full
 # dataset set INGEST_ARGS="--profile serving" and give the container ~2 GB.
+# Without the organizer's S3 access, INGEST_ARGS="--profile serving --source local
+# --raw-dir /app/tests/fixtures/raw" loads the hand-made fixture instead.
 # Production note: ingest on a schedule into persistent storage instead of at
 # boot (see LIMITATIONS.md).
 if [ ! -f "$DUCKDB_PATH" ]; then

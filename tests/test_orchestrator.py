@@ -46,6 +46,20 @@ def test_a_turn_records_the_customers_words_as_the_model_received_them():
     assert orch.handle_message(tok, "¿Cuál es mi saldo?").model_input is None  # the model was down: it received nothing
 
 
+def test_past_the_daily_model_budget_the_assistant_runs_as_if_the_model_were_down():
+    from agent.llm.budget import DailyBudget
+
+    budget = DailyBudget(limit_usd=0.005)
+    fake = FakeLLMClient([tool_call_response("get_account_summary", {})])
+    orch = Orchestrator(SessionStore(ttl_seconds=900), llm=lambda: fake, budget=budget)
+    tok = orch.session_store.issue("CLI-FIX0001", {"segment": "Premium", "country": "México", "customer_status": "Active"}).token
+    assert orch.handle_message(tok, "¿Cuál es mi saldo?").policy_rule == "verified_tool_results"
+    assert budget.exhausted()  # the scripted model has no price: its call counts as the conservative estimate
+    r = orch.handle_message(tok, "¿Cuál es mi saldo?")
+    assert r.policy_rule == "degraded:deterministic_balance" and fake.call_count == 1  # not called again
+    assert orch.handle_message(tok, "movimientos de mi tarjeta").policy_rule == "llm_unavailable"
+
+
 def test_two_tool_calls_in_one_model_response_are_both_verified_and_answered():
     orch, tok, _ = make([tool_call_response("get_account_summary", {}, ("get_payment_status", {"product_id": "0004"}))])
     r = orch.handle_message(tok, "¿Cuánto tengo y estoy al día con mi tarjeta de crédito?")

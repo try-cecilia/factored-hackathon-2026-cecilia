@@ -23,6 +23,19 @@ def test_login_rate_limit_per_client(client, monkeypatch):
     assert codes == [200, 200, 429]
 
 
+def test_behind_render_each_client_has_its_own_login_limit_and_nobody_can_pick_it_elsewhere(client, monkeypatch):
+    monkeypatch.setattr(main, "login_limiter", main.RateLimiter(1, 60))
+    as_ip = lambda ip: {"CF-Connecting-IP": ip}  # noqa: E731
+    body = {"customer_id": "CLI-FIX0004", "pin": derive_test_pin("CLI-FIX0004")}
+    # Anywhere else the header is the client's own words: ignored, one bucket for this connection.
+    assert [client.post("/auth/session", json=body, headers=as_ip(ip)).status_code for ip in ("1.1.1.1", "2.2.2.2")] == [200, 429]
+    # On Render the edge sets it and no client can forge it: one bucket per real client.
+    monkeypatch.setattr(main, "login_limiter", main.RateLimiter(1, 60))
+    monkeypatch.setenv("CLIENT_IP_HEADER", "CF-Connecting-IP")
+    codes = [client.post("/auth/session", json=body, headers=as_ip(ip)).status_code for ip in ("1.1.1.1", "2.2.2.2", "1.1.1.1")]
+    assert codes == [200, 200, 429]
+
+
 def login(client, cid="CLI-FIX0001", pin=None):
     return client.post("/auth/session", json={"customer_id": cid, "pin": pin or derive_test_pin(cid)})
 
@@ -30,6 +43,17 @@ def login(client, cid="CLI-FIX0001", pin=None):
 def test_health(client):
     body = client.get("/health").json()
     assert body["status"] == "ok" and body["data_as_of"] == "2024-01-16"
+    assert body["llm_budget_exhausted"] is False  # a monitor can alert on it; the amounts stay behind the admin key
+
+
+def test_the_daily_model_budget_is_reported_to_operators_only(client, monkeypatch):
+    from agent.llm.budget import DailyBudget
+
+    monkeypatch.setattr(main, "default_budget", DailyBudget(limit_usd=5.0))
+    main.default_budget.add(1.25)
+    assert client.get("/admin/llm_budget").status_code == 401
+    body = client.get("/admin/llm_budget", headers={"X-Admin-Key": "test-admin-key"}).json()
+    assert body == {"limit_usd": 5.0, "spent_today_usd": 1.25, "exhausted": False}
 
 
 def test_customer_id_alone_is_not_enough(client):

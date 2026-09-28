@@ -201,3 +201,23 @@ def test_circuit_breaker_skips_a_provider_that_keeps_failing(keys):
     r = c.chat([{"role": "user", "content": "b"}])
     assert r.provider == "p2" and calls == ["p2"]  # p1 not even tried while the breaker is open
     assert r.attempts[0]["reason"] == "circuit_open"
+
+
+def test_the_daily_model_budget_counts_spend_per_utc_day_and_is_off_without_a_limit():
+    from datetime import datetime, timezone
+
+    from agent.llm.budget import UNPRICED_CALL_USD, DailyBudget
+
+    now = [datetime(2026, 10, 5, 23, 59, tzinfo=timezone.utc).timestamp()]
+    budget = DailyBudget(limit_usd=1.0, clock=lambda: now[0])
+    budget.add(0.6)
+    assert not budget.exhausted()
+    budget.add(0.5)
+    assert budget.exhausted() and budget.spent_today() == pytest.approx(1.1)
+    now[0] += 120  # past midnight UTC: a new day
+    assert not budget.exhausted() and budget.spent_today() == 0
+    budget.add(None)  # a call with no known price still counts, conservatively
+    assert budget.spent_today() == UNPRICED_CALL_USD > 0
+    unlimited = DailyBudget(limit_usd=None)
+    unlimited.add(1_000_000)
+    assert not unlimited.exhausted()

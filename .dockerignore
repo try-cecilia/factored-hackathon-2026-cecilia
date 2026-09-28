@@ -12,6 +12,7 @@ data/warehouse/
 *.duckdb
 *.duckdb.wal
 tests/
+!tests/fixtures/raw/
 .pytest_cache/
 .coverage
 htmlcov/

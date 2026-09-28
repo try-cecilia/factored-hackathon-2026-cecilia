@@ -26,6 +26,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
+from agent.llm.budget import default_budget
 from agent.llm.client import default_providers
 from agent.policy import intent_guard
 from agent.session.identity import AuthError, IdentityUnavailable, LockedOut, default_identity, derive_test_pin
@@ -90,6 +91,15 @@ class ChatResponse(BaseModel):
     why: dict | None = None  # DEMO_MODE only: the rule, what the model received and chose, what the code verified
 
 
+def client_ip(request: Request) -> str:
+    """The caller's address, for per-client limits. Behind Render the peer is one of its internal proxies and the
+    real address comes in CF-Connecting-IP, set by its Cloudflare edge, which no client can forge (measured
+    2026-09-27; Render sends no X-Forwarded-For). Anywhere else that header is the client's own words, so it is
+    read only when CLIENT_IP_HEADER names it."""
+    header = os.environ.get("CLIENT_IP_HEADER")
+    return (header and request.headers.get(header)) or (request.client.host if request.client else "unknown")
+
+
 def require_admin(x_admin_key: str | None = Header(default=None)) -> None:
     expected = os.environ.get("ADMIN_API_KEY")
     if not expected:
@@ -111,12 +121,13 @@ def health() -> dict:
         as_of = f"unavailable: {type(exc).__name__}"
     return {"status": "ok", "data_as_of": as_of,
             "llm_providers_configured": [p.name for p in default_providers() if os.environ.get(p.api_key_env)],
+            "llm_budget_exhausted": default_budget.exhausted(),
             "intent_classifier_loaded": intent_guard.read("hola").model_available}
 
 
 @app.post("/auth/session", response_model=SessionResponse)
 def create_session(req: SessionRequest, request: Request) -> SessionResponse:
-    if not login_limiter.allow(request.client.host if request.client else "unknown"):
+    if not login_limiter.allow(client_ip(request)):
         raise HTTPException(429, "too many login attempts")
     try:
         s = default_identity.login(req.customer_id, req.pin)
@@ -175,6 +186,13 @@ def trace(trace_id: str) -> dict:
             rec["tool_audit"] = [a for a in _tail(default_audit_log.path, 5000) if a.get("trace_id") == rec["trace_id"]]
             return rec
     raise HTTPException(404, "trace not found")
+
+
+@app.get("/admin/llm_budget", dependencies=[Depends(require_admin)])
+def llm_budget() -> dict:
+    """Today's (UTC) model spend against LLM_DAILY_BUDGET_USD; past it the assistant runs in degraded mode."""
+    return {"limit_usd": default_budget.limit_usd, "spent_today_usd": round(default_budget.spent_today(), 6),
+            "exhausted": default_budget.exhausted()}
 
 
 @app.get("/admin/demo_pin/{customer_id}", dependencies=[Depends(require_admin)])

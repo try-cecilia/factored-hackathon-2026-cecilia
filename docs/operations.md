@@ -18,11 +18,49 @@ then serves on `$PORT`.
 - For the full dataset, set `INGEST_ARGS="--profile serving"` and give the container ~2 GB.
 - Without `DEMO_IDP_SECRET` every login is refused (fails closed).
 - Without `ADMIN_API_KEY`, `/admin/*` returns 503.
-- The runtime user is non-root. The healthcheck is `/health`, which reports the
-  data as-of date, the configured LLM providers and whether the classifier loaded.
+- The app runs as a non-root user. The container starts as root only so the
+  entrypoint can hand `/app/data` to that user (a platform may mount the disk
+  owned by root), then drops to it with `setpriv`.
+- The healthcheck is `/health`: the data as-of date, the configured LLM
+  providers, whether the daily model budget is exhausted and whether the
+  classifier loaded.
+- Without the organizer's S3 access, `INGEST_ARGS="--profile serving --source
+  local --raw-dir /app/tests/fixtures/raw"` loads the hand-made fixture (5
+  customers) that ships in the image.
 
-Free-tier hosts (Render, Fly.io, Railway) run this image as-is; mount a volume
-at `/app/data/warehouse` so restarts don't re-ingest.
+CI builds this image on every push, boots it the way Render does (a disk
+mounted owned by root, its own `PORT`), runs `ops/container_smoke.py`, checks
+that the app runs unprivileged and owns its data, restarts it and checks the
+disk kept the warehouse.
+
+## Deploy on Render (the jury demo)
+
+`render.yaml` is the Blueprint: one Docker web service on a paid instance
+(`0.5c-512mb`; the free one sleeps and has no disk), a 1 GB disk at
+`/app/data/warehouse`, `DEMO_MODE=1`, generated secrets for the test IdP and the
+admin key, and the caps below.
+1. In Render: New > Blueprint, pick the repository and branch. When asked, fill
+   `ANTHROPIC_API_KEY` (a key with a spend limit set at the provider), optionally
+   `GROQ_API_KEY`, and the organizer's `AWS_*` and `DATASET_BUCKET`. Without those
+   three, change `INGEST_ARGS` to the fixture line above.
+2. First boot ingests the 5,000-customer sample (about 20 s of load after the
+   download) and then passes `/health`. The disk keeps it: later deploys and
+   restarts do not re-ingest, even if the bucket closes after the deadline.
+3. Check it from any machine: `python ops/container_smoke.py https://<service>.onrender.com`.
+   With the admin key (Render dashboard > Environment), `/admin/llm_budget`
+   shows today's model spend.
+
+Two settings exist because of how Render works:
+- **The client's address.** Render's proxy is the peer of every request and it
+  sends no `X-Forwarded-For`; the real address arrives in `CF-Connecting-IP`,
+  set by its Cloudflare edge, which no client can forge (measured on a Render
+  service, 2026-09-27). `CLIENT_IP_HEADER=CF-Connecting-IP` makes the per-client
+  login limit use it. Leave it unset anywhere that header is not set by a
+  trusted edge, or any client could pick its own address.
+- **The daily model budget.** `LLM_DAILY_BUDGET_USD` (UTC day). Past it, the
+  assistant runs as if the model were down: plain balance questions are still
+  answered from verified data, the rest goes to a person. It lives in memory,
+  so the spend limit on the provider key stays the hard ceiling.
 
 ## Capacity
 
@@ -68,7 +106,8 @@ instead of reading JSONL. The field names are already stable for that.
 
 | Surface | Control |
 |---|---|
-| `/auth/session` | customer_id + test PIN (HMAC under a server secret), lockout after 5 failures per 15 min, 10 req/min per IP, generic error messages |
+| `/auth/session` | customer_id + test PIN (HMAC under a server secret), lockout after 5 failures per 15 min, 10 req/min per client address (`CLIENT_IP_HEADER` behind Render), generic error messages |
+| model spend | `LLM_DAILY_BUDGET_USD` per UTC day, then degraded mode; plus the spend limit on the provider key |
 | `/chat` | bearer session token (15 min TTL), 20 msgs/min per session, 1,000 chars max |
 | customer data | ownership enforced in every tool against the session's customer; account numbers leave the tool layer as last-4 only |
 | `/admin/*` | `X-Admin-Key` (constant-time compare), disabled if unset |
@@ -101,3 +140,6 @@ encryption at rest remain to be done (LIMITATIONS.md).
   (bump `CONTRACT_VERSION`, document it in `CONTRACT_DEVIATIONS`).
 - **Security escalation spike:** pull traces by `session_ref` at
   `/admin/traces/{id}` and revoke sessions.
+- **Daily model budget exhausted** (`/health` says so): the demo keeps working
+  in degraded mode until 00:00 UTC. Check `/admin/llm_budget` and the traces
+  for abuse; raise `LLM_DAILY_BUDGET_USD` only if the traffic is legitimate.

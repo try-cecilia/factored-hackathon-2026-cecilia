@@ -30,6 +30,7 @@ from typing import Any, Callable
 
 from agent.core import render
 from agent.llm import prompts
+from agent.llm.budget import DailyBudget, default_budget
 from agent.llm.client import LLMUnavailable, Usage, get_default_client
 from agent.llm.pricing import cost_usd
 from agent.llm.privacy import mask_card_numbers, redact
@@ -193,11 +194,12 @@ def _clarify_view(missing: list[str], catalog: list[dict], reply_text: str) -> s
 
 class Orchestrator:
     def __init__(self, session_store: SessionStore | None = None, llm: Callable[[], Any] | None = None,
-                 conversations: ConversationStore | None = None):
+                 conversations: ConversationStore | None = None, budget: DailyBudget | None = None):
         # `is None`, not `or`: both stores define __len__, so an empty one is falsy.
         self.session_store = default_store if session_store is None else session_store
         self._llm = llm or get_default_client
         self.conversations = ConversationStore() if conversations is None else conversations
+        self.budget = default_budget if budget is None else budget
 
     def handle_message(self, session_token: str, text: str) -> TurnResult:
         trace_id = uuid.uuid4().hex
@@ -312,6 +314,9 @@ class Orchestrator:
 
         # Understand: one model call chooses the tools. Its prose is never used.
         try:
+            if self.budget.exhausted():  # past the daily spend cap: the model counts as down
+                raise LLMUnavailable("daily model budget reached", [{"provider": "budget", "outcome": "skipped",
+                                                                     "reason": "daily_budget_exhausted"}])
             resp = self._llm().chat(messages, tools=prompts.TOOL_SCHEMAS)
         except LLMUnavailable as exc:
             trace["llm_steps"].append({"step": 0, "outcome": "unavailable", "attempts": exc.attempts})
@@ -322,6 +327,7 @@ class Orchestrator:
         provider, model = resp.provider, resp.model
         costs.append(cost_usd(resp.provider, resp.model, resp.usage.prompt_tokens, resp.usage.completion_tokens,
                               resp.usage.cache_read_tokens, resp.usage.cache_write_tokens))
+        self.budget.add(costs[-1])
         trace["llm_steps"].append({"step": 0, "provider": resp.provider, "model": resp.model, "latency_ms": round(resp.latency_ms, 1),
                                    "usage": asdict(resp.usage), "attempts": resp.attempts, "n_tool_calls": len(resp.tool_calls)})
 

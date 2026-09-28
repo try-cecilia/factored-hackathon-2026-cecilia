@@ -30,3 +30,33 @@ jobs:
           assert learned > base, "learned classifier no longer beats the keyword baseline"
           assert guard["false_escalation"]["rate"] <= 0.05
           EOF
+
+  container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the image
+        run: docker build -f ops/Dockerfile -t x-payments-agent .
+      - name: Boot it as on Render (disk mounted owned by root, its own PORT), on the fixture warehouse
+        run: |
+          sudo mkdir -p /srv/disk && sudo chown root:root /srv/disk && sudo chmod 755 /srv/disk
+          docker run -d --name app -p 8000:10000 -e PORT=10000 -v /srv/disk:/app/data/warehouse \
+            -e DEMO_MODE=1 -e DEMO_IDP_SECRET=ci-secret -e ADMIN_API_KEY=ci-admin \
+            -e INGEST_ARGS="--profile serving --source local --raw-dir /app/tests/fixtures/raw" \
+            x-payments-agent
+          for i in $(seq 1 90); do curl -fs localhost:8000/health && break; sleep 2; done
+          curl -fs localhost:8000/health | grep -q '"data_as_of":"2024-01-16"'
+      - name: Smoke test, with no model key (only what needs none)
+        run: python3 ops/container_smoke.py http://localhost:8000
+      - name: The app runs unprivileged, owns its data, and the disk survives a restart without re-ingesting
+        run: |
+          docker top app -o user,args | grep uvicorn | tee /dev/stderr | grep -vq '^root'
+          test "$(sudo stat -c %u /srv/disk/bank.duckdb)" = "10001"
+          docker restart app
+          for i in $(seq 1 60); do curl -fs localhost:8000/health && break; sleep 2; done
+          test "$(docker logs app 2>&1 | grep -c 'ingesting with')" = "1"
+          python3 ops/container_smoke.py http://localhost:8000
+      - name: Container logs
+        if: always()
+        run: docker logs app
