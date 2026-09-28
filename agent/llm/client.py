@@ -172,7 +172,9 @@ def default_providers() -> list[Provider]:
                          "GROQ_API_KEY", _groq_factory),
         "together": Provider("together", os.environ.get("TOGETHER_MODEL", "meta-llama/Llama-3.3-70B-Instruct-Turbo"),
                              "TOGETHER_API_KEY", _together_factory, per_request_timeout=False),
-        "anthropic": Provider("anthropic", os.environ.get("ANTHROPIC_MODEL", "claude-opus-5"), "ANTHROPIC_API_KEY",
+        # Sonnet 5: the higher safe automated resolution and the lower cost per safe resolution on the held-out
+        # workload (eval/reports/SYSTEM_EVAL_LIVE.md), and what render.yaml runs.
+        "anthropic": Provider("anthropic", os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-5"), "ANTHROPIC_API_KEY",
                               _anthropic_factory, call=anthropic_call),
     }
     order = [n.strip() for n in os.environ.get("LLM_PROVIDERS", "anthropic,groq,together").split(",")]

@@ -14,6 +14,23 @@ the customer ([ADR-001](docs/decisions/ADR-001-model-interprets-code-speaks.md))
 movement that is still pending, happens only on the customer's own yes, judged in code, and is
 announced only after it reads back ([ADR-002](docs/decisions/ADR-002-one-action-confirmed-in-code.md)).
 
+## For reviewers: where to look
+
+1. **Try it:** [deployed URL]. Each guided scenario says what to look for. Press **"Why?"** on a reply to see
+   what the model received (masked) and chose and what the code verified, open the **bank view** after a
+   handoff or a trace, take the model down and ask again, and open **Data quality**.
+2. **Check a number:** every figure here comes from a generated report:
+   [`SYSTEM_EVAL.md`](eval/reports/SYSTEM_EVAL.md) (offline, 528 cases),
+   [`SYSTEM_EVAL_LIVE.md`](eval/reports/SYSTEM_EVAL_LIVE.md) (live models),
+   [`intent_classifier.md`](eval/reports/intent_classifier.md) and
+   [`baseline_metrics.md`](docs/evidence/baseline_metrics.md) (the human baseline).
+   [`EVALUATION.md`](EVALUATION.md) says how each is measured and labels what is a projection.
+3. **Read the two decisions:** [ADR-001](docs/decisions/ADR-001-model-interprets-code-speaks.md) and
+   [ADR-002](docs/decisions/ADR-002-one-action-confirmed-in-code.md).
+4. **Run it:** `make test` needs no keys and no network; `make ingest-demo && make serve` runs the app on
+   your machine; `make all` rebuilds every number ([Quickstart](#quickstart)).
+5. **What is still missing:** [`LIMITATIONS.md`](LIMITATIONS.md).
+
 ## Why this workflow (measured on the supplied data)
 
 | | Account/payment ("Transaccional") | All other reasons |
@@ -121,7 +138,8 @@ findings: [`docs/data_quality.md`](docs/data_quality.md). Running it:
 ## Quickstart
 
 ```bash
-cp .env.example .env        # fill AWS_* + DATASET_BUCKET (dataset), DEMO_IDP_SECRET, ADMIN_API_KEY, and GROQ_API_KEY or ANTHROPIC_API_KEY
+python3.11 -m venv .venv && source .venv/bin/activate   # Python 3.11 (the committed intent model pins scikit-learn 1.9.1); or: uv venv --python 3.11 --seed
+cp .env.example .env        # fill AWS_* + DATASET_BUCKET (dataset), DEMO_IDP_SECRET, ADMIN_API_KEY, and ANTHROPIC_API_KEY or GROQ_API_KEY
 make setup
 make ingest                 # full warehouse from S3 (~6 min: 1.1 GB of daily files in ~80 s, then the load; or `make ingest-demo`, ~1 min)
 make serve                  # http://localhost:8000 — web chat with sandbox test logins
@@ -129,6 +147,9 @@ make test                   # 343 hermetic tests: fixture warehouse, no S3, no A
 make all                    # rebuild every number in the docs
 make mlflow-ui              # every classifier selection and evaluation run, tracked in MLflow
 ```
+
+The commands assume Linux or macOS with `make`. On Windows, use WSL, or run the command of each `Makefile`
+target with the venv's `python`.
 
 Log in with a customer id and its **test PIN** (a customer number alone is not
 accepted). The web UI lists sandbox accounts from `DEMO_PUBLIC_CUSTOMERS`.
@@ -180,6 +201,9 @@ tests/       343 hermetic tests + fixtures
   hermetic suite and checks the classifier report. Every classifier selection and evaluation run is tracked
   in MLflow: model, effort, prompt hash, data hashes, code version and metrics
   ([`EVALUATION.md`](EVALUATION.md#5-experiment-tracking-mlflow)).
+- Reproduced from scratch on 2026-09-28: `make all` on a fresh clone of the public repository, in a new
+  Python 3.11 environment, rebuilt the evaluation cases and the classifier byte for byte, the same 238 quality
+  checks, and every offline metric case by case (latencies aside, which depend on the machine).
 - **Live model: measured on the held-out workload** (above). Before that, a smoke run over the synthetic
   fixtures also covered Claude Opus 5: 13/13 turns graded against their intended outcome, p50 3.0 s per turn
   and about USD 0.005 per model call ([`eval/reports/LIVE_SMOKE.md`](eval/reports/LIVE_SMOKE.md)).
