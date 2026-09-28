@@ -62,6 +62,28 @@ Two settings exist because of how Render works:
   answered from verified data, the rest goes to a person. It lives in memory,
   so the spend limit on the provider key stays the hard ceiling.
 
+## Public repository (the submission)
+
+The submission is a public repository; this one keeps what must not be
+public. `ops/export_public.py` makes the public copy from a fresh clone:
+
+```bash
+pip install git-filter-repo
+python ops/export_public.py . ../factored-hackathon-2026-<team> <redactions-file>
+```
+
+- It removes from every commit the organizer's row-level data (the generated
+  workloads and the per-case eval JSON, regenerated with `make workload
+  eval`) and the v2 demo video, and replaces the strings in the redactions
+  file (kept outside any repository): the organizer's bucket name and
+  account id, which early commits carried.
+- It scans every blob of every commit by shape (keys, tokens, JWTs, private
+  keys, credential assignments, literal fallbacks of environment variables,
+  S3 URIs, 12-digit numbers, real dataset ids) and fails if a redacted value
+  survives. A person reads the listed hits before publishing.
+- Publish the result as a **new** repository: a force-push over an old one
+  leaves the old blobs reachable by their commit ids.
+
 ## Capacity
 
 | Layer | Measured / known limit | Notes |
