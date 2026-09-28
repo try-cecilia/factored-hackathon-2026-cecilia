@@ -267,9 +267,16 @@ automated per month; at the ideal-model upper bound, ≈ 1,005 (≈ 62
 agent-hours). Each automated contact skips the measured ~120 s wait. The live
 SAR must replace the upper bound before this number is used externally.
 
+**ROI per resolution (live runs only).** With billed model calls, the report
+compares a resolution's model cost with a person's: the measured 221 s of
+handling times an agent cost per hour that the data does not carry, so it is
+an assumption shown as a range (5, 10 and 20 USD per hour). The monthly model
+cost counts every text contact (cost per attempted case), not only the
+resolved ones. Scripted and adversarial runs bill nothing, so they print no ROI.
+
 ## 4. Unit and integration tests
 
-`make test`: 308 hermetic tests on a hand-made fixture warehouse, plus one
+`make test`: 309 hermetic tests on a hand-made fixture warehouse, plus one
 opt-in integration test (`RUN_INTEGRATION=1`). CI runs them
 on every push, plus the classifier evaluation. They cover:
 - pipeline idempotency, late-arrival update, quarantine and rollback, schema evolution;

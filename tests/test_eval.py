@@ -273,3 +273,25 @@ def test_the_report_counts_case_types_and_cells_and_labels_the_run_it_shows():
     md = rse.to_markdown(rep)
     assert "22 case types × 5 country·segment cells" in md and "18 case types" not in md
     assert "proposed (live: x), run 1 of 3" in md
+
+
+def test_roi_per_resolution_is_computed_only_from_measured_model_costs_and_labels_its_assumption():
+    import json as _json
+
+    m, _ = _run("scripted")
+    assert rse.projection(m)["roi"] is None  # no billed model calls in this mode: nothing to compare
+    live = {**m, "cost_per_attempted_case_usd": 0.002, "cost_per_safe_resolution_usd": 0.004}
+    proj = rse.projection(live)
+    b = _json.load(open("docs/evidence/baseline_metrics.json", encoding="utf-8"))
+    aht = next(r["aht_s"] for r in b["operations_by_reason"] if r["reason_category"] == "Transaccional")
+    contacts = b["transaccional"]["monthly_contacts_median"] * b["transaccional"]["text_channel_pct"] / 100
+    roi = proj["roi"]
+    assert "assumed" in roi["assumption"] and [r["agent_cost_per_hour_usd"] for r in roi["rows"]] == [5, 10, 20]
+    row = roi["rows"][1]
+    assert row["human_cost_per_contact_usd"] == round(aht / 3600 * 10, 4)
+    assert row["monthly_model_cost_usd"] == round(contacts * 0.002, 2)
+    assert row["monthly_human_cost_avoided_usd"] == round(contacts * proj["sar_used"] * aht / 3600 * 10, 2)
+    assert row["monthly_net_usd"] == round(row["monthly_human_cost_avoided_usd"] - row["monthly_model_cost_usd"], 2)
+    assert "Monthly net" in rse.to_markdown({"generated_at": "t", "prompt_version": "3", "pricing_as_of": "p", "mode_label": "m",
+                                             "split": "test", "n_cases": 1, "seed": 3, "systems": {"proposed (live)": live},
+                                             "projection": proj, "cases": {}})
