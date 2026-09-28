@@ -51,7 +51,8 @@ jobs:
         run: python3 ops/container_smoke.py http://localhost:8000
       - name: The app runs unprivileged, owns its data, and the disk survives a restart without re-ingesting
         run: |
-          docker top app -o user,args | grep uvicorn | tee /dev/stderr | grep -vq '^root'
+          user=$(docker top app -o pid,user,args | awk '/uvicorn/ {print $2; exit}')
+          echo "uvicorn runs as: $user" && test -n "$user" && test "$user" != "root"
           test "$(sudo stat -c %u /srv/disk/bank.duckdb)" = "10001"
           docker restart app
           for i in $(seq 1 60); do curl -fs localhost:8000/health && break; sleep 2; done
