@@ -184,7 +184,8 @@ diversity mitigates it; a human-authored or production-sampled set is the fix
   and the live path on Claude Opus 5, Sonnet 5 and Haiku 4.5 over the fixture
   turns ([`LIVE_SMOKE.md`](eval/reports/LIVE_SMOKE.md)). Until the held-out
   run exists, there is no claim about model-driven SAR. `--cases FILE` runs
-  any case file in the workload format, such as the external human set.
+  any case file in the workload format, such as the external human set; its
+  report names the file instead of a generated split and its seed.
 
 **Definitions** (as in the brief).
 - *In-scope* = oracle outcome is AUTO_RESOLVE.
@@ -276,7 +277,7 @@ resolved ones. Scripted and adversarial runs bill nothing, so they print no ROI.
 
 ## 4. Unit and integration tests
 
-`make test`: 322 hermetic tests on a hand-made fixture warehouse, plus one
+`make test`: 329 hermetic tests on a hand-made fixture warehouse, plus one
 opt-in integration test (`RUN_INTEGRATION=1`). CI runs them
 on every push, plus the classifier evaluation. They cover:
 - pipeline idempotency, late-arrival update, quarantine and rollback, schema evolution;
@@ -326,10 +327,41 @@ on every push, plus the classifier evaluation. They cover:
   - the bank view shows only the session's own tickets, never its token;
   - a simulated outage or an expired session affects only its own session;
   - "Why?" shows the masked text the model received, never the raw number,
-    and never reveals another customer's product;
+    and never reveals another customer's product; outside the demo, a reply
+    does not say which rule decided it;
+  - the data-quality view describes the served warehouse from its lineage
+    tables (values counted by hand on the fixture), counts a rolled-back load
+    without hiding the good one, follows a late partition, and shows no rows,
+    ids or source locations;
+- repeated evaluation runs are paired by case id, and a run leaves the
+  environment as it found it; lineage times are UTC on any machine;
+- experiment tracking: each classifier selection and system evaluation is an
+  MLflow run that says what its report says; without mlflow it is skipped with
+  one line, and a tracking failure never costs the evaluation its output;
 - retention.
 
-## 5. Capacity (measured, LLM excluded)
+## 5. Experiment tracking (MLflow)
+
+Every run of the two evaluations is logged to MLflow (`eval/tracking.py`), so
+model and prompt versions can be compared over time; `make mlflow-ui` opens
+them. The committed reports stay the reviewed record.
+
+| Experiment | Logged by | Parent run | Child runs |
+|---|---|---|---|
+| `intent-classifier` | `make train-eval` | the chosen representation and escalation threshold, the hashes of the training and held-out sets, the scikit-learn version, the test scores, the threshold sweep on dev as a metric series, and the model, its metadata and the report as artifacts | one per candidate representation, with its dev macro-F1 |
+| `system-eval` | `make eval`, `eval-adversarial`, `eval-live` | one per system and model: provider, model and effort; the prompt version and `prompt_sha256`, a hash of all the fixed text the system writes into a request, so an edit shows even without a version bump; the cases file's hash; every metric of the report (run 1, as in its table) and safe automated resolution by language, segment and country; with repeats, the mean and spread of each metric and the share of cases that changed outcome; the Markdown report as artifact | one per repeat, with its metrics |
+
+- Every run is tagged with the git sha, whether the working tree had
+  uncommitted changes, and the report it belongs to (`report_generated_at`).
+- Only the Markdown report is attached to a system run: the JSON report
+  carries customer ids.
+- The store is local and git-ignored (`mlruns/`: sqlite and artifacts).
+  `MLFLOW_TRACKING_URI` points it at a tracking server instead.
+- mlflow comes with `make setup` (`requirements-tracking.txt`). The serving
+  image does not carry it; without it, a run is skipped with one line. A
+  tracking failure is reported, never raised.
+
+## 6. Capacity (measured, LLM excluded)
 
 `make loadtest` on the full warehouse (4.4M transactions), in this container:
 - 71.7 turns/s on one thread (p50 10.5 ms, p95 39.4 ms);

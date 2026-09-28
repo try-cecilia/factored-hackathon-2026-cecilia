@@ -36,9 +36,11 @@ warehouse; everything else is already measured. Speaker notes follow `docs/video
 ## 4. Data and engineering rigor
 - Contracts with a quarantine gate and rollback; lineage per row, run and partition; a late-arrival fixture.
 - Findings the data dictionary hides: 57% missing USD amounts; registration branch keys broken for 149,995 of
-  150,000 customers; no MXN at all;
-  transcripts with 42 distinct texts; 58K pending movements (the action's ground).
-- 322 hermetic tests; CI builds the container and boots it like the host; `make all` rebuilds every number.
+  150,000 customers; no MXN at all; transcripts with 42 distinct texts; 58K pending movements (the action's
+  ground).
+- Every classifier selection and evaluation run tracked in MLflow: model, effort, prompt hash, data hashes,
+  code version and metrics.
+- 329 hermetic tests; CI builds the container and boots it like the host; `make all` rebuilds every number.
 
 ## 5. Try it, and what it takes to make it real
 - **Try it:** [deployed URL]. Guided scenarios, "Why?" on every reply, the bank view, fault buttons, and the

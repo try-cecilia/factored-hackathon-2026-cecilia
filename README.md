@@ -101,8 +101,9 @@ cp .env.example .env        # fill AWS_* + DATASET_BUCKET (dataset), DEMO_IDP_SE
 make setup
 make ingest                 # full warehouse from S3 (~6 min; or `make ingest-demo`, ~1 min)
 make serve                  # http://localhost:8000 — web chat with sandbox test logins
-make test                   # 322 hermetic tests: fixture warehouse, no S3, no API keys
+make test                   # 329 hermetic tests: fixture warehouse, no S3, no API keys
 make all                    # rebuild every number in the docs
+make mlflow-ui              # every classifier selection and evaluation run, tracked in MLflow
 ```
 
 Log in with a customer id and its **test PIN** (a customer number alone is not
@@ -143,15 +144,17 @@ agent/       core/ orchestrator, render · policy/ router, signals, classifier g
              session/ session store, demo identity provider
 api/         FastAPI + static web chat; demo.py: the jury demo (DEMO_MODE=1)
 analysis/    problem evidence and human baseline from the supplied data
-eval/        held-out sets, workload generator, baseline bot, evaluation runners, reports/
+eval/        held-out sets, workload generator, baseline bot, evaluation runners, MLflow tracking, reports/
 ops/         Dockerfile, entrypoint, demo-customer picker, load test, live smoke run, retention
 docs/        architecture decisions (decisions/), data quality, operations, evidence, demo
-tests/       322 hermetic tests + fixtures
+tests/       329 hermetic tests + fixtures
 ```
 
 ## Status
 
 - Built and evaluated offline end to end. CI runs the hermetic suite and checks the classifier report.
+  Every classifier selection and evaluation run is tracked in MLflow: model, effort, prompt hash, data
+  hashes, code version and metrics ([`EVALUATION.md`](EVALUATION.md#5-experiment-tracking-mlflow)).
 - **Live model: smoke-tested, held-out run pending.** v3 ran end to end on Claude Opus 5,
   Sonnet 5 and Haiku 4.5 over the synthetic fixtures ([`eval/reports/LIVE_SMOKE.md`](eval/reports/LIVE_SMOKE.md)):
   - 13 turns per model in ES and PT, each graded against its intended outcome: 13/13 on Opus 5 and

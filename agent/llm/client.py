@@ -100,6 +100,12 @@ ANTHROPIC_MAX_TOKENS = 4096  # covers adaptive thinking plus the tool call on mo
 SERVER_FALLBACK_MODELS = {"claude-opus-5"}  # server-side refusal fallback ("default" routing by refusal category)
 
 
+def anthropic_effort(model: str) -> str | None:
+    """The effort sent with a Claude request (ANTHROPIC_EFFORT, low by default); Haiku 4.5 takes none."""
+    effort = os.environ.get("ANTHROPIC_EFFORT", "low")
+    return effort if effort and not model.startswith("claude-haiku") else None
+
+
 def anthropic_call(sdk, p: Provider, messages, tools, temperature: float, timeout: float) -> tuple:
     """Claude Messages API. No sampling parameters (current models reject
     them); effort instead, except on Haiku, which rejects effort. A refusal
@@ -117,8 +123,7 @@ def anthropic_call(sdk, p: Provider, messages, tools, temperature: float, timeou
     if tools:
         kwargs["tools"] = [{"name": t["function"]["name"], "description": t["function"].get("description", ""),
                             "input_schema": t["function"]["parameters"]} for t in tools]
-    effort = os.environ.get("ANTHROPIC_EFFORT", "low")
-    if effort and not p.model.startswith("claude-haiku"):
+    if effort := anthropic_effort(p.model):
         kwargs["output_config"] = {"effort": effort}
     if p.model in SERVER_FALLBACK_MODELS and os.environ.get("ANTHROPIC_FALLBACKS", "1") != "0":
         kwargs["betas"] = ["server-side-fallback-2026-07-01"]

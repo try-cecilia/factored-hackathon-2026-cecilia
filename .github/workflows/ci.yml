@@ -14,7 +14,7 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-      - run: pip install -r requirements.txt
+      - run: pip install -r requirements-tracking.txt  # the runtime pins plus mlflow, so the tracking tests run
       - name: Hermetic test suite (fixture warehouse, no S3, no API keys)
         run: python -m pytest tests/ -q
       - name: Intent classifier evaluation is reproducible

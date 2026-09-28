@@ -13,3 +13,4 @@ data/warehouse/
 .pytest_cache/
 htmlcov/
 .coverage
+mlruns/

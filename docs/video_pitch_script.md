@@ -39,8 +39,9 @@ fill them in from that report, never from memory.
    runs: [Sonnet 5 …, Haiku 4.5 …, gpt-oss-120b …]. The model in production was chosen by cost per safe
    resolution. The scripted ideal model stays labeled as an upper bound.
 
-7. **Engineering (15 s).** Contracts with a quarantine gate, lineage and a late-arrival fixture; [N] hermetic
-   tests; CI builds the container and boots it the way the host does; `make all` rebuilds every number.
+7. **Engineering (15 s).** Contracts with a quarantine gate, lineage and a late-arrival fixture; every
+   classifier selection and evaluation run tracked in MLflow, with its model, prompt hash and data hashes; [N]
+   hermetic tests; CI builds the container and boots it the way the host does; `make all` rebuilds every number.
 
 8. **Honest limits and next (15 s).** Synthetic data with no real text and no Portuguese, the team wrote every
    utterance; a test identity provider; text channels only, while 85% of contacts are calls. Next: voice, and

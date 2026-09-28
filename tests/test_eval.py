@@ -247,6 +247,24 @@ def test_a_case_list_with_a_repeated_id_is_refused():
         rse.run("proposed", "scripted", [case, case])
 
 
+def test_a_report_on_a_case_file_names_it_instead_of_claiming_the_generated_workload(tmp_path, monkeypatch):
+    """--cases runs any case file (the human-written set, for one): its report names the file, and claims neither
+    the warehouse-generated split nor its seed."""
+    import sys
+
+    from eval.workload import save
+
+    cases = tmp_path / "human_set.jsonl"
+    save(generate(per_cell=1, seed=3)[:4], cases)
+    monkeypatch.setattr(rse, "track", lambda *args, **kwargs: None)  # MLflow is tests/test_tracking.py's subject
+    monkeypatch.setattr(sys, "argv", ["run_system_eval", "--system", "baseline", "--cases", str(cases),
+                                      "--out-json", str(tmp_path / "r.json"), "--out-md", str(tmp_path / "R.md")])
+    rse.main()
+    md = (tmp_path / "R.md").read_text(encoding="utf-8")
+    assert "4 cases from `human_set.jsonl`" in md
+    assert "seed" not in md and "generated from the warehouse" not in md
+
+
 def test_error_analysis_groups_what_went_wrong_and_the_report_carries_no_customer_ids():
     m, rows = _run("adversarial")
     groups = rse.error_analysis(rows)

@@ -1,10 +1,10 @@
 # Reproducible entry points. Every number in the docs comes from one of these.
 PY ?= python3
 
-.PHONY: retention loadtest setup ingest ingest-demo analysis train-eval workload eval eval-adversarial eval-live live-smoke test serve docker-build all
+.PHONY: retention loadtest setup ingest ingest-demo analysis train-eval workload eval eval-adversarial eval-live live-smoke test serve docker-build all mlflow-ui
 
-setup:            ## install pinned dependencies
-	$(PY) -m pip install -r requirements.txt
+setup:            ## install pinned dependencies, with experiment tracking (the serving image takes requirements.txt only)
+	$(PY) -m pip install -r requirements-tracking.txt
 
 ingest:           ## full warehouse (serving + analysis tables) from S3, with contracts + lineage
 	$(PY) -m data.pipeline --profile all --report data/reports/quality_report.json
@@ -38,6 +38,9 @@ live-smoke:       ## live model on the fixture warehouse: every required path, E
 
 test:             ## hermetic test suite (fixture warehouse; no S3, no API keys)
 	$(PY) -m pytest tests/ -q
+
+mlflow-ui:        ## browse every tracked classifier selection and evaluation run: http://127.0.0.1:5000
+	$(PY) -m mlflow ui --backend-store-uri sqlite:///mlruns/mlflow.db
 
 serve:
 	uvicorn api.main:app --host 0.0.0.0 --port 8000

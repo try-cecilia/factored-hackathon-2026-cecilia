@@ -22,6 +22,8 @@ for _var in ("INTENT_MODEL_PATH", "INTENT_META_PATH", "DQ_REPORT_PATH"):
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "integration: needs S3 access and credentials (RUN_INTEGRATION=1)")
+    # Raised inside MLflow 3.16's own SQLAlchemy mappings when a tracking store opens; nothing of ours to fix.
+    config.addinivalue_line("filterwarnings", "ignore:The ``noload`` loader strategy is deprecated:DeprecationWarning")
 
 
 def pytest_collection_modifyitems(config, items):

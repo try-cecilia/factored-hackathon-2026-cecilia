@@ -32,6 +32,7 @@ from sklearn.metrics import confusion_matrix, f1_score, precision_recall_fscore_
 from agent.llm import baseline_classifier
 from agent.llm.intent_classifier import VARIANTS, load_rows, train
 from agent.policy.signals import contains_escalation_signal
+from eval import tracking
 from eval.stats import fmt, rate, zero_event_upper_bound
 
 TRAIN = "eval/test_cases/intent_dataset.csv"
@@ -155,6 +156,39 @@ def main() -> None:
     REPORT_MD.write_text(to_markdown(report), encoding="utf-8")
     sys.stdout.reconfigure(encoding="utf-8")  # the report has non-cp1252 characters (Windows consoles)
     print(REPORT_MD.read_text(encoding="utf-8"))
+    track(report)
+
+
+def track(report: dict) -> None:
+    """The selection as an MLflow run (eval/tracking.py): one child run per candidate representation with its dev
+    macro-F1, the escalation threshold sweep on dev as a metric series (step = τ × 100), the test scores, the data
+    hashes, and the model and its report as artifacts."""
+    with tracking.run("intent-classifier", f"select {report['chosen_variant']}",
+                      tags={"report_generated_at": report["generated_at"]}) as mlflow:
+        if mlflow is None:
+            return
+        v = report["versions"]
+        mlflow.log_params({"chosen_variant": report["chosen_variant"], "escalation_threshold": report["escalation_threshold"],
+                           "max_false_escalation": report["max_false_escalation_constraint"], "train_n": report["train_n"],
+                           "dev_n": report["dev_n"], "test_n": report["test_n"], "sklearn": v["sklearn"],
+                           "train_sha256": v["train_sha256"], "heldout_sha256": v["heldout_sha256"], "protocol": report["protocol"]})
+        for variant, score in report["model_selection_dev"].items():
+            with mlflow.start_run(run_name=f"candidate {variant}", nested=True):
+                mlflow.log_param("variant", variant)
+                mlflow.log_metric("dev_macro_f1", score["dev_macro_f1"])
+                mlflow.set_tag("chosen", str(variant == report["chosen_variant"]).lower())
+        for s in report["threshold_sweep_dev"]:
+            mlflow.log_metrics(tracking.numbers({"dev_guard_recall": s["recall"], "dev_guard_false_escalation": s["false_escalation"]}),
+                               step=round(100 * s["tau"]))
+        t = report["test"]
+        guard = t["escalation_guard"]["lexicon_or_classifier (runtime)"]
+        mlflow.log_metrics(tracking.numbers({
+            "test_accuracy": t["learned"]["accuracy"]["rate"], "test_macro_f1": t["learned"]["macro_f1"],
+            "test_baseline_accuracy": t["baseline_keywords"]["accuracy"]["rate"], "test_baseline_macro_f1": t["baseline_keywords"]["macro_f1"],
+            "test_guard_recall": guard["recall"]["rate"], "test_guard_false_escalation": guard["false_escalation"]["rate"],
+            "test_guard_missed": guard["missed"]}))
+        for path in (REPORT_MD, REPORT_JSON, MODEL_OUT, META_OUT):
+            mlflow.log_artifact(str(path))
 
 
 def to_markdown(r: dict) -> str:
