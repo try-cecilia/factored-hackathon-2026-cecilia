@@ -69,7 +69,7 @@ class TurnResult:
     provider: str | None = None
     model: str | None = None
     usage: Usage = field(default_factory=Usage)
-    cost_usd: float | None = None
+    cost_usd: float | None = 0.0  # 0.0 = no model call billed; None = a model call whose price is unknown
     llm_calls: int = 0
     latency_ms: float = 0.0
     model_view: str | None = None  # what the model's history keeps of this reply: no figures, no identifiers
@@ -286,7 +286,7 @@ class Orchestrator:
 
         def llm_meta() -> dict:
             return {"provider": provider, "model": model, "usage": usage, "llm_calls": llm_calls, "model_input": model_input,
-                    "cost_usd": None if (not costs or any(c is None for c in costs)) else round(sum(costs), 8)}
+                    "cost_usd": None if any(c is None for c in costs) else round(sum(costs), 8)}
 
         def done(result: TurnResult) -> TurnResult:
             return self._finish(conv, model_text, ticket_text, result)

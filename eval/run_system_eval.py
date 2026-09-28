@@ -42,7 +42,7 @@ import sys
 import tempfile
 import time
 import unicodedata
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
@@ -418,6 +418,10 @@ def judge(case: Case, results: list, tickets: dict, sent: list[str]) -> dict:
         "cost_usd": None if any(r.cost_usd is None for r in results) else round(sum(r.cost_usd for r in results), 8),
         "tokens": sum(r.usage.total for r in results),
         "llm_calls": sum(r.llm_calls for r in results),
+        "model": ", ".join(sorted({f"{r.provider}/{r.model}" for r in results if r.llm_calls and r.model})),
+        "rule": last.policy_rule,
+        "model_chose": [{"tool": a["tool"], "args": a["raw_args"]} for a in last.tool_calls if "raw_args" in a],
+        "turns": list(case.turns),
     }
 
 
@@ -473,6 +477,44 @@ def breakdown(rows: list[dict], key: str) -> dict:
     return out
 
 
+VARIABILITY_RATES = ("safe_automated_resolution", "automation_attempted", "disposition_accuracy", "containment",
+                     "escalation_recall", "unnecessary_escalations", "handoff_completeness", "unsafe_outcomes")
+VARIABILITY_VALUES = ("latency_ms_p50", "latency_ms_p95", "cost_per_attempted_case_usd", "cost_per_safe_resolution_usd")
+
+
+def variability(reps: list[tuple[dict, list[dict]]]) -> dict:
+    """How much repeated runs of the same cases move: every headline rate, latency and cost across runs, and the
+    cases whose outcome changed between runs, with their dispositions in run order."""
+    def spread(values: list) -> dict | None:
+        values = [v for v in values if isinstance(v, (int, float)) and not isinstance(v, bool)]
+        return {"mean": round(statistics.mean(values), 4), "stdev": round(statistics.pstdev(values), 4),
+                "min": min(values), "max": max(values)} if values else None
+
+    out: dict = {"runs": len(reps)}
+    out |= {k: spread([m[k]["rate"] for m, _ in reps]) for k in VARIABILITY_RATES}
+    out |= {k: spread([m[k] for m, _ in reps]) for k in VARIABILITY_VALUES}
+    per_case = list(zip(*(rows for _, rows in reps)))
+    unstable = [{"case_id": rs[0]["case_id"], "template": rs[0]["template"], "language": rs[0]["language"],
+                 "dispositions": [r["actual"] for r in rs]} for rs in per_case if len({r["actual"] for r in rs}) > 1]
+    return out | {"outcome_flip_rate": rate(len(unstable), len(per_case)), "unstable_cases": unstable[:20]}
+
+
+def error_analysis(rows: list[dict]) -> list[dict]:
+    """What went wrong, grouped by case type, expected and actual outcome, the policy rule that decided it and the
+    tools the model chose. Counts and languages only, no customer ids or text: it goes into public reports."""
+    groups: dict[tuple, dict] = {}
+    for r in rows:
+        problems = r["unsafe"] + r["incorrect_not_unsafe"] + (["wrong_disposition"] if r["disposition_scored"] and not r["disposition_ok"] else [])
+        if not problems:
+            continue
+        key = (r["template"], "/".join(r["expected"]), r["actual"], r["rule"], ", ".join(problems))
+        g = groups.setdefault(key, {"template": key[0], "expected": key[1], "actual": key[2], "rule": key[3], "problem": key[4],
+                                    "model_chose": sorted({a["tool"] for a in r["model_chose"]}), "n": 0, "languages": set()})
+        g["n"] += 1
+        g["languages"].add(r["language"])
+    return sorted(({**g, "languages": sorted(g["languages"])} for g in groups.values()), key=lambda g: (-g["n"], g["template"]))
+
+
 def run(system: str, llm_mode: str, cases: list[Case], live_client=None) -> tuple[dict, list[dict]]:
     tmp = Path(tempfile.mkdtemp(prefix=f"eval_{system}_"))
     os.environ.update({"HUMAN_QUEUE_PATH": str(tmp / "queue.jsonl"), "AUDIT_LOG_PATH": str(tmp / "audit.jsonl"),
@@ -488,6 +530,8 @@ def run(system: str, llm_mode: str, cases: list[Case], live_client=None) -> tupl
     m["by_language"] = breakdown(rows, "language")
     m["by_segment"] = breakdown(rows, "segment")
     m["by_country"] = breakdown(rows, "country")
+    m["served_by"] = dict(sorted(Counter(r["model"] for r in rows if r["model"]).items()))
+    m["error_analysis"] = error_analysis(rows)
     return m, rows
 
 
@@ -525,6 +569,35 @@ def to_markdown(rep: dict) -> str:
     body += "| Cost per attempted case | " + " | ".join(str(systems[s]["cost_per_attempted_case_usd"]) for s in systems) + " |\n"
     body += "| Cost per safe resolution | " + " | ".join(str(systems[s]["cost_per_safe_resolution_usd"]) for s in systems) + " |\n"
 
+    def cell(v) -> str:
+        return str(v).replace("|", "\\|")
+
+    def spread(s: str) -> str:
+        v = systems[s].get("repeat_variability")
+        if not v:
+            return "single run"
+        sar = v["safe_automated_resolution"]
+        sar_txt = f"SAR {100 * sar['min']:.1f}–{100 * sar['max']:.1f}% (sd {100 * sar['stdev']:.1f} pts), " if sar else ""
+        return f"{v['runs']} runs: {sar_txt}outcome changed in {fmt(v['outcome_flip_rate'])} of cases"
+
+    body += "| Variability across runs | " + " | ".join(spread(s) for s in systems) + " |\n"
+    served = "; ".join(f"{s}: " + (", ".join(f"{k} ({n} cases)" for k, n in systems[s].get("served_by", {}).items()) or "no model")
+                       for s in systems)
+    unstable = [f"{c['template']} ({c['language']}): {' → '.join(c['dispositions'])}"
+                for s in systems for c in (systems[s].get("repeat_variability") or {}).get("unstable_cases", [])[:10]]
+    unstable_txt = f"\nCases whose outcome changed between runs (first 10): {'; '.join(unstable)}.\n" if unstable else ""
+    error_blocks = []
+    for s in systems:
+        groups = systems[s].get("error_analysis") or []
+        if groups:
+            error_blocks.append(f"### {s}\n| Case type | Expected | Actual | Decided by | Problem | Model chose | n | Languages |\n"
+                                "|---|---|---|---|---|---|---|---|\n" + "".join(
+                                    f"| {cell(g['template'])} | {cell(g['expected'])} | {cell(g['actual'])} | `{cell(g['rule'])}` | "
+                                    f"{cell(g['problem'])} | {cell(', '.join(g['model_chose']) or '-')} | {g['n']} | {', '.join(g['languages'])} |\n"
+                                    for g in groups))
+    errors_txt = "## Error analysis\nEvery case that went wrong, grouped by what happened (no customer data).\n\n" + (
+        "\n".join(error_blocks) if error_blocks else "No case went wrong in this run.\n")
+
     def cat_table(key):
         cats = sorted({c for s in systems for c in systems[s][key]})
         h = "| " + key.replace("by_", "") + " | n | " + " | ".join(f"{s}: correct disposition" for s in systems) + " |\n|---|---|" + "---|" * len(systems) + "\n"
@@ -555,6 +628,8 @@ Portuguese turns are team-written (the dataset has no Portuguese).
 
 ## Baseline vs proposed, same workload
 {head}{body}
+Served by: {served}.
+{unstable_txt}
 Unsafe outcomes by type: {json.dumps({s: systems[s]['unsafe_by_type'] for s in systems})}.
 Incorrect but not unsafe (irrelevant answer, no wrong figures or data): {json.dumps({s: systems[s]['incorrect_not_unsafe'] for s in systems})}.
 Missed escalations: {json.dumps({s: systems[s]['missed_escalations'] for s in systems}, ensure_ascii=False)}.
@@ -570,6 +645,7 @@ Unnecessary transfers came from: {json.dumps({s: systems[s]['unnecessary_escalat
 {sar_table('by_country')}
 Cells with n < 30 are small samples; differences inside overlapping intervals are not evidence of disparity.
 
+{errors_txt}
 {ptxt}"""
 
 
@@ -581,6 +657,9 @@ def main() -> None:
     ap.add_argument("--limit", type=int)
     ap.add_argument("--split", choices=["dev", "test"], default="test",
                     help="dev = used while building (disclosed); test = generated after the last design change, reported")
+    ap.add_argument("--cases", help="a case file (eval/workload format) instead of the split's workload")
+    ap.add_argument("--models", help="live only: provider:model list to compare on the same cases, e.g. "
+                                     "anthropic:claude-sonnet-5,anthropic:claude-haiku-4-5,groq:openai/gpt-oss-120b")
     ap.add_argument("--out-json")
     ap.add_argument("--out-md")
     a = ap.parse_args()
@@ -589,25 +668,33 @@ def main() -> None:
     out_json = Path(a.out_json or f"eval/reports/system_eval{suffix}{mode}.json")
     out_md = Path(a.out_md or f"eval/reports/SYSTEM_EVAL{suffix}{mode.upper()}.md")
 
-    cases = load(Path(f"eval/workload/cases_{a.split}.jsonl"))
+    cases = load(Path(a.cases or f"eval/workload/cases_{a.split}.jsonl"))
     FOREIGN_POOL[:] = [r[0] for r in get_connection().execute(
         "SELECT product_id FROM products ORDER BY md5(product_id) LIMIT 500").fetchall()]
     if a.limit:
         cases = cases[:: max(1, len(cases) // a.limit)][: a.limit]
     systems, runs = {}, {}
-    live = LLMClient() if a.llm == "live" else None
+    targets: list = [None]
+    if a.llm == "live" and a.models:
+        targets = [t.split(":", 1) for t in a.models.split(",")]
+        for t in [t for t in targets if not os.environ.get(f"{t[0].upper()}_API_KEY")]:
+            # without its key the model would run in degraded mode and be reported as if it were the model
+            print(f"skipping {t[0]}:{t[1]}: {t[0].upper()}_API_KEY is not set", file=sys.stderr)
+            targets.remove(t)
+        if not targets:
+            sys.exit("no model left to evaluate: set the API key of at least one --models entry")
     for system in (["baseline", "proposed"] if a.system == "both" else [a.system]):
-        name = system if system == "baseline" else f"proposed ({a.llm})"
-        reps = []
-        for _ in range(a.repeats if (system == "proposed" and a.llm == "live") else 1):
-            m, rows = run(system, a.llm, cases, live)
-            reps.append((m, rows))
-        systems[name] = reps[0][0]
-        if len(reps) > 1:
-            sar = [m["safe_automated_resolution"]["rate"] for m, _ in reps]
-            systems[name]["repeat_variability"] = {"runs": len(reps), "sar_mean": round(statistics.mean(sar), 4),
-                                                   "sar_stdev": round(statistics.pstdev(sar), 4)}
-        runs[name] = reps[0][1]
+        for target in (targets if system == "proposed" else [None]):
+            if target:  # the same cases on each model, as ops/live_smoke.py does it
+                os.environ["LLM_PROVIDERS"], os.environ[f"{target[0].upper()}_MODEL"] = target[0], target[1]
+            live = LLMClient() if a.llm == "live" and system == "proposed" else None
+            name = system if system == "baseline" else f"proposed ({a.llm}{': ' + target[1] if target else ''})"
+            reps = [run(system, a.llm, cases, live) for _ in range(a.repeats if (system == "proposed" and a.llm == "live") else 1)]
+            systems[name] = reps[0][0]
+            if len(reps) > 1:
+                systems[name]["repeat_variability"] = variability(reps)
+            runs[name] = reps[0][1]
+    proposed = next((m for n, m in systems.items() if n.startswith("proposed")), None)
     rep = {
         "generated_at": datetime.now(timezone.utc).isoformat(), "prompt_version": PROMPT_VERSION, "pricing_as_of": PRICING_AS_OF,
         "mode_label": {"scripted": "OFFLINE — baseline bot measured; proposed system run with a scripted ideal-model LLM (upper bound on model "
@@ -616,7 +703,7 @@ def main() -> None:
                                       "queries other customers' products, fabricates figures). Tests whether safety depends on the model.",
                        "live": "LIVE LLM — proposed system with the real model"}[a.llm],
         "split": a.split, "n_cases": len(cases), "seed": cases[0].case_id and SEEDS[a.split], "systems": systems,
-        "projection": projection(systems.get(f"proposed ({a.llm})"), systems.get("baseline")) if a.llm != "adversarial" else None,
+        "projection": projection(proposed, systems.get("baseline")) if a.llm != "adversarial" else None,
         "cases": runs,
     }
     out_json.parent.mkdir(parents=True, exist_ok=True)

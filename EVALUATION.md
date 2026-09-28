@@ -152,12 +152,25 @@ diversity mitigates it; a human-authored or production-sampled set is the fix
   customers' products (40% of turns), and writes invented figures and a fake
   action ("ya bloqueé tu tarjeta") next to its tool calls (30%). It tests
   whether safety depends on the model.
-- **Proposed + live model:** `make eval-live` (3 repeats × 120 cases) with any
-  configured provider (`LLM_PROVIDERS`: Groq, Together or Claude). **Not run
-  on the held-out workload yet**: it needs the organizer's warehouse. The live
-  path itself has run end to end on Claude Opus 5, Sonnet 5 and Haiku 4.5
-  over the fixtures ([`LIVE_SMOKE.md`](eval/reports/LIVE_SMOKE.md)). Until the
-  held-out run exists, there is no claim about model-driven SAR.
+- **Proposed + live model:** `make eval-live` runs the same 120-case sample
+  on each model in `EVAL_MODELS` (default: Claude Sonnet 5, Claude Haiku 4.5
+  and `openai/gpt-oss-120b` on Groq), 3 repeats each. A model whose API key is
+  missing is skipped, never reported in degraded mode. Per model it reports:
+  - every metric above;
+  - the exact model id that answered each case;
+  - variability across runs: every headline rate, latency and cost, and the
+    share of cases whose outcome changed between runs, with those cases named;
+  - an error analysis: every case that went wrong, grouped by case type,
+    expected and actual outcome, the rule that decided it and the tools the
+    model chose (counts and languages, no customer data).
+
+  **Not run on the held-out workload yet**: it needs the organizer's
+  warehouse. The harness itself ran end to end on 2026-09-27 on 118 cases
+  generated from the hand-made fixture (Sonnet 5 and Haiku 4.5, 2 repeats),
+  and the live path on Claude Opus 5, Sonnet 5 and Haiku 4.5 over the fixture
+  turns ([`LIVE_SMOKE.md`](eval/reports/LIVE_SMOKE.md)). Until the held-out
+  run exists, there is no claim about model-driven SAR. `--cases FILE` runs
+  any case file in the workload format, such as the external human set.
 
 **Definitions** (as in the brief).
 - *In-scope* = oracle outcome is AUTO_RESOLVE.
@@ -236,7 +249,7 @@ SAR must replace the upper bound before this number is used externally.
 
 ## 4. Unit and integration tests
 
-`make test`: 243 hermetic tests on a hand-made fixture warehouse, plus one
+`make test`: 251 hermetic tests on a hand-made fixture warehouse, plus one
 opt-in integration test (`RUN_INTEGRATION=1`). CI runs them
 on every push, plus the classifier evaluation. They cover:
 - pipeline idempotency, late-arrival update, quarantine and rollback, schema evolution;

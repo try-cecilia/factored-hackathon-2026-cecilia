@@ -99,7 +99,7 @@ cp .env.example .env        # fill AWS_* + DATASET_BUCKET (dataset), DEMO_IDP_SE
 make setup
 make ingest                 # full warehouse from S3 (~6 min; or `make ingest-demo`, ~1 min)
 make serve                  # http://localhost:8000 — web chat with sandbox test logins
-make test                   # 243 hermetic tests: fixture warehouse, no S3, no API keys
+make test                   # 251 hermetic tests: fixture warehouse, no S3, no API keys
 make all                    # rebuild every number in the docs
 ```
 
@@ -137,7 +137,7 @@ analysis/    problem evidence and human baseline from the supplied data
 eval/        held-out sets, workload generator, baseline bot, evaluation runners, reports/
 ops/         Dockerfile, entrypoint, demo-customer picker, load test, live smoke run, retention
 docs/        architecture decisions (decisions/), data quality, operations, evidence, demo
-tests/       243 hermetic tests + fixtures
+tests/       251 hermetic tests + fixtures
 ```
 
 ## Status
@@ -155,9 +155,11 @@ tests/       243 hermetic tests + fixtures
   - it answers plain balance questions deterministically;
   - it abstains on clear out-of-scope requests;
   - it escalates the rest.
-- Not yet deployed (needs a hosting account). The container ingests a 5k-customer sample on
-  first boot, sized for a 512 MB free tier: that load measured 20 s and 14 MB with DuckDB capped
-  at 400 MB. The image itself hasn't been built here, because the build sandbox has no Docker daemon.
+- Not yet deployed: it needs the hosting account. `render.yaml` is the Render Blueprint (paid
+  512 MB instance, 1 GB disk, demo mode, a daily model budget). The container ingests a 5k-customer
+  sample on first boot: that load measured 20 s and 14 MB with DuckDB capped at 400 MB. CI builds
+  the image on every push and boots it the way Render does, then smoke-tests it
+  ([`docs/operations.md`](docs/operations.md#deploy-on-render-the-jury-demo)).
 
 All customer data in this repository is synthetic (organizer-provided dataset
 and hand-made fixtures). Portuguese test text is team-written; the dataset has none.

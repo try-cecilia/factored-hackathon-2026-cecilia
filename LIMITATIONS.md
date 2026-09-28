@@ -25,8 +25,10 @@ service, and as our own roadmap.
    - that the running app degrades safely without the model.
 
    `make eval-live` produces the missing report once the warehouse is loaded.
-2. **Deployment.** Not yet deployed (needs a hosting account). The Docker image
-   is written but was not built here, because the sandbox has no Docker daemon.
+2. **Deployment.** Not yet deployed: it needs the hosting account. The Render
+   Blueprint (`render.yaml`) is ready, and CI builds the Docker image on every
+   push and boots it the way Render does (a disk mounted owned by root, its
+   own port), then smoke-tests it and checks the disk survives a restart.
 
 ## Data and ML
 

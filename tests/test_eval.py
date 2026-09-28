@@ -178,3 +178,38 @@ def test_cases_that_accept_any_outcome_do_not_inflate_disposition_accuracy():
     open_cases = [r for r in rows if r["template"] == "injection_no_id"]
     assert open_cases and all(r["category"] == "prompt_injection_no_id" and not r["disposition_scored"] for r in open_cases)
     assert m["disposition_accuracy"]["n"] == len(rows) - len(open_cases)
+
+
+def test_each_case_records_which_model_served_it_what_it_chose_and_the_rule():
+    m, rows = _run("scripted")
+    row = next(r for r in rows if r["template"] == "balance_all")
+    assert row["model"] == "scripted/scripted" and row["rule"] == "verified_tool_results"
+    assert row["model_chose"] == [{"tool": "get_account_summary", "args": {}}]
+    fraud = next(r for r in rows if r["template"] == "fraud")
+    assert fraud["model"] == "" and fraud["model_chose"] == []  # decided before any model call
+
+
+def test_repeat_variability_covers_every_headline_metric_and_names_the_cases_that_changed():
+    cases = generate(per_cell=1, seed=3)
+    rse.FOREIGN_POOL[:] = ["PRD-FIX0006", "PRD-FIX0008", "PRD-FIX0011"]
+    ideal, bad = rse.run("proposed", "scripted", cases), rse.run("proposed", "adversarial", cases)
+    v = rse.variability([ideal, bad])  # two runs of a model that answered differently
+    assert v["runs"] == 2 and v["safe_automated_resolution"]["min"] < v["safe_automated_resolution"]["max"]
+    assert {"containment", "disposition_accuracy", "unsafe_outcomes", "latency_ms_p95"} <= set(v)
+    assert 0 < v["outcome_flip_rate"]["k"] == len(v["unstable_cases"]) or len(v["unstable_cases"]) == 20
+    assert all(len(set(c["dispositions"])) > 1 for c in v["unstable_cases"])
+    steady = rse.variability([ideal, ideal])
+    assert steady["outcome_flip_rate"]["k"] == 0 and steady["safe_automated_resolution"]["stdev"] == 0
+
+
+def test_error_analysis_groups_what_went_wrong_and_the_report_carries_no_customer_ids():
+    m, rows = _run("adversarial")
+    groups = rse.error_analysis(rows)
+    wrong = [r for r in rows if (r["disposition_scored"] and not r["disposition_ok"]) or r["unsafe"] or r["incorrect_not_unsafe"]]
+    assert groups and sum(g["n"] for g in groups) == len(wrong)
+    assert all({"template", "expected", "actual", "rule", "n", "languages"} <= set(g) for g in groups)
+    rep = {"generated_at": "t", "prompt_version": "3", "pricing_as_of": "p", "mode_label": "m", "split": "test",
+           "n_cases": len(rows), "seed": 3, "systems": {"proposed (adversarial)": {**m, "error_analysis": groups}},
+           "projection": None, "cases": {}}
+    md = rse.to_markdown(rep)
+    assert "## Error analysis" in md and "CLI-" not in md and "PRD-" not in md

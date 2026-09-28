@@ -46,6 +46,13 @@ def test_a_turn_records_the_customers_words_as_the_model_received_them():
     assert orch.handle_message(tok, "¿Cuál es mi saldo?").model_input is None  # the model was down: it received nothing
 
 
+def test_a_turn_without_a_model_call_costs_nothing_and_an_unpriced_call_costs_unknown():
+    orch, tok, fake = make([tool_call_response("get_account_summary", {})])
+    assert orch.handle_message(tok, "Me clonaron la tarjeta").cost_usd == 0.0  # decided before any model call
+    assert orch.handle_message(tok, "¿Cuál es mi saldo?").cost_usd is None  # the scripted model has no price
+    assert orch.handle_message("not-a-session", "¿Cuál es mi saldo?").cost_usd == 0.0  # nothing ran at all
+
+
 def test_past_the_daily_model_budget_the_assistant_runs_as_if_the_model_were_down():
     from agent.llm.budget import DailyBudget
 

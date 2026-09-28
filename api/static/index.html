@@ -442,7 +442,7 @@ function paintWhy(box, w) {
       h("span", { class: c.ok ? "chk-ok" : "chk-bad" }, c.ok ? "✓ " : "✗ "), h("code", {}, c.tool),
       c.product ? ` · ${c.product}` : (c.outcome === "PermissionDenied" ? ` · ${t().notMine}` : ""), ` · ${c.outcome}`)))
     : h("span", {}, t().noChecks);
-  const cost = [t().calls(w.llm_calls), w.model.model, w.cost_usd != null ? `USD ${w.cost_usd.toFixed(4)}` : null, `${Math.round(w.latency_ms)} ms`]
+  const cost = [t().calls(w.llm_calls), w.model.model, w.llm_calls && w.cost_usd != null ? `USD ${w.cost_usd.toFixed(4)}` : null, `${Math.round(w.latency_ms)} ms`]
     .filter(Boolean).join(" · ");
   box.replaceChildren(h("dl", {},
     h("dt", {}, t().because), h("dd", {}, w.because[state.lang]),
