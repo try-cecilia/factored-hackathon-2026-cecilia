@@ -1,6 +1,8 @@
 """HTTP-level tests: auth factor, admin fail-closed, limits, no token leakage."""
 from __future__ import annotations
 
+import json
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -55,6 +57,17 @@ def test_the_operations_summary_counts_what_an_operator_watches(client):
     assert s["turns"] >= 2 and s["dispositions"]["ESCALATE"] >= 1 and s["escalations_by_category"]["theft"] >= 1
     assert s["degraded_turns"] >= 1 and s["handoff_unverified"] == 0
     assert {"latency_ms_p50", "latency_ms_p95", "cost_usd", "models", "traces_opened", "llm_budget", "top_rules"} <= set(s)
+
+
+def test_the_trace_log_gives_operators_the_last_turns_in_order_and_no_token(client):
+    token = login(client).json()["token"]
+    for message in ("Me clonaron la tarjeta", "¿Cuál es mi saldo?"):
+        client.post("/chat", json={"session_token": token, "message": message})
+    assert client.get("/admin/trace_log").status_code == 401
+    rows = client.get("/admin/trace_log?limit=2", headers={"X-Admin-Key": "test-admin-key"}).json()
+    assert len(rows) == 2 and rows[0]["ts"] <= rows[1]["ts"]
+    assert (rows[0]["disposition"], rows[0]["category"]) == ("ESCALATE", "theft")
+    assert token not in json.dumps(rows)
 
 
 def test_the_daily_model_budget_is_reported_to_operators_only(client, monkeypatch):

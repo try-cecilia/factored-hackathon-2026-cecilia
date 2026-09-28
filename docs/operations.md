@@ -149,6 +149,9 @@ category, the top rules, degraded-mode turns, `llm_unavailable`,
 `handoff_unverified`, traces opened, model calls, cost and unpriced turns,
 p50/p95 latency, the models that answered and the day's model budget. Check
 it once a day during the judging window, alongside `/health`.
+`GET /admin/trace_log` returns the turns' trace records themselves, oldest
+first (`?limit=`, default 500, up to 5,000), which is what the red-team
+report is built from (`docs/red_team.md`).
 
 ## Access control
 

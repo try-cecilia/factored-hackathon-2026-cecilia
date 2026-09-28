@@ -177,6 +177,12 @@ def audit_log(limit: int = 50) -> list[dict]:
     return _tail(default_audit_log.path, min(limit, 500))
 
 
+@app.get("/admin/trace_log", dependencies=[Depends(require_admin)])
+def trace_log(limit: int = 500) -> list[dict]:
+    """The last turns' trace records, oldest first: what a review of the live demo reads (docs/red_team.md)."""
+    return _tail(default_trace_log.path, min(max(limit, 1), 5000))
+
+
 @app.get("/admin/traces/{trace_id}", dependencies=[Depends(require_admin)])
 def trace(trace_id: str) -> dict:
     """A full trace id, or the 8-character code a customer was given when a handoff could not be filed."""
