@@ -1,0 +1,353 @@
+{
+  "generated_at": "2026-09-28T15:41:36.484695+00:00",
+  "source": "warehouse tables (synthetic dataset v1.0.0)",
+  "contact_reasons": [
+    {
+      "reason_category": "Transaccional",
+      "contacts": 240056,
+      "pct": 35.0
+    },
+    {
+      "reason_category": "Producto",
+      "contacts": 150863,
+      "pct": 22.0
+    },
+    {
+      "reason_category": "Queja",
+      "contacts": 117021,
+      "pct": 17.1
+    },
+    {
+      "reason_category": "Técnico",
+      "contacts": 102899,
+      "pct": 15.0
+    },
+    {
+      "reason_category": "Comercial",
+      "contacts": 54879,
+      "pct": 8.0
+    },
+    {
+      "reason_category": "Retención",
+      "contacts": 20578,
+      "pct": 3.0
+    }
+  ],
+  "operations_by_reason": [
+    {
+      "reason_category": "Transaccional",
+      "contacts": 240056,
+      "aht_s": 221.0,
+      "aht_p90_s": 333.0,
+      "wait_s": 120.0,
+      "wait_p90_s": 196.0,
+      "fcr_pct": 91.5,
+      "escalated_pct": 9.9,
+      "followup_pct": 22.1,
+      "negative_sentiment_pct": 0.0
+    },
+    {
+      "reason_category": "Producto",
+      "contacts": 150863,
+      "aht_s": 266.0,
+      "aht_p90_s": 379.0,
+      "wait_s": 120.0,
+      "wait_p90_s": 196.0,
+      "fcr_pct": 89.6,
+      "escalated_pct": 10.0,
+      "followup_pct": 23.8,
+      "negative_sentiment_pct": 19.2
+    },
+    {
+      "reason_category": "Queja",
+      "contacts": 117021,
+      "aht_s": 435.0,
+      "aht_p90_s": 608.0,
+      "wait_s": 120.0,
+      "wait_p90_s": 197.0,
+      "fcr_pct": 43.6,
+      "escalated_pct": 10.0,
+      "followup_pct": 63.0,
+      "negative_sentiment_pct": 34.9
+    },
+    {
+      "reason_category": "Técnico",
+      "contacts": 102899,
+      "aht_s": 360.0,
+      "aht_p90_s": 499.0,
+      "wait_s": 120.0,
+      "wait_p90_s": 196.0,
+      "fcr_pct": 69.9,
+      "escalated_pct": 10.1,
+      "followup_pct": 40.6,
+      "negative_sentiment_pct": 35.0
+    },
+    {
+      "reason_category": "Comercial",
+      "contacts": 54879,
+      "aht_s": 540.0,
+      "aht_p90_s": 747.0,
+      "wait_s": 120.0,
+      "wait_p90_s": 197.0,
+      "fcr_pct": 65.2,
+      "escalated_pct": 9.8,
+      "followup_pct": 44.5,
+      "negative_sentiment_pct": 34.9
+    },
+    {
+      "reason_category": "Retención",
+      "contacts": 20578,
+      "aht_s": 479.0,
+      "aht_p90_s": 665.0,
+      "wait_s": 121.0,
+      "wait_p90_s": 196.0,
+      "fcr_pct": 60.2,
+      "escalated_pct": 9.8,
+      "followup_pct": 49.1,
+      "negative_sentiment_pct": 34.9
+    }
+  ],
+  "satisfaction_by_reason": [
+    {
+      "reason_category": "Comercial",
+      "csat_1_5": 2.66,
+      "csat_n": 10243,
+      "nps": -78.4,
+      "nps_n": 5144
+    },
+    {
+      "reason_category": "Producto",
+      "csat_1_5": 2.9,
+      "csat_n": 27942,
+      "nps": -70.0,
+      "nps_n": 13997
+    },
+    {
+      "reason_category": "Queja",
+      "csat_1_5": 2.43,
+      "csat_n": 21843,
+      "nps": -85.3,
+      "nps_n": 10821
+    },
+    {
+      "reason_category": "Retención",
+      "csat_1_5": 2.61,
+      "csat_n": 3798,
+      "nps": -81.4,
+      "nps_n": 1917
+    },
+    {
+      "reason_category": "Transaccional",
+      "csat_1_5": 2.91,
+      "csat_n": 44837,
+      "nps": -69.9,
+      "nps_n": 22341
+    },
+    {
+      "reason_category": "Técnico",
+      "csat_1_5": 2.7,
+      "csat_n": 19193,
+      "nps": -76.2,
+      "nps_n": 9448
+    }
+  ],
+  "transaccional": {
+    "channels": [
+      {
+        "channel": "Phone",
+        "contacts": 204040,
+        "pct": 85.0
+      },
+      {
+        "channel": "Email",
+        "contacts": 9597,
+        "pct": 4.0
+      },
+      {
+        "channel": "App",
+        "contacts": 9274,
+        "pct": 3.9
+      },
+      {
+        "channel": "Web Chat",
+        "contacts": 7997,
+        "pct": 3.3
+      },
+      {
+        "channel": "WhatsApp",
+        "contacts": 7960,
+        "pct": 3.3
+      },
+      {
+        "channel": "Web",
+        "contacts": 1188,
+        "pct": 0.5
+      }
+    ],
+    "text_channel_pct": 15.0,
+    "by_country": [
+      {
+        "country": "México",
+        "contacts": 119885,
+        "pct": 49.9
+      },
+      {
+        "country": "Colombia",
+        "contacts": 72511,
+        "pct": 30.2
+      },
+      {
+        "country": "Argentina",
+        "contacts": 47660,
+        "pct": 19.9
+      }
+    ],
+    "by_segment": [
+      {
+        "segment": "Basic",
+        "contacts": 143663,
+        "pct": 59.8,
+        "fcr_pct": 91.5,
+        "wait_s": 120.0
+      },
+      {
+        "segment": "Plus",
+        "contacts": 60298,
+        "pct": 25.1,
+        "fcr_pct": 91.4,
+        "wait_s": 119.0
+      },
+      {
+        "segment": "Premium",
+        "contacts": 24229,
+        "pct": 10.1,
+        "fcr_pct": 91.6,
+        "wait_s": 120.0
+      },
+      {
+        "segment": "Student",
+        "contacts": 11866,
+        "pct": 4.9,
+        "fcr_pct": 91.5,
+        "wait_s": 120.0
+      }
+    ],
+    "by_day_of_week": [
+      {
+        "day": "Sunday",
+        "dow": 0,
+        "contacts": 20344
+      },
+      {
+        "day": "Monday",
+        "dow": 1,
+        "contacts": 33571
+      },
+      {
+        "day": "Tuesday",
+        "dow": 2,
+        "contacts": 39925
+      },
+      {
+        "day": "Wednesday",
+        "dow": 3,
+        "contacts": 39992
+      },
+      {
+        "day": "Thursday",
+        "dow": 4,
+        "contacts": 39808
+      },
+      {
+        "day": "Friday",
+        "dow": 5,
+        "contacts": 39952
+      },
+      {
+        "day": "Saturday",
+        "dow": 6,
+        "contacts": 26464
+      }
+    ],
+    "hour_share_min_max_pct": [
+      4.06,
+      4.25
+    ],
+    "monthly_contacts_median": 6701.0,
+    "unique_customers": 119646,
+    "agent_hours_per_month_median": 411.0
+  },
+  "text_data_limitations": {
+    "transcripts": 171321,
+    "distinct_customer_texts": 42,
+    "agent_text_unrendered_placeholder_pct": 100.0,
+    "detected_language": [
+      {
+        "detected_language": "es",
+        "n": 171321
+      }
+    ],
+    "top_detected_intents": [
+      {
+        "detected_intents": "consulta_general",
+        "n": 162864
+      },
+      {
+        "detected_intents": null,
+        "n": 8457
+      }
+    ],
+    "contact_reason_equals_category_pct": 100.0,
+    "balance_request_share_by_reason": [
+      {
+        "reason_category": "Comercial",
+        "pct_mentioning_saldo": 100.0
+      },
+      {
+        "reason_category": "Producto",
+        "pct_mentioning_saldo": 100.0
+      },
+      {
+        "reason_category": "Queja",
+        "pct_mentioning_saldo": 100.0
+      },
+      {
+        "reason_category": "Retención",
+        "pct_mentioning_saldo": 100.0
+      },
+      {
+        "reason_category": "Transaccional",
+        "pct_mentioning_saldo": 100.0
+      },
+      {
+        "reason_category": "Técnico",
+        "pct_mentioning_saldo": 100.0
+      }
+    ]
+  },
+  "serving_data_facts": {
+    "products_by_currency": [
+      {
+        "currency": "USD",
+        "n": 220501
+      },
+      {
+        "currency": "COP",
+        "n": 107975
+      },
+      {
+        "currency": "ARS",
+        "n": 71524
+      }
+    ],
+    "mexico_product_currencies": [
+      {
+        "currency": "USD",
+        "n": 200398
+      }
+    ],
+    "credit_products_missing_dpd": 6622,
+    "credit_products_total": 131972,
+    "data_as_of": "2026-06-17"
+  }
+}

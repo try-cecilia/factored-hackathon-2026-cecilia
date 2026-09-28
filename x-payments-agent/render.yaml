@@ -1,0 +1,56 @@
+# Render Blueprint for the jury demo (https://render.com/docs/blueprint-spec): one Docker web service with a
+# persistent disk for the warehouse, tickets and traces. Values marked `sync: false` are asked for when the
+# Blueprint is created (Render ignores them on later syncs). Put a spend limit on the model key at the provider;
+# LLM_DAILY_BUDGET_USD is a second, in-process cap. Steps and checks: docs/operations.md.
+services:
+  - type: web
+    name: x-payments-agent
+    runtime: docker
+    dockerfilePath: ./ops/Dockerfile
+    dockerContext: .
+    plan: 0.5c-512mb        # paid: it never sleeps while the jury tries it, and a disk needs a paid instance
+    region: oregon
+    healthCheckPath: /health
+    autoDeployTrigger: "off"  # deploy by hand: a push must not restart the instance while the jury is using it
+    disk:
+      name: warehouse
+      mountPath: /app/data/warehouse
+      sizeGB: 1
+    envVars:
+      - key: DEMO_MODE
+        value: "1"
+      - key: DEMO_IDP_SECRET
+        generateValue: true
+      - key: ADMIN_API_KEY
+        generateValue: true
+      # The real client address on Render: set by its Cloudflare edge, unforgeable; Render sends no X-Forwarded-For.
+      - key: CLIENT_IP_HEADER
+        value: CF-Connecting-IP
+      - key: LOGIN_RATE_PER_MIN
+        value: "30"           # every guided scenario opens a session
+      - key: CHAT_RATE_PER_MIN
+        value: "20"
+      - key: LLM_DAILY_BUDGET_USD
+        value: "5"
+      - key: LLM_PROVIDERS
+        value: anthropic,groq
+      - key: ANTHROPIC_MODEL
+        value: claude-sonnet-5
+      - key: ANTHROPIC_EFFORT
+        value: low
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      # The organizer's dataset (read-only S3; values from their data dictionary). Without them, set
+      # INGEST_ARGS to "--profile serving --source local --raw-dir /app/tests/fixtures/raw" (the hand-made fixture).
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: DATASET_BUCKET
+        sync: false
+      - key: AWS_DEFAULT_REGION
+        value: us-east-2
+      - key: INGEST_ARGS
+        value: --profile serving --sample-customers 5000 --since 2025-06-17

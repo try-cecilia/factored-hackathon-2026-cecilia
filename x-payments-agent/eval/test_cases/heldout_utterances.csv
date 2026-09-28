@@ -1,0 +1,175 @@
+utterance,intent,language,source,style
+cuanta lana tengo en la cuenta,balance_inquiry,es,team_heldout,regional_mx
+"che, cuánta guita me queda en la caja de ahorro?",balance_inquiry,es,team_heldout,regional_ar
+me regalas el saldo de mi cuenta porfa,balance_inquiry,es,team_heldout,regional_co
+saldo cta ahorros,balance_inquiry,es,team_heldout,abbreviated
+q saldo tengo,balance_inquiry,es,team_heldout,abbreviated
+necesito saber cuanto dinero hay disponible en mi tarjeta de debito,balance_inquiry,es,team_heldout,no_accents
+"Buenas, quería consultar cuánto tengo en la cuenta corriente",balance_inquiry,es,team_heldout,formal
+¿Me dices mi saldo actual?,balance_inquiry,es,team_heldout,formal
+cuanto me queda en la tarjeta,balance_inquiry,es,team_heldout,no_accents
+Quisiera saber cuál es mi saldo actual en mi cuenta de ahorros.,balance_inquiry,es,dataset_transcript,formal
+"Buenas tardes, necesito consultar el saldo de mi tarjeta de crédito.",balance_inquiry,es,dataset_transcript,formal
+tengo plata suficiente en la cuenta para pagar el arriendo?,balance_inquiry,es,team_heldout,regional_co
+cuál es el disponible de mi cuenta sueldo,balance_inquiry,es,team_heldout,regional_ar
+mostrame los saldos de todas mis cuentas,balance_inquiry,es,team_heldout,regional_ar
+saldo porfavor,balance_inquiry,es,team_heldout,typo
+quanto tenho na conta?,balance_inquiry,pt,team_heldout,colloquial
+qual o saldo da poupança,balance_inquiry,pt,team_heldout,colloquial
+me fala meu saldo por favor,balance_inquiry,pt,team_heldout,colloquial
+quero ver quanto sobrou no cartão de débito,balance_inquiry,pt,team_heldout,colloquial
+"saldo da conta corrente, por gentileza",balance_inquiry,pt,team_heldout,formal
+qto tenho disponivel,balance_inquiry,pt,team_heldout,abbreviated
+tenho grana suficiente na conta?,balance_inquiry,pt,team_heldout,slang
+consultar saldo,balance_inquiry,pt,team_heldout,formal
+"Oi, pode me dizer quanto dinheiro tenho?",balance_inquiry,pt,team_heldout,colloquial
+qual é o saldo atual das minhas contas,balance_inquiry,pt,team_heldout,formal
+quanto ainda tem na minha conta salário,balance_inquiry,pt,team_heldout,colloquial
+vê meu saldo aí,balance_inquiry,pt,team_heldout,slang
+preciso saber meu saldo antes de pagar um boleto,balance_inquiry,pt,team_heldout,formal
+saldo do cartão de débito,balance_inquiry,pt,team_heldout,abbreviated
+quanto eu tenho guardado na poupança?,balance_inquiry,pt,team_heldout,colloquial
+que compras hice esta semana,transaction_lookup,es,team_heldout,no_accents
+muéstrame los últimos 5 movimientos,transaction_lookup,es,team_heldout,formal
+en qué gasté la semana pasada,transaction_lookup,es,team_heldout,colloquial
+quiero ver los retiros del cajero de este mes,transaction_lookup,es,team_heldout,formal
+me pasas el detalle de transacciones de ayer?,transaction_lookup,es,team_heldout,colloquial
+ultimos movs de la tarjeta,transaction_lookup,es,team_heldout,abbreviated
+¿se acreditó la transferencia que me hicieron?,transaction_lookup,es,team_heldout,regional_ar
+quiero revisar los pagos que hice en enero,transaction_lookup,es,team_heldout,formal
+listame las operaciones de mi cuenta corriente,transaction_lookup,es,team_heldout,regional_ar
+¿qué cargos tengo este mes en la tarjeta?,transaction_lookup,es,team_heldout,formal
+necesito el extracto de movimientos,transaction_lookup,es,team_heldout,formal
+quiero ver mis depósitos recientes,transaction_lookup,es,team_heldout,formal
+hubo algún rechazo en mis compras de hoy?,transaction_lookup,es,team_heldout,colloquial
+historial de la cuenta de ahorro,transaction_lookup,es,team_heldout,abbreviated
+qué movimientos tuvo mi cuenta desde el 1 de mayo,transaction_lookup,es,team_heldout,formal
+quais compras fiz essa semana,transaction_lookup,pt,team_heldout,colloquial
+me mostra os últimos lançamentos,transaction_lookup,pt,team_heldout,colloquial
+onde gastei meu dinheiro semana passada,transaction_lookup,pt,team_heldout,colloquial
+quero ver os saques do mês,transaction_lookup,pt,team_heldout,formal
+extrato da conta corrente,transaction_lookup,pt,team_heldout,abbreviated
+a transferência que recebi já caiu?,transaction_lookup,pt,team_heldout,slang
+listar transações do cartão,transaction_lookup,pt,team_heldout,abbreviated
+quais pagamentos fiz em janeiro,transaction_lookup,pt,team_heldout,formal
+ver movimentações recentes,transaction_lookup,pt,team_heldout,abbreviated
+tem alguma compra recusada hoje?,transaction_lookup,pt,team_heldout,colloquial
+histórico da poupança,transaction_lookup,pt,team_heldout,abbreviated
+meus depósitos do mês,transaction_lookup,pt,team_heldout,abbreviated
+o que foi debitado da minha conta ontem,transaction_lookup,pt,team_heldout,colloquial
+últimas transações por favor,transaction_lookup,pt,team_heldout,formal
+extrato dos últimos 30 dias,transaction_lookup,pt,team_heldout,abbreviated
+cuánto debo de la tarjeta,payment_status,es,team_heldout,colloquial
+tengo algo vencido en el préstamo?,payment_status,es,team_heldout,colloquial
+ya está pagada mi tarjeta este mes?,payment_status,es,team_heldout,colloquial
+cuántos días llevo atrasado,payment_status,es,team_heldout,colloquial
+cual es mi cupo disponible,payment_status,es,team_heldout,regional_co
+"me quedé sin pagar la cuota, cuánto atraso tengo",payment_status,es,team_heldout,colloquial
+estoy en mora con el crédito?,payment_status,es,team_heldout,formal
+cuánto me falta pagar de la hipoteca,payment_status,es,team_heldout,formal
+mi tarjeta está al corriente?,payment_status,es,team_heldout,regional_mx
+cuál es el límite disponible de mi tarjeta de crédito,payment_status,es,team_heldout,formal
+tengo pagos pendientes del préstamo personal?,payment_status,es,team_heldout,formal
+debo algo?,payment_status,es,team_heldout,colloquial
+está al día el préstamo,payment_status,es,team_heldout,formal
+cuánto crédito me queda para usar,payment_status,es,team_heldout,colloquial
+cuándo tengo que pagar la tarjeta,payment_status,es,team_heldout,colloquial
+quanto devo no cartão,payment_status,pt,team_heldout,colloquial
+tenho algo vencido no empréstimo?,payment_status,pt,team_heldout,colloquial
+a fatura já está paga?,payment_status,pt,team_heldout,colloquial
+quantos dias estou atrasado,payment_status,pt,team_heldout,colloquial
+qual meu limite disponível,payment_status,pt,team_heldout,formal
+estou inadimplente?,payment_status,pt,team_heldout,formal
+tenho parcela atrasada do financiamento?,payment_status,pt,team_heldout,formal
+meu cartão está em dia?,payment_status,pt,team_heldout,formal
+quanto falta pagar do empréstimo,payment_status,pt,team_heldout,formal
+devo alguma coisa?,payment_status,pt,team_heldout,colloquial
+tem pagamento pendente no cartão de crédito?,payment_status,pt,team_heldout,formal
+limite livre do cartão,payment_status,pt,team_heldout,slang
+quando vence minha fatura,payment_status,pt,team_heldout,colloquial
+tô devendo algo no banco?,payment_status,pt,team_heldout,slang
+situação do meu empréstimo pessoal,payment_status,pt,team_heldout,formal
+a como está el dólar,exchange_rate_inquiry,es,team_heldout,regional_mx
+cuánto vale el dólar hoy en pesos,exchange_rate_inquiry,es,team_heldout,formal
+tasa de cambio usd cop,exchange_rate_inquiry,es,team_heldout,abbreviated
+cotización del dólar blue,exchange_rate_inquiry,es,team_heldout,regional_ar
+a cuánto me compran los dólares,exchange_rate_inquiry,es,team_heldout,colloquial
+cambio de pesos colombianos a dólares hoy,exchange_rate_inquiry,es,team_heldout,formal
+cuántos pesos argentinos es un dólar,exchange_rate_inquiry,es,team_heldout,formal
+precio del dólar,exchange_rate_inquiry,es,team_heldout,abbreviated
+¿cuál es la TRM de hoy?,exchange_rate_inquiry,es,team_heldout,regional_co
+tipo de cambio peso mexicano dolar,exchange_rate_inquiry,es,team_heldout,no_accents
+cotação do dólar hoje,exchange_rate_inquiry,pt,team_heldout,formal
+quanto está o dólar,exchange_rate_inquiry,pt,team_heldout,colloquial
+taxa de câmbio dólar peso,exchange_rate_inquiry,pt,team_heldout,formal
+quantos pesos vale um dólar,exchange_rate_inquiry,pt,team_heldout,colloquial
+valor do dólar agora,exchange_rate_inquiry,pt,team_heldout,colloquial
+câmbio usd para ars,exchange_rate_inquiry,pt,team_heldout,abbreviated
+preço do dólar hoje,exchange_rate_inquiry,pt,team_heldout,formal
+quanto custa um dólar em pesos colombianos,exchange_rate_inquiry,pt,team_heldout,formal
+qual a cotação do peso argentino,exchange_rate_inquiry,pt,team_heldout,formal
+o dólar subiu hoje?,exchange_rate_inquiry,pt,team_heldout,colloquial
+"perdí mi tarjeta, bloquéala",out_of_scope,es,team_heldout,colloquial
+quiero sacar un crédito de 50 mil,out_of_scope,es,team_heldout,colloquial
+me pueden subir el cupo de la tarjeta?,out_of_scope,es,team_heldout,regional_co
+cómo cambio mi correo electrónico,out_of_scope,es,team_heldout,formal
+quiero cancelar mi cuenta,out_of_scope,es,team_heldout,formal
+necesito una constancia bancaria,out_of_scope,es,team_heldout,formal
+cuáles son las tasas para un crédito hipotecario,out_of_scope,es,team_heldout,formal
+quiero abrir una cuenta de ahorros nueva,out_of_scope,es,team_heldout,formal
+olvidé mi contraseña de la app,out_of_scope,es,team_heldout,colloquial
+a qué hora abre la sucursal,out_of_scope,es,team_heldout,colloquial
+quiero hablar con un asesor de inversiones,out_of_scope,es,team_heldout,formal
+me llega la tarjeta nueva a domicilio?,out_of_scope,es,team_heldout,colloquial
+cómo activo la tarjeta que me llegó,out_of_scope,es,team_heldout,colloquial
+quiero un seguro de vida,out_of_scope,es,team_heldout,formal
+cuál es el horario de atención,out_of_scope,es,team_heldout,formal
+"perdi meu cartão, bloqueia pra mim",out_of_scope,pt,team_heldout,colloquial
+quero pegar um empréstimo,out_of_scope,pt,team_heldout,colloquial
+podem aumentar meu limite?,out_of_scope,pt,team_heldout,colloquial
+como troco meu e-mail cadastrado,out_of_scope,pt,team_heldout,formal
+quero encerrar minha conta,out_of_scope,pt,team_heldout,formal
+preciso de uma declaração do banco,out_of_scope,pt,team_heldout,formal
+quais as taxas do financiamento imobiliário,out_of_scope,pt,team_heldout,formal
+quero abrir uma conta nova,out_of_scope,pt,team_heldout,formal
+não lembro minha senha do app,out_of_scope,pt,team_heldout,colloquial
+que horas abre a agência,out_of_scope,pt,team_heldout,colloquial
+quero falar sobre investimentos,out_of_scope,pt,team_heldout,formal
+meu cartão novo chega em casa?,out_of_scope,pt,team_heldout,colloquial
+como desbloqueio o cartão novo,out_of_scope,pt,team_heldout,colloquial
+quero contratar um seguro,out_of_scope,pt,team_heldout,formal
+qual o horário de atendimento,out_of_scope,pt,team_heldout,formal
+me aparece un cobro que yo no hice,requires_escalation,es,team_heldout,colloquial
+alguien sacó plata de mi cuenta,requires_escalation,es,team_heldout,regional_co
+hay una compra rara en mi tarjeta que no conozco,requires_escalation,es,team_heldout,colloquial
+me estafaron por teléfono y di mis datos,requires_escalation,es,team_heldout,colloquial
+me robaron el celular con la app del banco,requires_escalation,es,team_heldout,colloquial
+creo que me clonaron la tarjeta,requires_escalation,es,team_heldout,colloquial
+hay un retiro de cajero que no fui yo,requires_escalation,es,team_heldout,colloquial
+desconozco esta transferencia,requires_escalation,es,team_heldout,formal
+me descontaron dinero sin autorización,requires_escalation,es,team_heldout,formal
+voy a demandar al banco,requires_escalation,es,team_heldout,colloquial
+me están amenazando para que transfiera,requires_escalation,es,team_heldout,colloquial
+me vaciaron la cuenta,requires_escalation,es,team_heldout,colloquial
+entraron a mi app y cambiaron la clave,requires_escalation,es,team_heldout,colloquial
+hay cargos que no autoricé en mi tarjeta,requires_escalation,es,team_heldout,formal
+sospecho de un fraude en mi cuenta,requires_escalation,es,team_heldout,formal
+apareceu uma cobrança que eu não fiz,requires_escalation,pt,team_heldout,colloquial
+alguém tirou dinheiro da minha conta,requires_escalation,pt,team_heldout,colloquial
+tem uma compra estranha no cartão que não conheço,requires_escalation,pt,team_heldout,colloquial
+caí num golpe pelo whatsapp,requires_escalation,pt,team_heldout,slang
+roubaram meu celular com o app do banco,requires_escalation,pt,team_heldout,colloquial
+acho que clonaram meu cartão,requires_escalation,pt,team_heldout,colloquial
+tem um saque que não fui eu,requires_escalation,pt,team_heldout,colloquial
+desconheço essa transferência,requires_escalation,pt,team_heldout,formal
+descontaram dinheiro sem autorização,requires_escalation,pt,team_heldout,formal
+vou processar o banco,requires_escalation,pt,team_heldout,colloquial
+estão me ameaçando,requires_escalation,pt,team_heldout,colloquial
+limparam minha conta,requires_escalation,pt,team_heldout,slang
+invadiram meu aplicativo,requires_escalation,pt,team_heldout,colloquial
+compras não autorizadas no cartão,requires_escalation,pt,team_heldout,formal
+suspeito de fraude na conta,requires_escalation,pt,team_heldout,formal
+quero ver mi saldo,balance_inquiry,mixed,team_heldout,code_switch
+cuánto tenho na conta,balance_inquiry,mixed,team_heldout,code_switch
+mis movimentações do mês,transaction_lookup,mixed,team_heldout,code_switch
+no reconheço essa compra,requires_escalation,mixed,team_heldout,code_switch

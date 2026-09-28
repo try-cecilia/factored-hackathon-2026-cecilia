@@ -1,0 +1,5 @@
+# Training and evaluation: the runtime pins plus experiment tracking (eval/tracking.py, `make mlflow-ui`).
+# The serving image installs requirements.txt only. mlflow 3.16.1 was resolved against these pins on 2026-09-28
+# without changing any of them.
+-r requirements.txt
+mlflow==3.16.1

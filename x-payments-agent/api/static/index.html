@@ -1,0 +1,757 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LATAM Bank · Account &amp; Payments Assistant</title>
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    --bg:#f4f5f3; --panel:#ffffff; --ink:#1b1f1d; --muted:#5d645f; --line:#dfe3de; --soft:#eef1ed;
+    --accent:#0e5c55; --accent-ink:#ffffff; --focus:#2f6fed;
+    --ok:#1b7a47; --clarify:#4a4fb5; --abstain:#935700; --escalate:#b3261e; --reauth:#5d645f;
+    --code:#f1f3f0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#101312; --panel:#191d1b; --ink:#e7ebe8; --muted:#9aa39d; --line:#2b312e; --soft:#212624;
+            --accent:#58c1b3; --accent-ink:#0b1614; --focus:#8fb2ff;
+            --ok:#3fb477; --clarify:#8d91f0; --abstain:#e0a33e; --escalate:#ef6b62; --reauth:#9aa39d; --code:#222826; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  button, input, select { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  [hidden] { display: none !important; }
+  code, .mono { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 13px; }
+
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+         max-width: 1480px; margin: 0 auto; padding: 18px 16px 6px; }
+  .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .logo { width: 40px; height: 40px; border-radius: 10px; background: var(--accent); color: var(--accent-ink);
+          display: grid; place-items: center; font-weight: 700; letter-spacing: .5px; flex: none; }
+  h1 { font-size: 19px; margin: 0; line-height: 1.25; }
+  .sub { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+  .top-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .pill { font-size: 12px; padding: 3px 10px; border-radius: 99px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); }
+  .pill.warn { color: var(--abstain); border-color: currentColor; }
+  .pill.down { color: var(--escalate); border-color: currentColor; }
+  .lang { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .lang button { border: 0; background: var(--panel); padding: 4px 10px; cursor: pointer; font-size: 13px; }
+  .lang button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+  .promise { max-width: 1480px; margin: 4px auto 0; padding: 0 16px; color: var(--muted); font-size: 13.5px; }
+
+  .layout { display: grid; grid-template-columns: 310px minmax(0, 1fr) 390px; gap: 16px; align-items: start;
+            max-width: 1480px; margin: 0 auto; padding: 14px 16px 32px; }
+  .layout.plain { grid-template-columns: minmax(0, 760px); justify-content: center; }
+  @media (min-width: 1201px) { .scen, .bank { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow-y: auto; padding-right: 2px; } }
+  @media (max-width: 1200px) { .layout { grid-template-columns: 290px minmax(0, 1fr); } .bank { grid-column: 1 / -1; } }
+  @media (max-width: 780px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+  .col h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 2px 0 6px; }
+  .hint { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+
+  .group { margin-bottom: 14px; }
+  .group h3 { font-size: 12px; font-weight: 600; color: var(--muted); margin: 0 0 6px; }
+  .scard { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
+  .scard.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+  .shead { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+  .stitle { font-weight: 600; font-size: 14px; }
+  .tagl { font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 0 5px; flex: none; }
+  .slook { font-size: 13px; color: var(--muted); margin: 4px 0 8px; }
+  .srow { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .smeta { font-size: 12px; color: var(--muted); }
+
+  .btn { border: 0; border-radius: 8px; padding: 7px 14px; background: var(--accent); color: var(--accent-ink); cursor: pointer; font-weight: 600; }
+  .btn.small { padding: 4px 11px; font-size: 13px; }
+  .ghost { border: 1px solid var(--line); border-radius: 8px; padding: 5px 10px; background: var(--panel); cursor: pointer; font-size: 13px; }
+  .ghost[aria-pressed="true"] { border-color: var(--escalate); color: var(--escalate); }
+  button:disabled { opacity: .5; cursor: default; }
+
+  label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  input, select { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; } .row > div { flex: 1 1 170px; }
+  .err { color: var(--escalate); font-size: 13px; margin-top: 8px; min-height: 1em; }
+
+  .sessbar { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;
+             padding-bottom: 10px; border-bottom: 1px solid var(--line); margin-bottom: 10px; }
+  .sessbtns { display: flex; gap: 6px; flex-wrap: wrap; }
+  .muted { color: var(--muted); font-size: 13px; }
+
+  .steps { background: var(--soft); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
+  .steps-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; }
+  .steps ol { margin: 8px 0 0; padding-left: 20px; }
+  .steps li { margin: 6px 0; font-size: 13.5px; }
+  .step-line { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+  .quote { font-style: italic; }
+  .res-ok { color: var(--ok); font-weight: 600; } .res-bad { color: var(--escalate); font-weight: 600; }
+
+  #log { display: flex; flex-direction: column; gap: 10px; min-height: 120px; max-height: calc(100vh - 330px); overflow-y: auto; padding: 2px; }
+  @media (max-width: 780px) { #log { max-height: 60vh; } }
+  .msg { padding: 9px 12px; border-radius: 10px; max-width: 94%; }
+  .me { align-self: flex-end; background: var(--accent); color: var(--accent-ink); white-space: pre-wrap; }
+  .bot { align-self: flex-start; background: var(--bg); border: 1px solid var(--line); }
+  .mtext { white-space: pre-wrap; }
+  .mmeta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .badge { font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 99px; color: #fff; }
+  .d-AUTO_RESOLVE { background: var(--ok); } .d-CLARIFY { background: var(--clarify); } .d-ABSTAIN { background: var(--abstain); }
+  .d-ESCALATE { background: var(--escalate); } .d-REAUTH_REQUIRED { background: var(--reauth); }
+  @media (prefers-color-scheme: dark) { .badge { color: #0d1110; } }
+  .linkbtn { border: 0; background: none; color: var(--accent); cursor: pointer; padding: 0; font-size: 12px; font-weight: 600; text-decoration: underline; }
+  .why { margin-top: 8px; border-top: 1px dashed var(--line); padding-top: 8px; font-size: 13px; }
+  .why dl, .ticket dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 10px; margin: 0; }
+  .why dt, .ticket dt { color: var(--muted); font-size: 12px; padding-top: 1px; }
+  .why dd, .ticket dd { margin: 0; overflow-wrap: anywhere; }
+  @media (max-width: 480px) { .why dl, .ticket dl { grid-template-columns: minmax(0, 1fr); } .why dt, .ticket dt { padding-top: 6px; } }
+  .codebox { display: block; background: var(--code); border-radius: 6px; padding: 4px 8px; white-space: pre-wrap; }
+  .never { margin: 8px 0 0; font-size: 12px; color: var(--muted); }
+  .chk-ok { color: var(--ok); } .chk-bad { color: var(--escalate); }
+  .plainlist { margin: 0; padding-left: 18px; }
+
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+  .chip { font-size: 13px; padding: 3px 10px; border: 1px solid var(--line); border-radius: 99px; background: var(--panel); cursor: pointer; }
+  form.send { display: flex; gap: 8px; margin-top: 10px; }
+
+  .ticket { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--escalate); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
+  .ticket.fresh { box-shadow: 0 0 0 2px var(--escalate); }
+  .ticket.trace { border-left-color: var(--ok); } .ticket.trace.fresh { box-shadow: 0 0 0 2px var(--ok); }
+  .bankh { font-size: 12px; font-weight: 600; color: var(--muted); margin: 10px 0 6px; }
+  .thead { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px; font-size: 13px; }
+  .q { font-weight: 700; }
+  .prio { font-size: 11px; font-weight: 700; border-radius: 6px; padding: 0 6px; border: 1px solid currentColor; }
+  .p-Critical, .p-High { color: var(--escalate); } .p-Medium { color: var(--abstain); } .p-Low { color: var(--muted); }
+  .ticket dd.wide { grid-column: 1 / -1; }
+  .ev { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .ev th, .ev td { text-align: left; padding: 2px 4px; border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: normal; }
+  .ev .nw { white-space: nowrap; }
+  .ev tr.flag td { color: var(--escalate); font-weight: 600; }
+  .evwrap { overflow-x: auto; }
+  details > summary { cursor: pointer; }
+  pre.json { margin: 4px 0 0; font-size: 12px; background: var(--code); border-radius: 6px; padding: 6px 8px; overflow-x: auto; max-height: 220px; }
+  .empty { color: var(--muted); font-size: 13px; border: 1px dashed var(--line); border-radius: 10px; padding: 14px; text-align: center; }
+  footer { max-width: 1480px; margin: 0 auto; padding: 0 16px 24px; color: var(--muted); font-size: 12px; }
+
+  dialog#dq { width: min(1100px, calc(100vw - 32px)); max-height: calc(100vh - 32px); padding: 0; border: 1px solid var(--line);
+              border-radius: 14px; background: var(--panel); color: var(--ink); }
+  dialog#dq::backdrop { background: rgb(0 0 0 / .45); }
+  @media (max-width: 780px) { dialog#dq { width: 100%; max-width: 100%; height: 100%; max-height: 100%; margin: 0; border: 0; border-radius: 0; } }
+  .dq-head { position: sticky; top: 0; z-index: 1; display: flex; justify-content: space-between; align-items: center; gap: 10px;
+             padding: 14px 16px 10px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  #dq h2 { font-size: 17px; margin: 0; line-height: 1.3; }
+  .dq-body { padding: 4px 16px 18px; }
+  .dq-body h3 { font-size: 14px; margin: 20px 0 2px; }
+  .dq-body .hint { margin: 0 0 8px; }
+  .dq-body .lead { margin-top: 10px; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; margin: 12px 0 4px; }
+  .kpi { background: var(--soft); border-radius: 10px; padding: 8px 10px; min-width: 0; }
+  .kpi span { display: block; font-size: 12px; color: var(--muted); }
+  .kpi b { display: block; font-size: 16px; overflow-wrap: anywhere; }
+  .tablewrap { overflow-x: auto; }
+  table.dqt { width: 100%; border-collapse: collapse; font-size: 13px; }
+  @media (max-width: 780px) { table.dqt { min-width: 680px; } }  /* scroll sideways instead of squeezing the columns */
+  table.dqt th, table.dqt td { text-align: left; padding: 5px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  table.dqt th { font-size: 12px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+  table.dqt .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  table.dqt .rule code { white-space: normal; overflow-wrap: anywhere; font-size: 12px; }
+  .sub2 { display: block; color: var(--muted); font-size: 12px; }
+  .sev { font-size: 11px; font-weight: 700; border: 1px solid currentColor; border-radius: 6px; padding: 0 6px; white-space: nowrap; }
+  .sev-error, .bad { color: var(--escalate); } .sev-warn { color: var(--abstain); }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <div class="logo" aria-hidden="true">LB</div>
+    <div>
+      <h1 data-t="title"></h1>
+      <p class="sub" data-t="subtitle"></p>
+    </div>
+  </div>
+  <div class="top-actions">
+    <button type="button" class="ghost demo-only" id="btnDq" aria-haspopup="dialog" data-t="dqButton"></button>
+    <span id="modelStatus" class="pill" role="status"></span>
+    <div class="lang" role="group" aria-label="Language">
+      <button type="button" data-lang="en" aria-pressed="true">EN</button>
+      <button type="button" data-lang="es" aria-pressed="false">ES</button>
+    </div>
+  </div>
+</header>
+<p class="promise" data-t="promise"></p>
+
+<main class="layout plain" id="layout">
+  <aside class="col scen" id="scenCol" hidden aria-labelledby="scenH">
+    <h2 id="scenH" data-t="scenarios"></h2>
+    <p class="hint" data-t="howto"></p>
+    <div id="scenList"></div>
+  </aside>
+
+  <section class="col" aria-labelledby="chatH">
+    <h2 id="chatH" data-t="chatTitle"></h2>
+    <div class="card" id="signin">
+      <p class="hint" data-t="signinHint"></p>
+      <div class="row">
+        <div><label for="cid" data-t="customer"></label><select id="cid"></select></div>
+        <div><label for="pin" data-t="pin"></label><input id="pin" inputmode="numeric" maxlength="6" autocomplete="off"></div>
+      </div>
+      <div style="margin-top:12px"><button class="btn" id="go" data-t="signIn"></button></div>
+      <div class="err" id="lerr" role="alert"></div>
+    </div>
+
+    <div class="card" id="chat" hidden>
+      <div class="sessbar">
+        <div><strong id="who"></strong> <span id="ttl" class="muted"></span></div>
+        <div class="sessbtns">
+          <button type="button" class="ghost demo-only" id="btnExpire" data-t="expire"></button>
+          <button type="button" class="ghost demo-only" id="btnOutage" aria-pressed="false" data-t="outage"></button>
+          <button type="button" class="ghost" id="btnAgain" hidden data-t="signInAgain"></button>
+          <button type="button" class="ghost" id="btnOut" data-t="signOut"></button>
+        </div>
+      </div>
+      <div class="steps" id="steps" hidden></div>
+      <div id="log" aria-live="polite"></div>
+      <div class="chips" id="chips"></div>
+      <form class="send" id="f">
+        <input id="m" maxlength="1000" autocomplete="off" aria-label="Message">
+        <button class="btn" id="send" data-t="send"></button>
+      </form>
+    </div>
+  </section>
+
+  <aside class="col bank" id="bankCol" hidden aria-labelledby="bankH">
+    <h2 id="bankH" data-t="bank"></h2>
+    <p class="hint" data-t="bankHint"></p>
+    <div id="tickets"></div>
+  </aside>
+</main>
+<footer data-t="footer"></footer>
+
+<dialog id="dq" aria-labelledby="dqH">
+  <div>
+    <div class="dq-head">
+      <h2 id="dqH" data-t="dqTitle"></h2>
+      <button type="button" class="ghost" id="dqClose" data-t="close"></button>
+    </div>
+    <div class="dq-body">
+      <p class="hint lead" data-t="dqHint"></p>
+      <div id="dqBody"></div>
+    </div>
+  </div>
+</dialog>
+
+<script>
+"use strict";
+const T = {
+  en: {
+    title: "Account & payments assistant", subtitle: "LATAM Bank sandbox · Factored AI & Data Hackathon 2026 · team Marvaq · 100% synthetic data",
+    promise: "The model only chooses which lookup to run. It never receives customer records and never writes a reply: every answer comes from verified data or a fixed template.",
+    scenarios: "Guided scenarios", howto: "Run a scenario and send its messages. Open \"Why?\" on any reply, and watch the bank view when a case goes to a person.",
+    chatTitle: "Customer chat", signinHint: "Pick a guided scenario, or sign in as a sandbox customer and write freely.",
+    customer: "Sandbox customer", pin: "Test PIN", signIn: "Sign in", signInAgain: "Sign in again", signOut: "Sign out",
+    expire: "Expire session", outage: "Simulate model outage", outageOn: "Model is down: restore",
+    send: "Send", placeholder: "Write your question…", bank: "Bank view · human agent queue",
+    bankHint: "What this session sent to the bank's teams, as they receive it: trace requests for payments operations, and handoffs with the request, verified facts, evidence and open questions. No transcript, no session token.",
+    noTickets: "No handoffs or actions yet. Try \"Unrecognized charge\", the trace scenario or the attacks.",
+    tracesTitle: "Payments operations · trace requests", ticketsTitle: "Human agents · handoffs",
+    tr: { movement: "Movement", product: "Product", sla: "Answer within", slaText: n => `${n} business days (synthetic policy)`, ids: "Codes" },
+    footer: "Prototype for the Factored AI & Data Hackathon 2026. Synthetic data only; test PINs are public on purpose. Not a real bank.",
+    run: "Run", running: "Running", playAll: "Play all", close: "Close", sendStep: "Send", expected: "expected", any: "any safe outcome",
+    got: "got", langES: "ES", langPT: "PT",
+    faultNote: { llm_outage: "starts with the model down", expire_session: "starts with an expired session", clear_traces: "starts with no earlier trace" },
+    paths: { normal: "Normal", ambiguous: "Ambiguous", out_of_scope: "Out of scope", action: "Verified action", human: "Needs a person", attack: "Attack", failure: "Failure" },
+    disp: { AUTO_RESOLVE: "Resolved", CLARIFY: "Asks", ABSTAIN: "Declines", ESCALATE: "To a person", REAUTH_REQUIRED: "Sign in again" },
+    why: "Why?", hide: "Hide", because: "Because", rule: "Rule", modelSaw: "The model received", modelChose: "The model chose",
+    checks: "The code verified", cost: "Cost", nothingPre: "Nothing: decided before any model call.",
+    nothingDown: "Nothing: the model was unavailable.", nothingChosen: "No lookup.", noChecks: "No lookup ran.",
+    never: "Never sent to the model: balances, account or card numbers, names, or any other record.",
+    calls: n => n === 1 ? "1 model call" : `${n} model calls`, notMine: "not this customer's product",
+    expiresIn: "session expires in", expired: "session expired", modelUp: p => `Model: ${p}`, modelNone: "No model configured: degraded mode",
+    modelDownSim: "Model down (simulated)", sessionRef: "session ref", trace: "trace code",
+    tk: { request: "Request", reason: "Why it came", rule: "Policy rule", facts: "Verified facts", evidence: "Evidence", actions: "Actions taken",
+          open: "Open questions", next: "Next step", prior: "Earlier requests", ids: "Codes", none: "none" },
+    ev: { date: "Date", amount: "Amount", merchant: "Merchant · country", score: "Fraud score", denied: "denied request for" },
+    examples: ["¿Cuál es mi saldo?", "¿Estoy al día con mi tarjeta de crédito?", "Mis últimos movimientos", "¿A cuánto está el dólar?",
+               "Qual é o meu saldo?", "Quiero bloquear mi tarjeta", "No reconozco un cargo"],
+    errGeneric: "Something went wrong", errRate: "Too many messages; wait a moment.",
+    dqButton: "Data quality", dqTitle: "Data quality · what every answer comes from",
+    dqHint: "Contracts, quality checks, lineage and freshness of the data behind every answer. Aggregates only: no customer rows, no file locations.",
+    dq: {
+      loading: "Loading…", failed: "The data-quality report could not be loaded.",
+      asOf: "Data as of", loaded: "Loaded (UTC)", checksRun: "Checks run", failedChecks: "Failed: errors · warnings",
+      slo: "Freshness SLO", sloOn: h => `${h} h, enforced`, sloOff: h => `${h} h, not enforced (static snapshot)`,
+      servedTitle: "This deploy's warehouse",
+      servedHint: "Read live from the warehouse's own lineage tables: _ingestion_log, _partition_log and _dq_results.",
+      table: "Table", rows: "Rows", partitions: "Daily partitions", lastLoad: "Last load", loads: "Loads ok · failed", contract: "Contract",
+      staged: (s, q, d) => `read ${s} · quarantined ${q} · deduplicated ${d}`,
+      failedTitle: "Checks that did not pass, in the last load of each table", allPassed: "Every check passed.",
+      fullFailedTitle: "Checks that did not pass in that run",
+      check: "Check", severity: "Severity", failedTotal: "Failed / total", rate: "Rate", rule: "Rule",
+      sev: { error: "error", warn: "warning" },
+      fullTitle: "Run over the complete dataset",
+      fullHint: "The committed report of make ingest over the organizer's full dataset, which this deploy samples from.",
+      run: "Run", rowsRead: "Rows read", files: "Files read", quarantined: "Quarantined", duplicates: "Deduplicated",
+      contractTitle: "Contract and documented deviations",
+      contractHint: v => `Contract version ${v}: types, NOT NULL and keys from the data dictionary, domain rules and cross-table checks. Where the data contradicts the dictionary, the deviation is written down and still measured on every load:`,
+      column: "Column", dictionary: "Data dictionary", observed: "Observed", decision: "Decision",
+      policyTitle: "Update and freshness policy",
+      policy: ["Batch, not streaming: the source is daily files, and no answer needs data fresher than a day.",
+               "The unit of update is the daily partition. An incremental load reloads from the latest partition minus 3 days, so late or re-delivered partitions are absorbed, and upserts by primary key make a replay change nothing (tested with a labeled fixture).",
+               "A load that quarantines more than 1% of its rows rolls back, and the previous data keeps serving.",
+               "Every answer states the date of the data it comes from."],
+    },
+  },
+  es: {
+    title: "Asistente de cuenta y pagos", subtitle: "Sandbox de LATAM Bank · Factored AI & Data Hackathon 2026 · equipo Marvaq · datos 100% sintéticos",
+    promise: "El modelo solo elige qué consultar. Nunca recibe datos de clientes y nunca escribe una respuesta: todo sale de datos verificados o de una plantilla fija.",
+    scenarios: "Escenarios guiados", howto: "Ejecuta un escenario y envía sus mensajes. Abre \"¿Por qué?\" en cualquier respuesta y mira la vista del banco cuando un caso pasa a una persona.",
+    chatTitle: "Chat del cliente", signinHint: "Elige un escenario guiado, o inicia sesión como un cliente de prueba y escribe libremente.",
+    customer: "Cliente de prueba", pin: "PIN de prueba", signIn: "Iniciar sesión", signInAgain: "Volver a iniciar sesión", signOut: "Cerrar sesión",
+    expire: "Vencer la sesión", outage: "Simular caída del modelo", outageOn: "Modelo caído: restaurar",
+    send: "Enviar", placeholder: "Escribe tu consulta…", bank: "Vista del banco · cola de agentes",
+    bankHint: "Lo que esta sesión mandó a los equipos del banco, tal como lo reciben: pedidos de rastreo para operaciones de pagos, y derivaciones con el pedido, hechos verificados, evidencia y preguntas abiertas. Sin transcripción y sin el token de sesión.",
+    noTickets: "Todavía no hay derivaciones ni acciones. Prueba \"Cargo no reconocido\", el rastreo o los ataques.",
+    tracesTitle: "Operaciones de pagos · pedidos de rastreo", ticketsTitle: "Agentes humanos · derivaciones",
+    tr: { movement: "Movimiento", product: "Producto", sla: "Responde en", slaText: n => `${n} días hábiles (política sintética)`, ids: "Códigos" },
+    footer: "Prototipo para el Factored AI & Data Hackathon 2026. Solo datos sintéticos; los PIN de prueba son públicos a propósito. No es un banco real.",
+    run: "Ejecutar", running: "En curso", playAll: "Enviar todo", close: "Cerrar", sendStep: "Enviar", expected: "esperado", any: "cualquier resultado seguro",
+    got: "obtuvo", langES: "ES", langPT: "PT",
+    faultNote: { llm_outage: "empieza con el modelo caído", expire_session: "empieza con la sesión vencida", clear_traces: "empieza sin pedidos anteriores" },
+    paths: { normal: "Normal", ambiguous: "Ambiguo", out_of_scope: "Fuera de alcance", action: "Acción verificada", human: "Requiere una persona", attack: "Ataque", failure: "Fallas" },
+    disp: { AUTO_RESOLVE: "Resuelto", CLARIFY: "Pregunta", ABSTAIN: "Declina", ESCALATE: "A una persona", REAUTH_REQUIRED: "Reingresar" },
+    why: "¿Por qué?", hide: "Ocultar", because: "Motivo", rule: "Regla", modelSaw: "El modelo recibió", modelChose: "El modelo eligió",
+    checks: "El código verificó", cost: "Costo", nothingPre: "Nada: se decidió antes de llamar al modelo.",
+    nothingDown: "Nada: el modelo no estaba disponible.", nothingChosen: "Ninguna consulta.", noChecks: "No se hizo ninguna consulta.",
+    never: "Nunca se envía al modelo: saldos, números de cuenta o tarjeta, nombres ni ningún otro dato del cliente.",
+    calls: n => n === 1 ? "1 llamada al modelo" : `${n} llamadas al modelo`, notMine: "no es un producto de este cliente",
+    expiresIn: "la sesión vence en", expired: "sesión vencida", modelUp: p => `Modelo: ${p}`, modelNone: "Sin modelo configurado: modo degradado",
+    modelDownSim: "Modelo caído (simulado)", sessionRef: "ref. de sesión", trace: "código de traza",
+    tk: { request: "Pedido", reason: "Por qué llegó", rule: "Regla", facts: "Hechos verificados", evidence: "Evidencia", actions: "Acciones",
+          open: "Preguntas abiertas", next: "Paso siguiente", prior: "Pedidos anteriores", ids: "Códigos", none: "ninguno" },
+    ev: { date: "Fecha", amount: "Monto", merchant: "Comercio · país", score: "Score de fraude", denied: "pedido rechazado de" },
+    examples: ["¿Cuál es mi saldo?", "¿Estoy al día con mi tarjeta de crédito?", "Mis últimos movimientos", "¿A cuánto está el dólar?",
+               "Qual é o meu saldo?", "Quiero bloquear mi tarjeta", "No reconozco un cargo"],
+    errGeneric: "Algo salió mal", errRate: "Demasiados mensajes; espera un momento.",
+    dqButton: "Calidad de datos", dqTitle: "Calidad de datos · de dónde sale cada respuesta",
+    dqHint: "Contratos, controles de calidad, linaje y frescura de los datos detrás de cada respuesta. Solo agregados: ninguna fila de clientes ni ubicación de archivos.",
+    dq: {
+      loading: "Cargando…", failed: "No se pudo cargar el reporte de calidad de datos.",
+      asOf: "Datos al", loaded: "Cargado (UTC)", checksRun: "Controles corridos", failedChecks: "Fallidos: errores · advertencias",
+      slo: "SLO de frescura", sloOn: h => `${h} h, aplicado`, sloOff: h => `${h} h, no aplicado (foto fija)`,
+      servedTitle: "El warehouse de este deploy",
+      servedHint: "Leído en vivo de las tablas de linaje del propio warehouse: _ingestion_log, _partition_log y _dq_results.",
+      table: "Tabla", rows: "Filas", partitions: "Particiones diarias", lastLoad: "Última carga", loads: "Cargas ok · fallidas", contract: "Contrato",
+      staged: (s, q, d) => `leídas ${s} · en cuarentena ${q} · duplicadas ${d}`,
+      failedTitle: "Controles que no pasaron, en la última carga de cada tabla", allPassed: "Pasaron todos los controles.",
+      fullFailedTitle: "Controles que no pasaron en esa corrida",
+      check: "Control", severity: "Severidad", failedTotal: "Fallidas / total", rate: "Tasa", rule: "Regla",
+      sev: { error: "error", warn: "advertencia" },
+      fullTitle: "Corrida sobre el dataset completo",
+      fullHint: "El reporte commiteado de make ingest sobre el dataset completo del organizador, del que este deploy toma una muestra.",
+      run: "Corrida", rowsRead: "Filas leídas", files: "Archivos leídos", quarantined: "En cuarentena", duplicates: "Duplicadas",
+      contractTitle: "Contrato y desvíos documentados",
+      contractHint: v => `Contrato versión ${v}: tipos, NOT NULL y claves del diccionario de datos, reglas de dominio y controles entre tablas. Donde los datos contradicen el diccionario, el desvío queda escrito y se sigue midiendo en cada carga:`,
+      column: "Columna", dictionary: "Diccionario de datos", observed: "Observado", decision: "Decisión",
+      policyTitle: "Política de actualización y frescura",
+      policy: ["Por lotes, no streaming: la fuente son archivos diarios, y ninguna respuesta necesita datos de menos de un día.",
+               "La unidad de actualización es la partición diaria. Una carga incremental recarga desde la última partición menos 3 días, así se absorben particiones tardías o reenviadas, y el upsert por clave primaria hace que repetir una carga no cambie nada (probado con un fixture rotulado).",
+               "Una carga que pone en cuarentena más del 1% de sus filas se revierte, y siguen sirviendo los datos anteriores.",
+               "Cada respuesta dice la fecha de los datos de los que sale."],
+    },
+  },
+};
+
+const $ = s => document.querySelector(s);
+function h(tag, attrs, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v === undefined || v === null || v === false) continue;
+    if (k === "class") el.className = v; else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else if (v === true) el.setAttribute(k, ""); else el.setAttribute(k, v);
+  }
+  for (const kid of kids.flat()) if (kid !== null && kid !== undefined && kid !== false) el.append(kid instanceof Node ? kid : String(kid));
+  return el;
+}
+const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+                set(k, v) { try { localStorage.setItem(k, v); } catch { /* private mode */ } } };
+
+const state = { lang: store.get("demo.lang") === "es" ? "es" : "en", demo: false, scenarios: [], providers: [],
+                token: null, customer: null, pin: null, deadline: 0, expired: false, modelDown: false,
+                active: null, turns: [], busy: false };
+const t = () => T[state.lang];
+
+async function api(method, path, body) {
+  const r = await fetch(path, { method, headers: body ? { "content-type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined });
+  let data = null; try { data = await r.json(); } catch { /* empty body */ }
+  return { ok: r.ok, status: r.status, data };
+}
+
+// ---------- static text ----------
+function paintStatic() {
+  document.documentElement.lang = state.lang;
+  document.querySelectorAll("[data-t]").forEach(el => { const v = t()[el.dataset.t]; if (typeof v === "string") el.textContent = v; });
+  document.querySelectorAll(".lang button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.lang === state.lang)));
+  $("#m").placeholder = t().placeholder;
+  $("#btnOutage").textContent = state.modelDown ? t().outageOn : t().outage;
+  $("#btnOutage").setAttribute("aria-pressed", String(state.modelDown));
+  paintModelStatus(); paintChips(); paintScenarios(); paintSteps(); repaintWhy(); refreshTickets(false); paintDq();
+}
+function paintModelStatus() {
+  const el = $("#modelStatus");
+  el.className = "pill";
+  if (state.modelDown) { el.textContent = t().modelDownSim; el.classList.add("down"); }
+  else if (!state.providers.length) { el.textContent = t().modelNone; el.classList.add("warn"); }
+  else el.textContent = t().modelUp(state.providers.join(", "));
+}
+function paintChips() {
+  const box = $("#chips"); box.replaceChildren();
+  if (state.active) return;
+  t().examples.forEach(e => box.append(h("button", { type: "button", class: "chip", onclick: () => send(e) }, e)));
+}
+
+// ---------- scenarios ----------
+function paintScenarios() {
+  const list = $("#scenList"); list.replaceChildren();
+  const groups = {};
+  state.scenarios.forEach(s => (groups[s.path] = groups[s.path] || []).push(s));
+  for (const [path, items] of Object.entries(groups)) {
+    const g = h("div", { class: "group" }, h("h3", {}, t().paths[path] || path));
+    items.forEach(s => {
+      const active = state.active && state.active.id === s.id;
+      g.append(h("article", { class: "scard" + (active ? " active" : "") },
+        h("div", { class: "shead" }, h("span", { class: "stitle" }, s.title[state.lang]), h("span", { class: "tagl" }, s.language.toUpperCase())),
+        h("p", { class: "slook" }, s.look_for[state.lang]),
+        h("div", { class: "srow" },
+          h("span", { class: "smeta mono" }, s.customer_id + (s.fault ? " · " + t().faultNote[s.fault] : "")),
+          h("button", { type: "button", class: "btn small", disabled: state.busy || undefined, onclick: () => runScenario(s) }, active ? t().running : t().run))));
+    });
+    list.append(g);
+  }
+}
+function paintSteps() {
+  const box = $("#steps"); box.replaceChildren();
+  const s = state.active;
+  box.hidden = !s;
+  if (!s) return;
+  const next = state.turns.length;
+  const ol = h("ol");
+  s.turns.forEach((turn, i) => {
+    const exp = s.expect[i];
+    const got = state.turns[i];
+    const expText = `${t().expected}: ${exp ? t().disp[exp] : t().any}`;
+    let res = null;
+    if (got) res = (!exp || exp === got) ? h("span", { class: "res-ok" }, "✓ " + t().disp[got])
+                                           : h("span", { class: "res-bad" }, `✗ ${t().got} ${t().disp[got] || got}`);
+    ol.append(h("li", {}, h("div", { class: "step-line" },
+      h("span", { class: "quote" }, `“${turn}”`), h("span", { class: "muted" }, expText), res,
+      i === next ? h("button", { type: "button", class: "btn small", disabled: state.busy || undefined, onclick: () => sendStep() }, t().sendStep) : null)));
+  });
+  box.append(h("div", { class: "steps-head" },
+    h("strong", {}, s.title[state.lang]),
+    h("span", { class: "sessbtns" },
+      next < s.turns.length ? h("button", { type: "button", class: "ghost", disabled: state.busy || undefined, onclick: playAll }, t().playAll) : null,
+      h("button", { type: "button", class: "ghost", onclick: () => { state.active = null; paintSteps(); paintScenarios(); paintChips(); } }, t().close))), ol);
+}
+async function runScenario(s) {
+  if (state.busy) return;
+  state.active = null; paintSteps();  // the previous scenario's steps must not stay clickable while signing in
+  const ok = await signIn(s.customer_id, s.test_pin);
+  if (!ok) return;
+  state.active = s; state.turns = [];
+  if (s.fault) await applyFault(s.fault);
+  paintScenarios(); paintSteps(); paintChips();
+  const top = $("#chat").getBoundingClientRect().top;
+  if (top < 0 || top > window.innerHeight * 0.6) $("#chat").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+async function sendStep() {
+  const s = state.active;
+  if (!s || state.turns.length >= s.turns.length) return;
+  const r = await send(s.turns[state.turns.length], true);
+  if (r) state.turns.push(r.disposition);
+  paintSteps(); paintScenarios();
+}
+async function playAll() {
+  while (state.active && state.turns.length < state.active.turns.length) {
+    const before = state.turns.length;
+    await sendStep();
+    if (state.turns.length === before) break;
+    await new Promise(res => setTimeout(res, 600));
+  }
+}
+
+// ---------- session ----------
+function notify(msg) {  // where the person is looking: the chat if it is open, else the sign-in card
+  if ($("#chat").hidden) { $("#lerr").textContent = msg; return; }
+  $("#log").append(h("div", { class: "msg bot", role: "alert" }, msg)); scrollLog();
+}
+async function signIn(customerId, pin) {
+  $("#lerr").textContent = "";
+  const r = await api("POST", "/auth/session", { customer_id: customerId, pin });
+  if (!r.ok) { notify(r.status === 429 ? t().errRate : ((r.data && r.data.detail) || t().errGeneric)); return false; }
+  Object.assign(state, { token: r.data.token, customer: customerId, pin, deadline: Date.now() + r.data.expires_in * 1000,
+                         expired: false, modelDown: false, active: null, turns: [] });
+  $("#signin").hidden = true; $("#chat").hidden = false; $("#btnAgain").hidden = true;
+  $("#who").textContent = customerId;
+  $("#log").replaceChildren(); lastTickets = []; lastTraces = [];
+  paintStatic(); tick(); $("#m").focus({ preventScroll: true });
+  return true;
+}
+function signOut() {
+  Object.assign(state, { token: null, customer: null, pin: null, active: null, turns: [], modelDown: false });
+  $("#chat").hidden = true; $("#signin").hidden = false; $("#log").replaceChildren(); lastTickets = []; lastTraces = [];
+  paintStatic();
+}
+async function applyFault(fault) {
+  const r = await api("POST", "/demo/fault", { session_token: state.token, fault });
+  if (!r.ok) return;
+  if (fault === "expire_session") { state.expired = true; state.deadline = Date.now(); }
+  if (fault === "llm_outage") state.modelDown = true;
+  if (fault === "llm_restore") state.modelDown = false;
+  paintStatic(); tick();
+}
+function tick() {
+  if (!state.token) return;
+  const left = Math.max(0, Math.round((state.deadline - Date.now()) / 1000));
+  const expired = state.expired || left === 0;
+  $("#ttl").textContent = expired ? `· ${t().expired}` : `· ${t().expiresIn} ${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
+  $("#btnExpire").disabled = expired;
+}
+setInterval(tick, 1000);
+
+// ---------- chat ----------
+function addMine(text) { $("#log").append(h("div", { class: "msg me" }, text)); scrollLog(); }
+function scrollLog() { const l = $("#log"); l.scrollTop = l.scrollHeight; }
+function addBot(j) {
+  const whyBox = h("div", { class: "why", hidden: true });
+  const btn = j.why ? h("button", { type: "button", class: "linkbtn", "aria-expanded": "false" }, t().why) : null;
+  const node = h("div", { class: "msg bot" }, h("div", { class: "mtext" }, j.response_text),
+    h("div", { class: "mmeta" },
+      h("span", { class: "badge d-" + j.disposition }, t().disp[j.disposition] || j.disposition),
+      h("span", {}, j.category), h("span", {}, `${Math.round(j.latency_ms)} ms`), btn), whyBox);
+  node._why = j;
+  if (btn) btn.addEventListener("click", () => {
+    const open = whyBox.hidden; whyBox.hidden = !open; btn.setAttribute("aria-expanded", String(open));
+    btn.textContent = open ? t().hide : t().why;
+    if (open) { paintWhy(whyBox, j.why); whyBox.scrollIntoView({ block: "nearest" }); }
+  });
+  $("#log").append(node); scrollLog();
+}
+function paintWhy(box, w) {
+  const down = /^(degraded:|llm_unavailable)/.test(w.rule);
+  const saw = w.model.called ? h("code", { class: "codebox" }, w.model.saw) : h("span", {}, down ? t().nothingDown : t().nothingPre);
+  const chose = w.model.chose.length ? h("ul", { class: "plainlist" }, w.model.chose.map(c => h("li", {}, h("code", {}, `${c.tool}(${JSON.stringify(c.args)})`))))
+                                     : h("span", {}, t().nothingChosen);
+  const checks = w.checks.length ? h("ul", { class: "plainlist" }, w.checks.map(c => h("li", {},
+      h("span", { class: c.ok ? "chk-ok" : "chk-bad" }, c.ok ? "✓ " : "✗ "), h("code", {}, c.tool),
+      c.product ? ` · ${c.product}` : (c.outcome === "PermissionDenied" ? ` · ${t().notMine}` : ""), ` · ${c.outcome}`)))
+    : h("span", {}, t().noChecks);
+  const cost = [t().calls(w.llm_calls), w.model.model, w.llm_calls && w.cost_usd != null ? `USD ${w.cost_usd.toFixed(4)}` : null, `${Math.round(w.latency_ms)} ms`]
+    .filter(Boolean).join(" · ");
+  box.replaceChildren(h("dl", {},
+    h("dt", {}, t().because), h("dd", {}, w.because[state.lang]),
+    h("dt", {}, t().rule), h("dd", {}, h("code", {}, w.rule)),
+    h("dt", {}, t().modelSaw), h("dd", {}, saw),
+    h("dt", {}, t().modelChose), h("dd", {}, chose),
+    h("dt", {}, t().checks), h("dd", {}, checks),
+    h("dt", {}, t().cost), h("dd", {}, cost)), h("p", { class: "never" }, t().never));
+}
+function repaintWhy() {
+  document.querySelectorAll(".msg.bot").forEach(node => {
+    const btn = node.querySelector(".linkbtn"), box = node.querySelector(".why");
+    if (!btn) return;
+    btn.textContent = box.hidden ? t().why : t().hide;
+    node.querySelector(".badge").textContent = t().disp[node._why.disposition] || node._why.disposition;
+    if (!box.hidden) paintWhy(box, node._why.why);
+  });
+}
+async function send(text, fromStep) {
+  text = (text || "").trim();
+  if (!text || !state.token || state.busy) return null;
+  state.busy = true; $("#send").disabled = true; paintScenarios(); if (fromStep) paintSteps();
+  addMine(text); $("#m").value = "";
+  try {
+    const r = await api("POST", "/chat", { session_token: state.token, message: text });
+    if (!r.ok) { $("#log").append(h("div", { class: "msg bot" }, r.status === 429 ? t().errRate : ((r.data && r.data.detail) || t().errGeneric))); return null; }
+    addBot(r.data);
+    if (r.data.disposition === "REAUTH_REQUIRED") { state.expired = true; $("#btnAgain").hidden = !state.pin; tick(); }
+    if (state.demo) await refreshTickets(true, r.data.ticket_id, r.data.policy_rule === "action:trace_opened");
+    return r.data;
+  } finally { state.busy = false; $("#send").disabled = false; paintScenarios(); if (fromStep) paintSteps(); }
+}
+
+// ---------- bank view ----------
+let lastTickets = [], lastTraces = [];
+async function refreshTickets(fetchNew, freshId, freshTrace) {
+  if (!state.demo) return;
+  if (fetchNew && state.token) {
+    const [tk, tr] = await Promise.all([api("POST", "/demo/tickets", { session_token: state.token }),
+                                        api("POST", "/demo/traces", { session_token: state.token })]);
+    if (tk.ok) lastTickets = tk.data;
+    if (tr.ok) lastTraces = tr.data;
+  }
+  if (!state.token) { lastTickets = []; lastTraces = []; }
+  const box = $("#tickets"); box.replaceChildren();
+  if (!lastTickets.length && !lastTraces.length) { box.append(h("div", { class: "empty" }, t().noTickets)); return; }
+  if (lastTraces.length) {
+    box.append(h("h3", { class: "bankh" }, t().tracesTitle));
+    lastTraces.forEach((tr, i) => box.append(traceCard(tr, freshTrace && i === 0)));
+  }
+  if (lastTickets.length) {
+    box.append(h("h3", { class: "bankh" }, t().ticketsTitle));
+    lastTickets.forEach(tk => box.append(ticketCard(tk, tk.ticket_id === freshId)));
+  }
+}
+function traceCard(tr, fresh) {
+  const L = t().tr;
+  const when = new Date(tr.created_at * 1000).toLocaleTimeString(state.lang === "es" ? "es" : "en");
+  return h("article", { class: "ticket trace" + (fresh ? " fresh" : "") },
+    h("div", { class: "thead" }, h("span", { class: "q" }, tr.queue), h("span", { class: "prio p-Low" }, tr.status),
+      h("span", { class: "muted mono" }, `${tr.trace_id} · ${when}`)),
+    h("dl", {},
+      h("dt", {}, L.movement), h("dd", { class: "mono" }, tr.transaction_id),
+      h("dt", {}, L.product), h("dd", { class: "mono" }, tr.product_id),
+      h("dt", {}, L.sla), h("dd", {}, L.slaText(tr.sla_business_days)),
+      h("dt", {}, L.ids), h("dd", { class: "mono" }, `${t().sessionRef} ${tr.session_ref}`)));
+}
+function ticketCard(tk, fresh) {
+  const L = t().tk;
+  const when = new Date(tk.created_at * 1000).toLocaleTimeString(state.lang === "es" ? "es" : "en");
+  const facts = tk.verified_facts.length ? tk.verified_facts.map(f => h("details", {}, h("summary", {}, h("code", {}, f.tool)),
+                                                             h("pre", { class: "json" }, JSON.stringify(f.result, null, 2)))) : L.none;
+  const txns = tk.evidence.filter(e => e.type === "transaction");
+  const denied = tk.evidence.filter(e => e.type === "denied_request");
+  const evidence = txns.length || denied.length ? h("div", { class: "evwrap" },
+      txns.length ? h("table", { class: "ev" },
+        h("thead", {}, h("tr", {}, [t().ev.date, t().ev.amount, t().ev.merchant, t().ev.score].map(c => h("th", {}, c)))),
+        h("tbody", {}, txns.map(e => h("tr", { class: e.flagged ? "flag" : "" },
+          h("td", { class: "nw" }, String(e.detail.transaction_date || "").slice(0, 16)),
+          h("td", { class: "nw" }, `${e.detail.amount ?? ""} ${e.detail.currency ?? ""}`),
+          h("td", {}, [e.detail.merchant_name, e.detail.transaction_country].filter(Boolean).join(" · ") || "—"),
+          h("td", { class: "nw" }, (e.flagged ? "⚑ " : "") + (e.detail.fraud_score ?? "—")))))) : null,
+      denied.map(e => h("div", {}, `${t().ev.denied} `, h("code", {}, e.id)))) : L.none;
+  const actions = tk.actions_taken.length ? h("ul", { class: "plainlist" }, tk.actions_taken.map(a =>
+      h("li", {}, h("code", {}, a.tool), a.success ? " · ok" : ` · ${a.error_type || "failed"}`))) : L.none;
+  const list = xs => xs.length ? h("ul", { class: "plainlist" }, xs.map(x => h("li", {}, x))) : L.none;
+  return h("article", { class: "ticket" + (fresh ? " fresh" : "") },
+    h("div", { class: "thead" }, h("span", { class: "q" }, tk.queue), h("span", { class: "prio p-" + tk.priority }, tk.priority),
+      h("span", { class: "muted" }, `${tk.category} · ${when}`)),
+    h("dl", {},
+      h("dt", {}, L.request), h("dd", {}, tk.request),
+      h("dt", {}, L.reason), h("dd", {}, tk.reason),
+      h("dt", {}, L.rule), h("dd", {}, h("code", {}, tk.policy_rule)),
+      h("dt", {}, L.facts), h("dd", {}, facts),
+      h("dt", {}, L.evidence), h("dd", { class: txns.length ? "wide" : "" }, evidence),
+      h("dt", {}, L.actions), h("dd", {}, actions),
+      h("dt", {}, L.open), h("dd", {}, list(tk.open_questions)),
+      h("dt", {}, L.next), h("dd", {}, tk.suggested_next_step),
+      h("dt", {}, L.prior), h("dd", {}, list(tk.prior_requests)),
+      h("dt", {}, L.ids), h("dd", { class: "mono" }, `${t().trace} ${String(tk.trace_id || "").slice(0, 8)} · ${t().sessionRef} ${tk.session_ref}`)));
+}
+
+// ---------- data quality ----------
+let dqData = null;
+const locale = () => (state.lang === "es" ? "es" : "en");
+const fmtN = n => (n === null || n === undefined) ? "—" : Number(n).toLocaleString(locale());
+const fmtPct = r => {  // one decimal; a rate that is not 0 or 1 never rounds to "0.0%" or "100.0%"
+  if (r === null || r === undefined) return "—";
+  if (r > 0 && r < 0.0005) return `<${(0.1).toLocaleString(locale(), { minimumFractionDigits: 1 })}%`;
+  if (r < 1 && r >= 0.9995) return `>${(99.9).toLocaleString(locale(), { minimumFractionDigits: 1 })}%`;
+  return `${(100 * r).toLocaleString(locale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+};
+const kpi = (label, value) => h("div", { class: "kpi" }, h("span", {}, label), h("b", {}, value));
+function dqTable(head, rows) {
+  return h("div", { class: "tablewrap" }, h("table", { class: "dqt" },
+    h("thead", {}, h("tr", {}, head.map(([c, num]) => h("th", { scope: "col", class: num ? "num" : null }, c)))), h("tbody", {}, rows)));
+}
+function checksTable(list) {
+  const L = t().dq;
+  if (!list.length) return h("p", { class: "muted" }, L.allPassed);
+  return dqTable([[L.table], [L.check], [L.severity], [L.failedTotal, true], [L.rate, true], [L.rule]], list.map(c => h("tr", {},
+    h("td", {}, c.table), h("td", {}, h("code", {}, c.check)), h("td", {}, h("span", { class: "sev sev-" + c.severity }, L.sev[c.severity] || c.severity)),
+    h("td", { class: "num" }, `${fmtN(c.failed)} / ${fmtN(c.total)}`), h("td", { class: "num" }, fmtPct(c.rate)),
+    h("td", { class: "rule" }, c.detail ? h("code", {}, c.detail) : "—"))));
+}
+function loadParams(load) {  // what shaped the load: a sample, a date range, a single day
+  return Object.entries(load.params || {})
+    .filter(([k, v]) => v !== null && v !== false && k !== "sample_mode" && (k !== "lookback_days" || load.mode === "incremental"))
+    .map(([k, v]) => `${k}=${v}`).join(" · ");
+}
+async function openDq() {
+  $("#dq").showModal();
+  if (!dqData) {
+    $("#dqBody").replaceChildren(h("p", { class: "muted" }, t().dq.loading));
+    const r = await api("GET", "/demo/data_quality");
+    if (!r.ok) { $("#dqBody").replaceChildren(h("p", { class: "err" }, t().dq.failed)); return; }
+    dqData = r.data;
+  }
+  paintDq();
+}
+function paintDq() {
+  if (!dqData || !$("#dq").open) return;
+  const L = t().dq, { served, freshness: f, full_run: full, contract } = dqData;
+  const body = [
+    h("div", { class: "kpis" },
+      kpi(L.asOf, f.as_of || "—"), kpi(L.loaded, f.loaded_at ? f.loaded_at.slice(0, 16) : "—"),
+      kpi(L.checksRun, fmtN(served.checks.run)), kpi(L.failedChecks, `${served.checks.errors_failed} · ${served.checks.warnings_failed}`),
+      kpi(L.slo, (f.enforced ? L.sloOn : L.sloOff)(fmtN(f.slo_hours)))),
+    h("h3", {}, L.servedTitle), h("p", { class: "hint" }, L.servedHint),
+    dqTable([[L.table], [L.rows, true], [L.partitions], [L.lastLoad], [L.loads, true], [L.contract]], served.tables.map(tb => {
+      const ld = tb.last_load, p = tb.partitions, params = ld ? loadParams(ld) : "";
+      return h("tr", {},
+        h("td", {}, h("code", {}, tb.table)), h("td", { class: "num" }, fmtN(tb.rows)),
+        h("td", {}, p ? `${fmtN(p.n)} · ${p.first} → ${p.last}` : "—"),
+        h("td", {}, ld ? [h("code", {}, ld.mode), " · ", L.staged(fmtN(ld.rows_staged), fmtN(ld.rows_quarantined), fmtN(ld.rows_deduplicated)),
+                          params ? h("span", { class: "sub2 mono" }, params) : null] : "—"),
+        h("td", { class: "num" }, fmtN(tb.loads), " · ", h("span", { class: tb.failed_loads ? "bad" : null }, fmtN(tb.failed_loads))),
+        h("td", {}, ld ? ld.contract_version : "—"));
+    })),
+    h("h3", {}, L.failedTitle), checksTable(served.checks.failed),
+  ];
+  if (full) {
+    const rowsRead = Object.values(full.tables).reduce((a, x) => a + x.rows_staged, 0);
+    body.push(h("h3", {}, L.fullTitle), h("p", { class: "hint" }, L.fullHint),
+      h("div", { class: "kpis" },
+        kpi(L.run, `${full.run_id} · ${full.generated_at.slice(0, 10)}`), kpi(L.rowsRead, fmtN(rowsRead)),
+        kpi(L.checksRun, fmtN(full.summary.checks_run)), kpi(L.failedChecks, `${full.summary.errors_failed} · ${full.summary.warnings_failed}`)),
+      dqTable([[L.table], [L.rowsRead, true], [L.files, true], [L.quarantined, true], [L.duplicates, true]],
+        Object.entries(full.tables).map(([name, x]) => h("tr", {}, h("td", {}, h("code", {}, name)), h("td", { class: "num" }, fmtN(x.rows_staged)),
+          h("td", { class: "num" }, fmtN(x.partitions)), h("td", { class: "num" }, fmtN(x.rows_quarantined)), h("td", { class: "num" }, fmtN(x.rows_deduplicated))))),
+      h("h3", {}, L.fullFailedTitle), checksTable(full.failed_checks));
+  }
+  body.push(h("h3", {}, L.contractTitle), h("p", { class: "hint" }, L.contractHint(contract.version)),
+    dqTable([[L.column], [L.dictionary], [L.observed], [L.decision]], contract.deviations.map(d => h("tr", {},
+      h("td", {}, h("code", {}, `${d.table}.${d.column}`)), h("td", {}, h("code", {}, d.dictionary)), h("td", {}, d.observed), h("td", {}, d.decision)))),
+    h("h3", {}, L.policyTitle), h("ul", { class: "plainlist" }, L.policy.map(x => h("li", {}, x))));
+  $("#dqBody").replaceChildren(...body);
+}
+
+// ---------- wiring ----------
+document.querySelectorAll(".lang button").forEach(b => b.addEventListener("click", () => { state.lang = b.dataset.lang; store.set("demo.lang", state.lang); paintStatic(); tick(); }));
+$("#btnDq").addEventListener("click", openDq);
+$("#dqClose").addEventListener("click", () => $("#dq").close());
+$("#dq").addEventListener("click", e => { if (e.target === $("#dq")) $("#dq").close(); });  // a click on the backdrop
+$("#f").addEventListener("submit", e => { e.preventDefault(); send($("#m").value); });
+$("#go").addEventListener("click", () => signIn($("#cid").value.trim(), $("#pin").value.trim()));
+$("#btnOut").addEventListener("click", signOut);
+$("#btnExpire").addEventListener("click", () => applyFault("expire_session"));
+$("#btnOutage").addEventListener("click", () => applyFault(state.modelDown ? "llm_restore" : "llm_outage"));
+$("#btnAgain").addEventListener("click", () => signIn(state.customer, state.pin));
+
+(async function init() {
+  const [health, scen, customers] = await Promise.all([api("GET", "/health"), api("GET", "/demo/scenarios"), api("GET", "/demo/customers")]);
+  state.providers = (health.ok && health.data.llm_providers_configured) || [];
+  state.demo = scen.ok;
+  state.scenarios = scen.ok ? scen.data : [];
+  $("#scenCol").hidden = !state.demo; $("#bankCol").hidden = !state.demo;
+  $("#layout").classList.toggle("plain", !state.demo);
+  document.querySelectorAll(".demo-only").forEach(el => { el.hidden = !state.demo; });
+  const sel = $("#cid");
+  const list = customers.ok ? customers.data : [];
+  if (!list.length) { sel.replaceWith(h("input", { id: "cid", placeholder: "CLI-…", autocomplete: "off" })); }
+  else {
+    list.forEach(c => sel.append(h("option", { value: c.customer_id, "data-pin": c.test_pin }, c.customer_id)));
+    const fill = () => { $("#pin").value = sel.selectedOptions[0].dataset.pin; };
+    sel.addEventListener("change", fill); fill();
+  }
+  paintStatic();
+})();
+</script>
+</body>
+</html>

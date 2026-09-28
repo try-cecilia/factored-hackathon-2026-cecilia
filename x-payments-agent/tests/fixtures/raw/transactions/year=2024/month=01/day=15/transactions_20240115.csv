@@ -1,0 +1,6 @@
+transaction_id,transaction_date,process_date,product_id,customer_id,transaction_type,transaction_category,amount,currency,amount_usd,channel,branch_id,merchant_name,merchant_category,transaction_country,transaction_city,transaction_status,response_code,is_fraud,fraud_score,latitude,longitude
+TXN-FIX0004,2024-01-15 10:20:00,2024-01-15,PRD-FIX0006,CLI-FIX0002,Withdrawal,,200000.00,COP,,ATM,,,,Colombia,Bogotá,Approved,00,false,3.40,,
+TXN-FIX0005,2024-01-15 13:00:00,2024-01-15,PRD-FIX0007,CLI-FIX0002,Purchase,Entertainment,150000.00,COP,,POS,,Cine Fixture,7832,Colombia,Bogotá,Declined,51,false,12.00,,
+TXN-FIX0005,2024-01-15 13:00:00,2024-01-15,PRD-FIX0007,CLI-FIX0002,Purchase,Entertainment,150000.00,COP,,POS,,Cine Fixture,7832,Colombia,Bogotá,Declined,51,false,12.00,,
+TXN-FIX0006,2024-01-15 16:10:00,2024-01-15,PRD-FIX0010,CLI-FIX0004,Transfer,,40.00,USD,40.00,App,,,,México,Guadalajara,Pending,,false,4.00,,
+TXN-FIX0007,2024-01-15 23:55:00,2024-01-15,PRD-FIX0004,CLI-FIX0001,Purchase,Other,980.00,USD,980.00,POS,,Electrónica Remota SA,5732,Argentina,Rosario,Approved,00,true,92.50,,

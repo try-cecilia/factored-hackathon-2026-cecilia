@@ -1,0 +1,3 @@
+branch_id,branch_code,branch_name,branch_type,address,city,state,country,postal_code,geographic_zone,phone,email,opening_time,closing_time,has_atms,atm_count,has_teller_windows,teller_window_count,latitude,longitude,branch_opening_date,branch_status
+SUC-FIX01,S9001,Sucursal Fixture Centro,Main,Av. Reforma 1,Ciudad de México,CDMX,México,06000,Urban,+525500000001,centro@fixture.test,09:00:00,17:00:00,true,4,true,6,19.4326000,-99.1332000,2010-01-01,Active
+SUC-FIX02,S9002,Sucursal Fixture Norte,Express,Calle 80 #10,Bogotá,Cundinamarca,Colombia,110111,Urban,+576010000002,norte@fixture.test,08:00:00,16:00:00,true,2,false,0,4.7110000,-74.0721000,2015-06-01,Active

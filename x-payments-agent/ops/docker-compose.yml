@@ -1,0 +1,35 @@
+services:
+  agent:
+    build:
+      context: ..
+      dockerfile: ops/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      # Dataset (organizer's read-only bucket; values from the data dictionary)
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-2}
+      - DATASET_BUCKET=${DATASET_BUCKET}
+      # Model providers, tried in LLM_PROVIDERS order; one without its key is skipped
+      - LLM_PROVIDERS=${LLM_PROVIDERS:-anthropic,groq,together}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-opus-5}
+      - ANTHROPIC_EFFORT=${ANTHROPIC_EFFORT:-low}
+      - ANTHROPIC_FALLBACKS=${ANTHROPIC_FALLBACKS:-1}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - GROQ_MODEL=${GROQ_MODEL:-openai/gpt-oss-120b}
+      - TOGETHER_API_KEY=${TOGETHER_API_KEY}
+      - TOGETHER_MODEL=${TOGETHER_MODEL:-meta-llama/Llama-3.3-70B-Instruct-Turbo}
+      # Sandbox identity and admin (both fail closed when empty)
+      - DEMO_IDP_SECRET=${DEMO_IDP_SECRET}
+      - ADMIN_API_KEY=${ADMIN_API_KEY}
+      - DEMO_PUBLIC_CUSTOMERS=${DEMO_PUBLIC_CUSTOMERS:-}
+      - DEMO_MODE=${DEMO_MODE:-0}
+    volumes:
+      - warehouse:/app/data/warehouse
+      - raw:/app/data/raw
+
+volumes:
+  warehouse:
+  raw:
