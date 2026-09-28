@@ -47,8 +47,9 @@ Per table, inside one transaction:
    - `_partition_log`: one row per daily partition loaded.
    - `_dq_results`: every check result.
 
-   The JSON report is written to `data/reports/quality_report.json` and
-   exposed at `/admin/data_quality`.
+   The JSON report is written to `--report` (`data/reports/quality_report.json`
+   by default; in the container, next to the warehouse on the persistent disk)
+   and exposed at `/admin/data_quality`.
 
 Contracts live in `data/contracts.py`, contract version 2.0.0.
 

@@ -15,6 +15,11 @@ First boot ingests `INGEST_ARGS`. The default is a deterministic 5,000-customer
 sample with the last 12 months of transactions: about 14 MB, 20 s of load
 after download, DuckDB capped at 400 MB. It picks sandbox demo customers,
 then serves on `$PORT`.
+- The load's quality report is written next to the warehouse, on the same
+  disk (`DQ_REPORT_PATH`), and `/admin/data_quality` serves it.
+- If the first load fails (wrong keys, bucket unreachable, a quality gate),
+  the container removes the half-built warehouse and exits, so the next boot
+  loads it again instead of serving it.
 - For the full dataset, set `INGEST_ARGS="--profile serving"` and give the container ~2 GB.
 - Without `DEMO_IDP_SECRET` every login is refused (fails closed).
 - Without `ADMIN_API_KEY`, `/admin/*` returns 503.
@@ -31,7 +36,8 @@ then serves on `$PORT`.
 CI builds this image on every push, boots it the way Render does (a disk
 mounted owned by root, its own `PORT`), runs `ops/container_smoke.py`, checks
 that the app runs unprivileged and owns its data, restarts it and checks the
-disk kept the warehouse.
+disk kept the warehouse and its quality report. It also boots it once with a
+load that fails and checks nothing was left on the disk.
 
 ## Deploy on Render (the jury demo)
 
@@ -45,7 +51,9 @@ admin key, and the caps below.
    three, change `INGEST_ARGS` to the fixture line above.
 2. First boot ingests the 5,000-customer sample (about 20 s of load after the
    download) and then passes `/health`. The disk keeps it: later deploys and
-   restarts do not re-ingest, even if the bucket closes after the deadline.
+   restarts do not re-ingest, even if the bucket closes after the deadline. If
+   that first load fails, the deploy fails with the reason in the logs and no
+   warehouse is left on the disk: fix the variable and deploy again.
 3. Later changes deploy by hand (Manual Deploy in the dashboard): the Blueprint
    turns auto-deploy off, so a push never restarts the instance, and with it the
    sessions, the day's budget count and the demo's fault flags, while the jury
@@ -167,8 +175,10 @@ encryption at rest remain to be done (LIMITATIONS.md).
   requests get an abstain, and the rest escalate with `category=llm_unavailable`.
   Check `/health` and the provider status.
 - **Pipeline failed a quality gate:** the load rolled back, so serving is on the
-  previous data. Read `failure` and the failed checks in
-  `data/reports/quality_report.json` and `_quarantine_<table>`. Decide
+  previous data (on a first boot there is none: the container exits and loads
+  again on the next one). Read `failure` and the failed checks in the report
+  (`--report`; in the container, `DQ_REPORT_PATH` next to the warehouse, also at
+  `/admin/data_quality`) and `_quarantine_<table>`. Decide
   whether it is a source defect (tell the provider) or a contract change
   (bump `CONTRACT_VERSION`, document it in `CONTRACT_DEVIATIONS`).
 - **Security escalation spike:** pull traces by `session_ref` at

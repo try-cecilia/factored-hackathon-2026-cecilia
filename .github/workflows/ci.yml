@@ -54,10 +54,22 @@ jobs:
           user=$(docker top app -o pid,user,args | awk '/uvicorn/ {print $2; exit}')
           echo "uvicorn runs as: $user" && test -n "$user" && test "$user" != "root"
           test "$(sudo stat -c %u /srv/disk/bank.duckdb)" = "10001"
+          loaded=$(sudo python3 -c "import json; print(json.load(open('/srv/disk/quality_report.json'))['run_id'])")
           docker restart app
           for i in $(seq 1 60); do curl -fs localhost:8000/health && break; sleep 2; done
           test "$(docker logs app 2>&1 | grep -c 'ingesting with')" = "1"
+          shown=$(curl -fs -H "X-Admin-Key: ci-admin" localhost:8000/admin/data_quality | python3 -c "import json, sys; print(json.load(sys.stdin)['run_id'])")
+          echo "quality report on the disk: $loaded; /admin/data_quality after the restart: $shown"
+          test -n "$loaded" && test "$loaded" = "$shown"
           python3 ops/container_smoke.py http://localhost:8000
+      - name: A failed first load leaves no warehouse on the disk (the next boot would serve it half built)
+        run: |
+          sudo mkdir -p /srv/bad && sudo chown root:root /srv/bad
+          if docker run --rm -v /srv/bad:/app/data/warehouse -e DEMO_IDP_SECRET=ci-secret \
+               -e INGEST_ARGS="--profile serving --source local --raw-dir /app/no-such-dir" x-payments-agent; then
+            echo "the boot should have failed" && exit 1
+          fi
+          sudo test ! -e /srv/bad/bank.duckdb && sudo test ! -e /srv/bad/bank.duckdb.wal
       - name: Container logs
         if: always()
         run: docker logs app

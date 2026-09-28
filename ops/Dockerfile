@@ -20,6 +20,7 @@ COPY tests/fixtures/raw/ ./tests/fixtures/raw/
 RUN chmod +x ./ops/entrypoint.sh && touch ops/__init__.py
 
 ENV DUCKDB_PATH=/app/data/warehouse/bank.duckdb \
+    DQ_REPORT_PATH=/app/data/warehouse/quality_report.json \
     RAW_DATA_DIR=/app/data/raw \
     DUCKDB_MEMORY_LIMIT=400MB \
     INGEST_ARGS="--profile serving --sample-customers 5000 --since 2025-06-17" \
