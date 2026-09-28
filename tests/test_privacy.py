@@ -243,6 +243,53 @@ def test_identifiers_are_masked_however_they_are_written(raw, expected):
     assert redact(raw) == expected
 
 
+@pytest.mark.parametrize("raw,expected", [
+    # third review: ids with other separators, split bodies, homoglyphs and other scripts' digits
+    ("saldo de PRD - FIX0006", "saldo de [id]"),
+    ("saldo de PRD.FIX0006", "saldo de [id]"),
+    ("saldo de PRD/FIX0006", "saldo de [id]"),
+    ("saldo de PRD-FIX-0006", "saldo de [id]"),
+    ("saldo de PRD-FIX 0006", "saldo de [id]"),
+    ("saldo de РRD-FIX0006", "saldo de [id]"),              # Cyrillic ER
+    ("saldo de PRD-FIX٠٠٠6", "saldo de [id]"),     # Arabic-Indic digits
+    ("RFC PEPA-800101-AB1", "RFC [id]"),
+    ("RFC PEPA 800101 AB1", "RFC [id]"),
+    ("RFCPEPA800101AB1", "RFC[id]"),
+    ("CURP PEPA 800101 HDFRRN09", "CURP [id]"),
+    ("ana @ mail.com", "[email]"),
+    ("ana﹫mail.com", "[email]"),
+    ("tarjeta 4111, 1111, 1111, 1111", "tarjeta [···1111]"),
+    ("tarjeta 4111:1111:1111:1111", "tarjeta [···1111]"),
+    ("tarjeta 4111      1111      1111      1111", "tarjeta [···1111]"),
+    ("tarjeta ⁴¹¹¹ ¹¹¹¹ ¹¹¹¹ ¹¹¹¹", "tarjeta [···1111]"),
+    ("tel 55-12-34-56-78", "tel [···5678]"),                     # not a date: day 55
+    ("tel 12-10-34-56-78", "tel [···5678]"),                     # starts like a date (12-10-34), goes on as a phone
+    ("mail o'brien@mail.com", "mail [email]"),                   # an apostrophe is valid in an address
+    ("tarjeta 4111 1111 1111 1111 12/27", "tarjeta [···1111] 12/27"),  # expiry kept, last 4 right
+    ("tarjeta 4111 1111 1111 1111 123", "tarjeta [···1111]"),     # a CVV never shifts the last 4
+])
+def test_identifiers_are_masked_in_the_harder_spellings(raw, expected):
+    assert redact(raw) == expected
+
+
+@pytest.mark.parametrize("text", [
+    "movimientos de 2025-2026", "periodo 2024/2025", "extracto 06/2026-07/2026", "del 15 01 2024 al 20 01 2024",
+    "de 10.30-11.45", "horario 08.00-12.00", "cuota 3/12 de 1500", "mi usuario es cliente2024", "sucursal123 centro",
+    "ciclismo2 y clic 2 veces", "el cli 2024", "Suc 1234 centro", "P1 y P2",
+])
+def test_dates_periods_times_and_ordinary_words_are_not_mistaken_for_identifiers(text):
+    assert redact(text) == text
+
+
+def test_trimming_a_glued_id_never_drops_digits():
+    assert redact("saldo de PRD-FIX00012", {"PRD-FIX0001": "P1"}) == "saldo de [id]"  # not P1: another product
+
+
+def test_tickets_mask_cards_however_they_are_split_and_keep_the_expiry():
+    assert mask_card_numbers("tarjeta 4111, 1111, 1111, 1111") == "tarjeta [···1111]"
+    assert mask_card_numbers("tarjeta 4111 1111 1111 1111 12/27") == "tarjeta [···1111] 12/27"
+
+
 def test_the_customers_own_product_ids_become_their_aliases():
     own = {"PRD-FIX0001": "P1"}
     assert redact("saldo de PRD-FIX0001 y de prd-fix0006", own) == "saldo de P1 y de [id]"

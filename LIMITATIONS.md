@@ -76,10 +76,24 @@ service, and as our own roadmap.
   - an ID shorter than 8 digits, such as an older Argentine DNI (5.123.456),
     because it cannot be told apart from an amount;
   - two last-4 references separated only by a space ("0001 0002"), which
-    read as one 8-digit number and get masked together.
+    read as one 8-digit number and get masked together;
+  - an identifier spelled out letter by letter ("P R D - F I X 0 0 0 6") or
+    an email written as "ana(at)mail.com".
 
-  An amount of 8+ digits is masked for the model but kept in the human
-  agent's ticket.
+  The masking errs on the side of hiding: an amount range written as one
+  chain of digits ("1500-2000", "1.000 - 5.000"), a compact date
+  ("20240115") or two ISO dates joined by "/" read as one long number and are
+  masked. The model then works without them (it asks, or the customer
+  rephrases); nothing leaks. An amount of 8+ digits is masked for the model
+  but kept in the human agent's ticket.
+- The eval's privacy judge (`records_sent`) is pattern-based too, with its
+  own code. It does not see a figure written as a bare integer under 100 (it
+  reads those as days, counts or option numbers), an identifier spelled out
+  letter by letter, or an id the warehouse does not have. It does not count
+  what customers typed about themselves, such as their name or an amount:
+  that is the customer speaking, not the system leaking. It always counts
+  ids, 8+ digit numbers, emails and document numbers, because the system
+  must mask those even when the customer types them.
 - No WAF or bot protection beyond per-session and per-IP rate limits.
 
 ## Operations
