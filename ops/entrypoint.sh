@@ -17,15 +17,21 @@ fi
 # Production note: ingest on a schedule into persistent storage instead of at
 # boot (see LIMITATIONS.md).
 # The quality report goes next to the warehouse, on the persistent disk, where
-# /admin/data_quality reads it. A failed load must not leave a half-built
-# warehouse behind: the next boot would take it as loaded and serve it.
+# /admin/data_quality reads it. The warehouse is built under a temporary name and
+# renamed only after the load succeeded: a load that fails, or that is killed half
+# way (a cancelled deploy, out of memory), leaves nothing a later boot could take
+# as loaded, and that boot loads again.
 if [ ! -f "$DUCKDB_PATH" ]; then
+  building="$DUCKDB_PATH.building"
+  rm -f "$building" "$building.wal" "$DUCKDB_PATH.wal"  # what a killed boot left; a stale WAL would be replayed
   echo "[entrypoint] no warehouse at $DUCKDB_PATH; ingesting with: $INGEST_ARGS"
-  if ! python -m data.pipeline $INGEST_ARGS --report "${DQ_REPORT_PATH:-/app/data/warehouse/quality_report.json}"; then
-    rm -f "$DUCKDB_PATH" "$DUCKDB_PATH.wal"
-    echo "[entrypoint] ingestion failed: removed the partial warehouse, so the next boot loads it again" >&2
+  if ! DUCKDB_PATH="$building" python -m data.pipeline $INGEST_ARGS --report "${DQ_REPORT_PATH:-/app/data/warehouse/quality_report.json}"; then
+    rm -f "$building" "$building.wal"
+    echo "[entrypoint] ingestion failed: nothing was kept, so the next boot loads again" >&2
     exit 1
   fi
+  if [ -f "$building.wal" ]; then mv "$building.wal" "$DUCKDB_PATH.wal"; fi  # normally checkpointed on close
+  mv "$building" "$DUCKDB_PATH"  # same directory: an atomic rename
 fi
 
 if [ -z "$DEMO_IDP_SECRET" ]; then

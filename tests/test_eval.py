@@ -226,6 +226,9 @@ def test_repeat_variability_refuses_runs_of_different_cases():
     with pytest.raises(ValueError, match="same cases"):
         rse.variability([(m, [_row("c1", "AUTO_RESOLVE"), _row("c2", "ESCALATE")]),
                          (m, [_row("c1", "AUTO_RESOLVE"), _row("c3", "ESCALATE")])])
+    with pytest.raises(ValueError, match="each once"):  # a repeated case must not stand in for a missing one
+        rse.variability([(m, [_row("c1", "AUTO_RESOLVE"), _row("c1", "AUTO_RESOLVE")]),
+                         (m, [_row("c2", "ESCALATE"), _row("c2", "ESCALATE")])])
 
 
 def test_an_eval_run_leaves_the_environment_as_it_found_it(monkeypatch):
@@ -263,6 +266,23 @@ def test_a_report_on_a_case_file_names_it_instead_of_claiming_the_generated_work
     md = (tmp_path / "R.md").read_text(encoding="utf-8")
     assert "4 cases from `human_set.jsonl`" in md
     assert "seed" not in md and "generated from the warehouse" not in md
+
+
+def test_a_case_file_run_keeps_its_reports_apart_from_the_generated_splits(tmp_path, monkeypatch):
+    """Without --out-json/--out-md, a --cases run writes reports named after its file, never over the committed
+    report of the test split; the public export removes every eval/reports/system_eval*.json by that pattern."""
+    import sys
+
+    from eval.workload import save
+
+    cases = tmp_path / "human_set.jsonl"
+    save(generate(per_cell=1, seed=3)[:4], cases)
+    monkeypatch.setattr(rse, "track", lambda *args, **kwargs: None)
+    monkeypatch.chdir(tmp_path)  # the default report paths are relative to where it runs
+    monkeypatch.setattr(sys, "argv", ["run_system_eval", "--system", "baseline", "--cases", str(cases)])
+    rse.main()
+    assert sorted(p.name for p in (tmp_path / "eval" / "reports").iterdir()) == ["SYSTEM_EVAL_human_set.md",
+                                                                                  "system_eval_human_set.json"]
 
 
 def test_error_analysis_groups_what_went_wrong_and_the_report_carries_no_customer_ids():

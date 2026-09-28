@@ -57,6 +57,10 @@ def run(experiment: str, run_name: str, tags: dict[str, str] | None = None):
               "(pip install -r requirements-tracking.txt)", file=sys.stderr)
         yield None
         return
+    except Exception as exc:  # noqa: BLE001 - a broken install is a tracking failure like any other
+        print(f"experiment tracking failed ({experiment}): {type(exc).__name__}: {exc}", file=sys.stderr)
+        yield None
+        return
     try:
         uri = os.environ.get("MLFLOW_TRACKING_URI")
         if not uri:

@@ -3,8 +3,9 @@
     python ops/container_smoke.py BASE_URL
 
 Checks only what needs no language model, so it holds on any warehouse and without a model key: health,
-the guided scenarios (DEMO_MODE=1), a fraud report escalated with its ticket in the bank view and no token
-in it, a suspended account held, and an expired session. Stdlib only; exits 1 on the first failure.
+the guided scenarios (DEMO_MODE=1), the data-quality view (tables from the lineage, the complete-dataset run,
+no source location), a fraud report escalated with its ticket in the bank view and no token in it, a suspended
+account held, and an expired session. Stdlib only; exits 1 on the first failure.
 """
 from __future__ import annotations
 
@@ -37,6 +38,11 @@ check(status == 200 and health["status"] == "ok" and not str(health["data_as_of"
 status, scenarios = call("GET", "/demo/scenarios")
 check(status == 200 and bool(scenarios), f"{len(scenarios or [])} guided scenarios")
 by_id = {s["id"]: s for s in scenarios}
+status, dq = call("GET", "/demo/data_quality")
+check(status == 200 and bool(dq), f"data-quality view: HTTP {status}")
+text = json.dumps(dq)  # on a deploy the lineage tables hold the organizer's bucket: it must not leave
+check(bool(dq["served"]["tables"]) and dq["full_run"] is not None and "s3://" not in text and "file:" not in text,
+      f"data quality: {len(dq['served']['tables'])} tables from the lineage, the complete-dataset run, no source location")
 
 for sid, want in (("human_fraud", "ESCALATE"), ("human_compliance", "ESCALATE"), ("failure_expired", "REAUTH_REQUIRED")):
     s = by_id.get(sid)

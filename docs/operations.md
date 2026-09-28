@@ -17,9 +17,10 @@ after download, DuckDB capped at 400 MB. It picks sandbox demo customers,
 then serves on `$PORT`.
 - The load's quality report is written next to the warehouse, on the same
   disk (`DQ_REPORT_PATH`), and `/admin/data_quality` serves it.
-- If the first load fails (wrong keys, bucket unreachable, a quality gate),
-  the container removes the half-built warehouse and exits, so the next boot
-  loads it again instead of serving it.
+- The warehouse is built under a temporary name and renamed only when the load
+  succeeds: a first load that fails (wrong keys, bucket unreachable, a quality
+  gate) or is killed half way (a cancelled deploy, out of memory) leaves nothing
+  a later boot could serve, and the next boot loads again.
 - For the full dataset, set `INGEST_ARGS="--profile serving"` and give the container ~2 GB.
 - Without `DEMO_IDP_SECRET` every login is refused (fails closed).
 - Without `ADMIN_API_KEY`, `/admin/*` returns 503.
@@ -36,8 +37,9 @@ then serves on `$PORT`.
 CI builds this image on every push, boots it the way Render does (a disk
 mounted owned by root, its own `PORT`), runs `ops/container_smoke.py`, checks
 that the app runs unprivileged and owns its data, restarts it and checks the
-disk kept the warehouse and its quality report. It also boots it once with a
-load that fails and checks nothing was left on the disk.
+disk kept the warehouse and its quality report. It also boots it with a load
+that fails and checks nothing was left on the disk, then leaves what a killed
+boot would (a partial build, a stale WAL) and checks the next boot loads again.
 
 ## Deploy on Render (the jury demo)
 
@@ -84,9 +86,12 @@ pip install git-filter-repo
 python ops/export_public.py . ../factored-hackathon-2026-<team> <redactions-file>
 ```
 
-- It removes from every commit the organizer's row-level data (the generated
-  workloads and the per-case eval JSON, regenerated with `make workload
-  eval`) and the v2 demo video, and replaces the strings in the redactions
+- It removes from every commit the organizer's row-level data, by pattern so a
+  new file is covered too: every case file under `eval/workload/` (the
+  generated workloads, regenerated with `make workload`, and any other set,
+  such as the human one, which belongs there) and every per-case eval JSON
+  (`eval/reports/system_eval*.json`, regenerated with `make eval`). It also
+  removes the v2 demo video, and replaces the strings in the redactions
   file (kept outside any repository): the organizer's bucket name and
   account id, which early commits carried.
 - It scans every blob of every commit by shape (keys, tokens, JWTs, private

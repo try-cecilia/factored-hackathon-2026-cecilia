@@ -185,7 +185,11 @@ diversity mitigates it; a human-authored or production-sampled set is the fix
   turns ([`LIVE_SMOKE.md`](eval/reports/LIVE_SMOKE.md)). Until the held-out
   run exists, there is no claim about model-driven SAR. `--cases FILE` runs
   any case file in the workload format, such as the external human set; its
-  report names the file instead of a generated split and its seed.
+  report names the file instead of a generated split and its seed, and is
+  written under that name (`eval/reports/system_eval_<file>.json` and
+  `SYSTEM_EVAL_<file>.md`), never over a split's. Case files belong in
+  `eval/workload/`: they carry the organizer's customer ids, and the public
+  export removes that folder's `.jsonl` files and every `system_eval*.json`.
 
 **Definitions** (as in the brief).
 - *In-scope* = oracle outcome is AUTO_RESOLVE.
@@ -277,7 +281,7 @@ resolved ones. Scripted and adversarial runs bill nothing, so they print no ROI.
 
 ## 4. Unit and integration tests
 
-`make test`: 329 hermetic tests on a hand-made fixture warehouse, plus one
+`make test`: 332 hermetic tests on a hand-made fixture warehouse, plus one
 opt-in integration test (`RUN_INTEGRATION=1`). CI runs them
 on every push, plus the classifier evaluation. They cover:
 - pipeline idempotency, late-arrival update, quarantine and rollback, schema evolution;
@@ -349,7 +353,7 @@ them. The committed reports stay the reviewed record.
 | Experiment | Logged by | Parent run | Child runs |
 |---|---|---|---|
 | `intent-classifier` | `make train-eval` | the chosen representation and escalation threshold, the hashes of the training and held-out sets, the scikit-learn version, the test scores, the threshold sweep on dev as a metric series, and the model, its metadata and the report as artifacts | one per candidate representation, with its dev macro-F1 |
-| `system-eval` | `make eval`, `eval-adversarial`, `eval-live` | one per system and model: provider, model and effort; the prompt version and `prompt_sha256`, a hash of all the fixed text the system writes into a request, so an edit shows even without a version bump; the cases file's hash; every metric of the report (run 1, as in its table) and safe automated resolution by language, segment and country; with repeats, the mean and spread of each metric and the share of cases that changed outcome; the Markdown report as artifact | one per repeat, with its metrics |
+| `system-eval` | `make eval`, `eval-adversarial`, `eval-live` | one per system and model: provider, model and effort; the prompt version and `prompt_sha256`, a hash of all the fixed text the system writes into a request, so an edit shows even without a version bump; the cases file's hash; the metrics of the report's table (run 1, as in the table: every rate, latency, cost, model calls and missed escalations), the 95% upper bound when no unsafe outcome was seen and a count per kind when one was, and safe automated resolution by language, segment and country; with repeats, the mean and spread of each metric and the share of cases that changed outcome; the Markdown report as artifact | one per repeat, with its metrics |
 
 - Every run is tagged with the git sha, whether the working tree had
   uncommitted changes, and the report it belongs to (`report_generated_at`).

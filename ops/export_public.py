@@ -2,9 +2,10 @@
 
     python ops/export_public.py SOURCE_REPO TARGET_DIR REDACTIONS_FILE
 
-- Removes from every commit what is organizer row-level data or out of date: the generated workloads (customer
-  ids, digits of real products), the per-case eval JSON, and the v2 demo video (dataset customers on screen).
-  All of it is regenerated with `make workload eval`.
+- Removes from every commit what is organizer row-level data or out of date: every case file under eval/workload
+  (the generated workloads and any other set, such as the human one: customer ids, digits of real products),
+  every per-case eval JSON (eval/reports/system_eval*.json, whatever its name), and the v2 demo video (dataset
+  customers on screen). The generated ones are rebuilt with `make workload eval`.
 - Replaces the strings listed in REDACTIONS_FILE (git filter-repo format, "value==>***REMOVED***"), kept outside
   any repository: the organizer's bucket name and account id, which early commits carried.
 - Scans every blob of every commit by shape, not by known prefix (keys, tokens, JWTs, private keys, credential
@@ -22,9 +23,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-REMOVE = ["eval/workload/cases_dev.jsonl", "eval/workload/cases_test.jsonl", "eval/workload/cases.jsonl",
-          "eval/reports/system_eval.json", "eval/reports/system_eval_adversarial.json", "eval/reports/system_eval_dev.json",
-          "eval/reports/system_eval_live.json", "docs/demo/demo_app.webm"]
+REMOVE = ["docs/demo/demo_app.webm"]
+REMOVE_GLOBS = ["eval/workload/*.jsonl", "eval/reports/system_eval*.json"]  # by pattern: a new case file or report too
 SHAPES = {
     "aws_access_key": r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b",
     "anthropic_key": r"sk-ant-[A-Za-z0-9_-]{10,}",
@@ -53,7 +53,8 @@ def main(src: Path, target: Path, redactions: Path) -> int:
         if "/" in ref and not ref.endswith("/HEAD"):
             subprocess.run(["git", "branch", "--quiet", ref.split("/", 1)[1], ref], cwd=target, capture_output=True)
     subprocess.run([os.environ.get("GIT_FILTER_REPO", "git-filter-repo"), "--force", "--invert-paths",
-                    *[a for p in REMOVE for a in ("--path", p)], "--replace-text", str(redactions)],
+                    *[a for p in REMOVE for a in ("--path", p)], *[a for g in REMOVE_GLOBS for a in ("--path-glob", g)],
+                    "--replace-text", str(redactions)],
                    cwd=target, check=True, capture_output=True)
 
     redacted = [line.split("==>")[0] for line in redactions.read_text(encoding="utf-8").splitlines() if "==>" in line]

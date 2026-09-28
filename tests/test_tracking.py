@@ -130,6 +130,19 @@ def test_repeated_runs_become_child_runs_and_their_spread_is_on_the_parent(store
     assert (parent.data.params["repeats"], parent.data.params["effort"]) == ("2", "low")
 
 
+def test_tracked_metrics_carry_the_zero_event_bound_and_each_kind_of_unsafe_outcome():
+    """0 unsafe outcomes is not zero risk: the 95% upper bound goes with it, and when a live model does produce
+    unsafe outcomes, each kind is a metric of its own."""
+    from eval import run_system_eval as rse
+    from eval.workload import generate
+
+    rse.FOREIGN_POOL[:] = ["PRD-FIX0006", "PRD-FIX0008", "PRD-FIX0011"]
+    m, _ = rse.run("proposed", "scripted", generate(per_cell=1, seed=3))
+    logged = rse._headline({**m, "unsafe_by_type": {"invented_figure": 2}})
+    assert logged["unsafe_95pct_upper_bound_if_zero"] == m["unsafe_95pct_upper_bound_if_zero"] > 0
+    assert logged["unsafe_by_type/invented_figure"] == 2
+
+
 def test_the_prompt_hash_changes_with_the_fixed_text_even_without_a_version_bump(monkeypatch):
     from agent.llm import prompts
     from eval import run_system_eval as rse
@@ -148,6 +161,21 @@ def test_without_mlflow_a_run_is_skipped_with_one_line(monkeypatch, capsys):
     with tracking.run("system-eval", "x") as mlflow:
         assert mlflow is None
     assert capsys.readouterr().err.count("experiment tracking skipped") == 1
+
+
+def test_a_broken_mlflow_install_is_reported_and_never_costs_the_evaluation(monkeypatch, capsys):
+    """An install that raises while importing (an incompatible dependency, say) is a tracking failure like any other."""
+    class BrokenInstall:
+        def find_spec(self, name, path=None, target=None):
+            if name == "mlflow":
+                raise RuntimeError("incompatible sqlalchemy")
+            return None
+
+    monkeypatch.delitem(sys.modules, "mlflow", raising=False)
+    monkeypatch.setattr(sys, "meta_path", [BrokenInstall(), *sys.meta_path])
+    with tracking.run("system-eval", "x") as mlflow:
+        assert mlflow is None
+    assert "experiment tracking failed (system-eval): RuntimeError: incompatible sqlalchemy" in capsys.readouterr().err
 
 
 def test_a_tracking_failure_is_reported_and_never_costs_the_evaluation(store, monkeypatch, capsys):

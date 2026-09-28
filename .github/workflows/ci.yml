@@ -62,14 +62,22 @@ jobs:
           echo "quality report on the disk: $loaded; /admin/data_quality after the restart: $shown"
           test -n "$loaded" && test "$loaded" = "$shown"
           python3 ops/container_smoke.py http://localhost:8000
-      - name: A failed first load leaves no warehouse on the disk (the next boot would serve it half built)
+      - name: A first load that fails or is killed leaves nothing a later boot would serve, and the next boot loads again
         run: |
           sudo mkdir -p /srv/bad && sudo chown root:root /srv/bad
           if docker run --rm -v /srv/bad:/app/data/warehouse -e DEMO_IDP_SECRET=ci-secret \
                -e INGEST_ARGS="--profile serving --source local --raw-dir /app/no-such-dir" x-payments-agent; then
             echo "the boot should have failed" && exit 1
           fi
-          sudo test ! -e /srv/bad/bank.duckdb && sudo test ! -e /srv/bad/bank.duckdb.wal
+          for f in bank.duckdb bank.duckdb.wal bank.duckdb.building; do sudo test ! -e /srv/bad/$f; done
+          # What a boot killed half way through its load leaves: a partial build under the temporary name, a stale WAL
+          sudo sh -c 'echo partial > /srv/bad/bank.duckdb.building && echo stale > /srv/bad/bank.duckdb.wal'
+          docker run -d --name retry -p 8001:10000 -e PORT=10000 -v /srv/bad:/app/data/warehouse -e DEMO_IDP_SECRET=ci-secret \
+            -e INGEST_ARGS="--profile serving --source local --raw-dir /app/tests/fixtures/raw" x-payments-agent
+          for i in $(seq 1 90); do curl -fs localhost:8001/health && break; sleep 2; done
+          curl -fs localhost:8001/health | grep -q '"data_as_of":"2024-01-16"' || { docker logs retry; exit 1; }
+          sudo test -f /srv/bad/bank.duckdb && sudo test ! -e /srv/bad/bank.duckdb.building && sudo test ! -e /srv/bad/bank.duckdb.wal
+          docker rm -f retry
       - name: Container logs
         if: always()
         run: docker logs app

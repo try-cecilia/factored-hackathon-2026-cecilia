@@ -535,12 +535,13 @@ def variability(reps: list[tuple[dict, list[dict]]]) -> dict:
     out: dict = {"runs": len(reps)}
     out |= {k: spread([m[k]["rate"] for m, _ in reps]) for k in VARIABILITY_RATES}
     out |= {k: spread([m[k] for m, _ in reps]) for k in VARIABILITY_VALUES}
+    ids = [[r["case_id"] for r in rows] for _, rows in reps]
+    if any(len(set(run_ids)) != len(run_ids) for run_ids in ids) or len({frozenset(run_ids) for run_ids in ids}) > 1:
+        raise ValueError("repeated runs must cover the same cases, each once")
     per_case: dict[str, list[dict]] = {}  # paired by case id, in the first run's order
     for _, rows in reps:
         for r in rows:
             per_case.setdefault(r["case_id"], []).append(r)
-    if any(len(rs) != len(reps) for rs in per_case.values()):
-        raise ValueError("repeated runs must cover the same cases, each once")
     unstable = [{"case_id": case_id, "template": rs[0]["template"], "language": rs[0]["language"],
                  "dispositions": [r["actual"] for r in rs]} for case_id, rs in per_case.items() if len({r["actual"] for r in rs}) > 1]
     return out | {"outcome_flip_rate": rate(len(unstable), len(per_case)), "unstable_cases": unstable[:20]}
@@ -766,10 +767,12 @@ def _ascii(text: str) -> str:
 
 
 def _headline(m: dict) -> dict[str, float]:
-    """A system's numbers as MLflow metrics: every rate the report prints, latency, cost, model calls and missed
-    escalations, and safe automated resolution by language, segment and country (the fairness tables)."""
+    """A system's numbers as MLflow metrics: every rate of the report's table, latency, cost, model calls, missed
+    escalations, the 95% upper bound when no unsafe outcome was seen and a count per kind when one was, and safe
+    automated resolution by language, segment and country (the fairness tables)."""
     values = {k: m[k]["rate"] for k in (*VARIABILITY_RATES, "records_sent_to_model")}
-    values |= {k: m[k] for k in (*VARIABILITY_VALUES, "llm_calls_per_case", "missed_escalations_n")}
+    values |= {k: m[k] for k in (*VARIABILITY_VALUES, "llm_calls_per_case", "missed_escalations_n", "unsafe_95pct_upper_bound_if_zero")}
+    values |= {f"unsafe_by_type/{kind}": n for kind, n in m.get("unsafe_by_type", {}).items()}
     for key in ("by_language", "by_segment", "by_country"):
         values |= {f"sar_{key}/{_ascii(group)}": g["safe_automated_resolution"]["rate"] for group, g in m.get(key, {}).items()}
     return tracking.numbers(values)
@@ -829,6 +832,8 @@ def main() -> None:
     ap.add_argument("--out-md")
     a = ap.parse_args()
     suffix = "" if a.split == "test" else "_dev"
+    if a.cases:  # a case file's reports are named after it: never over a generated split's committed report
+        suffix = "_" + re.sub(r"[^A-Za-z0-9_-]+", "_", Path(a.cases).stem)
     mode = "" if a.llm == "scripted" else f"_{a.llm}"
     out_json = Path(a.out_json or f"eval/reports/system_eval{suffix}{mode}.json")
     out_md = Path(a.out_md or f"eval/reports/SYSTEM_EVAL{suffix}{mode.upper()}.md")
