@@ -87,9 +87,12 @@ NEXT_STEP = {
     "data_unavailable": "Look up the missing field in the core system and answer the customer.",
     "tool_failure": "Answer from the core system manually; report the failing lookup.",
     "llm_unavailable": "Answer manually; the assistant was down.",
+    "trace_unmatched": "Check the movement with payments operations or the sending bank: nothing of the customer's is pending.",
+    "trace_unverified": "Open the trace manually and give the customer its number: the tracing service did not confirm it.",
 }
 QUEUE = {"fraud": "fraud_ops", "theft": "fraud_ops", "account_takeover": "fraud_ops", "safety": "priority_care",
-         "legal_or_regulator": "complaints", "security": "security_review", "compliance_hold": "compliance"}
+         "legal_or_regulator": "complaints", "security": "security_review", "compliance_hold": "compliance",
+         "trace_unmatched": "payments_ops", "trace_unverified": "payments_ops"}
 
 
 def _evidence_for(decision: Decision, customer_id: str, actions: list[dict[str, Any]]) -> tuple[list[dict], list[str]]:

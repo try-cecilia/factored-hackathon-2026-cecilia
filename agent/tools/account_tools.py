@@ -24,11 +24,14 @@ from agent.llm.privacy import internal_ids, normalize
 from agent.tools.audit import default_audit_log
 from agent.tools.db import duckdb_path, get_connection
 from agent.tools.errors import DataUnavailable, InvalidArgument, NotApplicable, PermissionDenied, ResourceNotFound
+from agent.tools.traces import default_traces
 
 CREDIT_PRODUCT_TYPES = {"Tarjeta Crédito", "Préstamo Personal", "Préstamo Hipotecario"}
 CURRENCIES = {"MXN", "COP", "ARS", "USD"}
 MAX_TRANSACTIONS = 50
 MAX_FX_FALLBACK_DAYS = 7
+TRACEABLE_TYPES = ("Transfer", "Payment", "Deposit")  # what operations can follow; a pending card purchase just posts
+MAX_TRACE_CANDIDATES = 5
 
 
 def _audited(tool_name: str, customer_id: str, args: dict[str, Any], fn):
@@ -246,6 +249,40 @@ def get_exchange_rate(customer_id: str, source_currency: str, target_currency: s
 
     return _audited("get_exchange_rate", customer_id,
                     {"on_date": on_date, "source_currency": source_currency, "target_currency": target_currency}, _run)
+
+
+def request_trace(customer_id: str, product_id: Optional[str] = None, amount: Any = None, on_date: Optional[str] = None) -> dict:
+    """The customer's pending transfers, payments and deposits that match what they said: the candidates for a
+    trace (D3), each with the trace already open for it, if any. Nothing is opened here: the orchestrator proposes
+    the one match and opens it in the trace service only after the customer confirms."""
+
+    def _run():
+        if product_id:
+            _owned_product(customer_id, product_id)
+        day = _parse_date(on_date, "on_date")
+        clauses = ["t.customer_id = ?", "t.transaction_status = 'Pending'", f"t.transaction_type IN ({', '.join('?' * len(TRACEABLE_TYPES))})"]
+        params: list = [customer_id, *TRACEABLE_TYPES]
+        if product_id:
+            clauses.append("t.product_id = ?"); params.append(product_id)
+        if amount not in (None, ""):
+            try:
+                value = abs(float(str(amount).replace(",", ".")))
+            except ValueError:
+                raise InvalidArgument(f"amount must be a number, got {amount!r}", missing_slots=["amount"]) from None
+            clauses.append("abs(abs(t.amount) - ?) <= 1"); params.append(value)  # what the customer remembers, to the unit
+        if day:
+            clauses.append("CAST(t.transaction_date AS DATE) = ?"); params.append(day)
+        items = _rows(
+            f"""SELECT t.transaction_id, t.transaction_date, t.transaction_type, t.amount, t.currency, t.product_id,
+                       p.product_type, p.product_number
+                FROM transactions t JOIN products p ON p.product_id = t.product_id
+                WHERE {' AND '.join(clauses)} ORDER BY t.transaction_date DESC, t.transaction_id LIMIT {MAX_TRACE_CANDIDATES}""", params)
+        for it in items:
+            it["last4"] = _last4(it.pop("product_number"))
+            it["open_trace"] = default_traces.find(customer_id, it["transaction_id"])
+        return {"items": items, "as_of": data_as_of(), "filters": {"product_id": product_id, "amount": amount, "on_date": day}}
+
+    return _audited("request_trace", customer_id, {"product_id": product_id, "amount": amount, "on_date": on_date}, _run)
 
 
 def recent_activity_for_review(customer_id: str, limit: int = 10) -> dict:

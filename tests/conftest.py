@@ -53,6 +53,7 @@ def fixture_warehouse(tmp_path_factory):
     mp.setenv("AUDIT_LOG_PATH", str(db_path.parent / "audit_log.jsonl"))
     mp.setenv("HUMAN_QUEUE_PATH", str(db_path.parent / "human_queue.jsonl"))
     mp.setenv("TRACE_LOG_PATH", str(db_path.parent / "traces.jsonl"))
+    mp.setenv("TRACE_REQUESTS_PATH", str(db_path.parent / "trace_requests.jsonl"))
     mp.setenv("DEMO_IDP_SECRET", "test-secret")
     mp.setenv("ADMIN_API_KEY", "test-admin-key")
     mp.setenv("GROQ_API_KEY", "")

@@ -41,12 +41,14 @@ from agent.session.auth import ExpiredSession, InvalidSession, SessionStore, def
 from agent.tools import account_tools
 from agent.tools.audit import current_trace_id, default_trace_log
 from agent.tools.errors import InvalidArgument, MissingSlot, NotApplicable, ToolError
+from agent.tools.traces import default_traces
 
 TOOL_FUNCTIONS: dict[str, Callable[..., Any]] = {
     "get_account_summary": account_tools.get_account_summary,
     "list_transactions": account_tools.list_transactions,
     "get_payment_status": account_tools.get_payment_status,
     "get_exchange_rate": account_tools.get_exchange_rate,
+    "request_trace": account_tools.request_trace,
 }
 _SCHEMAS = {s["function"]["name"]: s["function"]["parameters"] for s in prompts.TOOL_SCHEMAS}
 MAX_TOOL_CALLS_PER_TURN = 2
@@ -82,6 +84,7 @@ class _Conversation:
     requests: list[str] = field(default_factory=list)  # what a human agent may see: card numbers masked only
     language: str = "es"
     pending_clarification: bool = False
+    pending_action: dict | None = None  # a trace proposed on the last turn, kept in code: never sent to the model
 
 
 class ConversationStore:
@@ -239,6 +242,48 @@ class Orchestrator:
         return TurnResult(trace_id, Disposition.ESCALATE.value, msg, lang, decision.category, decision.rule,
                           ticket.ticket_id, facts, actions, **llm_meta)
 
+    def _trace_step(self, result, conv, lang, trace_id, actions, done, escalate, meta) -> TurnResult:
+        """The customer's pending movements that match: propose the one (opened only on their yes), say which trace
+        is already open, ask which one, or hand it to a person when nothing of theirs is pending."""
+        decision = router.trace_step(result)
+        items = result["items"]
+        if decision.disposition == Disposition.ESCALATE:
+            return escalate(decision, actions, [])
+        if decision.rule == "action:trace_choose":
+            opts = "; ".join(f"{i}) {render.movement(m, lang)}" for i, m in enumerate(items, start=1))
+            return done(TurnResult(trace_id, decision.disposition.value, render.MSG["trace_choose"][lang].format(opts=opts), lang,
+                                   decision.category, decision.rule, None, [], actions, **meta,
+                                   model_view="[Se le pidió al cliente elegir cuál de sus movimientos pendientes rastrear]"))
+        m = items[0]
+        if decision.rule == "action:trace_already_open":
+            opened = m["open_trace"]
+            text = render.MSG["trace_already_open"][lang].format(tid=opened["trace_id"], mov=render.movement(m, lang),
+                                                                  sla=opened["sla_business_days"])
+            return done(TurnResult(trace_id, decision.disposition.value, text, lang, decision.category, decision.rule, None,
+                                   [{"tool": "request_trace", "args": {"product_id": m["product_id"]}, "result": opened}], actions,
+                                   **meta, model_view="[Se informó el pedido de rastreo que el cliente ya tenía abierto]"))
+        conv.pending_action = {"transaction_id": m["transaction_id"], "product_id": m["product_id"], "movement": m}
+        return done(TurnResult(trace_id, decision.disposition.value, render.MSG["trace_propose"][lang].format(mov=render.movement(m, lang)),
+                               lang, decision.category, decision.rule, None, [], actions, **meta,
+                               model_view="[Se le propuso al cliente abrir un pedido de rastreo; se espera su respuesta]"))
+
+    def _open_trace(self, proposal, session, lang, trace_id, done, escalate) -> TurnResult:
+        """The customer said yes: open the trace, read it back, and only then say it exists."""
+        action = {"tool": "request_trace", "args": {"product_id": proposal["product_id"]}, "confirmed_by_customer": True}
+        try:
+            opened = default_traces.open(session.customer_id, proposal["transaction_id"], proposal["product_id"], session.ref)
+            verified = default_traces.get(opened["trace_id"])
+        except Exception:  # noqa: BLE001 - an unwritable service is an unverified action, never a crash
+            verified = None
+        if not (verified and verified["customer_id"] == session.customer_id and verified["transaction_id"] == proposal["transaction_id"]):
+            return escalate(router.trace_unverified(), [{**action, "success": False, "error_type": "TraceNotReadBack"}], [])
+        decision = router.trace_opened()
+        text = render.MSG["trace_opened"][lang].format(tid=verified["trace_id"], mov=render.movement(proposal["movement"], lang),
+                                                       sla=verified["sla_business_days"])
+        return done(TurnResult(trace_id, decision.disposition.value, text, lang, decision.category, decision.rule, None,
+                               [{"tool": "request_trace", "args": {"product_id": proposal["product_id"]}, "result": verified}],
+                               [{**action, "success": True}], model_view="[Se abrió el pedido de rastreo que el cliente confirmó]"))
+
     def _degraded(self, reading, text, session, catalog, lang, trace_id, trace, meta) -> TurnResult | None:
         """LLM down: handle only what needs no language model - a confident
         out-of-scope request (abstain) or a plain balance question with no
@@ -294,6 +339,18 @@ class Orchestrator:
         def escalate(decision: Decision, actions: list[dict], facts: list[dict]) -> TurnResult:
             return done(self._escalate(decision, session, conv, ticket_text, lang, trace_id, actions, facts, llm_meta()))
 
+        # Act on the customer's own yes: a trace proposed on the last turn is opened only if this message is a plain
+        # yes, decided in code without the model. Any other message lets the proposal lapse and goes on as usual.
+        if conv.pending_action is not None:
+            proposal, conv.pending_action = conv.pending_action, None
+            answer = router.confirmation(text)
+            if answer == "yes":
+                return self._open_trace(proposal, session, lang, trace_id, done, escalate)
+            if answer == "no":
+                d = router.trace_cancelled()
+                return done(TurnResult(trace_id, d.disposition.value, render.MSG["trace_cancelled"][lang], lang, d.category, d.rule,
+                                       model_view="[El cliente no quiso abrir el pedido de rastreo; no se abrió nada]"))
+
         # Decide (pre-LLM): compliance hold, safety lexicon, classifier guard.
         pre, reading = router.pre_llm(text, session.attributes.get("customer_status"), conv.pending_clarification)
         trace["intent_reading"] = asdict(reading)
@@ -338,6 +395,9 @@ class Orchestrator:
             return done(TurnResult(trace_id, decision.disposition.value, reply, lang, decision.category, decision.rule,
                                    None, [], [], **llm_meta()))
 
+        if any(c["name"] == "request_trace" for c in calls):  # a proposed action takes the turn on its own
+            calls = [next(c for c in calls if c["name"] == "request_trace")]
+
         # Act: sanitized arguments, identity from the session, ownership checked in the tool.
         facts: list[dict] = []
         actions: list[dict] = []
@@ -376,6 +436,8 @@ class Orchestrator:
                     return done(TurnResult(trace_id, Disposition.CLARIFY.value, reply, lang, decision.category, decision.rule,
                                            None, facts, actions, **llm_meta(), model_view=_clarify_view(missing, catalog, reply)))
                 return escalate(decision, actions, facts)
+            if name == "request_trace":
+                return self._trace_step(result, conv, lang, trace_id, actions, done, escalate, llm_meta())
             facts.append({"tool": name, "args": action["args"], "result": result})
 
         # Verify + reply: rendered from the verified results only.

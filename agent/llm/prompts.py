@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import json
 
-PROMPT_VERSION = "3.0.0"
+PROMPT_VERSION = "3.1.0"
 
 SYSTEM_PROMPT = """Eres el módulo de comprensión del asistente de un banco en LATAM (clientes de México, Colombia y Argentina, que escriben en español o portugués). Solo se atienden consultas de CUENTA y PAGOS: saldos, movimientos, estado de pago de tarjetas de crédito y préstamos, y tipo de cambio.
 
@@ -30,6 +30,7 @@ Reglas:
 5. Si preguntan por atrasos, pagos pendientes o si están al día con un producto, usa get_payment_status aunque el producto no sea de crédito: el sistema explica si no aplica.
 6. Si la consulta no es de cuenta o pagos (bloqueos, disputas, créditos nuevos, cambios de datos), no llames ninguna herramienta. Si es de cuenta o pagos pero ambigua, llámala igual con lo que dijo el cliente: el sistema le pregunta lo que falte.
 7. Puedes llamar hasta dos herramientas a la vez si la pregunta lo necesita.
+8. Si el cliente dice que una transferencia, un pago o un depósito suyo no llegó, no se acreditó o sigue pendiente, o pide rastrearlo, usa request_trace con lo que haya dicho (producto, monto, fecha). No abres nada: el sistema busca el movimiento y le pide confirmación al cliente.
 """
 
 
@@ -66,6 +67,13 @@ TOOL_SCHEMAS = [
         "parameters": {"type": "object", "properties": {
             "source_currency": CURRENCY, "target_currency": CURRENCY, "on_date": DATE},
             "required": ["source_currency", "target_currency"]}}},
+    {"type": "function", "function": {
+        "name": "request_trace",
+        "description": "Rastreo de una transferencia, pago o depósito del cliente que sigue pendiente (no llegó o no se acreditó). "
+                       "Busca el movimiento; el sistema se lo muestra al cliente y solo abre el pedido si el cliente lo confirma.",
+        "parameters": {"type": "object", "properties": {
+            "product_id": PRODUCT_ID, "amount": {"type": "number", "description": "Monto que dio el cliente, si lo dio."},
+            "on_date": DATE}, "required": []}}},
 ]
 
 TOOL_INTENT = {
@@ -73,4 +81,5 @@ TOOL_INTENT = {
     "list_transactions": "transaction_lookup",
     "get_payment_status": "payment_status",
     "get_exchange_rate": "exchange_rate_inquiry",
+    "request_trace": "transaction_lookup",
 }

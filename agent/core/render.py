@@ -27,7 +27,19 @@ MSG = {
     "clarify_currency": {"es": "¿Qué monedas quieres convertir? (MXN, COP, ARS o USD)", "pt": "Quais moedas você quer converter? (MXN, COP, ARS ou USD)"},
     "clarify_product": {"es": "¿Sobre cuál de tus productos?", "pt": "Sobre qual dos seus produtos?"},
     "as_of": {"es": "Información al {d}.", "pt": "Informação de {d}."},
+    "trace_propose": {"es": "Encontré este movimiento pendiente: {mov}. ¿Quieres que abra un pedido de rastreo? Responde sí o no.",
+                      "pt": "Encontrei esta movimentação pendente: {mov}. Quer que eu abra um pedido de rastreamento? Responda sim ou não."},
+    "trace_choose": {"es": "Tienes varios movimientos pendientes. ¿Cuál quieres rastrear? {opts}",
+                     "pt": "Você tem várias movimentações pendentes. Qual quer rastrear? {opts}"},
+    "trace_opened": {"es": "Listo: abrí el pedido de rastreo {tid} para la {mov}. Operaciones responde en hasta {sla} días hábiles; si te lo piden, el número es {tid}.",
+                     "pt": "Pronto: abri o pedido de rastreamento {tid} para a {mov}. A equipe de operações responde em até {sla} dias úteis; se pedirem, o número é {tid}."},
+    "trace_already_open": {"es": "Ya tienes abierto el pedido de rastreo {tid} para la {mov}. Operaciones responde en hasta {sla} días hábiles desde que se abrió.",
+                           "pt": "Você já tem aberto o pedido de rastreamento {tid} para a {mov}. A equipe de operações responde em até {sla} dias úteis desde a abertura."},
+    "trace_cancelled": {"es": "Entendido, no abrí ningún pedido. Si más adelante lo necesitas, pídemelo.",
+                        "pt": "Entendido, não abri nenhum pedido. Se precisar depois, é só pedir."},
 }
+TXN_TYPE = {"es": {"Transfer": "transferencia", "Payment": "operación de pago", "Deposit": "operación de depósito"},
+            "pt": {"Transfer": "transferência", "Payment": "operação de pagamento", "Deposit": "operação de depósito"}}
 
 TYPE_PT = {"Cuenta Ahorro": "Conta Poupança", "Cuenta Corriente": "Conta Corrente", "Tarjeta Débito": "Cartão de Débito",
            "Tarjeta Crédito": "Cartão de Crédito", "Préstamo Personal": "Empréstimo Pessoal",
@@ -51,6 +63,13 @@ def fmt_date(d: Any) -> str:
 def product_label(p: dict, lang: str) -> str:
     t = p.get("product_type", "")
     return f"{TYPE_PT.get(t, t) if lang == 'pt' else t} ···{p.get('last4') or '????'}"
+
+
+def movement(m: dict, lang: str) -> str:
+    """A pending movement as the customer knows it: kind, amount, date and product (type and last 4)."""
+    kind = TXN_TYPE[lang].get(m["transaction_type"], m["transaction_type"])
+    on = "del" if lang == "es" else "de"
+    return f"{kind} de {money(m['amount'], m['currency'])} {on} {fmt_date(m['transaction_date'])} ({product_label(m, lang)})"
 
 
 def as_of_line(as_of: Any, lang: str) -> str:
