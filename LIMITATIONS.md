@@ -5,30 +5,21 @@ service, and as our own roadmap.
 
 ## Not yet measured
 
-1. **The live model on the held-out workload.** The live path has run end to
-   end on Claude Opus 5, Sonnet 5 and Haiku 4.5, over 13 fixture turns
-   ([`eval/reports/LIVE_SMOKE.md`](eval/reports/LIVE_SMOKE.md)): 1.2–3.0 s p50
-   per turn and USD 0.002–0.005 per model call with prompt caching. Groq has
-   not run yet: it needs a key. Its default is now the open-weights
+1. **The live models, beyond a sample.** Claude Sonnet 5 and Haiku 4.5 ran on
+   132 of the 528 held-out test cases, three runs each
+   ([`eval/reports/SYSTEM_EVAL_LIVE.md`](eval/reports/SYSTEM_EVAL_LIVE.md)).
+   The intervals are wide (Sonnet 5's safe automated resolution is 95.0%
+   [86.3–98.3]), a segment or country cell holds 15–20 in-scope cases, and
+   0 unsafe outcomes in 132 bounds the true rate only below ≈2.3%. Groq has
+   not run: it needs a key. Its default is the open-weights
    `openai/gpt-oss-120b`, because Llama 3.3 70B left Groq's self-serve tiers
-   on 2026-08-16. Still unmeasured on the
-   held-out workload, which needs the organizer's warehouse:
-   - the model's own tool-selection accuracy (SAR with a live model);
-   - p50/p95 latency and cost per case at scale;
-   - run-to-run variability.
-
-   What we can show today:
-   - the scripted **upper bound**: 100% SAR on the test workload (design v2);
-   - an **adversarial lower bound on safety**: 0 unsafe outcomes even with a
-     model that obeys injections and invents figures. Under v3 a model's
-     figures can no longer reach the customer at all;
-   - that the running app degrades safely without the model.
-
-   `make eval-live` produces the missing report once the warehouse is loaded.
+   on 2026-08-16.
 2. **Deployment.** Not yet deployed: it needs the hosting account. The Render
    Blueprint (`render.yaml`) is ready, and CI builds the Docker image on every
    push and boots it the way Render does (a disk mounted owned by root, its
-   own port), then smoke-tests it and checks the disk survives a restart.
+   own port), then smoke-tests it, checks the disk survives a restart, and
+   checks that a first load that fails or is killed leaves nothing a later
+   boot would serve.
 
 ## Data and ML
 
@@ -39,9 +30,9 @@ service, and as our own roadmap.
   sentences). Same-author bias between training and held-out text is likely.
   - Next: sample real (consented, redacted) chat logs, have humans label them,
     and re-run `make train-eval`.
-- **Small held-out sets.** 86 utterances in the classifier test split; 432
-  cases per system split, with 2–3 phrasings per case type. Intervals are
-  wide (e.g. escalation recall 93.3% [70.2–98.8]).
+- **Small held-out sets.** 86 utterances in the classifier test split; 528
+  cases per system split, with 1–3 phrasings per case type and language.
+  Intervals are wide (e.g. escalation recall 93.3% [70.2–98.8]).
 - **Known misses.** "vou processar o banco" escapes the escalation guard, and
   slang is weak (33%). Both are reported, and neither was tuned away on test.
 - **Synthetic-data artifacts** limit what the baseline can say:
@@ -135,6 +126,13 @@ service, and as our own roadmap.
   not self-served. Retraining with trace examples fixed it but lost a fraud
   report on the classifier's held-out test ("no reconheço essa compra"), so
   the classifier was kept. That choice was made after seeing the test split.
+- On the system test split the same guard reads one of the workload's trace
+  requests, "hice un pago que sigue pendiente", as a possible dispute (p =
+  0.62 ≥ τ = 0.55): 6 of the 48 confirm and cancel cases go to a person on the
+  first turn. That is why the ideal model reaches 98.8% and not 100%. It
+  shows on dev as well (4 cases). The candidate fix is the one above,
+  retraining with trace examples, which cost a fraud report; so it stays
+  reported, not tuned.
 - The demo's trace scenario starts by clearing the customer's earlier trace
   requests (`clear_traces`, sandbox only), because idempotency is per
   customer and every jury member runs the same test customer.

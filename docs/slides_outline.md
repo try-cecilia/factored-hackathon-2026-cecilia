@@ -1,7 +1,8 @@
 # Slide outline (5 slides)
 
-Numbers in brackets come from `eval/reports/SYSTEM_EVAL_LIVE.md` after `make eval-live` on the organizer's
-warehouse; everything else is already measured. Speaker notes follow `docs/video_pitch_script.md`.
+Every number is measured: the offline ones come from `eval/reports/SYSTEM_EVAL.md` and
+`SYSTEM_EVAL_ADVERSARIAL.md`, the live ones from `eval/reports/SYSTEM_EVAL_LIVE.md` (2026-09-28). If a report is
+regenerated, copy the numbers again from it. Speaker notes follow `docs/video_pitch_script.md`.
 
 ## 1. The problem, measured
 - Account and payment questions are **35%** of 686K contacts, the largest reason.
@@ -19,19 +20,22 @@ warehouse; everything else is already measured. Speaker notes follow `docs/video
   announced only after it reads back.
 - *(diagram: Understand → Decide → Act → Verify → Escalate, with the model's single job highlighted)*
 
-## 3. Proof (held-out cases, ES + PT, live models, 3 runs each)
+## 3. Proof (held-out cases, ES + PT)
 
-| | Keyword bot | Sonnet 5 | Haiku 4.5 | gpt-oss-120b |
-|---|---|---|---|---|
-| Safe automated resolution | [ ] | [ ] | [ ] | [ ] |
-| Unsafe outcomes | [ ] | [ ] | [ ] | [ ] |
-| Cases that sent a record to the model | n/a | [ ] | [ ] | [ ] |
-| p50 / p95 latency | [ ] | [ ] | [ ] | [ ] |
-| Cost per safe resolution | — | [ ] | [ ] | [ ] |
-| Cases that changed outcome between runs | — | [ ] | [ ] | [ ] |
+| | Keyword bot (528 cases) | Sonnet 5 (132 of them, 3 runs) | Haiku 4.5 (132 of them, 3 runs) |
+|---|---|---|---|
+| Safe automated resolution | 69.6% | **95.0%** | 78.3% |
+| Required escalations missed | 48 of 144 | 0 of 36 | 4 of 36 |
+| Unsafe outcomes | 0 | **0 in each run** | 0 in each run |
+| Cases that sent a record to the model | n/a | 0 in each run | 0 in each run |
+| p50 / p95 latency per case | 5 / 18 ms | 1.8 / 3.9 s | 1.2 / 3.8 s |
+| Model cost per safe resolution | no model | USD 0.0029 | USD 0.0057 |
+| Cases that changed outcome between runs | deterministic | 3.0% | 4.5% |
 
-- Adversarial model (obeys injections, invents figures): [0 unsafe in N].
+- Adversarial model (obeys injections, invents figures): 0 unsafe in 528; automation drops to 60.8%.
+- Ideal model, the upper bound on the model's understanding: 98.8%.
 - Learned intent classifier on unseen text: 84.9% vs 62.8% for keywords.
+- Groq's gpt-oss-120b not run (no key).
 
 ## 4. Data and engineering rigor
 - Contracts with a quarantine gate and rollback; lineage per row, run and partition; a late-arrival fixture.
@@ -40,7 +44,7 @@ warehouse; everything else is already measured. Speaker notes follow `docs/video
   ground).
 - Every classifier selection and evaluation run tracked in MLflow: model, effort, prompt hash, data hashes,
   code version and metrics.
-- 339 hermetic tests; CI builds the container and boots it like the host; `make all` rebuilds every number.
+- 342 hermetic tests; CI builds the container and boots it like the host; `make all` rebuilds every number.
 
 ## 5. Try it, and what it takes to make it real
 - **Try it:** [deployed URL]. Guided scenarios, "Why?" on every reply, the bank view, fault buttons, and the

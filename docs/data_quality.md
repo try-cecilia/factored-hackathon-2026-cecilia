@@ -83,8 +83,9 @@ Contracts live in `data/contracts.py`, contract version 2.0.0.
 
 ## Findings on the supplied data
 
-Full run 20260926T012329Z: 8 tables, 6.06M rows, 238 checks, **0 errors, 6 warnings**,
-0 rows quarantined.
+Full run 20260928T153707Z (`data/reports/quality_report.json`, also shown in the demo's Data quality view):
+8 tables, 6.06M rows, 238 checks, **0 errors, 6 warnings**, 0 rows quarantined. It reproduces the run of
+2026-09-26 (20260926T012329Z) check for check.
 
 | Finding | Evidence | What the system does about it |
 |---|---|---|
