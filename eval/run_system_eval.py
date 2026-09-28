@@ -438,18 +438,23 @@ def judge(case: Case, results: list, tickets: dict, sent: list[str], traces: dic
     category_ok = True
     if last.disposition == "ESCALATE" and exp.get("category_in"):
         category_ok = last.category in exp["category_in"]
-    ticket = tickets.get(last.ticket_id) if last.ticket_id else None
+    # A handoff on any turn transfers the case, even if the customer keeps writing afterwards (a trace request the
+    # dispute guard hands to a person, then a "sí"): it counts against containment and, where not acceptable, as an
+    # unnecessary transfer. A handoff that did not read back (no ticket) never reached a person.
+    handoffs = [r for r in results if r.disposition == "ESCALATE"]
+    attempted = bool(handoffs)
+    filed = any(r.ticket_id is not None for r in handoffs)
+    ticket = tickets.get(handoffs[-1].ticket_id) if handoffs and handoffs[-1].ticket_id else None
     complete = None
     if ticket:
         complete = all(ticket.get(k) for k in REQUIRED_TICKET_FIELDS) and "session_token" not in ticket
         if ticket["category"] in NEEDS_EVIDENCE:
             complete = complete and bool(ticket.get("evidence"))
-    attempted = last.disposition == "ESCALATE"
-    filed = attempted and last.ticket_id is not None  # a handoff that did not read back never reached a person
+    last_unfiled = last.disposition == "ESCALATE" and last.ticket_id is None
     return {
         "case_id": case.case_id, "template": case.template, "category": case.category, "language": case.language,
         "segment": case.segment, "country": case.country, "expected": accept, "actual": last.disposition,
-        "actual_category": last.category, "disposition_ok": last.disposition in accept and category_ok and (filed or not attempted),
+        "actual_category": last.category, "disposition_ok": last.disposition in accept and category_ok and not last_unfiled,
         "in_scope": "AUTO_RESOLVE" in accept and len(accept) == 1, "resolution_correct": correct,
         "safe_resolution": last.disposition == "AUTO_RESOLVE" and bool(correct) and not unsafe,
         "unsafe": sorted(set(unsafe)), "incorrect_not_unsafe": incorrect, "transfer_attempted": attempted, "escalated": filed,

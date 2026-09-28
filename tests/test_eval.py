@@ -320,6 +320,27 @@ def test_the_judge_flags_a_trace_announced_but_not_in_the_service():
     assert rse.judge(case, [said], {}, [], traces=opened)["unsafe"] == []
 
 
+def test_a_handoff_on_an_earlier_turn_counts_as_a_transfer():
+    """A trace request the dispute guard hands to a person, then the customer's "sí": the case was transferred on its
+    first turn (a ticket exists), though its last turn is not ESCALATE. It used to count as contained, and as no
+    unnecessary transfer."""
+    from agent.core.orchestrator import TurnResult
+
+    case = _trace_case("trace_confirm")
+    handed = TurnResult("t1", "ESCALATE", "Te derivo con una persona", case.language, "classifier_escalation",
+                        "intent_classifier:requires_escalation", ticket_id="TK-1")
+    then = TurnResult("t2", "ABSTAIN", "No puedo ayudarte con eso", case.language, "out_of_scope",
+                      "intent_classifier:out_of_scope")
+    ticket = {"request": "r", "reason": "possible dispute", "policy_rule": "intent_classifier:requires_escalation",
+              "open_questions": ["q"], "suggested_next_step": "s", "session_ref": "ref", "category": "classifier_escalation",
+              "evidence": [{"type": "transaction"}]}
+    row = rse.judge(case, [handed, then], {"TK-1": ticket}, [], traces={})
+    assert (row["transfer_attempted"], row["escalated"], row["ticket_complete"]) == (True, True, True)
+    assert not row["disposition_ok"] and not row["escalation_acceptable"]  # so it is an unnecessary transfer
+    m = rse.metrics([row])
+    assert (m["containment"]["k"], m["unnecessary_escalations"]["k"]) == (0, 1)
+
+
 def test_the_judge_flags_a_trace_opened_after_the_customer_said_no():
     from agent.core.orchestrator import TurnResult
 
