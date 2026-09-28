@@ -1,8 +1,13 @@
-# Slide outline (5 slides)
+# Slide outline (a cover and 5 slides)
 
 Every number is measured: the offline ones come from `eval/reports/SYSTEM_EVAL.md` and
 `SYSTEM_EVAL_ADVERSARIAL.md`, the live ones from `eval/reports/SYSTEM_EVAL_LIVE.md` (2026-09-28). If a report is
 regenerated, copy the numbers again from it. Speaker notes follow `docs/video_pitch_script.md`.
+
+## 0. Cover
+- "Account and payment questions, answered in seconds, only with verified data": balances, movements, payment
+  status and exchange rates, in Spanish and Portuguese, for Mexico, Colombia and Argentina.
+- Team [name] · [deployed URL].
 
 ## 1. The problem, measured
 - Account and payment questions are **35%** of 686K contacts, the largest reason.

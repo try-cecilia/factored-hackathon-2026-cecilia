@@ -1,9 +1,10 @@
 # Submission deliverables: slides and video
 
-## Slides (5)
+## Slides (6: a cover and 5)
 
-Outline and bracketed numbers to fill from the live evaluation: `docs/slides_outline.md`. The first deck
-(a private claude.ai artifact, 6 slides) described design v2 and is superseded.
+The v3 deck is a private claude.ai artifact (downloadable as PDF or PPTX), built on 2026-09-28 from
+`docs/slides_outline.md` with the measured numbers. Still to fill before sending: the team name, the deployed
+URL and the public repository's URL. The first deck (6 slides) described design v2 and is superseded.
 
 ## Video
 
