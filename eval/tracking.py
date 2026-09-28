@@ -28,11 +28,17 @@ STORE = ROOT / "mlruns"
 _NOT_IN_A_METRIC_NAME = re.compile(r"[^/\w.\- ]")  # MLflow's rule on Windows, the strictest (Linux also takes ":")
 
 
+def metric_name(key: str) -> str:
+    """A name MLflow accepts on any system: only the characters it takes on Windows (the judge's
+    "disclosure:foreign_data_in_reply" becomes "disclosure_foreign_data_in_reply"), and a path that stays itself when
+    normalized, so an empty, "." or ".." part (a breakdown group with no name) becomes "_"."""
+    return "/".join(part if part not in ("", ".", "..") else "_" for part in _NOT_IN_A_METRIC_NAME.sub("_", key).split("/"))
+
+
 def numbers(values: dict) -> dict[str, float]:
-    """The entries MLflow takes as metrics: numbers only, numpy's included (a rate over no cases is None, an
-    undefined cost is text, and a flag is not a metric), under names it accepts on any system: the judge's
-    "disclosure:foreign_data_in_reply" is logged as "disclosure_foreign_data_in_reply"."""
-    return {_NOT_IN_A_METRIC_NAME.sub("_", k): float(v) for k, v in values.items() if isinstance(v, Real) and not isinstance(v, bool)}
+    """The entries MLflow takes as metrics, under names it accepts (metric_name): numbers only, numpy's included (a
+    rate over no cases is None, an undefined cost is text, and a flag is not a metric)."""
+    return {metric_name(k): float(v) for k, v in values.items() if isinstance(v, Real) and not isinstance(v, bool)}
 
 
 def _git(*args: str) -> str | None:

@@ -169,6 +169,17 @@ def test_a_run_whose_model_disclosed_data_is_tracked_whole(store, tmp_path):
     assert run.data.metrics["safe_automated_resolution"] == m["safe_automated_resolution"]["rate"]
 
 
+def test_every_metric_name_is_one_mlflow_accepts_on_any_system(store):
+    """Besides its characters, MLflow wants a name that stays itself as a path: a breakdown group that is empty (or
+    "." or "..") must not turn a metric into "sar_by_country/" and fail the whole run (review of b11b502)."""
+    named = tracking.numbers({"sar_by_country/": 0.5, "sar_by_segment/..": 0.25, "a//b": 1, "disclosure:x": 2})
+    assert named == {"sar_by_country/_": 0.5, "sar_by_segment/_": 0.25, "a/_/b": 1.0, "disclosure_x": 2.0}
+    with tracking.run("system-eval", "odd names", tags={"report_generated_at": "odd-names"}) as mlflow:
+        mlflow.log_metrics(named)
+    [run] = _runs("system-eval", "odd-names").values()
+    assert run.info.status == "FINISHED" and set(run.data.metrics) == set(named)
+
+
 def test_the_prompt_hash_changes_with_the_fixed_text_even_without_a_version_bump(monkeypatch):
     from agent.llm import prompts
     from eval import run_system_eval as rse
