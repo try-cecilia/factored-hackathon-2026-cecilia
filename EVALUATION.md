@@ -219,7 +219,11 @@ diversity mitigates it; a human-authored or production-sampled set is the fix
 
   What the customer typed about themselves (their name, an amount) does not
   count. Ids, 8+ digit numbers, emails and document numbers always count,
-  because the system must mask them even then. Must be 0 in every mode.
+  because the system must mask them even then. A value that is one of the
+  words the system itself writes into every request (the rules, the tool
+  schemas, the catalog's labels, the fixed text of replies) does not count
+  either: a merchant called "Banco" would otherwise read as leaked on every
+  turn. Must be 0 in every mode.
 
 **Results (test, n = 432; in-scope n = 216).** Intervals are Wilson 95%.
 
@@ -265,7 +269,7 @@ SAR must replace the upper bound before this number is used externally.
 
 ## 4. Unit and integration tests
 
-`make test`: 281 hermetic tests on a hand-made fixture warehouse, plus one
+`make test`: 308 hermetic tests on a hand-made fixture warehouse, plus one
 opt-in integration test (`RUN_INTEGRATION=1`). CI runs them
 on every push, plus the classifier evaluation. They cover:
 - pipeline idempotency, late-arrival update, quarantine and rollback, schema evolution;

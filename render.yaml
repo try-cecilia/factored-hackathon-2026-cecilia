@@ -11,7 +11,7 @@ services:
     plan: 0.5c-512mb        # paid: it never sleeps while the jury tries it, and a disk needs a paid instance
     region: oregon
     healthCheckPath: /health
-    autoDeployTrigger: commit
+    autoDeployTrigger: "off"  # deploy by hand: a push must not restart the instance while the jury is using it
     disk:
       name: warehouse
       mountPath: /app/data/warehouse

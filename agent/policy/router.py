@@ -122,11 +122,16 @@ def llm_unavailable(attempts: list[dict[str, Any]]) -> Decision:
 
 # --- the one action: tracing a pending movement (D3) ------------------------------------------------------------
 
-_YES = {"si", "sim", "dale", "confirmo", "confirmar", "ok", "okay", "de acuerdo", "claro", "claro que si", "adelante",
-        "hazlo", "si por favor", "sim por favor", "si confirmo", "sim confirmo", "si dale", "si quiero", "sim quero",
-        "pode ser", "pode", "isso", "yes"}
-_NO = {"no", "nao", "no gracias", "nao obrigado", "nao obrigada", "cancelar", "cancela", "cancelalo", "mejor no",
-       "no quiero", "nao quero", "no por ahora", "agora nao", "no no"}
+_YES = {"si", "sim", "si si", "sim sim", "dale", "ok dale", "si dale", "dale si", "confirmo", "confirmar", "si confirmo",
+        "sim confirmo", "ok", "okay", "de acuerdo", "claro", "claro que si", "claro que sim", "si claro", "por supuesto",
+        "correcto", "adelante", "hazlo", "sale", "va", "si por favor", "sim por favor", "si quiero", "sim quero",
+        "pode ser", "pode", "sim pode", "isso", "yes", "yes please"}
+_NO = {"no", "nao", "no no", "nao nao", "no gracias", "nao obrigado", "nao obrigada", "cancelar", "cancela", "cancelalo",
+       "mejor no", "no quiero", "nao quero", "no por ahora", "agora nao"}
+_ORDINALS = {"primera": 0, "primero": 0, "primer": 0, "primeira": 0, "primeiro": 0, "segunda": 1, "segundo": 1,
+             "tercera": 2, "tercero": 2, "terceira": 2, "terceiro": 2, "cuarta": 3, "cuarto": 3, "quarta": 3, "quarto": 3,
+             "quinta": 4, "quinto": 4}
+_ORDINAL_ANSWER = re.compile(r"^(?:(?:la|el|lo|a|o|numero|nro|opcion|opcao)\s+)*(\w+)$")
 
 
 def confirmation(text: str) -> str | None:
@@ -135,6 +140,17 @@ def confirmation(text: str) -> str | None:
     by the model: an action happens only on the customer's own yes."""
     plain = " ".join(re.sub(r"[^\w\s]", " ", normalize(text)).split())
     return "yes" if plain in _YES else "no" if plain in _NO else None
+
+
+def ordinal(text: str, n: int) -> int | None:
+    """The index a plain answer to a numbered list picks ("la segunda", "2", "o primeiro"), if the whole message is
+    that and the list has it. Resolved in code: the model never saw the list."""
+    m = _ORDINAL_ANSWER.match(" ".join(re.sub(r"[^\w\s]", " ", normalize(text)).split()))
+    if not m:
+        return None
+    word = m.group(1)
+    index = int(word) - 1 if word.isdigit() else _ORDINALS.get(word)
+    return index if index is not None and 0 <= index < n else None
 
 
 def trace_step(result: dict) -> Decision:

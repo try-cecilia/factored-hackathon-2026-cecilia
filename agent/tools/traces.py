@@ -36,13 +36,16 @@ class TraceService:
 
     @staticmethod
     def trace_id(customer_id: str, transaction_id: str) -> str:
-        return "TR-" + hashlib.sha256(f"{customer_id}|{transaction_id}".encode()).hexdigest()[:8].upper()
+        # 64 bits: with every pending movement of a bank traced, two alike are not expected in its lifetime.
+        return "TR-" + hashlib.sha256(f"{customer_id}|{transaction_id}".encode()).hexdigest()[:16].upper()
 
     def get(self, trace_id: str) -> dict | None:
         return next((t for t in self._all() if t["trace_id"] == trace_id), None)
 
     def find(self, customer_id: str, transaction_id: str) -> dict | None:
-        return self.get(self.trace_id(customer_id, transaction_id))
+        """This customer's request for this movement. Checked field by field: an id is never trusted to be unique."""
+        return next((t for t in self._all() if t["trace_id"] == self.trace_id(customer_id, transaction_id)
+                     and t["customer_id"] == customer_id and t["transaction_id"] == transaction_id), None)
 
     def open(self, customer_id: str, transaction_id: str, product_id: str, session_ref: str) -> dict:
         """The existing request for this movement, or a new one."""

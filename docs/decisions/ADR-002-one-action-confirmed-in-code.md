@@ -30,8 +30,15 @@ organizer's dataset are Pending (1.99%).
    customer and this movement, is announced with its number and deadline. If
    it does not read back, the customer is not told it exists and a person
    opens it (a ticket to payments operations).
-5. **Idempotent.** The trace id derives from the customer and the movement:
-   asking again returns the same trace instead of a second one.
+5. **Idempotent.** The trace id derives from the customer and the movement
+   (64 bits of SHA-256): asking again returns the same trace instead of a
+   second one. Lookups and the read-back check the customer and the movement
+   field by field, so even a colliding id can never make one customer hear
+   another customer's trace number.
+6. **Several matches are listed**, and a plain answer with the number ("la
+   segunda", "2") is resolved in code from the list kept server side, like
+   the yes; the model never saw the list. The customer can also give the
+   amount or the date, which the model passes to the tool.
 
 ## Consequences
 

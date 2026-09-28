@@ -46,7 +46,11 @@ admin key, and the caps below.
 2. First boot ingests the 5,000-customer sample (about 20 s of load after the
    download) and then passes `/health`. The disk keeps it: later deploys and
    restarts do not re-ingest, even if the bucket closes after the deadline.
-3. Check it from any machine: `python ops/container_smoke.py https://<service>.onrender.com`.
+3. Later changes deploy by hand (Manual Deploy in the dashboard): the Blueprint
+   turns auto-deploy off, so a push never restarts the instance, and with it the
+   sessions, the day's budget count and the demo's fault flags, while the jury
+   is using it.
+4. Check it from any machine: `python ops/container_smoke.py https://<service>.onrender.com`.
    With the admin key (Render dashboard > Environment), `/admin/llm_budget`
    shows today's model spend.
 
@@ -128,7 +132,7 @@ instead of reading JSONL. The field names are already stable for that.
 
 | Surface | Control |
 |---|---|
-| `/auth/session` | customer_id + test PIN (HMAC under a server secret), lockout after 5 failures per 15 min, 10 req/min per client address (`CLIENT_IP_HEADER` behind Render), generic error messages |
+| `/auth/session` | customer_id + test PIN (HMAC under a server secret), lockout after 5 failures per 15 min, 10 req/min per client address by default (30 in the Render Blueprint, where every guided scenario opens a session; `CLIENT_IP_HEADER` behind Render), generic error messages |
 | model spend | `LLM_DAILY_BUDGET_USD` per UTC day, then degraded mode; plus the spend limit on the provider key |
 | `/chat` | bearer session token (15 min TTL), 20 msgs/min per session, 1,000 chars max |
 | customer data | ownership enforced in every tool against the session's customer; account numbers leave the tool layer as last-4 only |

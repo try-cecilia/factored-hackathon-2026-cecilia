@@ -69,8 +69,10 @@ verified tool results or fixed templates.
      is never announced: a person opens it. A plain no opens nothing. Any
      other message lets the proposal lapse and goes through every check above.
    - Asking again returns the same trace (idempotent per customer and
-     movement). Several matches ask which one. Nothing pending goes to a
-     person in payments operations.
+     movement, checked field by field, never by id alone). Several matches are
+     listed: the customer answers with the number, resolved in code from the
+     list kept server side, or with the amount or the date. Nothing pending
+     goes to a person in payments operations.
 5. **Decide after each tool** (`router.after_tool`). Each outcome maps to a disposition:
    - `MissingSlot`/`InvalidArgument`/`ResourceNotFound` → CLARIFY (listing the customer's own products).
    - `NotApplicable` → answered (e.g. "payment status doesn't apply to a savings account").

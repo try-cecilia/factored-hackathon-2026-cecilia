@@ -51,6 +51,16 @@ TOOL_FUNCTIONS: dict[str, Callable[..., Any]] = {
     "request_trace": account_tools.request_trace,
 }
 _SCHEMAS = {s["function"]["name"]: s["function"]["parameters"] for s in prompts.TOOL_SCHEMAS}
+# What the model's history keeps of our replies: fixed text, no figures, no identifiers.
+MODEL_VIEW = {
+    "answered": "[Se respondió al cliente con datos verificados de: {used}]",
+    "choose_product": "[Se le pidió al cliente elegir producto: {opts}]",
+    "trace_choose": "[Se le pidió al cliente elegir cuál de sus movimientos pendientes rastrear]",
+    "trace_already_open": "[Se informó el pedido de rastreo que el cliente ya tenía abierto]",
+    "trace_proposed": "[Se le propuso al cliente abrir un pedido de rastreo; se espera su respuesta]",
+    "trace_opened": "[Se abrió el pedido de rastreo que el cliente confirmó]",
+    "trace_cancelled": "[El cliente no quiso abrir el pedido de rastreo; no se abrió nada]",
+}
 MAX_TOOL_CALLS_PER_TURN = 2
 MAX_HISTORY_MESSAGES = 8
 MAX_CONVERSATIONS = 10_000
@@ -85,6 +95,7 @@ class _Conversation:
     language: str = "es"
     pending_clarification: bool = False
     pending_action: dict | None = None  # a trace proposed on the last turn, kept in code: never sent to the model
+    pending_choice: list[dict] | None = None  # the pending movements listed on the last turn, to pick one by number
 
 
 class ConversationStore:
@@ -183,13 +194,13 @@ def with_aliases(catalog: list[dict]) -> list[dict]:
 def _answered_view(facts: list[dict], catalog: list[dict]) -> str:
     alias = {p["product_id"]: p["alias"] for p in catalog}
     used = ", ".join(f"{f['tool']}({alias.get((f.get('args') or {}).get('product_id'), '')})" for f in facts)
-    return f"[Se respondió al cliente con datos verificados de: {used}]"
+    return MODEL_VIEW["answered"].format(used=used)
 
 
 def _clarify_view(missing: list[str], catalog: list[dict], reply_text: str) -> str:
     if "product_id" in missing and catalog:
         opts = "; ".join(f"{i}) {p['alias']} {p['product_type']} {p['currency']}" for i, p in enumerate(catalog, start=1))
-        return f"[Se le pidió al cliente elegir producto: {opts}]"
+        return MODEL_VIEW["choose_product"].format(opts=opts)
     return reply_text  # dates / currency / generic questions are fixed templates without customer data
 
 
@@ -250,10 +261,10 @@ class Orchestrator:
         if decision.disposition == Disposition.ESCALATE:
             return escalate(decision, actions, [])
         if decision.rule == "action:trace_choose":
+            conv.pending_choice = items  # a plain "la segunda" is resolved in code next turn
             opts = "; ".join(f"{i}) {render.movement(m, lang)}" for i, m in enumerate(items, start=1))
             return done(TurnResult(trace_id, decision.disposition.value, render.MSG["trace_choose"][lang].format(opts=opts), lang,
-                                   decision.category, decision.rule, None, [], actions, **meta,
-                                   model_view="[Se le pidió al cliente elegir cuál de sus movimientos pendientes rastrear]"))
+                                   decision.category, decision.rule, None, [], actions, **meta, model_view=MODEL_VIEW["trace_choose"]))
         m = items[0]
         if decision.rule == "action:trace_already_open":
             opened = m["open_trace"]
@@ -261,28 +272,28 @@ class Orchestrator:
                                                                   sla=opened["sla_business_days"])
             return done(TurnResult(trace_id, decision.disposition.value, text, lang, decision.category, decision.rule, None,
                                    [{"tool": "request_trace", "args": {"product_id": m["product_id"]}, "result": opened}], actions,
-                                   **meta, model_view="[Se informó el pedido de rastreo que el cliente ya tenía abierto]"))
+                                   **meta, model_view=MODEL_VIEW["trace_already_open"]))
+        # One movement: show it and ask for a plain yes; the proposal is kept in code for one turn.
         conv.pending_action = {"transaction_id": m["transaction_id"], "product_id": m["product_id"], "movement": m}
         return done(TurnResult(trace_id, decision.disposition.value, render.MSG["trace_propose"][lang].format(mov=render.movement(m, lang)),
-                               lang, decision.category, decision.rule, None, [], actions, **meta,
-                               model_view="[Se le propuso al cliente abrir un pedido de rastreo; se espera su respuesta]"))
+                               lang, decision.category, decision.rule, None, [], actions, **meta, model_view=MODEL_VIEW["trace_proposed"]))
 
     def _open_trace(self, proposal, session, lang, trace_id, done, escalate) -> TurnResult:
         """The customer said yes: open the trace, read it back, and only then say it exists."""
         action = {"tool": "request_trace", "args": {"product_id": proposal["product_id"]}, "confirmed_by_customer": True}
         try:
-            opened = default_traces.open(session.customer_id, proposal["transaction_id"], proposal["product_id"], session.ref)
-            verified = default_traces.get(opened["trace_id"])
+            default_traces.open(session.customer_id, proposal["transaction_id"], proposal["product_id"], session.ref)
+            verified = default_traces.find(session.customer_id, proposal["transaction_id"])  # this customer's, this movement's
         except Exception:  # noqa: BLE001 - an unwritable service is an unverified action, never a crash
             verified = None
-        if not (verified and verified["customer_id"] == session.customer_id and verified["transaction_id"] == proposal["transaction_id"]):
+        if not verified:
             return escalate(router.trace_unverified(), [{**action, "success": False, "error_type": "TraceNotReadBack"}], [])
         decision = router.trace_opened()
         text = render.MSG["trace_opened"][lang].format(tid=verified["trace_id"], mov=render.movement(proposal["movement"], lang),
                                                        sla=verified["sla_business_days"])
         return done(TurnResult(trace_id, decision.disposition.value, text, lang, decision.category, decision.rule, None,
                                [{"tool": "request_trace", "args": {"product_id": proposal["product_id"]}, "result": verified}],
-                               [{**action, "success": True}], model_view="[Se abrió el pedido de rastreo que el cliente confirmó]"))
+                               [{**action, "success": True}], model_view=MODEL_VIEW["trace_opened"]))
 
     def _degraded(self, reading, text, session, catalog, lang, trace_id, trace, meta) -> TurnResult | None:
         """LLM down: handle only what needs no language model - a confident
@@ -349,7 +360,13 @@ class Orchestrator:
             if answer == "no":
                 d = router.trace_cancelled()
                 return done(TurnResult(trace_id, d.disposition.value, render.MSG["trace_cancelled"][lang], lang, d.category, d.rule,
-                                       model_view="[El cliente no quiso abrir el pedido de rastreo; no se abrió nada]"))
+                                       model_view=MODEL_VIEW["trace_cancelled"]))
+        # A pending movement picked by its number in the list shown last turn ("la segunda"), also in code.
+        if conv.pending_choice is not None:
+            choices, conv.pending_choice = conv.pending_choice, None
+            index = router.ordinal(text, len(choices))
+            if index is not None:
+                return self._trace_step({"items": [choices[index]]}, conv, lang, trace_id, [], done, escalate, llm_meta())
 
         # Decide (pre-LLM): compliance hold, safety lexicon, classifier guard.
         pre, reading = router.pre_llm(text, session.attributes.get("customer_status"), conv.pending_clarification)

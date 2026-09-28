@@ -81,7 +81,7 @@ def test_asking_again_returns_the_same_trace_instead_of_a_new_one():
 def test_a_trace_that_does_not_read_back_is_never_announced(monkeypatch):
     orch, tok, _ = make(tool_call_response("request_trace", {}))
     orch.handle_message(tok, "hice una transferencia que todavía no llega")
-    monkeypatch.setattr(traces.TraceService, "get", lambda self, trace_id: None)  # the write was lost
+    monkeypatch.setattr(traces.TraceService, "find", lambda self, customer_id, transaction_id: None)  # the write was lost
     r = orch.handle_message(tok, "sí")
     assert (r.disposition, r.policy_rule) == ("ESCALATE", "action:trace_unverified") and r.ticket_id
     assert "abrí" not in r.response_text.lower()
@@ -128,6 +128,53 @@ def test_the_pre_llm_guard_hands_few_trace_requests_to_a_person():
     ("sí", "yes"), ("Si", "yes"), ("SÍ, por favor", "yes"), ("dale", "yes"), ("confirmo", "yes"), ("sim", "yes"),
     ("pode ser", "yes"), ("ok", "yes"), ("no", "no"), ("No, gracias", "no"), ("cancelar", "no"), ("não", "no"),
     ("nao obrigado", "no"), ("sí, pero antes dime mi saldo", None), ("no sé", None), ("¿cuánto tengo?", None),
+    ("claro que sim", "yes"), ("sí sí", "yes"), ("sale", "yes"), ("va", "yes"), ("por supuesto", "yes"), ("correcto", "yes"),
+    ("ok dale", "yes"), ("sim, pode", "yes"), ("yes please", "yes"), ("no no", "no"), ("mejor no", "no"), ("não quero", "no"),
 ])
 def test_only_a_plain_answer_counts_as_confirming_or_refusing(text, answer):
     assert router.confirmation(text) == answer
+
+
+def test_a_trace_id_collision_never_announces_another_customers_trace(monkeypatch):
+    """With colliding ids, one customer's trace must never be found or announced for another (review finding I2)."""
+    monkeypatch.setattr(traces.TraceService, "trace_id", staticmethod(lambda customer_id, transaction_id: "TR-SAME"))
+    service = traces.TraceService()
+    service.open("CLI-FIX0001", "TXN-OTHER", "PRD-FIX0001", "someone-else")
+    assert service.find("CLI-FIX0004", "TXN-FIX0006") is None
+    orch, tok, _ = make(tool_call_response("request_trace", {}))
+    r = orch.handle_message(tok, "hice una transferencia que todavía no llega")
+    assert r.policy_rule == "action:trace_proposed"  # not "already open" with the other customer's number
+
+
+def test_trace_ids_are_long_enough_that_a_bank_never_sees_two_alike():
+    assert len(traces.TraceService.trace_id("CLI-FIX0004", "TXN-FIX0006")) == len("TR-") + 16
+
+
+def test_a_pending_movement_can_be_picked_by_its_number_in_the_list(monkeypatch):
+    """Several pending movements: the list is kept server side, and "la segunda" picks the second, in code
+    (review finding I3). The customer then confirms it as usual."""
+    from agent.core import orchestrator as orch_mod
+    from agent.tools import account_tools
+
+    real = account_tools.request_trace
+    first = {"transaction_id": "TXN-FIX0006", "transaction_date": "2024-01-15 10:00:00", "transaction_type": "Transfer",
+             "amount": 40, "currency": "USD", "product_id": "PRD-FIX0010", "product_type": "Cuenta Ahorro", "last4": "0010", "open_trace": None}
+    second = {**first, "transaction_id": "TXN-FIX0099", "transaction_type": "Deposit", "amount": 15, "transaction_date": "2024-01-14 09:00:00"}
+    monkeypatch.setitem(orch_mod.TOOL_FUNCTIONS, "request_trace",
+                        lambda customer_id, **kw: real(customer_id, **kw) | {"items": [first, second]})
+    orch, tok, fake = make(tool_call_response("request_trace", {}))
+    listed = orch.handle_message(tok, "tengo movimientos que no se acreditan")
+    assert listed.policy_rule == "action:trace_choose" and "1)" in listed.response_text and "2)" in listed.response_text
+    proposed = orch.handle_message(tok, "la segunda")
+    assert (proposed.policy_rule, proposed.llm_calls) == ("action:trace_proposed", 0) and "15.00 USD" in proposed.response_text
+    opened = orch.handle_message(tok, "sí")
+    assert opened.policy_rule == "action:trace_opened" and stored()[0]["transaction_id"] == "TXN-FIX0099"
+    assert fake.call_count == 1
+
+
+@pytest.mark.parametrize("text,n,index", [
+    ("la segunda", 2, 1), ("2", 2, 1), ("el primero", 2, 0), ("la 1", 3, 0), ("a segunda", 2, 1), ("o primeiro", 2, 0),
+    ("número 2", 2, 1), ("la tercera", 2, None), ("la de 40 dólares", 2, None), ("la segunda y la primera", 2, None),
+])
+def test_an_ordinal_picks_from_the_list_only_when_it_is_the_whole_answer(text, n, index):
+    assert router.ordinal(text, n) == index

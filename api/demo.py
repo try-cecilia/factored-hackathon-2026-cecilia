@@ -207,10 +207,12 @@ def _scenarios() -> tuple[dict, ...]:
             (f"Trace a pending {en} (two turns)", f"Rastrear {es_title} pendiente (dos turnos)"),
             ("The one action this assistant takes. It finds the pending movement, shows it and asks for a plain yes; the yes is "
              "judged in code, not by the model. The trace is opened, read back, and only then announced with its number. "
-             "The bank view shows it as operations receives it.",
+             "The bank view shows it as operations receives it. The scenario starts by clearing this test customer's earlier "
+             "traces, which every visitor shares.",
              "La única acción que toma este asistente. Encuentra el movimiento pendiente, lo muestra y pide un sí; el sí lo evalúa "
              "el código, no el modelo. El pedido se abre, se relee y recién ahí se anuncia con su número. La vista del banco lo "
-             "muestra como lo recibe operaciones."), fault="clear_traces"))
+             "muestra como lo recibe operaciones. El escenario empieza borrando los pedidos anteriores de este cliente de prueba, "
+             "que comparten todos los visitantes."), fault="clear_traces"))
     order = ("normal", "ambiguous", "out_of_scope", "action", "human", "attack", "failure")
     return tuple(sorted(out, key=lambda s: order.index(s["path"])))
 
