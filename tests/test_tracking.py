@@ -86,8 +86,9 @@ def test_retraining_the_classifier_in_a_new_process_rewrites_the_same_bytes(tmp_
               "e.main()\n")
     for run in ("a", "b"):
         (tmp_path / run).mkdir()
-        subprocess.run([sys.executable, "-c", script, str(tmp_path / run)], cwd=tracking.ROOT, check=True,
-                       capture_output=True)
+        done = subprocess.run([sys.executable, "-c", script, str(tmp_path / run)], cwd=tracking.ROOT,
+                              capture_output=True, text=True, encoding="utf-8", errors="replace")
+        assert done.returncode == 0, done.stderr[-3000:]  # the trainer's own error, when it fails on CI
     for name in ("intent_clf.joblib", "intent_clf_meta.json"):
         assert (tmp_path / "a" / name).read_bytes() == (tmp_path / "b" / name).read_bytes(), name
 
@@ -112,6 +113,13 @@ def test_each_system_of_an_evaluation_is_tracked_with_its_model_prompt_data_and_
     assert proposed.data.params["prompt_version"] == PROMPT_VERSION
     assert proposed.data.params["prompt_sha256"] == rse.prompt_sha256() and len(rse.prompt_sha256()) == 64
     assert proposed.data.params["cases_sha256"] == hashlib.sha256(cases.read_bytes()).hexdigest()
+    # The projection reads the human baseline from docs/evidence, which git_dirty does not watch: its inputs are
+    # recorded by value instead (review of e0cc308).
+    b = json.loads(open("docs/evidence/baseline_metrics.json", encoding="utf-8").read())
+    ops = next(r for r in b["operations_by_reason"] if r["reason_category"] == "Transaccional")
+    assert json.loads(proposed.data.params["projection_inputs"]) == rep["projection"]["inputs"] == {
+        "source": "docs/evidence/baseline_metrics.json", "monthly_contacts_median": b["transaccional"]["monthly_contacts_median"],
+        "text_channel_pct": b["transaccional"]["text_channel_pct"], "aht_s": ops["aht_s"], "wait_s": ops["wait_s"]}
     m = rep["systems"]["proposed (scripted)"]
     assert proposed.data.metrics["safe_automated_resolution"] == m["safe_automated_resolution"]["rate"]
     assert proposed.data.metrics["unsafe_outcomes"] == m["unsafe_outcomes"]["rate"]
@@ -145,6 +153,9 @@ def test_repeated_runs_become_child_runs_and_their_spread_is_on_the_parent(store
     v = rep["systems"][name]["repeat_variability"]
     assert parent.data.metrics["outcome_flip_rate"] == v["outcome_flip_rate"]["rate"] > 0
     assert parent.data.metrics["safe_automated_resolution_stdev"] == v["safe_automated_resolution"]["stdev"]
+    # every run's privacy count is in the report, not only run 1's (review of 47feebc)
+    assert v["records_sent_to_model"] == {"mean": 0.0, "stdev": 0.0, "min": 0.0, "max": 0.0}
+    assert parent.data.metrics["records_sent_to_model_mean"] == 0.0
     assert (parent.data.params["repeats"], parent.data.params["effort"]) == ("2", "low")
 
 

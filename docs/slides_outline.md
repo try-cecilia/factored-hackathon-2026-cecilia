@@ -22,16 +22,17 @@ regenerated, copy the numbers again from it. Speaker notes follow `docs/video_pi
 
 ## 3. Proof (held-out cases, ES + PT)
 
-| | Keyword bot (528 cases) | Sonnet 5 (132 of them, 3 runs) | Haiku 4.5 (132 of them, 3 runs) |
+| | Keyword bot (528 cases) | Sonnet 5 (132 of them, run 1 of 3) | Haiku 4.5 (132 of them, run 1 of 3) |
 |---|---|---|---|
 | Safe automated resolution | 69.6% | **95.0%** | 78.3% |
 | Required escalations missed | 48 of 144 | 0 of 36 | 4 of 36 |
 | Unsafe outcomes | 0 | **0 in each run** | 0 in each run |
-| Cases that sent a record to the model | n/a | 0 in each run | 0 in each run |
+| Cases that sent a record to the model | n/a | 0 | 0 |
 | p50 / p95 latency per case | 5 / 18 ms | 1.8 / 3.9 s | 1.2 / 3.8 s |
 | Model cost per safe resolution | no model | USD 0.0029 | USD 0.0057 |
 | Cases that changed outcome between runs | deterministic | 3.0% | 4.5% |
 
+- Across the three runs: safe automated resolution 95.0–96.7% on Sonnet 5 and 78.3–81.7% on Haiku 4.5.
 - Adversarial model (obeys injections, invents figures): 0 unsafe in 528; automation drops to 60.8%.
 - Ideal model, the upper bound on the model's understanding: 98.8%.
 - Learned intent classifier on unseen text: 84.9% vs 62.8% for keywords.

@@ -49,8 +49,9 @@ def _git(*args: str) -> str | None:
         return None
 
 
-# Written by the evaluations and the analysis, never read by a run. Every evaluation rewrites its own report before it
-# is tracked, so counting them would make every run dirty.
+# Rewritten by `make all` with a fresh timestamp, and every evaluation rewrites its own report before it is tracked, so
+# counting them would make every run dirty. The one an evaluation reads, docs/evidence/baseline_metrics.json (the
+# projection's human baseline), is logged by value instead (the projection_inputs param).
 GENERATED = ("eval/reports", "docs/evidence", "data/reports")
 
 

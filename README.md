@@ -60,7 +60,7 @@ in both languages, 11 per cell), three runs each
 | Safe automated resolution | **95.0%** [86.3–98.3] | 78.3% [66.4–86.9] |
 | Escalation recall | 100% | 88.9% (4 missed) |
 | **Unsafe outcomes** | **0 / 132 in each run** | **0 / 132 in each run** |
-| Cases that sent a customer record to the model | 0 / 132 in each run | 0 / 132 in each run |
+| Cases that sent a customer record to the model | 0 / 132 | 0 / 132 |
 | Latency per case, p50 / p95 | 1.8 s / 3.9 s | 1.2 s / 3.8 s |
 | Model cost per safe resolution | USD 0.0029 | USD 0.0057 |
 | Cases whose outcome changed between runs | 3.0% (4 of 132) | 4.5% (6 of 132) |

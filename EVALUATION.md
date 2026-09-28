@@ -292,11 +292,15 @@ The table shows run 1, as the report does; the ranges are across the three runs.
 | Unnecessary transfers (n=84) | 0.0% | 1.2% |
 | Handoff completeness | 100% | 100% |
 | **Unsafe outcomes** | **0 / 132 in each run** | **0 / 132 in each run** |
-| Cases that sent a customer record to the model | 0 / 132 in each run | 0 / 132 in each run |
+| Cases that sent a customer record to the model | 0 / 132 | 0 / 132 |
 | Latency p50 / p95 per case | 1.78 / 3.86 s | 1.24 / 3.82 s |
 | Model calls per case | 0.80 | 0.89 |
 | Cost per attempted case / per safe resolution | USD 0.0014 / 0.0029 | USD 0.0023 / 0.0057 |
 | Cases whose outcome changed between runs | 3.0% [1.2–7.5] | 4.5% [2.1–9.6] |
+
+The unsafe count is 0 in each of the three runs of both models (the report's spread). The report carries the
+privacy count of run 1 only; runs 2 and 3 also sent no record, as their MLflow child runs show
+(`records_sent_to_model`). Reports from now on carry the spread of that rate too.
 
 - Sonnet 5 missed 3 in-scope cases, none unsafe. Twice it looked up the
   payment status of the card or loan whose balance was asked ("¿cuánto tengo
@@ -307,10 +311,17 @@ The table shows run 1, as the report does; the ranges are across the three runs.
 - Haiku 4.5 more often replies without looking anything up: it asks to
   clarify on every exchange-rate request (0/6), never proposes a trace (0 of
   the 12 action cases right), and on 4 of the 6 cases of money that never
-  arrived it asks instead of handing the case to a person. None of it is
-  unsafe: a reply without a lookup carries no figure.
-- The action with Sonnet 5: 6 of 6 confirmations traced, each in the tracing
-  service's records, and none opened after a "no" in any run.
+  arrived it asks instead of handing the case to a person. A reply without a
+  lookup carries no figure, so none of that is unsafe. Its other 4 wrong
+  outcomes: 3 requests for the balance of "my savings account" from
+  customers who have more than one, where instead of naming the account type
+  (which makes the system ask which one) it asked for the whole summary
+  (twice) or for both accounts (once), so the reply showed them all: the
+  customer's own data, so not unsafe. And one multi-turn case handed to a
+  person, its only unnecessary transfer.
+- The action with Sonnet 5: in run 1, 6 of 6 confirmations traced, each in
+  the tracing service's records. No run had an unsafe outcome, so no trace
+  was opened after a "no" in any of the three.
 - Sonnet 5's 4 changed cases are two exchange-rate requests and two
   injections with no id (which accept any safe outcome); Haiku 4.5's 6 are
   mostly exchange-rate requests.
@@ -422,7 +433,13 @@ them. The committed reports stay the reviewed record.
   uncommitted changes (`git_dirty`), and the report it belongs to
   (`report_generated_at`). The generated reports (`eval/reports/`,
   `docs/evidence/`, `data/reports/`) do not count: every evaluation rewrites
-  its own before it is tracked.
+  its own before it is tracked, and `make all` rewrites the rest with a new
+  timestamp. The one an evaluation reads, the human baseline in
+  `docs/evidence/baseline_metrics.json`, is logged by value instead
+  (`projection_inputs`: monthly contacts, text-channel share, handle time and
+  wait). Runs logged before `e0cc308`, including those of the committed
+  reports (at `9179e0c`), carry the old meaning: any uncommitted change,
+  reports included, so they read `true`.
 - Only the Markdown report is attached to a system run: the JSON report
   carries customer ids.
 - The store is local and git-ignored (`mlruns/`: sqlite and artifacts).

@@ -109,7 +109,7 @@ python ops/export_public.py . ../factored-hackathon-2026-<team> <redactions-file
 |---|---|---|
 | Deterministic layers (policy, tools, rendering, tracing) | 58–80 turns/s on 1 thread, 170–191 turns/s on 8 threads, p95 27–33 ms / 63–73 ms | `make loadtest` on the full 4.4M-transaction warehouse, LLM excluded; design v3, four runs on a 16-thread laptop |
 | LLM calls per turn | at most 1 (design v3); turns decided by the pre-LLM checks make none | 0.80 per case with Sonnet 5 on the held-out sample (`llm_calls_per_case`) |
-| LLM latency and cost | Claude Sonnet 5 (effort low): 1.8 s p50 / 3.9 s p95 per case, USD 0.0014 per case (0.0029 per safe resolution); Haiku 4.5: 1.2 / 3.8 s, USD 0.0023 per case | `make eval-live`, 132 held-out cases, `eval/reports/SYSTEM_EVAL_LIVE.md`; the tools + rules prefix is prompt-cached (≈1.7K of ≈2.1K input tokens, `eval/reports/LIVE_SMOKE.md`) |
+| LLM latency and cost | Claude Sonnet 5 (effort low): 1.8 s p50 / 3.9 s p95 per case, USD 0.0014 per case (0.0029 per safe resolution); Haiku 4.5: 1.2 / 3.8 s, USD 0.0023 per case | `make eval-live`, 132 held-out cases, `eval/reports/SYSTEM_EVAL_LIVE.md`; the tools + rules prefix is prompt-cached (≈1.7K of ≈2.1K input tokens in the smoke run on prompt 3.0.0, `eval/reports/LIVE_SMOKE.md`) |
 | LLM provider | the real ceiling: provider rate limits (per key, per minute), **not measured here**: the live evaluation sends one conversation at a time | scale with paid tiers, multiple keys, or a smaller model for tool routing |
 | DuckDB | single writer; many readers (the API opens read-only) | ingestion and serving can run side by side |
 | In-memory state | sessions ≤ 50k, conversations ≤ 10k × 8 messages | per process; multi-replica needs Redis |
