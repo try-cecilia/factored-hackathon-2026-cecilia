@@ -218,13 +218,15 @@ class Orchestrator:
     def handle_message(self, session_token: str, text: str) -> TurnResult:
         trace_id = uuid.uuid4().hex
         ctx_token = current_trace_id.set(trace_id)
-        start = time.time()
-        trace: dict[str, Any] = {"trace_id": trace_id, "ts": start, "prompt_version": prompts.PROMPT_VERSION, "llm_steps": []}
+        # The record's timestamp is wall time; the latency, a monotonic clock fine enough for milliseconds (Windows'
+        # wall clock ticks every 15.6 ms).
+        ts, start = time.time(), time.perf_counter()
+        trace: dict[str, Any] = {"trace_id": trace_id, "ts": ts, "prompt_version": prompts.PROMPT_VERSION, "llm_steps": []}
         try:
             result = self._handle(session_token, text, trace_id, trace)
         finally:
             current_trace_id.reset(ctx_token)
-        result.latency_ms = (time.time() - start) * 1000
+        result.latency_ms = (time.perf_counter() - start) * 1000
         default_trace_log.write({**trace, **{k: v for k, v in asdict(result).items() if k not in ("verified_facts",)},
                                  "verified_tools": [f["tool"] for f in result.verified_facts]})
         return result

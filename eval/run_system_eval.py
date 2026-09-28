@@ -1,7 +1,7 @@
 """Baseline vs. proposed system on the same held-out workload, rubric metrics.
 
     python -m eval.run_system_eval                      # both systems, scripted LLM (offline)
-    python -m eval.run_system_eval --llm live --repeats 3 --limit 120   # needs a provider key + network
+    python -m eval.run_system_eval --llm live --repeats 3 --limit 132   # needs a provider key + network
 
 Modes, and what each one can and cannot claim:
 - baseline: the deterministic keyword bot (eval/baseline_bot.py). Real
@@ -568,6 +568,18 @@ def error_analysis(rows: list[dict]) -> list[dict]:
     return sorted(({**g, "languages": sorted(g["languages"])} for g in groups.values()), key=lambda g: (-g["n"], g["template"]))
 
 
+def sample(cases: list[Case], n: int) -> list[Case]:
+    """About n cases for a limited run: the same number per case type and language, spread evenly over each group's
+    country-segment cells, in file order. A plain stride fell in step with the workload's order and kept 11 of its
+    22 case types."""
+    groups: dict[tuple[str, str], list[int]] = defaultdict(list)
+    for i, c in enumerate(cases):
+        groups[(c.template, c.language)].append(i)
+    per = max(1, n // len(groups)) if groups else 0
+    keep = sorted(idx[(j * len(idx)) // min(per, len(idx))] for idx in groups.values() for j in range(min(per, len(idx))))
+    return [cases[i] for i in keep]
+
+
 RUN_PATHS = ("HUMAN_QUEUE_PATH", "AUDIT_LOG_PATH", "TRACE_LOG_PATH", "TRACE_REQUESTS_PATH")
 
 
@@ -848,7 +860,7 @@ def main() -> None:
     FOREIGN_POOL[:] = [r[0] for r in get_connection().execute(
         "SELECT product_id FROM products ORDER BY md5(product_id) LIMIT 500").fetchall()]
     if a.limit:
-        cases = cases[:: max(1, len(cases) // a.limit)][: a.limit]
+        cases = sample(cases, a.limit)
     systems, runs, tracked = {}, {}, {}
     targets: list = [None]
     if a.llm == "live" and a.models:

@@ -204,6 +204,22 @@ def test_repeat_variability_covers_every_headline_metric_and_names_the_cases_tha
     assert steady["outcome_flip_rate"]["k"] == 0 and steady["safe_automated_resolution"]["stdev"] == 0
 
 
+def test_a_limited_run_samples_every_case_type_in_each_language():
+    """--limit took every k-th case, a stride that fell in step with the workload's order: the first live run on the
+    organizer's data kept 11 of its 22 case types. The sample takes the same number per case type and language,
+    spread over the country-segment cells."""
+    from collections import Counter
+
+    cases = generate(per_cell=1, seed=3)
+    groups = Counter((c.template, c.language) for c in cases)
+    picked = rse.sample(cases, 2 * len(groups))
+    assert Counter((c.template, c.language) for c in picked) == {g: min(2, n) for g, n in groups.items()}
+    assert len({c.case_id for c in picked}) == len(picked)
+    for group, n in groups.items():
+        if n >= 2:  # two picks from a group with several cells come from two different cells
+            assert len({(c.country, c.segment) for c in picked if (c.template, c.language) == group}) == 2
+
+
 def _steady_metrics() -> dict:
     return {k: {"rate": 1.0} for k in rse.VARIABILITY_RATES} | {k: 1.0 for k in rse.VARIABILITY_VALUES}
 

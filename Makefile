@@ -30,8 +30,8 @@ eval-adversarial: ## same workload with a deliberately bad model: safety must no
 
 EVAL_MODELS ?= anthropic:claude-sonnet-5,anthropic:claude-haiku-4-5,groq:openai/gpt-oss-120b
 
-eval-live:        ## live models compared on one 120-case sample, 3 repeats each (a model without its API key is skipped)
-	$(PY) -m eval.run_system_eval --split test --system proposed --llm live --repeats 3 --limit 120 --models $(EVAL_MODELS)
+eval-live:        ## live models compared on one 132-case sample (3 per case type and language), 3 repeats each (a model without its API key is skipped)
+	$(PY) -m eval.run_system_eval --split test --system proposed --llm live --repeats 3 --limit 132 --models $(EVAL_MODELS)
 
 live-smoke:       ## live model on the fixture warehouse: every required path, ES/PT, per-turn cost and latency
 	$(PY) -m ops.live_smoke --out eval/reports/LIVE_SMOKE.md

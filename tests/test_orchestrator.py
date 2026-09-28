@@ -46,6 +46,21 @@ def test_a_turn_records_the_customers_words_as_the_model_received_them():
     assert orch.handle_message(tok, "¿Cuál es mi saldo?").model_input is None  # the model was down: it received nothing
 
 
+def test_turn_latency_is_measured_on_a_clock_fine_enough_for_milliseconds(monkeypatch):
+    """Windows' wall clock ticks every 15.6 ms, so a fast turn timed with time.time() read 0 ms (the baseline bot's
+    p50 came out as 0.0 ms on the organizer's data). Latency comes from the monotonic high-resolution clock."""
+    import time as time_mod
+
+    from eval.baseline_bot import BaselineBot
+
+    ticks = iter(range(100_000))
+    monkeypatch.setattr(time_mod, "perf_counter", lambda: next(ticks) * 0.002)  # 2 ms per reading
+    monkeypatch.setattr(time_mod, "time", lambda: 1_790_000_000.0)  # a wall clock too coarse to see the turn
+    orch, tok, _ = make([])
+    assert orch.handle_message(tok, "Me clonaron la tarjeta").latency_ms >= 2
+    assert BaselineBot(orch.session_store).handle_message(tok, "Me clonaron la tarjeta").latency_ms >= 2
+
+
 def test_a_turn_without_a_model_call_costs_nothing_and_an_unpriced_call_costs_unknown():
     orch, tok, fake = make([tool_call_response("get_account_summary", {})])
     assert orch.handle_message(tok, "Me clonaron la tarjeta").cost_usd == 0.0  # decided before any model call

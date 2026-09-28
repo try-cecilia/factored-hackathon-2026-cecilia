@@ -53,18 +53,18 @@ class BaselineBot:
         self.session_store = session_store
 
     def handle_message(self, token: str, text: str) -> TurnResult:
-        start, trace_id = time.time(), uuid.uuid4().hex
+        start, trace_id = time.perf_counter(), uuid.uuid4().hex  # a monotonic clock fine enough for milliseconds
         lang = detect_language(text).language
         try:
             session = self.session_store.validate(token)
         except (InvalidSession, ExpiredSession):
-            return TurnResult(trace_id, "REAUTH_REQUIRED", render.MSG["reauth"][lang], lang, "session", latency_ms=(time.time() - start) * 1000)
+            return TurnResult(trace_id, "REAUTH_REQUIRED", render.MSG["reauth"][lang], lang, "session", latency_ms=(time.perf_counter() - start) * 1000)
 
         def esc(decision: Decision, actions=()):
             t = escalation.escalate(decision, session.customer_id, session.ref, text, lang, list(actions), [], [], session.attributes, trace_id)
             msg = render.MSG["escalate_security" if decision.category == "security" else "escalate"][lang]
             return TurnResult(trace_id, "ESCALATE", msg, lang, decision.category, decision.rule, t.ticket_id,
-                              latency_ms=(time.time() - start) * 1000)
+                              latency_ms=(time.perf_counter() - start) * 1000)
 
         if session.attributes.get("customer_status") == "Suspended":
             return esc(Decision(Disposition.ESCALATE, "compliance hold", "compliance_hold", rule="customer_status == Suspended"))
@@ -74,7 +74,7 @@ class BaselineBot:
             return esc(Decision(Disposition.ESCALATE, "keyword escalation", cats[0], rule=f"lexicon:{cats[0]}"))
         if intent == "out_of_scope":
             return TurnResult(trace_id, "ABSTAIN", render.MSG["abstain"][lang], lang, "out_of_scope", "keyword:out_of_scope",
-                              latency_ms=(time.time() - start) * 1000)
+                              latency_ms=(time.perf_counter() - start) * 1000)
 
         catalog = account_tools.get_customer_profile(session.customer_id)["products"]
         tool, args = None, {}
@@ -111,8 +111,8 @@ class BaselineBot:
         if decision is not None:
             if decision.disposition == Disposition.CLARIFY:
                 return TurnResult(trace_id, "CLARIFY", render.clarify(decision.missing_slots, catalog, lang), lang, decision.category,
-                                  decision.rule, tool_calls=[action], latency_ms=(time.time() - start) * 1000)
+                                  decision.rule, tool_calls=[action], latency_ms=(time.perf_counter() - start) * 1000)
             return esc(decision, [action])
         facts = [{"tool": tool, "args": args, "result": result}]
         return TurnResult(trace_id, "AUTO_RESOLVE", render.render_answer(facts, lang), lang, "resolved", "keyword_routing",
-                          None, facts, [action], latency_ms=(time.time() - start) * 1000)
+                          None, facts, [action], latency_ms=(time.perf_counter() - start) * 1000)

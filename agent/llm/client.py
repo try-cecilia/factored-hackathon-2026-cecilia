@@ -236,7 +236,7 @@ class LLMClient:
 
     def chat(self, messages: list[dict[str, Any]], tools: list[dict[str, Any]] | None = None,
              temperature: float = 0.0) -> LLMResponse:
-        start = time.time()
+        start = time.perf_counter()  # durations and the turn's deadline on a monotonic clock, fine to the millisecond
         deadline = start + self.total_budget_s
         attempts: list[dict[str, Any]] = []
         for p in self.providers:
@@ -248,28 +248,28 @@ class LLMClient:
                 attempts.append({"provider": p.name, "outcome": "skipped", "reason": "circuit_open"})
                 continue
             for attempt in range(self.max_attempts):
-                remaining = deadline - time.time()
+                remaining = deadline - time.perf_counter()
                 if remaining <= 0:
                     attempts.append({"provider": p.name, "outcome": "skipped", "reason": "turn_budget_exhausted"})
                     break
-                t0 = time.time()
+                t0 = time.perf_counter()
                 try:
                     content, tool_calls, usage, served_model, raw = (p.call or openai_compatible_call)(
                         self._client(p, api_key), p, messages, tools, temperature, min(self.timeout_s, remaining))
-                    attempts.append({"provider": p.name, "outcome": "ok", "ms": round((time.time() - t0) * 1000, 1)})
+                    attempts.append({"provider": p.name, "outcome": "ok", "ms": round((time.perf_counter() - t0) * 1000, 1)})
                     self._record_success(p.name)
-                    return LLMResponse(content, tool_calls, p.name, (time.time() - start) * 1000, served_model, usage, attempts, raw)
+                    return LLMResponse(content, tool_calls, p.name, (time.perf_counter() - start) * 1000, served_model, usage, attempts, raw)
                 except Exception as exc:  # noqa: BLE001 - SDK error types vary by provider
                     kind = classify_error(exc)
                     attempts.append({"provider": p.name, "outcome": "error", "kind": kind, "error": f"{type(exc).__name__}: {exc}"[:300],
-                                     "ms": round((time.time() - t0) * 1000, 1)})
+                                     "ms": round((time.perf_counter() - t0) * 1000, 1)})
                     logger.warning("LLM %s attempt %d failed (%s): %s", p.name, attempt + 1, kind, exc)
                     if kind == "permanent":
                         break
                     self._record_failure(p.name)
                     if attempt < self.max_attempts - 1:
                         delay = self.backoff_base_s * (2 ** attempt) * (1 + random.random() * 0.25)
-                        self._sleep(max(0.0, min(delay, deadline - time.time())))
+                        self._sleep(max(0.0, min(delay, deadline - time.perf_counter())))
         raise LLMUnavailable("all LLM providers failed or were unavailable", attempts)
 
 
