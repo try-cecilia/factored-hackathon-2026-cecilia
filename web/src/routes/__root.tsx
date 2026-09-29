@@ -7,8 +7,12 @@ export const Route = createRootRoute({
       { charSet: 'utf-8' },
       { name: 'viewport', content: 'width=device-width, initial-scale=1' },
       { title: 'Cecilai' },
+      { name: 'color-scheme', content: 'light' },
     ],
-    links: [{ rel: 'stylesheet', href: stylesheet }],
+    links: [
+      { rel: 'stylesheet', href: stylesheet },
+      { rel: 'icon', type: 'image/png', href: '/cecilia-avatar.png' },
+    ],
   }),
   component: () => (
     <html lang="es">

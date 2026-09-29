@@ -267,6 +267,84 @@ ventanas en memoria son de 1000 registros de auditoría y 500 de trazas.
 
 ---
 
+## 8. Frontend web del cliente
+
+**Hoy.** `web/` (TanStack Start, React 19). El navegador nunca habla con la API de Python: lo hace un BFF, con
+funciones de servidor en `web/src/server/`, y el token de sesión vive en una cookie httpOnly (ver frontera 1). La ruta
+`/chat` (`web/src/chat/`) es el chat del cliente; el shell y los estilos siguen el diseño "Cecil.ai" de Paper, y sus
+tokens están en `web/src/tokens.css` con los mismos nombres que en Paper (`--color-cecil-blue`, `--color-gray-500`,
+`--radius-app`...). La consola del operador debe reutilizar esas variables, no redefinirlas. Nada depende de la nube: Inter y DM Mono salen
+de paquetes npm (`@fontsource`) y quedan dentro del build, y el avatar de Cecilia está en `web/public`; no hay CDN ni
+Google Fonts.
+
+**Cómo correrlo.**
+
+```bash
+make web-setup                 # Node 24, pnpm 10.33.2, dependencias fijadas
+make serve-all                 # con el warehouse real (make ingest o ingest-demo) y una clave de modelo
+make serve-all-fixture         # sin S3 ni claves: warehouse de los tests y un modelo simulado
+```
+
+Web en `http://127.0.0.1:3000`, API en `http://127.0.0.1:8000`. Variables del frontend (o `web/.env`):
+`AGENT_API_URL` (por defecto `http://127.0.0.1:8000`) y `TRUSTED_CLIENT_IP_HEADER` (ver frontera 1). Con `DEMO_MODE=1`
+en la API el chat muestra, aparte y marcado como **Demo**, los escenarios guiados, las fallas (vencer la sesión,
+modelo caído), "¿Por qué?" en cada respuesta y la vista del banco de la sesión; sin `DEMO_MODE` nada de eso se dibuja.
+`make serve-fixture` deja `DEMO_MODE=1` salvo que lo pises (`DEMO_MODE=0 make serve-fixture`).
+
+`ops/serve_fixture.py` es una **simulación offline**: el código posterior al modelo (políticas, herramientas, plantillas,
+tickets, rastreos, sesiones) es el real, pero qué herramienta pedir lo decide una coincidencia de palabras, no un modelo.
+Sirve para desarrollar y mostrar el front; no dice nada de cómo se comporta un modelo real.
+
+**Contrato que usa el BFF.**
+
+| Función de servidor | Llamada a la API | Qué devuelve al navegador |
+|---|---|---|
+| `sendMessage` | `POST /chat` con `session_token` (lo agrega el servidor) y `Idempotency-Key` (un UUID por mensaje, que el cliente conserva en los reintentos), plazo de 35 s | La respuesta (`disposition`, texto, idioma, `category`, `ticket_id`, y `why` solo en demo) o un motivo de fallo |
+| `getCase` | `GET /case/{ticket_id}` | Estado del caso y el texto de novedad, o `not_found` |
+| `getDemoKit`, `startScenario`, `applyDemoFault`, `getDemoTickets` | `/demo/*` | Solo con `DEMO_MODE=1`; los PIN de prueba se quedan en el servidor |
+
+La propuesta de rastreo se reconoce por `disposition=CLARIFY` y `category=confirm_action`, y se responde con un "Sí" o "No"
+que el código de la API evalúa (nunca el modelo). Una aclaración se dibuja como lista de opciones cuando el texto trae
+`1) ...; 2) ...`; si no calza con ese formato se muestra el texto tal cual.
+
+**Fallas, y qué ve el cliente.**
+
+| Situación | Qué pasa |
+|---|---|
+| Sesión vencida (`REAUTH_REQUIRED`, HTTP 401 o cookie ausente) | El BFF borra la cookie y el chat va a `/login?redirect=/chat&motivo=expired`, con aviso; al ingresar vuelve al chat (la conversación empieza de cero) |
+| 429 | Aviso en la conversación y botón "Reintentar"; no se reenvía solo |
+| API caída, conexión cortada o plazo agotado | Resultado incierto: "No pude confirmar si el servicio recibió tu mensaje", con "Reintentar" manual. El reintento es seguro porque viaja con la misma clave: si la API ya lo procesó, devuelve la misma respuesta y no crea otro ticket ni confirma dos veces |
+| Respuesta que no calza con el contrato | "Recibí una respuesta que no pude mostrar" y "Reintentar" |
+| Doble envío | Un turno a la vez: el compositor se bloquea mientras envía, y el BFF rechaza un segundo envío de la misma sesión mientras el primero corre |
+
+**Idempotencia de `POST /chat`.** Con la cabecera `Idempotency-Key` (8 a 64 caracteres: letras, dígitos, `-` o `_`), la API
+(`api/idempotency.py`) guarda la respuesta por (sesión, clave) mientras viva la sesión (`SESSION_TTL_SECONDS`, 900 por
+defecto), en el mismo SQLite de sesiones y conversaciones (`STATE_DB_PATH`, o memoria). La misma clave devuelve la misma
+respuesta con `Idempotent-Replayed: true`, sin volver a correr el turno y sin gastar cupo del límite de mensajes; un
+reintento que llega mientras el primero corre espera su respuesta. Antes de entregar un replay se comprueba que la
+sesión siga viva (también después de esperar): con la sesión cerrada o vencida la respuesta es `REAUTH_REQUIRED`, como en
+un turno normal. La misma clave con otro texto es un 422. No se guardan las respuestas de sesión vencida ni los errores. Un turno que falla después de empezar (por ejemplo, el ticket
+ya se creó y falla el log de trazas) deja la clave marcada: el reintento recibe 409 y nunca un segundo turno; el lugar solo
+se devuelve si el turno se rechazó antes de empezar (429, sesión terminada).
+Pasadas 50 000 respuestas guardadas, las más viejas pierden la respuesta pero conservan una marca (hash de la clave):
+un reintento de esa clave recibe un 409 "already processed" en vez de volver a ejecutarse, y la UI dice "Ya lo
+recibimos, pero la respuesta ya no está guardada". Las marcas de sesiones vivas no se expulsan nunca: con 500 000 claves
+retenidas, un turno nuevo se rechaza antes de ejecutarse (503 con `Retry-After`, sin efectos), y cada turno toma su lugar
+en la misma transacción que comprueba el tope. Sin la cabecera, el comportamiento es el de siempre. Con
+`DEMO_MODE=1` la respuesta guardada incluye `why` y `policy_rule`, y un replay los filtra según el modo vigente.
+
+**Punto de sustitución.** El BFF solo conoce `POST /chat` y `GET /case/{id}`; con el core real el contrato no cambia.
+
+**En producción.** Falta un `POST /auth/session/refresh` para ofrecer "Seguir conectado" antes de que venza.
+
+**Cómo se verifica.** `make web-typecheck`, `make web-test` (formato de las aclaraciones, envío, 401, clave de idempotencia),
+`tests/test_idempotency.py` (API) y `make web-build`; el flujo
+completo se probó en el navegador con `make serve-all-fixture`, y las capturas están en `docs/demo/web-*.png`
+(login, chat vacío, propuesta de rastreo, escalamiento con número de caso, sesión vencida y su aviso previo, aclaración,
+límite de tasa, API caída, plazo agotado, escenario en portugués, móvil, respuesta inesperada, chat sin `DEMO_MODE`).
+
+---
+
 ## Trabajo restante antes de desplegar
 
 Es la lista consolidada de lo que separa este prototipo de un servicio real. El detalle de cada punto está en la

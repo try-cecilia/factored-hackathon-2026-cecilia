@@ -1,0 +1,74 @@
+// Shapes the chat server functions hand to the browser. The session token is never part of them.
+
+export type Disposition = 'AUTO_RESOLVE' | 'CLARIFY' | 'ABSTAIN' | 'ESCALATE'
+
+// DEMO_MODE only: what api/demo.py explains about one reply.
+export type Why = {
+  rule: string
+  because: { en: string; es: string }
+  model: {
+    called: boolean
+    provider: string | null
+    model: string | null
+    saw: string | null
+    chose: { tool: string; args: Record<string, string | number | boolean | null> }[]
+  }
+  checks: { tool: string; product: string | null; ok: boolean; outcome: string }[]
+  llm_calls: number
+  cost_usd: number | null
+  latency_ms: number
+}
+
+export type Reply = {
+  trace_id: string
+  disposition: Disposition
+  response_text: string
+  language: string
+  category: string
+  ticket_id: string | null
+  latency_ms: number
+  why?: Why
+}
+
+export type SendFailure =
+  | 'session_expired'
+  | 'rate_limited'
+  | 'unavailable' // never reached the API: safe to send again
+  | 'timeout' // may have been processed: the customer decides
+  | 'busy' // another send from this session is still in flight
+  | 'already_processed' // the API got this message before and no longer keeps its reply
+  | 'unexpected'
+
+export type SendResult = { ok: true; reply: Reply } | { ok: false; failure: SendFailure }
+
+export type CaseStatus = { ticket_id: string; status: string; message: string | null }
+
+export type CaseResult =
+  | { ok: true; case: CaseStatus }
+  | { ok: false; failure: 'session_expired' | 'not_found' | 'unavailable' }
+
+export type DemoScenario = {
+  id: string
+  path: string
+  customer_id: string
+  language: string
+  fault: string | null
+  turns: string[]
+  expect: (string | null)[]
+  title: { en: string; es: string }
+  look_for: { en: string; es: string }
+}
+
+export type DemoTicket = {
+  ticket_id: string
+  queue: string
+  priority: string
+  category: string
+  request: string
+  reason: string
+  suggested_next_step: string
+  open_questions: string[]
+  created_at: number
+}
+
+export type DemoFault = 'expire_session' | 'llm_outage' | 'llm_restore'

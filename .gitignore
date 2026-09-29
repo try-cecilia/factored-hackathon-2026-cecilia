@@ -25,3 +25,6 @@ web/.tanstack/
 # Local remnants of the abandoned workspace migration
 .turbo/
 .venv-backups/
+
+# Browser automation scratch (Playwright MCP)
+.playwright-mcp/

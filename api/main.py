@@ -36,14 +36,14 @@ from agent.core.orchestrator import default_orchestrator
 from agent.llm.budget import default_budget
 from agent.llm.client import default_providers
 from agent.policy import intent_guard
-from agent.session.auth import ExpiredSession, InvalidSession, default_store
+from agent.session.auth import ExpiredSession, InvalidSession, default_store, session_ref
 from agent.session.identity import AuthError, IdentityUnavailable, LockedOut, default_identity, derive_test_pin
 from agent.session.operators import OperatorDirectory
 from agent.tools import account_tools
 from agent.tools.audit import default_audit_log, default_trace_log
 from agent.policy.desk import Conflict, DeskError, NotFound, default_desk
 from agent.policy.escalation import default_queue
-from api import demo
+from api import demo, idempotency
 from ops.drift import recent_rows, report as drift_report, save_baseline as save_drift_baseline
 
 app = FastAPI(title="LATAM Bank — Account/Payment Inquiries Agent", version="2.0.0")
@@ -218,9 +218,61 @@ def end_session(x_session_token: str | None = Header(default=None)) -> Response:
 
 
 @app.post("/chat", response_model=ChatResponse)
-def chat(req: ChatRequest) -> ChatResponse:
+def chat(req: ChatRequest, response: Response, idempotency_key: str | None = Header(default=None)) -> ChatResponse:
+    """One turn. With an Idempotency-Key, a retry of the same message returns the stored reply instead of a new turn."""
+    if idempotency_key is None:
+        return _chat_turn(req)
+    if not idempotency.KEY_PATTERN.match(idempotency_key):
+        raise HTTPException(422, "Idempotency-Key must be 8-64 characters of letters, digits, - or _")
+    session = _live_session(req.session_token)
+    if session is None:  # nothing stored is shown to a session that is over
+        return _chat_turn(req)  # the usual REAUTH_REQUIRED reply
+    try:
+        with idempotency.default.guard(session_ref(req.session_token), idempotency_key, req.message,
+                                       session.expires_at) as slot:
+            if slot.replay is not None or slot.processed:
+                if _live_session(req.session_token) is None:  # it ended while this retry waited for the first turn
+                    return _chat_turn(req)
+                if slot.replay is None:  # it ran, but the table filled up and its reply was dropped
+                    raise HTTPException(409, "already processed: this message was received, its reply is no longer kept")
+                response.headers["Idempotent-Replayed"] = "true"  # a replay is not a new turn: no chat-limit hit
+                stored = ChatResponse.model_validate_json(slot.replay)
+                # Stored whole; what the caller may see is decided now, not when the turn ran.
+                return stored if demo.enabled() else stored.model_copy(update={"why": None, "policy_rule": ""})
+            _admit(req)  # a refusal here ran nothing: the key's place is given back
+            slot.begin()  # POINT OF NO RETURN: from here the turn may have effects (a ticket, a trace), so whatever
+            reply = _run_turn(req)  # happens next, an error included, the key stays taken and a retry gets a 409
+            if reply.disposition == "REAUTH_REQUIRED":  # the session ended first: nothing ran, answered afresh after login
+                slot.abandon()
+            else:
+                slot.save(reply.model_dump_json())
+            return reply
+    except idempotency.KeyReused:
+        raise HTTPException(422, "Idempotency-Key was already used with a different message") from None
+    except idempotency.CapacityFull as full:  # refused before the turn ran: nothing changed, the client may retry
+        raise HTTPException(503, "too many turns in flight for the idempotency store; retry shortly",
+                            headers={"Retry-After": str(full.retry_after)}) from None
+
+
+def _live_session(token: str):
+    try:
+        return default_store.validate(token)
+    except (InvalidSession, ExpiredSession):
+        return None
+
+
+def _chat_turn(req: ChatRequest) -> ChatResponse:
+    _admit(req)
+    return _run_turn(req)
+
+
+def _admit(req: ChatRequest) -> None:
+    """Everything that can refuse a turn before it starts. Nothing has run when this raises."""
     if not chat_limiter.allow(req.session_token):
         raise HTTPException(429, "rate limit exceeded for this session")
+
+
+def _run_turn(req: ChatRequest) -> ChatResponse:
     r = demo.orchestrator_for(req.session_token).handle_message(req.session_token, req.message)
     shown = demo.enabled()  # which rule decided is for the trace log; outside the jury demo it would guide an attacker
     return ChatResponse(trace_id=r.trace_id, disposition=r.disposition, response_text=r.response_text,
