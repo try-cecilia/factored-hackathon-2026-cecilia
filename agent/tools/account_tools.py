@@ -32,6 +32,7 @@ MAX_TRANSACTIONS = 50
 MAX_FX_FALLBACK_DAYS = 7
 TRACEABLE_TYPES = ("Transfer", "Payment", "Deposit")  # what operations can follow; a pending card purchase just posts
 MAX_TRACE_CANDIDATES = 5
+TRACE_REVIEW_AFTER_DAYS = 90  # synthetic policy: a movement "pending" for longer than this is a case for a person
 
 
 def _audited(tool_name: str, customer_id: str, args: dict[str, Any], fn):
@@ -259,6 +260,23 @@ def get_exchange_rate(customer_id: str, source_currency: str, target_currency: s
                     {"on_date": on_date, "source_currency": source_currency, "target_currency": target_currency}, _run)
 
 
+def _review_reason(row: dict, as_of: date | None) -> str | None:
+    """Why a person, not the assistant, must approve tracing this movement: it is too old to be a plain delay, or its
+    date contradicts the customer's own records (before the product opened or before they registered). The demo
+    dataset has both (docs/data_quality.md), and an action on a self-contradicting record is not the assistant's call."""
+    def day_of(v):  # the warehouse mixes DATE and TIMESTAMP columns
+        return v.date() if isinstance(v, datetime) else v
+
+    day = day_of(row["transaction_date"])
+    if as_of and (as_of - day).days > TRACE_REVIEW_AFTER_DAYS:
+        return "older_than_review_threshold"
+    if row.get("opening_date") and day < day_of(row["opening_date"]):
+        return "before_product_opening"
+    if row.get("registration_date") and day < day_of(row["registration_date"]):
+        return "before_customer_registration"
+    return None
+
+
 def request_trace(customer_id: str, product_id: Optional[str] = None, amount: Any = None, on_date: Optional[str] = None,
                   transaction_id: Optional[str] = None) -> dict:
     """The customer's pending transfers, payments and deposits that match what they said: the candidates for a
@@ -287,13 +305,17 @@ def request_trace(customer_id: str, product_id: Optional[str] = None, amount: An
             clauses.append("CAST(t.transaction_date AS DATE) = ?"); params.append(day)
         items = _rows(
             f"""SELECT t.transaction_id, t.transaction_date, t.transaction_type, t.amount, t.currency, t.product_id,
-                       p.product_type, p.product_number
+                       p.product_type, p.product_number, p.opening_date, cu.registration_date
                 FROM transactions t JOIN products p ON p.product_id = t.product_id
+                JOIN customers cu ON cu.customer_id = t.customer_id
                 WHERE {' AND '.join(clauses)} ORDER BY t.transaction_date DESC, t.transaction_id LIMIT {1 if transaction_id else MAX_TRACE_CANDIDATES}""", params)
+        as_of = data_as_of()
         for it in items:
             it["last4"] = _last4(it.pop("product_number"))
+            it["review_reason"] = _review_reason(it, as_of)
+            it.pop("opening_date"), it.pop("registration_date")
             it["open_trace"] = default_traces.find(customer_id, it["transaction_id"])
-        return {"items": items, "as_of": data_as_of(), "filters": {"product_id": product_id, "amount": amount, "on_date": day}}
+        return {"items": items, "as_of": as_of, "filters": {"product_id": product_id, "amount": amount, "on_date": day}}
 
     return _audited("request_trace", customer_id, {"product_id": product_id, "amount": amount, "on_date": on_date, "transaction_id": transaction_id}, _run)
 

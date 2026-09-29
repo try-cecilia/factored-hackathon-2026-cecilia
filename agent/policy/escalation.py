@@ -48,6 +48,8 @@ class EscalationTicket:
     open_questions: list[str]
     suggested_next_step: str
     queue: str = field(default="account_payments_l2")
+    # The action an operator may approve (a trace on this movement); empty for tickets that only need a reply.
+    pending_action: dict[str, Any] | None = None
 
 
 class HumanQueue:
@@ -89,10 +91,11 @@ NEXT_STEP = {
     "llm_unavailable": "Answer manually; the assistant was down.",
     "trace_unmatched": "Check the movement with payments operations or the sending bank: nothing of the customer's is pending.",
     "trace_unverified": "Open the trace manually and give the customer its number: the tracing service did not confirm it.",
+    "trace_review": "Review the movement (see pending_action.review_reason) and approve or reject the trace the customer asked for.",
 }
 QUEUE = {"fraud": "fraud_ops", "theft": "fraud_ops", "account_takeover": "fraud_ops", "safety": "priority_care",
          "legal_or_regulator": "complaints", "security": "security_review", "compliance_hold": "compliance",
-         "trace_unmatched": "payments_ops", "trace_unverified": "payments_ops"}
+         "trace_unmatched": "payments_ops", "trace_unverified": "payments_ops", "trace_review": "payments_ops"}
 
 
 def _evidence_for(decision: Decision, customer_id: str, actions: list[dict[str, Any]]) -> tuple[list[dict], list[str]]:
@@ -126,6 +129,7 @@ def escalate(
     prior_requests: list[str],
     attributes: dict,
     trace_id: str | None,
+    pending_action: dict[str, Any] | None = None,
 ) -> EscalationTicket:
     evidence, notes = _evidence_for(decision, customer_id, actions)
     ticket = EscalationTicket(
@@ -149,6 +153,7 @@ def escalate(
         open_questions=decision.open_questions + notes,
         suggested_next_step=NEXT_STEP.get(decision.category, "Review and respond to the customer."),
         queue=QUEUE.get(decision.category, "account_payments_l2"),
+        pending_action=pending_action,
     )
     default_queue.enqueue(ticket)
     return ticket

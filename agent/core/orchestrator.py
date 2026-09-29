@@ -239,12 +239,13 @@ class Orchestrator:
         self.conversations.append_request(conv, ticket_text)
         return result
 
-    def _escalate(self, decision: Decision, session, conv, ticket_text, lang, trace_id, actions, facts, llm_meta) -> TurnResult:
+    def _escalate(self, decision: Decision, session, conv, ticket_text, lang, trace_id, actions, facts, llm_meta,
+                  pending_action: dict | None = None) -> TurnResult:
         """File the ticket, read it back, and only then tell the customer they were transferred."""
         try:
             ticket = escalation.escalate(decision, session.customer_id, session.ref, ticket_text, lang, actions,
                                          [{"tool": f["tool"], "result": f["result"]} for f in facts],
-                                         list(conv.requests), session.attributes, trace_id)
+                                         list(conv.requests), session.attributes, trace_id, pending_action)
             filed = escalation.default_queue.get(ticket.ticket_id) is not None
         except Exception:  # noqa: BLE001 - an unwritable queue must not crash the turn; it is reported as unfiled
             filed = False
@@ -283,18 +284,24 @@ class Orchestrator:
     def _open_trace(self, proposal, session, lang, trace_id, done, escalate) -> TurnResult:
         """The customer said yes: open the trace, read it back, and only then say it exists."""
         action = {"tool": "request_trace", "args": {"product_id": proposal["product_id"]}, "confirmed_by_customer": True}
-        still_pending = True
+        still_pending, review = True, None
         try:
             # The proposal is one turn old: the movement may have settled since, so eligibility is checked again.
             pending = TOOL_FUNCTIONS["request_trace"](session.customer_id, product_id=proposal["product_id"],
                                                       transaction_id=proposal["transaction_id"])["items"]
-            still_pending = any(m["transaction_id"] == proposal["transaction_id"] for m in pending)
+            found = next((m for m in pending if m["transaction_id"] == proposal["transaction_id"]), None)
+            still_pending = found is not None
+            review = found.get("review_reason") if found else None
             verified = None
-            if still_pending:
+            if still_pending and not review:
                 default_traces.open(session.customer_id, proposal["transaction_id"], proposal["product_id"], session.ref)
                 verified = default_traces.find(session.customer_id, proposal["transaction_id"])  # this customer's, this movement's
         except Exception:  # noqa: BLE001 - an unwritable service is an unverified action, never a crash
             verified = None
+        if review:  # old or self-contradicting: the customer's yes is recorded, a person decides
+            return escalate(router.trace_review(review), [{**action, "success": False, "error_type": "NeedsHumanApproval"}], [],
+                            {"tool": "request_trace", "transaction_id": proposal["transaction_id"],
+                             "product_id": proposal["product_id"], "review_reason": review, "movement": proposal["movement"]})
         if not still_pending:
             return escalate(router.trace_step({"items": []}), [{**action, "success": False, "error_type": "MovementNoLongerPending"}], [])
         if not verified:
@@ -358,8 +365,9 @@ class Orchestrator:
         def done(result: TurnResult) -> TurnResult:
             return self._finish(conv, model_text, ticket_text, result)
 
-        def escalate(decision: Decision, actions: list[dict], facts: list[dict]) -> TurnResult:
-            return done(self._escalate(decision, session, conv, ticket_text, lang, trace_id, actions, facts, llm_meta()))
+        def escalate(decision: Decision, actions: list[dict], facts: list[dict], pending_action: dict | None = None) -> TurnResult:
+            return done(self._escalate(decision, session, conv, ticket_text, lang, trace_id, actions, facts, llm_meta(),
+                                       pending_action))
 
         # Act on the customer's own yes: a trace proposed on the last turn is opened only if this message is a plain
         # yes, decided in code without the model. Any other message lets the proposal lapse and goes on as usual.
