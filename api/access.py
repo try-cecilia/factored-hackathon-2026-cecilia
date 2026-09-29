@@ -55,6 +55,7 @@ POLICY: dict[tuple[str, str], Policy] = {
     # Customer: a live session
     ("GET", "/auth/session"): Policy(CUSTOMER, "session"),
     ("POST", "/chat"): Policy(CUSTOMER, "session", note="the session token is in the body; a dead one gets REAUTH_REQUIRED"),
+    ("GET", "/chat/history"): Policy(CUSTOMER, "session", note="the live session's own conversation, as rendered; nothing after the session ends"),
     ("GET", "/case/{ticket_id}"): Policy(CUSTOMER, "session", note="only the session's own tickets"),
     # Operator: acts on tickets
     ("POST", "/admin/tickets/{ticket_id}/{action}"): Policy(OPERATOR, "operator", note="claim, approve, reject, release; the actor is the key's name"),

@@ -24,6 +24,7 @@ export const chat = {
     action: 'Ingresar de nuevo',
   },
   confirm: {
+    group: 'Confirmar el rastreo',
     yes: 'Sí, rastrear',
     yesLoading: 'Rastreando',
     no: 'Ahora no',

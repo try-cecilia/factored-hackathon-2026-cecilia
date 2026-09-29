@@ -29,7 +29,7 @@ export function parseSend(input: unknown): { message: string; key: string } {
 
 export type ChatSession = { token: string | undefined; clear: () => void }
 
-function parseReply(body: unknown): Reply | null {
+export function parseReply(body: unknown): Reply | null {
   if (typeof body !== 'object' || body === null) return null
   const r = body as Record<string, unknown>
   if (typeof r.response_text !== 'string' || typeof r.trace_id !== 'string') return null
@@ -43,6 +43,7 @@ function parseReply(body: unknown): Reply | null {
     ticket_id: typeof r.ticket_id === 'string' ? r.ticket_id : null,
     latency_ms: typeof r.latency_ms === 'number' ? r.latency_ms : 0,
   }
+  if (r.degraded === true) reply.degraded = true
   if (typeof r.why === 'object' && r.why !== null) reply.why = r.why as Why
   return reply
 }

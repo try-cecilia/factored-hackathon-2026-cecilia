@@ -8,11 +8,22 @@ export const shell: Like<typeof es> = {
   mainNav: 'Principal',
   nav: {
     chat: 'Chat',
+    conversation: 'Conversa',
   },
   customer: 'Cliente {id}',
   signOut: 'Sair',
   signingOut: 'Saindo…',
-  signOutFailed: 'Não foi possível encerrar a sessão. Tentar novamente.',
+  signOutFailed: 'Não foi possível encerrar a sessão.',
+  menu: {
+    open: 'Abrir o menu',
+    close: 'Fechar o menu',
+    scrim: 'Fechar o menu',
+  },
+  demo: {
+    toggle: 'Demo',
+    show: 'Mostrar o painel de demo',
+    hide: 'Ocultar o painel de demo',
+  },
   unavailable: {
     title: 'Serviço indisponível.',
     body: 'Não conseguimos conectar ao serviço neste momento. Tentar novamente em alguns minutos.',

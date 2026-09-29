@@ -11,3 +11,6 @@
   .ui-user__time { opacity: 0; transition: opacity 0.12s ease; }
   .ui-user:hover .ui-user__time, .ui-user[data-state='hover'] .ui-user__time { opacity: 1; }
 }
+/* A message that did not go through: the tint says so next to the delivery line. */
+.ui-user__bubble[data-tone='failed'] { background: color-mix(in srgb, var(--color-danger) 8%, transparent); }
+.ui-user__bubble[data-tone='uncertain'] { background: color-mix(in srgb, var(--color-caution) 18%, transparent); }

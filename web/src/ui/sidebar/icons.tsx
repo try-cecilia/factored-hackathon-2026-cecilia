@@ -71,3 +71,7 @@ export const SidebarArchiveIcon = (props: IconProps) => (
 export const SidebarDeleteIcon = (props: IconProps) => (
   <Icon size={15} {...props}><path d="M5 6h10M8 6V4.5h4V6M6.5 6l.6 9.5h5.8l.6-9.5" /></Icon>
 )
+/** Door with an arrow going out: sign out. */
+export const SidebarSignOutIcon = (props: IconProps) => (
+  <Icon {...props}><path d="M8 4.5H6A1.5 1.5 0 0 0 4.5 6v8A1.5 1.5 0 0 0 6 15.5h2M12 7l3 3-3 3M15 10H8.5" /></Icon>
+)

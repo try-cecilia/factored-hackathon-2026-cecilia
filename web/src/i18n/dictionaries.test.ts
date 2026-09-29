@@ -50,3 +50,10 @@ test('translator binds a language and lookup ignores keys that are not strings',
   assert.equal(lookup('es', 'shell.nope'), undefined)
   assert.equal(lookup('es', 'shell.signOut.deeper'), undefined)
 })
+
+test('the Spanish has no imperative addressed to the reader ("Ingresa", "Espera"...): infinitives and nouns instead', () => {
+  // Assistant-side first person and the customer's own suggested words are not commands; a sentence that opens with a tuteo imperative is.
+  const imperative = /(?:^|[.!?:;]\s+)(?:ingresa|espera|escribe|revisa|vuelve|prueba|pregúntale|elige|selecciona|intenta|presiona|haz|mira|usa|confirma|verifica|cierra|abre|toca|pulsa|inicia|continúa|reintenta|regresa)\b/i
+  // The gallery's samples are mock content of the design (the assistant's sentences, captions), not the interface's own copy.
+  for (const [key, text] of spanish) if (!/(^|\.)sample\./.test(key) && !key.startsWith('gallery.')) assert.doesNotMatch(text, imperative, key)
+})

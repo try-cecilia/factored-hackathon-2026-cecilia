@@ -1,0 +1,50 @@
+/* Public pages (home, sign in, service unavailable): paper, the mascot, one column of content. No cards, no strokes. */
+.brand { display: inline-flex; align-items: center; gap: 8px; color: var(--color-ink-app); text-decoration: none; border-radius: var(--radius-control); }
+.brand:focus-visible { outline: none; box-shadow: var(--ring-focus); }
+.brand__mark { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; overflow: clip; border-radius: var(--radius-sm); background: var(--color-sky-300); }
+.brand__mark img { display: block; width: 18px; height: 18px; }
+.brand__word { font-size: var(--text-base); font-weight: var(--font-weight-bold); letter-spacing: -0.02em; line-height: 20px; }
+
+.pub { display: flex; flex-direction: column; min-height: 100dvh; background: var(--color-paper); color: var(--color-ink-app); }
+.pub__bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 20px 32px; }
+.pub__main { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 16px; width: 100%; max-width: 420px; margin: 0 auto; padding: 16px 24px 64px; }
+.pub__main h1 { margin: 0; font-size: var(--text-4xl); font-weight: var(--font-weight-semibold); letter-spacing: -0.02em; line-height: 40px; text-align: center; }
+.pub__lead { margin: 0; color: var(--color-ink-70); font-size: var(--text-base); line-height: 26px; text-align: center; }
+.pub__mascot { display: block; width: 96px; height: 96px; object-fit: contain; }
+
+/* Home: the copy on the left, Cecilia on the right. */
+.hero { display: grid; flex: 1; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 48px; width: 100%; max-width: 1120px; margin: 0 auto; padding: 16px 32px 64px; }
+.hero__copy { display: flex; flex-direction: column; align-items: flex-start; gap: 24px; }
+.hero__copy h1 { margin: 0; font-size: clamp(40px, 5vw, var(--text-6xl)); font-weight: var(--font-weight-semibold); letter-spacing: var(--tracking-tighter); line-height: 1.02; }
+.hero__copy .pub__lead { max-width: 460px; font-size: var(--text-lg); text-align: left; }
+.hero__art { display: block; width: 100%; max-width: 480px; height: auto; margin-inline: auto; }
+
+/* The form: tonal fields, the focus ring is the only line. */
+.auth-form { display: grid; gap: 16px; width: 100%; }
+.auth-form label { display: grid; gap: 6px; font-size: var(--text-compact-md); font-weight: var(--font-weight-semibold); }
+.auth-form input {
+  height: 44px; padding: 0 14px; border: 0; border-radius: var(--radius-control); background: var(--color-fill-subtle);
+  color: var(--color-ink-app); font-size: var(--text-sm); font-weight: var(--font-weight-normal);
+}
+.auth-form input:focus { outline: none; box-shadow: var(--ring-focus); }
+.auth-form .ui-btn { width: 100%; }
+.pub__error { margin: 0; color: var(--color-danger); font-size: var(--text-compact-md); font-weight: var(--font-weight-medium); }
+.pub__notice { width: 100%; margin: 0; padding: 10px 14px; border-radius: var(--radius-xl); background: var(--color-sky-100); color: var(--color-sky-900); font-size: var(--text-compact-md); font-weight: var(--font-weight-medium); line-height: 18px; }
+.pub__demo { display: grid; gap: 8px; width: 100%; padding-top: 8px; }
+.pub__demo-title { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--color-ink-70); font-size: var(--text-compact-sm); font-weight: var(--font-weight-medium); }
+.badge-demo {
+  padding: 2px 6px; border-radius: var(--radius-sm); background: var(--color-sky-100); color: var(--color-sky-900);
+  font-size: var(--text-compact-2xs); font-weight: var(--font-weight-bold); letter-spacing: 0.06em; line-height: 12px; text-transform: uppercase;
+}
+.pub .ui-lang { flex-shrink: 0; }
+
+@media (max-width: 859px) {
+  .hero { grid-template-columns: minmax(0, 1fr); gap: 24px; padding-inline: 24px; }
+  .hero__art { order: -1; max-width: 240px; }
+  .hero__copy { align-items: center; text-align: center; }
+  .hero__copy .pub__lead { text-align: center; }
+}
+@media (max-width: 559px) {
+  .pub__bar { padding: 14px 16px; }
+  .pub__main h1 { font-size: var(--text-3xl); line-height: 36px; }
+}

@@ -79,6 +79,7 @@ MAX_PROMPT_CHARS = int(os.environ.get("LLM_MAX_PROMPT_CHARS") or 24_000)  # ~6K 
 logger = logging.getLogger(__name__)
 turn_logger = logging.getLogger("cecilai.turn")  # one line per turn: ids, outcome, timings, nothing the customer wrote
 MAX_HISTORY_MESSAGES = 8
+MAX_TRANSCRIPT = 40  # rendered turns kept for the customer to read again (20 exchanges); the model never sees them
 MAX_CONVERSATIONS = 10_000
 DEGRADED_MIN_CONFIDENCE = 0.6
 
@@ -103,6 +104,11 @@ class TurnResult:
     model_view: str | None = None  # what the model's history keeps of this reply: no figures, no identifiers
     model_input: str | None = None  # the customer's words as the model received them (masked); None if it received nothing
 
+    @property
+    def degraded(self) -> bool:
+        """The assistant answered in limited mode: the model was unavailable (or its budget spent), so the code answered alone."""
+        return self.policy_rule.startswith("degraded:") or self.category == "llm_unavailable"
+
 
 @dataclass
 class _Conversation:
@@ -113,6 +119,7 @@ class _Conversation:
     pending_action: dict | None = None  # a trace proposed on the last turn, kept in code: never sent to the model
     pending_choice: list[dict] | None = None  # the pending movements listed on the last turn, to pick one by number
     cases: dict[str, str] = field(default_factory=dict)  # legacy notices, retained when loading older conversations
+    transcript: list[dict] = field(default_factory=list)  # what the customer saw, as rendered: card numbers masked, no model data
 
 
 class ConversationStore:
@@ -155,6 +162,24 @@ class ConversationStore:
     def append(self, conv: _Conversation, role: str, content: str) -> None:
         conv.messages.append({"role": role, "content": content})
         del conv.messages[:-self.max_messages]
+
+    def record_turn(self, conv: _Conversation, text: str, result: "TurnResult") -> None:
+        """Keep the exchange as the customer saw it, for GET /chat/history. The customer's words go in with card numbers masked
+        (the same masking as the ticket's copy); the reply is the rendered text, and only the fields the screen needs."""
+        now = time.time()
+        conv.transcript.append({"role": "user", "text": mask_card_numbers(text), "at": now})
+        conv.transcript.append({"role": "assistant", "text": result.response_text, "at": now, "trace_id": result.trace_id,
+                                "disposition": result.disposition, "category": result.category, "language": result.language,
+                                "ticket_id": result.ticket_id, "degraded": result.degraded})
+        del conv.transcript[:-MAX_TRANSCRIPT]
+
+    def clear_transcript(self, key: str) -> None:
+        """Forget what was shown (logout): the figures in it are not kept for the rest of the retention window."""
+        conv = self._data.pop(key, None) or self._load(key)
+        if conv is not None and conv.transcript:
+            conv.transcript.clear()
+            self._data[key] = conv
+            self.save(key)
 
     def mark_case_notified(self, customer_id: str, ticket_id: str, status: str) -> bool:
         """Record a notice once per customer, even across sessions, restarts and conversation cleanup."""
@@ -310,6 +335,7 @@ class Orchestrator:
                     result = self._with_case_news(session_token, result)
                 except Exception as exc:  # noqa: BLE001 - the news are a courtesy: the answer, and what it already did, go out without them
                     self._record_failed("case_news", trace_id, exc)
+                self._remember_turn(session_token, text, result, trace_id)
                 trace["stages"] = recorder.spans
                 trace["turn_budget_left_ms"] = round(deadline.remaining() * 1000)
         finally:
@@ -326,6 +352,24 @@ class Orchestrator:
             self._record_failed("trace_write", trace_id, exc)
         self._log_turn(result, trace)
         return result
+
+    def _remember_turn(self, session_token: str, text: str, result: TurnResult, trace_id: str) -> None:
+        """Add the exchange to the session's readable history. A session that ended has none, and a failure here loses the
+        history, never the reply."""
+        if result.disposition == "REAUTH_REQUIRED":
+            return
+        try:
+            session = self.session_store.validate(session_token)
+            self.conversations.record_turn(self.conversations.get(session.ref), text, result)
+        except (InvalidSession, ExpiredSession):
+            return
+        except Exception as exc:  # noqa: BLE001
+            self._record_failed("transcript", trace_id, exc)
+
+    def history(self, session_token: str) -> list[dict]:
+        """The session's rendered conversation, oldest first. Raises InvalidSession/ExpiredSession for a bad token."""
+        session = self.session_store.validate(session_token)
+        return [dict(turn) for turn in self.conversations.get(session.ref).transcript]
 
     @staticmethod
     def _record_failed(kind: str, trace_id: str, exc: Exception) -> None:

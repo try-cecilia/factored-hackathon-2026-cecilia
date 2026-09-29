@@ -363,8 +363,9 @@ ventanas en memoria son de 1000 registros de auditoría y 500 de trazas.
 
 **Hoy.** `web/` (TanStack Start, React 19). El navegador nunca habla con la API de Python: lo hace un BFF, con
 funciones de servidor en `web/src/server/`, y el token de sesión vive en una cookie httpOnly (ver frontera 1). La ruta
-`/chat` (`web/src/chat/`) es el chat del cliente; el shell y los estilos siguen el diseño "Cecil.ai" de Paper, y sus
-tokens están en `web/src/tokens.css` con los mismos nombres que en Paper (`--color-cecil-blue`, `--color-gray-500`,
+`/chat` es el chat del cliente: el shell (`web/src/shell/`), la conversación (`web/src/chat/`) y las pantallas públicas
+siguen el diseño "Cecil.ai" de Paper (componentes del kit, sin bordes, paleta de azules; el único ámbar es
+`--color-caution`, para precaución), y sus tokens están en `web/src/tokens.css` con los mismos nombres que en Paper (`--color-cecil-blue`, `--color-gray-500`,
 `--radius-app`...). La consola del operador debe reutilizar esas variables, no redefinirlas. Nada depende de la nube: Inter y DM Mono salen
 de paquetes npm (`@fontsource`) y quedan dentro del build, y el avatar de Cecilia está en `web/public`; no hay CDN ni
 Google Fonts.
@@ -392,6 +393,7 @@ Sirve para desarrollar y mostrar el front; no dice nada de cómo se comporta un 
 | Función de servidor | Llamada a la API | Qué devuelve al navegador |
 |---|---|---|
 | `sendMessage` | `POST /chat` con `session_token` (lo agrega el servidor) y `Idempotency-Key` (un UUID por mensaje, que el cliente conserva en los reintentos), plazo de 35 s | La respuesta (`disposition`, texto, idioma, `category`, `ticket_id`, y `why` solo en demo) o un motivo de fallo |
+| `getHistory` | `GET /chat/history` con el token de la cookie | La conversación de la sesión viva, ya renderizada por la API (ver abajo), o `session_expired` / `unavailable` |
 | `getCase` | `GET /case/{ticket_id}` | Estado del caso y el texto de novedad, o `not_found` |
 | `getDemoKit`, `startScenario`, `applyDemoFault`, `getDemoTickets` | `/demo/*` | Solo con `DEMO_MODE=1`; los PIN de prueba se quedan en el servidor |
 
@@ -399,15 +401,60 @@ La propuesta de rastreo se reconoce por `disposition=CLARIFY` y `category=confir
 que el código de la API evalúa (nunca el modelo). Una aclaración se dibuja como lista de opciones cuando el texto trae
 `1) ...; 2) ...`; si no calza con ese formato se muestra el texto tal cual.
 
+**Historial (`GET /chat/history`).** Devuelve, con el token de la sesión viva (cabecera `X-Session-Token`, como `/case`), los turnos
+que la API guardó tal como el cliente los vio: sus palabras con los números de tarjeta enmascarados, la respuesta ya
+armada por las plantillas y, por turno de la asistente, `trace_id`, `disposition`, `category`, `language`, `ticket_id` y
+`degraded`. Nada interno: ni la regla que decidió, ni `why`, ni lo que recibió el modelo, ni los resultados de las
+herramientas. Es de solo lectura, el rol es CUSTOMER en la matriz de `api/access.py`, y la conversación es la de esa sesión:
+otra sesión, aunque sea del mismo cliente, recibe la suya (vacía si es nueva); sin sesión viva, 401. Se guardan hasta 40
+turnos (`MAX_TRANSCRIPT`) en el estado de la conversación (`agent/core/orchestrator.py`), que ya sobrevive a un reinicio, y se
+borran al cerrar sesión. El BFF lo lee en el loader de la ruta autenticada, así que el HTML del servidor ya trae la
+conversación: recargar la página no la vacía. Al recargar aparece la nota "Conversación retomada". La respuesta de `/chat`
+trae además `degraded` (el modelo no estaba disponible y el código respondió solo), que el front dibuja como el banner de
+modo limitado.
+
+**Pantallas del cliente** (`web/src/shell/`, `web/src/chat/`; el kit está en la sección siguiente).
+
+- *Shell.* Sidebar de cliente (expandido de 260 px, o rail de 56 px con el botón de la marca), barra con el título, el
+  selector de idioma y, solo en la demo, el botón "Demo". Bajo los 760 px el sidebar es un cajón (botón de menú, cierre con
+  Escape, con la barra de fondo o con su botón; el foco entra y vuelve al botón). Texto e íconos del sidebar van en tinta:
+  el azul queda para el anillo de foco y los puntos de "no leído".
+- *Casos.* La sección lista los casos de la conversación (las derivaciones que llegaron con número) y el estado de cada
+  uno, consultado con `GET /case/{id}` (otra vez cada 45 s mientras un caso siga abierto y la página esté visible, y
+  cuando una respuesta trae una novedad). El título sale de la categoría de la derivación (`cases.category.*`).
+- *Mensajes.* Cada respuesta se dibuja con el componente del kit que pide su disposición (`resolveMessage`): AUTO_RESOLVE,
+  respuesta (con "¿Por qué?" solo si la API mandó `why`, o sea, en la demo); CLARIFY, aclaración con opciones, o la
+  propuesta de rastreo con Sí/No (`category=confirm_action`); ABSTAIN, rechazo con sugerencias; ESCALATE con número de
+  caso, pase a una persona; ESCALATE **sin** número (no se pudo registrar), "no pude verificar", con reintento que reenvía
+  el mensaje del cliente; la respuesta al "sí" de una propuesta, resultado de la acción; `degraded`, banner de modo
+  limitado; las novedades de un caso que la API antepone a una respuesta ("Novedad de tu caso: ..."), notas de sistema; sesión
+  terminada, "ingresar de nuevo". El resultado de la acción se reconoce por su posición (sigue al "sí" del cliente a una
+  propuesta), no por un campo: `category=resolved` lo comparten todas las respuestas resueltas.
+- *Espera y entrega.* Tres puntos hasta que llega la respuesta y, pasados 6 s, los pasos de verificación (un paso hecho, el
+  envío, y el que está en curso); nada de texto que aparezca de a poco. Cada mensaje del cliente lleva su estado: enviando;
+  **sin confirmar** (se perdió la respuesta: "Reintentar" es seguro porque viaja con la misma clave); no enviado (429 o turno
+  en curso; también con la misma clave); y **recibido** (409, ver arriba): el mensaje que la API ya tiene no se reenvía, se
+  ofrece "Cargar la conversación", que vuelve a leer `/chat/history` y ahora sí muestra su respuesta.
+- *Sesión.* Ya no se redirige sola: al terminar (respuesta `REAUTH_REQUIRED`, 401 o cuenta regresiva) el chat queda en su
+  lugar, con una nota, el compositor deshabilitado y el mensaje "Ingresar de nuevo", que lleva a
+  `/login?redirect=/chat&motivo=expired`. Otro inicio de sesión es otra conversación (empieza de cero).
+- *Demo.* Con `DEMO_MODE=1` el panel de demo es una columna aparte (cajón deslizante bajo los 1180 px), con la etiqueta
+  Demo; sin la variable no existe ni en el HTML. Los títulos de los escenarios los manda la API en español e inglés: en
+  portugués se ven en español.
+- *Idioma.* Todo texto de la interfaz está en ES y PT (`web/src/i18n/dict/*/{shell,cases,conversation,demo}.ts`); las
+  respuestas de la asistente llegan de la API en el idioma del cliente y no se traducen. El español no usa imperativo de
+  tuteo (un test lo comprueba).
+
 **Fallas, y qué ve el cliente.**
 
 | Situación | Qué pasa |
 |---|---|
-| Sesión vencida (`REAUTH_REQUIRED`, HTTP 401 o cookie ausente) | El BFF borra la cookie y el chat va a `/login?redirect=/chat&motivo=expired`, con aviso; al ingresar vuelve al chat (la conversación empieza de cero) |
-| 429 | Aviso en la conversación y botón "Reintentar"; no se reenvía solo |
-| API caída, conexión cortada o plazo agotado | Resultado incierto: "No pude confirmar si el servicio recibió tu mensaje", con "Reintentar" manual. El reintento es seguro porque viaja con la misma clave: si la API ya lo procesó, devuelve la misma respuesta y no crea otro ticket ni confirma dos veces |
-| Respuesta que no calza con el contrato | "Recibí una respuesta que no pude mostrar" y "Reintentar" |
+| Sesión vencida (`REAUTH_REQUIRED`, HTTP 401 o cookie ausente) | El BFF borra la cookie; el chat muestra el mensaje "Ingresar de nuevo" (ver *Sesión*). Con la cookie ausente al cargar, `/chat` redirige a `/login?redirect=/chat` |
+| 429 | El mensaje queda "No enviado" con "Reintentar" (misma clave); no se reenvía solo |
+| API caída, conexión cortada o plazo agotado | Resultado incierto: "Sin confirmar", "No pude confirmar si el servicio recibió tu mensaje", con "Reintentar" manual. El reintento es seguro porque viaja con la misma clave: si la API ya lo procesó, devuelve la misma respuesta y no crea otro ticket ni confirma dos veces |
+| Respuesta que no calza con el contrato | "Recibí una respuesta que no pude mostrar" y "Reintentar" (misma clave) |
 | Doble envío | Un turno a la vez: el compositor se bloquea mientras envía, y el BFF rechaza un segundo envío de la misma sesión mientras el primero corre |
+| La conversación no se pudo leer al cargar | Aviso con "Reintentar" que vuelve a pedir `/chat/history`; el resto de la página funciona |
 
 **Idempotencia de `POST /chat`.** Con la cabecera `Idempotency-Key` (8 a 64 caracteres: letras, dígitos, `-` o `_`), la API
 (`api/idempotency.py`) guarda la respuesta por (sesión, clave) mientras viva la sesión (`SESSION_TTL_SECONDS`, 900 por
@@ -419,21 +466,27 @@ un turno normal. La misma clave con otro texto es un 422. No se guardan las resp
 ya se creó y falla el log de trazas) deja la clave marcada: el reintento recibe 409 y nunca un segundo turno; el lugar solo
 se devuelve si el turno se rechazó antes de empezar (429, sesión terminada).
 Pasadas 50 000 respuestas guardadas, las más viejas pierden la respuesta pero conservan una marca (hash de la clave):
-un reintento de esa clave recibe un 409 "already processed" en vez de volver a ejecutarse, y la UI dice "Ya lo
-recibimos, pero la respuesta ya no está guardada". Las marcas de sesiones vivas no se expulsan nunca: con 500 000 claves
+un reintento de esa clave recibe un 409 "already processed" en vez de volver a ejecutarse, y la UI marca el mensaje
+como "Recibido" y dice "El servicio ya recibió este mensaje. Cargar la conversación muestra su respuesta": el turno sí
+quedó en el historial de la sesión (`GET /chat/history`), aunque la respuesta ya no esté en la tabla de idempotencia. Las marcas de sesiones vivas no se expulsan nunca: con 500 000 claves
 retenidas, un turno nuevo se rechaza antes de ejecutarse (503 con `Retry-After`, sin efectos), y cada turno toma su lugar
 en la misma transacción que comprueba el tope. Sin la cabecera, el comportamiento es el de siempre. Con
 `DEMO_MODE=1` la respuesta guardada incluye `why` y `policy_rule`, y un replay los filtra según el modo vigente.
 
-**Punto de sustitución.** El BFF solo conoce `POST /chat` y `GET /case/{id}`; con el core real el contrato no cambia.
+**Punto de sustitución.** El BFF solo conoce `POST /chat`, `GET /chat/history` y `GET /case/{id}`; con el core real el contrato no cambia.
 
 **En producción.** Falta un `POST /auth/session/refresh` para ofrecer "Seguir conectado" antes de que venza.
 
-**Cómo se verifica.** `make web-typecheck`, `make web-test` (formato de las aclaraciones, envío, 401, clave de idempotencia),
-`tests/test_idempotency.py` (API) y `make web-build`; el flujo
-completo se probó en el navegador con `make serve-all-fixture`, y las capturas están en `docs/demo/web-*.png`
-(login, chat vacío, propuesta de rastreo, escalamiento con número de caso, sesión vencida y su aviso previo, aclaración,
-límite de tasa, API caída, plazo agotado, escenario en portugués, móvil, respuesta inesperada, chat sin `DEMO_MODE`).
+**Cómo se verifica.** `make web-typecheck`, `make web-test` (formato de las aclaraciones, envío, 401, clave de
+idempotencia, lectura del historial, la lógica de la conversación, cada variante de mensaje y cada estado de entrega en el DOM,
+el shell con su rail y su cajón, y pruebas HTTP contra el build: `/chat` con y sin sesión, la conversación ya en el HTML, ES y PT,
+el token que no sale del servidor, el panel de demo que solo existe con la demo), `tests/test_chat_history.py` y
+`tests/test_access_matrix.py` (API: el historial, que otra sesión no lo lee, y su fila en la matriz) y `make web-build`. El
+flujo completo se recorrió en el navegador, en español y portugués, en escritorio y móvil, con `make serve-all-fixture`; las
+capturas están en `docs/demo/cliente-*.png`: inicio y login (ES y PT), chat vacío, respuesta con "¿Por qué?", aclaración,
+rechazo, caso derivado con el sidebar de casos, recarga con la conversación, propuesta y resultado del rastreo, modo limitado,
+chat en portugués, rail, tablet, móvil (chat, cajón y demo), límite de mensajes, sesión terminada, entrega sin confirmar,
+espera (puntos y pasos) y el chat sin demo.
 
 ### UI kit, i18n y galería
 
@@ -472,6 +525,10 @@ Paper; con `?both=1` dibuja el kit entero en español y en portugués. Existe co
 build arrancado con `UI_GALLERY=1`; en cualquier otro build responde 404 y su código va en un chunk aparte que el
 cliente nunca descarga. Los estados que solo se alcanzan con el puntero o el teclado (hover, pressed, focus) se dibujan
 con la prop `forceState`. Las capturas de la galería contra Paper están en `docs/demo/ui-kit-*.png`.
+
+Las pantallas del cliente extendieron el kit sin tocar sus variantes de Paper: `DeliveryStatus` suma los estados *sin
+confirmar* y *recibido* (con `detail` y `onReload`), `UserMessage` acepta la línea de entrega y el tinte del mensaje que no
+llegó, y `ConfirmTraceMessage` acepta `disabled` y funciona sin tarjeta del movimiento (la API manda la propuesta como texto).
 
 ---
 

@@ -196,10 +196,27 @@ service, and as our own roadmap.
   `get_computed_styles`. Where Paper draws only one state, the rest was designed in the same language and is listed in
   `docs/integracion.md`: the open "Why?" panel, the failed action result, the hover and selected quick replies, and the
   failed step and error toast of the loaders. Paper draws no "delivered" message state and no skeleton avatar in tables,
-  so the kit has neither.
+  so the kit has neither. The customer chat adds two delivery states Paper does not draw: *unconfirmed* (the answer was lost;
+  retrying is safe) and *received* (a 409: the API has the message and only the conversation can show its reply).
+- **Chat history keeps figures.** `GET /chat/history` returns the session's last 40 turns as the customer saw them, rendered
+  reply included (balances, movements). They live in the conversation state, which the API keeps for 24 hours after a
+  session ends (`ConversationStore.RETENTION_SECONDS`) so a restart or a refresh resumes it. Only the live session's token
+  reads it, and logging out clears it; a session that only expires leaves the text in the state until that purge. The
+  customer's words are stored with card numbers masked, as in the ticket. Production needs encryption at rest and a
+  retention period the bank chooses (or expiry with the session). The demo's "Why?" is not stored: after a reload the
+  earlier answers have no explanation.
+- **Customer screens: what they cannot know.** The cases in the sidebar are those this conversation opened: there is no
+  endpoint that lists a customer's cases across sessions, so a new sign-in starts with none even if the bank still has
+  one open. Their status refreshes every 45 s while the page is visible, not by push. The "action result" message is
+  recognised by its position (it follows the customer's yes to a proposal) because the API gives every resolved reply
+  `category=resolved`; a trace the tracing service did not confirm is drawn as a handoff with its case number, not as a
+  red "could not open the trace" card. The demo scenarios' titles come from the API in Spanish and English, so the
+  Portuguese interface shows them in Spanish. The keyboard and focus order were checked in a browser and in DOM tests;
+  it was not tried with a screen reader. Changing language reloads the route's data (session, history), so with the API down
+  it shows the "service unavailable" page with a retry instead of switching.
 - **Web UI: the Portuguese was written by the team, not reviewed by a native speaker**, and the interface has only Spanish
-  and Portuguese (the assistant's replies come from the API in the customer's language). The chat screen and the
-  operator console are not migrated to the kit or to i18n yet.
+  and Portuguese (the assistant's replies come from the API in the customer's language). The customer screens (home,
+  sign in, chat) use the kit and i18n; the operator console is not migrated yet.
 
 ## Operations
 

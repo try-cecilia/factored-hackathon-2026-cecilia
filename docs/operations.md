@@ -618,6 +618,7 @@ whether the door held with the row; it fails the moment a route is added without
 | `DELETE /auth/session` | yes | yes | yes | yes | logout: always 204, an unknown token is a no-op |
 | `GET /auth/session` | - | yes | - | - |  |
 | `POST /chat` | - | yes | - | - | the session token is in the body; a dead one gets REAUTH_REQUIRED |
+| `GET /chat/history` | - | yes | - | - | the live session's own conversation, as rendered; nothing after the session ends |
 | `GET /case/{ticket_id}` | - | yes | - | - | only the session's own tickets |
 | `POST /admin/tickets/{ticket_id}/{action}` | - | - | yes | - | claim, approve, reject, release; the actor is the key's name |
 | `GET /admin/operator/me` | - | - | yes | - | the operator key's name, touching no ticket (the web BFF's login check) |

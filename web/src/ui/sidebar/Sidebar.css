@@ -25,7 +25,7 @@
 .ui-sidebar--collapsed .ui-sidebar__brand { justify-content: center; padding-inline: 0; }
 .ui-sidebar__mascot {
   display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center; overflow: clip; border-radius: 4px;
-  background: var(--color-sky-300);
+  background: var(--color-sky-300); /* Paper keeps the mascot's tile in sky-300 for now */
 }
 .ui-sidebar__mascot img { display: block; width: 18px; height: 18px; }
 .ui-sidebar__wordmark { flex: 1; color: var(--color-ink-app); font-size: var(--text-sm); font-weight: var(--font-weight-bold); letter-spacing: -0.02em; line-height: 18px; }

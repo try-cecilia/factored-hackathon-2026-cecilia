@@ -16,8 +16,11 @@ export type ConfirmTraceMessageProps = {
   children: ReactNode
   time?: string
   dateTime?: string
-  item: TraceItem
+  /** The movement, when the data is at hand. The API sends the proposal as text, so the chat may pass none: the text is then the whole proposal. */
+  item?: TraceItem
   state?: ConfirmTraceState
+  /** Both answers wait: another message is on its way, or the conversation moved on and the yes would no longer mean this proposal. */
+  disabled?: boolean
   /** The customer's yes. Tracing never happens without it (ADR-002). */
   onConfirm?: () => void
   onDecline?: () => void
@@ -25,26 +28,36 @@ export type ConfirmTraceMessageProps = {
 }
 
 /** The one action the assistant can take, proposed and then held until the customer says yes. */
-export function ConfirmTraceMessage({ children, time, dateTime, item, state = 'idle', onConfirm, onDecline, className }: ConfirmTraceMessageProps) {
+export function ConfirmTraceMessage({ children, time, dateTime, item, state = 'idle', disabled, onConfirm, onDecline, className }: ConfirmTraceMessageProps) {
   const t = useT()
   const titleId = useId()
   const answering = state === 'idle' || state === 'loading'
   return (
     <AssistantFrame time={time} dateTime={dateTime} className={className}>
       <AssistantText>{children}</AssistantText>
-      <div className="ui-confirm" role="group" aria-labelledby={titleId} aria-busy={state === 'loading' || undefined}>
-        <div className="ui-confirm__row">
-          <span className="ui-confirm__title" id={titleId}>{item.title}</span>
-          {item.amount && <span className="ui-confirm__amount">{item.amount}</span>}
-        </div>
-        {item.detail && <p className="ui-confirm__detail">{item.detail}</p>}
+      <div
+        className={item ? 'ui-confirm' : 'ui-confirm ui-confirm--bare'}
+        role="group"
+        aria-labelledby={item ? titleId : undefined}
+        aria-label={item ? undefined : t('chat.confirm.group')}
+        aria-busy={state === 'loading' || undefined}
+      >
+        {item && (
+          <>
+            <div className="ui-confirm__row">
+              <span className="ui-confirm__title" id={titleId}>{item.title}</span>
+              {item.amount && <span className="ui-confirm__amount">{item.amount}</span>}
+            </div>
+            {item.detail && <p className="ui-confirm__detail">{item.detail}</p>}
+          </>
+        )}
         <div className="ui-confirm__actions">
           {answering && (
             <>
-              <Button variant="primary" size="md" loading={state === 'loading'} onClick={onConfirm}>
+              <Button variant="primary" size="md" loading={state === 'loading'} disabled={disabled} onClick={onConfirm}>
                 {state === 'loading' ? t('chat.confirm.yesLoading') : t('chat.confirm.yes')}
               </Button>
-              <Button variant="ghost" size="md" disabled={state === 'loading'} onClick={onDecline}>{t('chat.confirm.no')}</Button>
+              <Button variant="ghost" size="md" disabled={disabled || state === 'loading'} onClick={onDecline}>{t('chat.confirm.no')}</Button>
             </>
           )}
           {/* Always mounted so the outcome is announced when its text appears. */}

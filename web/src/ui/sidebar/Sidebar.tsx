@@ -45,7 +45,7 @@ export function Sidebar({ variant = 'client', collapsed = false, onCollapsedChan
   )
 }
 
-/** The product mascot on its sky tile. Decorative: the wordmark next to it names the product. */
+/** The product mascot on its sky tile (Paper keeps it). Nothing else in the sidebar is blue except the focus ring, the unread dot and the rename caret. Decorative: the wordmark next to it names the product. */
 function Mascot({ size }: { size: number }) {
   return (
     <span className="ui-sidebar__mascot" style={{ width: size, height: size }} aria-hidden="true">
