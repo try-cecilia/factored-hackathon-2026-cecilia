@@ -25,17 +25,20 @@ organizer's dataset are Pending (1.99%).
    "não, obrigado"). Anything else, such as "no, me clonaron la tarjeta", lets
    the proposal lapse and goes through the usual pre-LLM checks. The model is
    never asked whether the customer agreed.
-4. **Announce only what reads back.** After the yes, the trace is opened in the
+4. **Still eligible at the yes.** The proposal is one turn old, so before opening,
+   the code asks the same tool again: if the movement is no longer pending, nothing
+   is opened and a person takes over.
+5. **Announce only what reads back.** After the yes, the trace is opened in the
    tracing service and read back; only a record that reads back, for this
    customer and this movement, is announced with its number and deadline. If
    it does not read back, the customer is not told it exists and a person
    opens it (a ticket to payments operations).
-5. **Idempotent.** The trace id derives from the customer and the movement
+6. **Idempotent.** The trace id derives from the customer and the movement
    (64 bits of SHA-256): asking again returns the same trace instead of a
    second one. Lookups and the read-back check the customer and the movement
    field by field, so even a colliding id can never make one customer hear
    another customer's trace number.
-6. **Several matches are listed**, and a plain answer with the number ("la
+7. **Several matches are listed**, and a plain answer with the number ("la
    segunda", "2") is resolved in code from the list kept server side, like
    the yes; the model never saw the list. The customer can also give the
    amount or the date, which the model passes to the tool.
