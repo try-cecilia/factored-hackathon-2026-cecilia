@@ -3,6 +3,7 @@ import { test } from 'node:test'
 import { checkOrigin, publicOrigins } from './origin-check.ts'
 
 const post = (url: string, headers: Record<string, string> = {}) => new Request(url, { method: 'POST', headers })
+const post_ = (url: string, origin: string) => post(url, { Origin: origin })
 const dev = { production: false }
 
 test('in development, with nothing configured, the origin is the one of the request URL, scheme and port included', () => {
@@ -57,8 +58,28 @@ test('a list with a wildcard, or with any entry that is not an http(s) origin, i
   }
 })
 
-test('publicOrigins normalizes each entry and drops blanks around commas', () => {
-  assert.deepEqual(publicOrigins('https://a.example/, http://b.example:8080/x ,'), ['https://a.example', 'http://b.example:8080'])
+test('publicOrigins reads each entry as a pure origin: scheme, host and optional port, and nothing else', () => {
+  assert.deepEqual(publicOrigins('https://a.example, https://B.example:8443/'), ['https://a.example', 'https://b.example:8443'])
+  assert.deepEqual(publicOrigins('http://[::1]:3000'), ['http://[::1]:3000'])
   assert.equal(publicOrigins(undefined), null)
   assert.equal(publicOrigins(''), null)
+})
+
+test('one entry that is not a pure origin invalidates the whole value: wildcard, userinfo, path, query, fragment, blank, other scheme', () => {
+  const good = 'https://console.bank.example'
+  const bad = [
+    'https://*.bank.example', 'https://console.*', '*', 'https://trusted.example@attacker.invalid', 'https://user:pw@console.bank.example',
+    'https://console.bank.example/operador', 'https://console.bank.example//', 'https://console.bank.example?x=1', 'https://console.bank.example#f',
+    'https://console.bank.example\\evil.example', 'https://console.bank.example /x', 'https://', 'ftp://console.bank.example', 'console.bank.example', '',
+  ]
+  for (const entry of bad) {
+    assert.equal(publicOrigins(`${good},${entry}`), null, `second: ${JSON.stringify(entry)}`)
+    assert.equal(publicOrigins(`${entry},${good}`), null, `first: ${JSON.stringify(entry)}`)
+  }
+})
+
+test('a wildcard or userinfo entry does not authorize anything, in either position', () => {
+  const post = (origin: string) => checkOrigin(post_('https://console.bank.example/x', origin), { production: true, publicOrigin: 'https://trusted.example@attacker.invalid' })
+  assert.deepEqual(post('https://attacker.invalid'), { ok: false, reason: 'misconfigured' })
+  assert.deepEqual(post('https://trusted.example'), { ok: false, reason: 'misconfigured' })
 })

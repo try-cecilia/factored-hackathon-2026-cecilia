@@ -7,8 +7,8 @@
 //  - production: WEB_PUBLIC_ORIGIN is required (for example https://console.bank.example). Without it, or with a value that
 //    is not an http(s) origin, every form post is refused and the server logs why.
 //  - WEB_PUBLIC_ORIGIN may list several origins separated by commas, each one exact (a local run answers on both
-//    http://127.0.0.1:3000 and http://localhost:3000). No wildcards: one entry that is not an http(s) origin makes the whole
-//    value invalid, so a typo refuses everything instead of opening something.
+//    http://127.0.0.1:3000 and http://localhost:3000). Every entry must be a pure origin (no wildcard, userinfo, path, query or
+//    fragment): one entry that is not makes the whole value invalid, so a typo refuses everything instead of opening something.
 //  - development: without WEB_PUBLIC_ORIGIN, the origin of the request URL (Vite serves http://127.0.0.1:<port>).
 // X-Forwarded-* and Forwarded are never read.
 //
@@ -29,11 +29,26 @@ const originOf = (value: string) => {
   }
 }
 
-/** The exact origins a WEB_PUBLIC_ORIGIN value lists, or null when it lists none or one of them is not an http(s) origin. */
+// One entry of WEB_PUBLIC_ORIGIN must already BE an origin as written: http(s), a host, an optional port. Checked on the text
+// before anything is normalized, because normalizing first would quietly turn `https://trusted.example@attacker.invalid` into
+// `https://attacker.invalid`, or drop a path or a query. A single trailing slash is the empty path and is accepted.
+const PURE_ORIGIN = /^https?:\/\/[^\s/?#@*\\%]+$/i
+
+/**
+ * The exact origins a WEB_PUBLIC_ORIGIN value lists, or null unless EVERY entry is a pure origin: no wildcard, userinfo, path,
+ * query, fragment or blank entry. One bad entry invalidates the whole value, so a typo refuses everything instead of opening something.
+ */
 export function publicOrigins(value: string | undefined): string[] | null {
-  const parts = (value ?? '').split(',').map((part) => part.trim()).filter(Boolean)
-  const origins = parts.map(originOf)
-  return origins.length > 0 && origins.every((origin) => origin !== null) ? (origins as string[]) : null
+  if (!value?.trim()) return null
+  const origins: string[] = []
+  for (const part of value.split(',')) {
+    const entry = part.trim().replace(/\/$/, '')
+    if (!PURE_ORIGIN.test(entry)) return null
+    const origin = originOf(entry)
+    if (origin === null) return null
+    origins.push(origin)
+  }
+  return origins
 }
 
 export function originConfigFromEnv(env: Record<string, string | undefined> = process.env): OriginConfig {

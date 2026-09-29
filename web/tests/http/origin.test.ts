@@ -135,6 +135,27 @@ describe('a refused post explains itself on the login page instead of leaving a 
   })
 })
 
+describe('a list is valid only if every entry is a pure origin: one bad entry refuses everything', () => {
+  const original = console.error
+  beforeEach(() => { console.error = () => {} })
+  after(() => { console.error = original })
+
+  const cases: [string, string, string][] = [
+    ['a wildcard next to a real origin', 'https://console.bank.example,https://*.bank.example', 'https://console.bank.example'],
+    ['userinfo that would make the host attacker.invalid', 'https://trusted.example@attacker.invalid', 'https://attacker.invalid'],
+    ['a path', 'https://console.bank.example/operador', 'https://console.bank.example'],
+    ['a query', 'https://console.bank.example?x=1', 'https://console.bank.example'],
+    ['a fragment', 'https://console.bank.example#x', 'https://console.bank.example'],
+  ]
+  for (const [name, value, logged] of cases) {
+    test(`${name}: ${value}`, async () => {
+      process.env.WEB_PUBLIC_ORIGIN = value
+      const res = await login({ Origin: logged, 'Sec-Fetch-Site': 'same-origin' }, logged)
+      assertRefused(res, 'origin_config')
+    })
+  }
+})
+
 describe('in production the public origin is required', () => {
   const errors: string[] = []
   const original = console.error
