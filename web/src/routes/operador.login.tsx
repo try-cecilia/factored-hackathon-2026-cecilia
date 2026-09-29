@@ -18,7 +18,9 @@ export const Route = createFileRoute('/operador/login')({
   },
   beforeLoad: async ({ search }) => {
     const view = await getOperatorView({ data: { auto: false } }).catch(() => null)
-    if (view?.status === 'active') throw redirect({ href: sameOriginPath(search.redirect) ?? '/operador/cola' })
+    // A refused form is explained on this page even to someone who is signed in: bouncing them to the queue would swallow the notice.
+    const explains = search.motivo === 'origen' || search.motivo === 'origen-config'
+    if (view?.status === 'active' && !explains) throw redirect({ href: sameOriginPath(search.redirect) ?? '/operador/cola' })
   },
   loaderDeps: ({ search }) => ({ motivo: search.motivo }),
   loader: async ({ deps }) => ({

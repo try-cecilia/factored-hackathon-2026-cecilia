@@ -186,3 +186,30 @@ describe('in production the public origin is required', () => {
     })
   }
 })
+
+describe('a refusal is shown even when the operator already has a session', () => {
+  const HOME = 'http://127.0.0.1:3000'
+  beforeEach(() => { process.env.WEB_PUBLIC_ORIGIN = `${HOME},http://localhost:3000` })
+
+  for (const path of ['/operador/clave', '/operador/salir']) {
+    test(`${path}: the whole chain, post -> login page, keeps the session and says why`, async () => {
+      const cookie = sessionCookie(await app.send('/operador/sesion', { fields: { admin_key: ADMIN }, headers: { Origin: HOME }, base: HOME }))!
+      const refused = await app.send(path, { method: 'POST', fields: { operator_key: 'k' }, headers: { Origin: 'http://192.168.1.20:3000', Cookie: cookie }, base: HOME })
+      assertRefused(refused, 'origen', path)
+      // The login page of a signed-in operator used to bounce to the queue, swallowing the notice
+      const es = await app.send(refused.headers.get('location')!, { headers: { Cookie: cookie }, base: HOME })
+      assert.equal(es.status, 200, `${path} landed on ${es.headers.get('location')}`)
+      assert.match(await es.text(), /No pudimos verificar el origen del formulario\. Ingresar desde http:\/\/127\.0\.0\.1:3000, http:\/\/localhost:3000\./)
+      const pt = await app.send(refused.headers.get('location')!, { headers: { Cookie: `${cookie}; cecilai_lang=pt` }, base: HOME })
+      assert.match(await pt.text(), /Não conseguimos verificar a origem do formulário\. Entrar por http:\/\/127\.0\.0\.1:3000, http:\/\/localhost:3000\./)
+      assert.equal((await app.send('/operador/cola', { headers: { Cookie: cookie }, base: HOME })).status, 200, 'the refusal did not end the session')
+    })
+  }
+
+  test('a signed-in operator who opens the login page for no reason still goes to the queue', async () => {
+    const cookie = sessionCookie(await app.send('/operador/sesion', { fields: { admin_key: ADMIN }, headers: { Origin: HOME }, base: HOME }))!
+    const res = await app.send('/operador/login', { headers: { Cookie: cookie }, base: HOME })
+    assert.equal(res.status, 307)
+    assert.equal(res.headers.get('location'), '/operador/cola')
+  })
+})
