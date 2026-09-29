@@ -1,0 +1,20 @@
+/* Chrome of the sidebar gallery only. The sidebar components draw themselves. */
+.gal-sidebar__variants { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 32px; }
+.gal-sidebar__cell { display: grid; gap: 12px; }
+.gal-sidebar__cell-head { display: grid; gap: 2px; }
+/* Paper's frame around each variant: white, 14px, with a soft shadow. */
+.gal-sidebar__frame {
+  display: flex; flex-shrink: 0; height: 640px; overflow: clip; border-radius: 14px; background: var(--color-paper);
+  box-shadow: 0 12px 32px -16px #00000040, 0 2px 6px -2px #0000001A;
+}
+.gal-sidebar__frame--live { width: 100%; max-width: 420px; height: 480px; }
+.gal-sidebar__states { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 48px 40px; }
+.gal-sidebar__states > .gal__group { flex: none; }
+.gal-sidebar__row-states { display: flex; align-items: flex-start; gap: 16px; }
+.gal-sidebar__state-labels { display: flex; flex-direction: column; gap: 1px; width: 96px; padding-top: 8px; }
+.gal-sidebar__state-labels > span { display: flex; align-items: center; height: 32px; }
+.gal-sidebar__panel.ui-sidebar { height: auto; padding: 8px; }
+.gal-sidebar__panel .ui-sidebar__nav > :first-child { padding-top: 0; }
+.gal-sidebar__menu-sample { padding: 6px 20px 24px 6px; }
+.gal-sidebar__card { width: 260px; height: 230px; }
+.gal-sidebar__card > * { height: 100%; }

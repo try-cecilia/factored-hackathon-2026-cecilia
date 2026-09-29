@@ -1,0 +1,14 @@
+/* Empty and loading states of the sidebar list (Paper "Empty" and "Loading"). Alone they are tonal 14px cards. */
+.ui-sidebar__empty, .ui-sidebar__skeleton {
+  display: flex; flex-direction: column; box-sizing: border-box; border-radius: 14px; background: var(--color-fill-subtle);
+  font-family: var(--font-sans);
+}
+.ui-sidebar__empty { align-items: center; justify-content: center; gap: 10px; padding: 16px; text-align: center; }
+.ui-sidebar__empty-title { margin: 0; color: var(--color-ink-app); font-size: var(--text-compact-md); font-weight: var(--font-weight-semibold); line-height: 16px; }
+.ui-sidebar__empty-text { margin: 0; color: var(--color-ink-70); font-size: var(--text-compact-sm); line-height: 150%; text-wrap: balance; }
+.ui-sidebar__skeleton { gap: 14px; padding: 16px 18px; }
+
+/* Inside a sidebar the panel already carries the fill. */
+.ui-sidebar .ui-sidebar__empty, .ui-sidebar .ui-sidebar__skeleton { background: transparent; }
+.ui-sidebar .ui-sidebar__empty { min-height: 160px; }
+.ui-sidebar--operator .ui-sidebar__skeleton { gap: 12px; padding: 12px 8px; }
