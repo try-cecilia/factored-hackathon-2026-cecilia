@@ -5,8 +5,9 @@ cómo reproducirlo y qué falta. Todo lo integrado sigue en su rama y va a tener
 
 ## 1. Punto de partida
 
-- **Base:** `origin/main` en `9d62bfb` (PR #18) más los PR abiertos **#19** (`feat/api-session-endpoints`) y **#20**
-  (`feat/web-auth`, con su fix `83d05b8`), mergeados localmente en `8865592`. Esos dos PR siguen abiertos y sin revisión humana.
+- **Base:** `origin/main` en `9d62bfb` (PR #18) más **#19** (`feat/api-session-endpoints`) y **#20** (`feat/web-auth`, con
+  su fix `83d05b8`), mergeados localmente en `8865592`. Los dos ya se mergearon en GitHub (`origin/main` en `86dd5c9`) con
+  exactamente el mismo contenido, y `main` local ya incorporó `origin/main`.
 - **Ramas nuevas:** todas salen de `8865592` y se integraron en `main` local **sin push**. La excepción es `feat/web-ui-kit`, que sale del
   HEAD de `feat/web-chat` en `299536d`.
 - **Estado probado:** `main` local en `0b355ef`. El tag `pre-integracion-total` marca el punto anterior a la integración masiva.
@@ -132,18 +133,17 @@ Para construir el warehouse completo desde los CSV:
 ## 7. Plan de PRs
 
 - **Un PR por rama**, en este orden, porque cada una depende de las anteriores:
-  1. #19
-  2. #20
-  3. `feat/validate-data-ml`
-  4. `feat/web-chat`
-  5. `feat/web-operator`
-  6. `feat/prod-resilience`
-  7. `feat/prod-operations`
-  8. `feat/heldout-failure-eval`
-  9. `feat/web-ui-kit`
-  10. `fix/integracion-local`
-  11. las ramas de pantallas
-- **#19 y #20 van primero.** Todas las ramas nuevas los contienen, así que hasta que se mergeen, cada PR va a mostrar también sus commits.
+  1. `feat/validate-data-ml`
+  2. `feat/web-chat`
+  3. `feat/web-operator`
+  4. `feat/prod-resilience`
+  5. `feat/prod-operations`
+  6. `feat/heldout-failure-eval`
+  7. `feat/web-ui-kit`
+  8. `fix/integracion-local`
+  9. las ramas de pantallas
+- **#19 y #20 ya están en `origin/main`.** Las ramas los contienen con otros commits de merge, pero el contenido es idéntico, así que
+  GitHub no los muestra como cambios.
 - **Los cambios de §3 van en el PR de `fix/integracion-local`**, o se reparten al resolver los conflictos de cada PR. Hay que llevarlos
   explícitamente: si no, `main` en GitHub no arranca, porque `api/access.py` exige una fila por ruta.
 - **`eval/reports/*` se regenera al final.** La huella de políticas cambia con cada rama que toca el orquestador, las políticas o
