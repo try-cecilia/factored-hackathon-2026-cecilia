@@ -609,7 +609,9 @@ make clean-volumes      # además borra los volúmenes (pregunta antes)
 La web del compose corre en modo producción: la consola de operador exige `WEB_PUBLIC_ORIGIN`, y el compose se la pasa
 (por defecto `http://127.0.0.1:${WEB_PORT}` y `http://localhost:${WEB_PORT}`, junto con `TRUSTED_CLIENT_IP_HEADER`, `OPERATOR_IDLE_SECONDS` y `UI_GALLERY`; están en
 `.env.example`). `make compose-e2e` entra por la web como un navegador: login de cliente y un turno de chat, login de operador por el
-formulario (con y sin el `Origin` correcto) y su cola, y `/dev/ui` en 404.
+formulario (con y sin el `Origin` correcto, y por `localhost`) y su cola, y `/dev/ui` en 404; lo repite con la web reiniciada tras un
+origen https, donde espera cookies `Secure` con `__Host-`. Con un navegador de verdad (WebKit, el motor de Safari, y Chromium)
+se verificó una vez con `ops/browser_cookies_check.mjs`; capturas en `docs/demo/cookies-*.png`.
 
 Sin clave de modelo el asistente corre en modo degradado seguro: saldos simples desde datos verificados y todo lo demás a una
 persona. Requisitos de RAM y disco de los modelos locales, y por qué en macOS conviene el Ollama del host: `docs/operations.md`

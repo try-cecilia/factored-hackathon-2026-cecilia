@@ -298,10 +298,17 @@ service, and as our own roadmap.
   (the same requests, cookies and headers: customer login and a chat turn, operator login on the plain form and the queue,
   `/dev/ui` closed), but no browser runs in it. Once, on 2026-09-29, the compose stack was driven with Chromium 154 (customer
   login and a balance question, operator login and the queue): that found that the web's `Referrer-Policy: no-referrer` made the
-  browser post `Origin: null` and every operator login a 403, now fixed and pinned by a header check. The image is in production
-  mode, so its session cookies are `Secure` `__Host-` cookies over plain `http://127.0.0.1`; Chromium stores them. Firefox and
-  Safari were not tried (Safari is known not to store a Secure cookie from plain http: use another browser, or a TLS proxy with
-  `WEB_PUBLIC_ORIGIN` set to its origin).
+  browser post `Origin: null` and every operator login a 403, now fixed and pinned by a header check. That run also left a hole
+  that Chromium hid: the image is in production mode, so its session cookies were `Secure` `__Host-` cookies over plain `http://`, and
+  WebKit (Safari's engine) does not store them, so the login hung. Now the cookies follow `WEB_PUBLIC_ORIGIN` (plain over http,
+  `Secure` `__Host-` over https), the compose trusts both `127.0.0.1` and `localhost`, and a login the browser did not keep says so.
+  Checked on 2026-09-29 with Playwright 1.63 (WebKit 26.6 and Chromium 153) against a throwaway compose project
+  (`ops/browser_cookies_check.mjs`; screenshots in `docs/demo/cookies-*.png`): customer and operator login through both hosts, in both
+  engines. **Not tried:** Safari itself (WebKit under Playwright is its engine, not the same build) and Firefox. **Known edge:** a
+  `WEB_PUBLIC_ORIGIN` that says https while the browser is on http (a mistake) gets Secure cookies WebKit drops; the customer login
+  says the session was not kept, but the operator's refusal notice travels in a flash cookie of that same kind, so WebKit shows the
+  console's login without the notice. Fix the origin: the notice names it whenever the cookie arrives. A list that mixes http and
+  https origins is not supported (the first one decides the cookies).
 - **The local model is wired, not measured.** The compose stack can start Ollama and pass the API `LLM_PROVIDERS=local`, and the
   profile was verified with a 0.5 GB model. No evaluation has run against any local model (`gpt-oss:20b` or a smaller one),
   and on macOS Docker runs models on CPU only.

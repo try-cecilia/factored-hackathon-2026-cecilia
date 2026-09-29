@@ -83,7 +83,8 @@ started in CI.
 **Checked end to end.** `make compose-e2e` builds both images in its own throwaway compose project (`cecilai-e2e-<random>`, its own settings file and free ports: it never touches the stack of `make up`), starts API + web + Prometheus + Grafana on the fixture,
 runs the smoke test, checks that the web reaches the API and, through the web as a browser uses it, a customer's login (a wrong
 PIN is refused, the right one sets an httpOnly session cookie, plain over the compose's http origin) and a chat turn, an operator's login on the plain form (refused
-without an `Origin` or from another one, accepted from the configured origin) and the queue behind it with the tickets the stack
+without an `Origin` or from another one, with a notice on the login page; accepted from either configured origin, `127.0.0.1` or `localhost`) and the queue behind it;
+then it restarts the web behind an `https://` origin and repeats the web checks, which now expect `Secure` `__Host-` cookies with the tickets the stack
 filed, and that `/dev/ui` answers 404; then the security headers, the access checks, `/metrics` (with and without
 its token), that Prometheus scrapes the API and loaded every alert rule, that Grafana holds the dashboard and its 20 queries are
 valid, and that the container's retention loop ran and audited itself; then it removes the stack. The same script is the CI job
