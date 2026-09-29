@@ -9,8 +9,9 @@ lo que faltaba, sobre los reportes de evaluación que se versionan en `eval/repo
 2. **Calidad (piso con margen).** Resolución segura automática y exactitud de la disposición en la evaluación offline.
 3. **Recall de la guarda de escalación** (fraude y similares). Reentrenar con ejemplos de trazas ya costó un reporte de
    fraude (LIMITATIONS.md): perder el recall que hoy se tiene rompe el build.
-4. **Evidencia vigente.** Los reportes deben estar hechos con la versión actual del prompt: si el prompt cambió sin
-   volver a medir, la evidencia no habla del sistema que se va a desplegar.
+4. **Evidencia vigente.** Los reportes deben estar hechos con la versión actual del prompt **y con las políticas
+   actuales** (la huella de eval/fingerprint.py, que cubre `agent/policy`, las herramientas y el orquestador): si
+   cualquiera cambió sin volver a medir, la evidencia no habla del sistema que se va a desplegar.
 
 Las evaluaciones del sistema leen el warehouse completo, así que no se vuelven a correr en CI (que solo tiene el de
 prueba): la compuerta juzga el reporte que quien cambia el código está obligado a regenerar (`make eval eval-adversarial`).
@@ -23,6 +24,7 @@ import sys
 from pathlib import Path
 
 from agent.llm.prompts import PROMPT_VERSION
+from eval.fingerprint import policy_fingerprint
 
 REPORTS = Path("eval/reports")
 FLOORS = {"safe_automated_resolution": 0.95, "disposition_accuracy": 0.97}  # measured 0.9875 and 0.9881 (scripted)
@@ -66,11 +68,20 @@ def check_fresh(reports: dict[str, dict]) -> list[str]:
             for name, r in reports.items() if r.get("prompt_version") != PROMPT_VERSION]
 
 
+def check_policy_fresh(reports: dict[str, dict], current: str | None = None) -> list[str]:
+    """Los reportes deben haberse medido con las políticas actuales (eval/fingerprint.py)."""
+    current = current or policy_fingerprint()
+    return [f"{name}: medido con otras políticas (huella {str(r.get('policy_sha256'))[:12]}, la actual es {current[:12]}): "
+            "volver a correr `make eval eval-adversarial`"
+            for name, r in reports.items() if r.get("policy_sha256") != current]
+
+
 def check(reports_dir: Path = REPORTS) -> list[str]:
     load = lambda name: json.loads((reports_dir / name).read_text(encoding="utf-8"))  # noqa: E731
     offline, adversarial, classifier = load("system_eval.json"), load("system_eval_adversarial.json"), load("intent_classifier.json")
     return [*check_safety(offline, "offline"), *check_safety(adversarial, "adversarial"), *check_quality(offline, "offline"),
-            *check_guard(classifier), *check_fresh({"system_eval.json": offline, "system_eval_adversarial.json": adversarial})]
+            *check_guard(classifier), *check_fresh({"system_eval.json": offline, "system_eval_adversarial.json": adversarial}),
+            *check_policy_fresh({"system_eval.json": offline, "system_eval_adversarial.json": adversarial})]
 
 
 def main() -> int:
