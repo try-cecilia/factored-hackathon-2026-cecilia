@@ -31,23 +31,33 @@ service, and as our own roadmap.
    only below ≈1.3%. Batch 1 was written and committed before the system ran on it; batch 2 after seeing batch 1's
    failures and before fixing them; the fixes came after seeing both. Their post-fix numbers are regression evidence,
    not a held-out measurement, for the failures they fixed. A fresh, human-written set is the remaining fix.
-5. **The judge of replies knows templates, not meaning.** By ADR-001 every reply is a fixed template (`agent/core/render.py`) or verified
-   facts rendered, so `eval/run_system_eval.py` (`reply_template`) says which template produced each reply and flags any text that is none of
-   them (`text_outside_the_templates`). Two reviews found phrase-matching (regex over "ya transferí", "no pude") always one phrasing behind, and
-   it was dropped. What this leaves open:
-   - *The orchestrator does not expose the template key.* `TurnResult` has the category and the rule, not which message was sent, so the
-     classification is done on the text. Exposing the key (a field set where the reply is chosen) would replace it with a fact; that is a change
-     to the system, not made in this branch.
+5. **The judge of replies reconstructs templates, from the outside.** By ADR-001 every reply is a fixed template (`agent/core/render.py`) or
+   verified facts rendered. Three reviews found that recognising phrases (regex over "ya transferí", "no pude") or matching templates with
+   wildcards is always one loophole behind, so `eval/run_system_eval.py` (`reply_template`) now rebuilds, exactly, the replies the system could
+   have sent at each turn, and any text that is none of them is `text_outside_the_templates`, unsafe by itself. It rebuilds from: the fixed
+   templates; `escalate_unverified` with the turn's own code (`trace_id[:8]`); `render.render_answer` over the turn's verified facts (with the
+   customer's catalog labels, or without them for the degraded mode and the baseline); `render.clarify` over the catalog; the trace replies from
+   the customer's movements and the run's trace requests; and the `case_*` notices only for a ticket of the customer whose desk state says so.
+   What this leaves open:
+   - *The orchestrator does not expose the template key or its parameters.* `TurnResult` has the category and the rule, not the message. The clean
+     fix is a system change, not made in this branch. Proposal: a field `TurnResult.reply = {"template": "<render.MSG key or 'answer'>", "params": {...}}`
+     set at each place that builds a reply (about 15 `TurnResult(...)` calls in `agent/core/orchestrator.py`, and `eval/baseline_bot.py`), never
+     serialised by the API; the judge would compare the text to `render.MSG[key][lang].format(**params)` and check each param against the turn's
+     data, instead of enumerating candidates. Impact: editing `agent/core/orchestrator.py` changes the policy fingerprint
+     (`eval/fingerprint.py`), so `make eval eval-adversarial eval-failures` must be re-run and the three committed reports regenerated; no
+     behaviour and no prompt change.
    - *Any free text is unsafe, honest or not.* "No pude registrar tu caso. Comunícate con un agente especializado por teléfono." and
      "O encaminhamento falhou. Seu caso não foi encaminhado." are safe to say and are flagged, like "Ya transferí tu caso". The system never
      writes them; if a later change lets model text reach the customer, every such reply will be flagged until the judge is taught the new source.
-   - *Placeholders are wildcards.* A template with `{mov}`, `{opts}` or `{code}` matches whatever is in that slot, and `clarify_product` accepts any
-     list after its question. "Encontré este movimiento pendiente: X. Ya transferí tu caso. ¿Quieres que abra un pedido de rastreo? Responde sí o no."
-     would be read as `trace_propose`. The content of a slot is checked only where a session is dead (the data detector), not for promises.
-   - *An answer is its facts' renderings plus lines that end in `:`* (the product labels). A line "Ya transferí tu caso:" inside an answer passes.
-   - *A quote is excused by rendering.* On a dead session, the text of a public fact (`get_exchange_rate`) is removed before looking for the customer's
-     data; text that merely contains the same figures written another way is not removed, and is flagged.
-   The three sets of replies measured (548 + 548 generated rows, 226 + 226 reserved rows) contain no text outside the templates.
+   - *The candidates are the customer's real data, not the turn's exact choice.* A `trace_propose` for a movement of the customer's that is not the
+     one the system picked passes; so does a `trace_choose` whose options are real movements in any order or subset; and a `case_*` notice passes for any
+     status a ticket of the customer has, not the one it should announce at that turn (with no operator acting in the scenarios there is none).
+   - *An answer is compared with `render_answer` over the facts the result itself reports.* A wrong fact rendered faithfully is not a text finding
+     (it is caught by the ownership and figure checks); and when the facts are missing from the result, a correct-looking answer is flagged.
+   - *A quote is excused by rendering.* On a dead session, the exact rendering of a public fact (`get_exchange_rate`) is removed before looking for the
+     customer's data; the same figures written another way are not removed, and are flagged.
+   The replies measured (548 generated rows in each of the ideal and adversarial runs, and 226 reserved rows in each) contain no text outside the
+   templates, trace replies included.
 ## Data and ML
 
 - **No usable text in the supplied data.** 171K transcripts hold 42 distinct
