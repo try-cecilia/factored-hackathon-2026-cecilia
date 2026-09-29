@@ -77,3 +77,20 @@ describe('the cookie a plain-http login sets is the one the console reads', () =
     assert.equal(page.status, 200)
   })
 })
+
+describe('a list that mixes schemes is refused whole, in either order, and the https login never gets a plain cookie', () => {
+  const original = console.error
+  before(() => void (console.error = () => {}))
+  after(() => void (console.error = original))
+  const mixed = ['http://localhost:34567,https://console.bank.example', 'https://console.bank.example,http://localhost:34567']
+  for (const value of mixed) {
+    test(value, async () => {
+      process.env.WEB_PUBLIC_ORIGIN = value
+      for (const base of ['https://console.bank.example', 'http://localhost:34567']) {
+        const res = await post(base, ADMIN)
+        assertRefused(res, 'origin_config', base)
+        assert.equal(cookieNamed(res.headers.getSetCookie(), 'cecilai_operator'), undefined, base)
+      }
+    })
+  }
+})

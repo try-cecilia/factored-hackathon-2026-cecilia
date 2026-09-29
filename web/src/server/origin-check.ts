@@ -35,8 +35,8 @@ const originOf = (value: string) => {
 const PURE_ORIGIN = /^https?:\/\/[^\s/?#@*\\%]+$/i
 
 /**
- * The exact origins a WEB_PUBLIC_ORIGIN value lists, or null unless EVERY entry is a pure origin: no wildcard, userinfo, path,
- * query, fragment or blank entry. One bad entry invalidates the whole value, so a typo refuses everything instead of opening something.
+ * The exact origins a WEB_PUBLIC_ORIGIN value lists, or null unless EVERY entry is a pure origin (no wildcard, userinfo, path,
+ * query, fragment or blank entry) and all share a scheme. One bad entry invalidates the whole value, so a typo refuses everything instead of opening something.
  */
 export function publicOrigins(value: string | undefined): string[] | null {
   if (!value?.trim()) return null
@@ -48,7 +48,9 @@ export function publicOrigins(value: string | undefined): string[] | null {
     if (origin === null) return null
     origins.push(origin)
   }
-  return origins
+  // The origins share one scheme: the session cookies are Secure or not for the whole console (cookie-policy.ts), so a list that
+  // mixes http and https would give a plain cookie to the https login, or a Secure one that the http origin never stores.
+  return origins.every((origin) => origin.startsWith(origins[0].slice(0, origins[0].indexOf(':') + 1))) ? origins : null
 }
 
 export function originConfigFromEnv(env: Record<string, string | undefined> = process.env): OriginConfig {

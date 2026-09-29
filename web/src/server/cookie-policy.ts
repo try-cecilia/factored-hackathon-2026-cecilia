@@ -4,23 +4,17 @@
 //  - WEB_PUBLIC_ORIGIN is https: `Secure` and `__Host-` (the prefix makes the browser require Secure, Path=/ and no Domain).
 //  - WEB_PUBLIC_ORIGIN is http (a local run): neither, because the browser would drop them.
 //  - not set, or not an http(s) origin: production keeps `Secure` and `__Host-`; development, which has no https, does not.
-// WEB_PUBLIC_ORIGIN can list several origins (a local run answers on 127.0.0.1 and on localhost); the first one decides, and a
-// list that mixes http and https is not supported: the origins it names should share a scheme.
+// WEB_PUBLIC_ORIGIN can list several origins (a local run answers on 127.0.0.1 and on localhost). The list is read with the same
+// validation the origin check uses (publicOrigins): it must be valid and its origins share a scheme, and that scheme decides. A value
+// that is not valid, or a list mixing http and https, decides nothing here (and the console refuses its forms): production keeps Secure.
 // Read on every call, not once at import, so the choice follows the environment the process was started with.
+
+import { publicOrigins } from './origin-check.ts'
 
 export type CookiePolicy = { secure: boolean; name: (base: string) => string }
 
-const protocolOf = (value: string | undefined) => {
-  try {
-    const first = value?.split(',')[0].trim()
-    return first ? new URL(first).protocol : null
-  } catch {
-    return null
-  }
-}
-
 export function cookiePolicy(env: Record<string, string | undefined> = process.env): CookiePolicy {
-  const protocol = protocolOf(env.WEB_PUBLIC_ORIGIN)
-  const secure = protocol === 'https:' ? true : protocol === 'http:' ? false : env.NODE_ENV === 'production'
+  const origins = publicOrigins(env.WEB_PUBLIC_ORIGIN)
+  const secure = origins ? origins[0].startsWith('https:') : env.NODE_ENV === 'production'
   return { secure, name: (base) => (secure ? `__Host-${base}` : base) }
 }

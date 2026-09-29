@@ -83,3 +83,13 @@ test('a wildcard or userinfo entry does not authorize anything, in either positi
   assert.deepEqual(post('https://attacker.invalid'), { ok: false, reason: 'misconfigured' })
   assert.deepEqual(post('https://trusted.example'), { ok: false, reason: 'misconfigured' })
 })
+
+test('a list that mixes http and https is invalid, in either order: the cookies could not be right for both', () => {
+  assert.equal(publicOrigins('http://localhost:34567,https://console.bank.example'), null)
+  assert.equal(publicOrigins('https://console.bank.example,http://localhost:34567'), null)
+  assert.deepEqual(publicOrigins('https://a.example,https://b.example'), ['https://a.example', 'https://b.example'])
+  for (const publicOrigin of ['http://localhost:34567,https://console.bank.example', 'https://console.bank.example,http://localhost:34567']) {
+    const verdict = checkOrigin(post('https://console.bank.example/x', { Origin: 'https://console.bank.example' }), { production: true, publicOrigin })
+    assert.deepEqual(verdict, { ok: false, reason: 'misconfigured' }, publicOrigin)
+  }
+})

@@ -37,10 +37,21 @@ describe('cookie policy: Secure and __Host- follow the public origin, not NODE_E
     assert.equal(policy({ NODE_ENV: 'production', WEB_PUBLIC_ORIGIN: ' http://127.0.0.1:3000 ' }).secure, false)
   })
 
-  test('a list of origins is decided by the first one', () => {
+  test('a list of origins that share a scheme decides by that scheme', () => {
     assert.equal(policy({ NODE_ENV: 'production', WEB_PUBLIC_ORIGIN: 'http://127.0.0.1:3000,http://localhost:3000' }).secure, false)
     assert.equal(policy({ NODE_ENV: 'production', WEB_PUBLIC_ORIGIN: 'https://a.example, https://b.example' }).secure, true)
     assert.equal(policy({ NODE_ENV: 'production', WEB_PUBLIC_ORIGIN: ',' }).secure, true)
+  })
+
+  test('a list that mixes schemes is invalid, so production keeps Secure whichever comes first (the same validation as the origin check)', () => {
+    for (const WEB_PUBLIC_ORIGIN of ['http://localhost:34567,https://console.bank.example', 'https://console.bank.example,http://localhost:34567']) {
+      assert.deepEqual(policy({ NODE_ENV: 'production', WEB_PUBLIC_ORIGIN }), { secure: true, session: '__Host-cecilai_session' }, WEB_PUBLIC_ORIGIN)
+    }
+  })
+
+  test('an entry that is not a pure origin makes the value invalid for the cookies too', () => {
+    assert.equal(policy({ NODE_ENV: 'production', WEB_PUBLIC_ORIGIN: 'http://127.0.0.1:3000,*' }).secure, true)
+    assert.equal(policy({ NODE_ENV: 'production', WEB_PUBLIC_ORIGIN: 'http://127.0.0.1:3000/x' }).secure, true)
   })
 
   test('the prefix is applied to any cookie name the same way', () => {
