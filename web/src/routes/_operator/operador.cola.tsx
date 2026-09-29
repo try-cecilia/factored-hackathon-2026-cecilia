@@ -8,14 +8,13 @@ import type { DeskStatus, QueueRow } from '../../server/operator.functions'
 import { Button, DataTable, PriorityChip, StatusIndicator, type Column, type SortState, type StatusTone } from '../../ui'
 import type { Priority } from '../../ui'
 import { ageShort, categoryName, statusKey, when } from '../-operator/format'
+import { useMinute } from '../-operator/now'
 import {
   countryOptions, distinct, filterTickets, filtersOf, hasFilters, inScope, isClosed, localeOf, orderTickets, pageSlice, tabCounts, validateSearch, type QueueSearch, type StatusTab,
 } from '../-operator/queue'
 import { Notice } from '../-operator/ui'
 
 const PAGE_SIZE = 25
-// How often the ages in the table ("4m", "1h") are worked out again: their unit is the minute.
-const AGE_MS = 30_000
 
 export const Route = createFileRoute('/_operator/operador/cola')({
   validateSearch,
@@ -55,16 +54,6 @@ function makeColumns(t: Translate, locale: Locale, now: number): Column<QueueRow
     { id: 'status', header: t('operator.queue.columns.status'), width: 108, sortable: true, cell: (r) => <StatusIndicator tone={tones[r.desk.status]}>{t(statusKey[r.desk.status])}</StatusIndicator> },
     { id: 'operator', header: t('operator.queue.columns.operator'), width: 92, mono: true, truncate: true, sortable: true, cell: (r) => r.desk.operator ?? '—' },
   ]
-}
-
-/** The time the ages are counted from: it moves on its own, so a table whose data did not change still shows the right age. */
-function useNow(every: number) {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), every)
-    return () => clearInterval(timer)
-  }, [every])
-  return now
 }
 
 function Queue() {
@@ -117,7 +106,7 @@ function Queue() {
 
   const title = search.cola ?? t(search.vista === 'mias' ? 'operator.queue.title.mine' : search.vista === 'sin-asignar' ? 'operator.queue.title.unassigned' : 'operator.queue.title.all')
 
-  const now = useNow(AGE_MS)
+  const now = useMinute()
   const columns = useMemo(() => makeColumns(t, locale, now), [t, locale, now])
   const openTicket = useCallback(
     (r: QueueRow) => void navigate({ to: '/operador/cola/$ticketId', params: { ticketId: r.ticket_id }, search: ((prev: QueueSearch) => prev) as never }),
