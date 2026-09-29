@@ -1,14 +1,17 @@
 name: ci
 
 # Jobs run in parallel and each is cached:
-#   python     the hermetic suite, the classifier evaluation and the quality gate (eval.gate)
-#   web        the frontend's locked install, typecheck and build
+#   python     the hermetic suite (which includes the resilience tests, `make test-resilience` is a subset of it), the classifier
+#              evaluation, the quality gate (eval.gate) and the data/ML validation (`make gate` runs `make validate-data-ml`), and
+#              a check that none of that rewrote a versioned file
+#   web        the frontend's locked install, typecheck, build and every test (`pnpm test:all`: node:test, vitest on the DOM,
+#              and HTTP tests against the production build)
 #   alerts     promtool over ops/alerts.yml and its unit tests
 #   container  the API image booted the way Render does (existing checks)
 #   web-image  the web image builds, runs unprivileged and answers
 #   compose    the whole stack (API + web + Prometheus) from scratch on the fixture warehouse: ops/compose_e2e.sh
-# Checks that other branches add (data/ML validation, per-category floors in eval.gate) come in through `make` targets:
-# `make gate` runs whatever eval.gate checks, and ops/ci_optional.sh runs a target only if this checkout defines it.
+# Checks that other branches add (per-category floors in eval.gate) come in through `make` targets: `make gate` runs whatever
+# eval.gate checks. The versioned evidence is regenerated on purpose (`make evidence`, `make eval ...`), never by a CI run.
 
 on:
   push:
@@ -35,7 +38,13 @@ jobs:
         run: pip install --require-hashes -r requirements-tracking.txt  # the serving lock plus mlflow, so the tracking tests run
       - name: Hermetic test suite (fixture warehouse, no S3, no API keys)
         run: make test
-      - name: Intent classifier evaluation is reproducible
+      - name: Quality gate (safety floors, guard recall, evidence made with the current prompt)
+        run: make gate
+      - name: Nothing versioned was rewritten (the suite, the gate and the data/ML validation leave the tree as they found it)
+        run: |
+          git status --porcelain
+          test -z "$(git status --porcelain)" || { git --no-pager diff --stat; echo "a CI step rewrote a versioned file"; exit 1; }
+      - name: Intent classifier evaluation is reproducible (last, because it rewrites its own report and model, which is what it is for)
         run: |
           python -m eval.evaluate_intent_classifier > /dev/null
           python - <<'EOF'
@@ -48,10 +57,6 @@ jobs:
           assert learned > base, "learned classifier no longer beats the keyword baseline"
           assert guard["false_escalation"]["rate"] <= 0.05
           EOF
-      - name: Quality gate (safety floors, guard recall, evidence made with the current prompt)
-        run: make gate
-      - name: Checks other branches add (skipped here if the Makefile has no such target)
-        run: sh ops/ci_optional.sh validate-data-ml
 
   web:
     runs-on: ubuntu-latest
@@ -72,6 +77,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm build
+      - name: Unit tests (node:test), component tests (vitest, DOM) and HTTP tests against the production build
+        run: pnpm test:all
 
   alerts:
     runs-on: ubuntu-latest

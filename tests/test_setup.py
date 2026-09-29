@@ -192,8 +192,23 @@ def test_the_ci_runs_every_layer_in_parallel_jobs_with_a_time_limit():
     runs = {name: " ".join(str(s.get("run", "")) for s in job["steps"]) for name, job in jobs.items()}
     assert "make lock-check" in runs["python"] and "make test" in runs["python"] and "make gate" in runs["python"]
     assert "pnpm install --frozen-lockfile" in runs["web"] and "pnpm typecheck" in runs["web"] and "pnpm build" in runs["web"]
+    assert "pnpm test:all" in runs["web"]  # node:test, vitest on the DOM and the HTTP tests against the production build
     assert "make alerts-check" in runs["alerts"] and "make compose-e2e" in runs["compose"]
     assert "ops/container_smoke.py" in runs["container"]
+
+
+def test_the_ci_python_job_covers_the_data_ml_validation_and_the_resilience_tests_and_checks_the_tree_stays_clean():
+    """Neither has a step of its own because `make gate` runs the one and `make test` (the whole tests/ folder) the other."""
+    makefile = (ROOT / "Makefile").read_text()
+    gate = re.search(r"^gate:.*\n((?:\t.*\n)+)", makefile, re.M).group(1)
+    assert "$(MAKE) validate-data-ml" in gate
+    resilience = re.search(r"^test-resilience:.*\n\t\$\(PY\) -m pytest (.*) -q\n", makefile, re.M).group(1).split()
+    assert resilience and all((ROOT / f).exists() and f.startswith("tests/") for f in resilience)
+    assert re.search(r"^test:.*\n\t\$\(PY\) -m pytest tests/ -q\n", makefile, re.M)  # the whole folder, so the files above run
+    steps = WORKFLOW["jobs"]["python"]["steps"]
+    runs = [str(step.get("run", "")) for step in steps]
+    order = {key: next(i for i, run in enumerate(runs) if key in run) for key in ("make test", "make gate", "git status --porcelain", "evaluate_intent_classifier")}
+    assert order["make test"] < order["make gate"] < order["git status --porcelain"] < order["evaluate_intent_classifier"]
 
 
 def test_the_ci_installs_from_the_hash_checked_lock():
