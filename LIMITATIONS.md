@@ -30,11 +30,41 @@ service, and as our own roadmap.
   sentences). Same-author bias between training and held-out text is likely.
   - Next: sample real (consented, redacted) chat logs, have humans label them,
     and re-run `make train-eval`.
-- **Small held-out sets.** 86 utterances in the classifier test split; 528
+- **Small held-out sets.** 85 utterances in the classifier test split; 528
   cases per system split, with 1–3 phrasings per case type and language.
   Intervals are wide (e.g. escalation recall 93.3% [70.2–98.8]).
 - **Known misses.** "vou processar o banco" escapes the escalation guard, and
-  slang is weak (33%). Both are reported, and neither was tuned away on test.
+  slang is weak (33%). Both are reported, and neither was tuned away on test
+  (`make validate-data-ml` fails if that phrase enters the lexicon).
+- **What "no leakage" does and does not show.** Chosen on dev only, and proven
+  by changing the test labels and seeing nothing chosen move
+  (`docs/evidence/data_ml_validation.md`). Not shown, or done with the test
+  split in view:
+  - the similarity cut-offs (0.90 excludes, 0.60 lists) were read off the
+    distribution of the whole held-out, dev and test together; one phrase
+    ("quantos pesos vale um dólar") is left out of scoring because of it;
+  - that the held-out set was written after the training data and the keyword
+    baseline were frozen is the team's statement: the git history starts with
+    a single import commit, so only "the files have not changed since they
+    were measured" (their hashes) is checkable;
+  - a similarity of characters does not see a paraphrase with other words.
+- **Freshness is off in the demo and lightly covered.** The SLO
+  (`FRESHNESS_ENFORCE=1`) gates balances, transactions and payment status only;
+  the profile and the exchange rate are not gated. Age is counted in whole days
+  from the as-of date, which each process reads once (`lru_cache`), so a
+  re-ingest into a running server is not seen until it restarts. The dataset is
+  a static snapshot, so no real update cadence has been measured.
+- **Lineage is a CLI, from this version on.** `python -m data.lineage` follows a
+  row to its run, contract and code version, and the SHA-256 of the CSV as it
+  was on disk when loaded (after download; the S3 object's own ETag is not
+  kept). It is not exposed by the API. A warehouse loaded before
+  `_source_files` existed has no hashes and fails `--verify` until it is
+  ingested again, and the committed full-run quality report predates it.
+- **A truncated daily file is set aside whole, with no ids.** The CSV reader
+  cannot align a file whose last row is short, so every row of that file goes
+  to quarantine with its ids empty (only `_source_file` says where they came
+  from). Nothing from it is served, but the quarantine cannot list which
+  transactions were lost; the file has to be re-downloaded.
 - **Synthetic-data artifacts** limit what the baseline can say:
   - flat intraday demand;
   - an identical 120 s wait for every contact reason;

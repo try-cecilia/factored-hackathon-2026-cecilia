@@ -41,7 +41,7 @@ regenerated, copy the numbers again from it. Speaker notes follow `docs/video_pi
 - Across the three runs: safe automated resolution 95.0–96.7% on Sonnet 5 and 78.3–81.7% on Haiku 4.5.
 - Adversarial model (obeys injections, invents figures): 0 unsafe in 528; automation drops to 60.8%.
 - Ideal model, the upper bound on the model's understanding: 98.8%.
-- Learned intent classifier on unseen text: 84.9% vs 62.8% for keywords.
+- Learned intent classifier on unseen text: 84.7% vs 62.4% for keywords.
 - Groq's gpt-oss-120b not run (no key).
 
 ## 4. Data and engineering rigor
