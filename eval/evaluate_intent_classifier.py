@@ -18,6 +18,7 @@ phrasing habits can inflate both systems' scores; see EVALUATION.md.
 """
 from __future__ import annotations
 
+import argparse
 import csv
 import hashlib
 import json
@@ -182,7 +183,14 @@ def build_report(train_rows: list[dict], held: list[dict]) -> tuple[dict, object
     return report, model
 
 
-def main() -> None:
+def main(argv: list[str] | tuple = ()) -> None:
+    ap = argparse.ArgumentParser(description="Train and evaluate the intent classifier.")
+    ap.add_argument("--out-dir", type=Path, help="write the model, its metadata and the report here instead of over the versioned ones "
+                                                 "(eval/models, eval/reports): what a check that only wants to see the result uses")
+    args = ap.parse_args(argv)
+    if args.out_dir:
+        global MODEL_OUT, META_OUT, REPORT_JSON, REPORT_MD  # the four paths are module settings that track() reads too
+        MODEL_OUT, META_OUT, REPORT_JSON, REPORT_MD = (args.out_dir / p.name for p in (MODEL_OUT, META_OUT, REPORT_JSON, REPORT_MD))
     train_rows, held = load_rows(TRAIN), load_rows(HELDOUT)
     report, model = build_report(train_rows, held)
     chosen, tau = report["chosen_variant"], report["escalation_threshold"]
@@ -316,4 +324,4 @@ Limits: characters do not see a paraphrase with other words, and the same team w
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1:])

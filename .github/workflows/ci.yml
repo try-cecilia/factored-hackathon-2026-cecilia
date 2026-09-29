@@ -40,16 +40,13 @@ jobs:
         run: make test
       - name: Quality gate (safety floors, guard recall, evidence made with the current prompt)
         run: make gate
-      - name: Nothing versioned was rewritten (the suite, the gate and the data/ML validation leave the tree as they found it)
+      - name: Intent classifier evaluation is reproducible (its report and model go to a temporary directory, not over the versioned ones)
         run: |
-          git status --porcelain
-          test -z "$(git status --porcelain)" || { git --no-pager diff --stat; echo "a CI step rewrote a versioned file"; exit 1; }
-      - name: Intent classifier evaluation is reproducible (last, because it rewrites its own report and model, which is what it is for)
-        run: |
-          python -m eval.evaluate_intent_classifier > /dev/null
+          out="$RUNNER_TEMP/intent-classifier"
+          python -m eval.evaluate_intent_classifier --out-dir "$out" > /dev/null
           python - <<'EOF'
-          import json
-          r = json.load(open("eval/reports/intent_classifier.json"))
+          import json, os
+          r = json.load(open(os.environ["RUNNER_TEMP"] + "/intent-classifier/intent_classifier.json"))
           t = r["test"]
           learned, base = t["learned"]["accuracy"]["rate"], t["baseline_keywords"]["accuracy"]["rate"]
           guard = t["escalation_guard"]["lexicon_or_classifier (runtime)"]
@@ -57,6 +54,10 @@ jobs:
           assert learned > base, "learned classifier no longer beats the keyword baseline"
           assert guard["false_escalation"]["rate"] <= 0.05
           EOF
+      - name: Nothing versioned was rewritten (the last step, so it covers the suite, the gate, the validation and the evaluation above)
+        run: |
+          git status --porcelain
+          test -z "$(git status --porcelain)" || { git --no-pager diff --stat; echo "a CI step rewrote a versioned file"; exit 1; }
 
   web:
     runs-on: ubuntu-latest

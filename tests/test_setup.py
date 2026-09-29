@@ -205,10 +205,35 @@ def test_the_ci_python_job_covers_the_data_ml_validation_and_the_resilience_test
     resilience = re.search(r"^test-resilience:.*\n\t\$\(PY\) -m pytest (.*) -q\n", makefile, re.M).group(1).split()
     assert resilience and all((ROOT / f).exists() and f.startswith("tests/") for f in resilience)
     assert re.search(r"^test:.*\n\t\$\(PY\) -m pytest tests/ -q\n", makefile, re.M)  # the whole folder, so the files above run
-    steps = WORKFLOW["jobs"]["python"]["steps"]
-    runs = [str(step.get("run", "")) for step in steps]
-    order = {key: next(i for i, run in enumerate(runs) if key in run) for key in ("make test", "make gate", "git status --porcelain", "evaluate_intent_classifier")}
-    assert order["make test"] < order["make gate"] < order["git status --porcelain"] < order["evaluate_intent_classifier"]
+
+
+def test_the_ci_python_job_ends_with_the_clean_tree_check_and_every_step_that_writes_writes_elsewhere():
+    """A step that rewrites a versioned file must not run after the check that says none did: the evaluation of the classifier
+    (it rewrites its report and its model) writes to a temporary directory, and the check is the last step."""
+    runs = [str(step.get("run", "")) for step in WORKFLOW["jobs"]["python"]["steps"]]
+    order = {key: next(i for i, run in enumerate(runs) if key in run) for key in ("make test", "make gate", "evaluate_intent_classifier")}
+    assert order["make test"] < order["make gate"] and order["evaluate_intent_classifier"] < len(runs) - 1
+    assert "git status --porcelain" in runs[-1]  # last: whatever ran before it left the tree as it found it
+    for run in runs:
+        for line in run.splitlines():
+            if "eval.evaluate_intent_classifier" in line:
+                assert "--out-dir" in line, line
+            assert not re.search(r"\bmake (evidence|eval|eval-adversarial|eval-failures|train-eval|workload|analysis|ingest)\b", line), line
+
+
+def test_the_classifier_evaluation_can_write_its_outputs_elsewhere_and_leaves_the_versioned_ones_alone(tmp_path, monkeypatch):
+    from eval import evaluate_intent_classifier as eic
+
+    watched = [eic.MODEL_OUT, eic.META_OUT, eic.REPORT_JSON, eic.REPORT_MD]
+    before = [p.read_bytes() for p in watched]
+    monkeypatch.setattr(eic, "track", lambda report: None)
+    for name in ("MODEL_OUT", "META_OUT", "REPORT_JSON", "REPORT_MD"):  # main() repoints the module's paths: put them back afterwards
+        monkeypatch.setattr(eic, name, getattr(eic, name))
+    eic.main(["--out-dir", str(tmp_path)])
+    assert sorted(p.name for p in tmp_path.iterdir()) == sorted(p.name for p in watched)
+    assert [p.read_bytes() for p in watched] == before  # the committed model and reports are untouched
+    report = json.loads((tmp_path / "intent_classifier.json").read_text(encoding="utf-8"))
+    assert report["test"]["learned"]["accuracy"]["rate"] > report["test"]["baseline_keywords"]["accuracy"]["rate"]
 
 
 def test_the_ci_installs_from_the_hash_checked_lock():
@@ -358,3 +383,72 @@ def test_the_web_server_does_not_send_no_referrer_because_a_browser_then_posts_o
     forms' origin check (web/src/server/origin-check.ts, which rightly refuses `null`) turned every login into a 403."""
     serve = (ROOT / "web" / "serve.mjs").read_text(encoding="utf-8")
     assert "'referrer-policy': 'same-origin'" in serve and "'referrer-policy': 'no-referrer'" not in serve
+
+
+# --- .env syntax as Compose reads it (dotenv: export, spaces around =, quotes, comments) -----------------------------------------
+
+DOTENV = """\
+# a comment, then a blank line
+
+export ADMIN_API_KEY=exported-value
+METRICS_TOKEN = spaced-value
+GRAFANA_ADMIN_PASSWORD="double # quoted"
+DEMO_IDP_SECRET='single quoted' # trailing comment
+OPERATOR_KEYS=operator1=abc#not-a-comment
+  export   SESSION_TTL_SECONDS  =  60  # indented, exported, spaced
+"""
+
+
+def test_env_check_parses_the_dotenv_syntax_compose_accepts():
+    got = env_check.parse(DOTENV)
+    assert got["ADMIN_API_KEY"] == "exported-value" and got["METRICS_TOKEN"] == "spaced-value"
+    assert got["GRAFANA_ADMIN_PASSWORD"] == "double # quoted" and got["DEMO_IDP_SECRET"] == "single quoted"
+    assert got["OPERATOR_KEYS"] == "operator1=abc#not-a-comment"  # a # with no space before it is part of the value
+    assert got["SESSION_TTL_SECONDS"] == "60"
+    assert "a" not in got and len(got) == 6
+
+
+def test_env_check_does_not_call_missing_what_export_or_spaces_declare_and_env_fill_never_doubles_a_key(tmp_path):
+    (tmp_path / ".env.example").write_text(EXAMPLE)
+    env = tmp_path / ".env"
+    env.write_text(DOTENV)
+    listed = "\n".join(env_check.report(EXAMPLE, DOTENV))
+    for name in ("ADMIN_API_KEY", "METRICS_TOKEN", "GRAFANA_ADMIN_PASSWORD", "DEMO_IDP_SECRET", "OPERATOR_KEYS", "SESSION_TTL_SECONDS"):
+        assert f"  {name}\n" not in listed + "\n", name
+        assert name not in env_check.missing(EXAMPLE, DOTENV)
+    assert env_check.main(["--env", str(env), "--example", str(tmp_path / ".env.example"), "--fill"]) == 0
+    text = env.read_text()
+    assert text.startswith(DOTENV)  # what was there is untouched
+    for name in ("ADMIN_API_KEY", "METRICS_TOKEN", "GRAFANA_ADMIN_PASSWORD", "DEMO_IDP_SECRET", "OPERATOR_KEYS", "SESSION_TTL_SECONDS"):
+        assert len(re.findall(rf"^\s*(?:export\s+)?{name}\s*=", text, re.M)) == 1, name  # a second assignment would override the first
+    assert env_check.parse(text)["ADMIN_API_KEY"] == "exported-value" and env_check.parse(text)["METRICS_TOKEN"] == "spaced-value"
+
+
+def test_env_fill_keeps_every_existing_value_whatever_the_syntax(tmp_path):
+    (tmp_path / ".env.example").write_text(EXAMPLE)
+    env = tmp_path / ".env"
+    env.write_text(DOTENV + "LOG_LEVEL=DEBUG\n")
+    before = env_check.parse(env.read_text())
+    assert env_check.main(["--env", str(env), "--example", str(tmp_path / ".env.example"), "--fill"]) == 0
+    after = env_check.parse(env.read_text())
+    assert {k: after[k] for k in before} == before
+    assert env_check.main(["--env", str(env), "--example", str(tmp_path / ".env.example"), "--fill"]) == 0
+    assert env_check.parse(env.read_text()) == after  # and a second fill adds nothing
+
+
+def test_env_fill_writes_a_value_that_dotenv_reads_back_as_written():
+    for value in ("plain", "--profile serving --source local", "has # hash", "it's", 'say "hi" # x', " edge", "a\nb", "$HOME", ""):
+        assert env_check.parse(f"K={env_check._written(value)}\n") == {"K": value}, value
+
+
+def test_env_check_reads_ingest_args_the_way_dotenv_and_argparse_do():
+    read = lambda value: env_check.ingests_from_s3(f"INGEST_ARGS={value}\n")
+    assert read("--profile serving # --source local")  # the comment is dropped: no source, so S3
+    assert not read("--profile serving --source local # the fixture")
+    assert read("--source local --source s3")  # the last one wins
+    assert not read("--source s3 --source=local")
+    assert read('--profile serving --source local --source=s3')
+    assert not read('"--profile serving --source local"')  # quoted as a whole: still the same arguments
+    assert not env_check.ingests_from_s3("export INGEST_ARGS = --source local\n")
+    assert env_check.ingests_from_s3("export INGEST_ARGS = --profile serving\n")
+    assert not env_check.ingests_from_s3("INGEST_ARGS=\n")  # empty: compose falls back to its fixture default
