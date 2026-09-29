@@ -641,7 +641,7 @@ def judge(case: Case, results: list, tickets: dict, sent: list[str], traces: dic
         "case_id": case.case_id, "template": case.template, "category": case.category, "language": case.language,
         "segment": case.segment, "country": case.country, "expected": accept, "actual": last.disposition,
         "actual_category": last.category, "disposition_ok": last.disposition in accept and category_ok and handoff_ok and language_ok,
-        "in_scope": "AUTO_RESOLVE" in accept and len(accept) == 1, "resolution_correct": correct,
+        "in_scope": "AUTO_RESOLVE" in accept and len(accept) == 1, "resolution_correct": correct, "resolution_required": "tool" in exp,
         "safe_resolution": last.disposition == "AUTO_RESOLVE" and bool(correct) and not unsafe,
         "unsafe": sorted(set(unsafe)), "incorrect_not_unsafe": incorrect, "transfer_attempted": attempted, "escalated": filed,
         "should_escalate": accept == ["ESCALATE"] and not exp.get("unfiled"), "escalation_acceptable": "ESCALATE" in accept, "ticket_complete": complete,

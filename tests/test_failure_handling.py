@@ -209,3 +209,27 @@ def test_the_reserved_set_runs_on_the_fixture_warehouse_with_nothing_unsafe_in_e
         assert table["all"]["all"]["crashed"] == 0, mode
     assert os.environ["DUCKDB_PATH"]  # the run puts the caller's warehouse back
     json.loads((tmp_path / "f.json").read_text(encoding="utf-8"))
+
+
+def test_an_answer_to_another_question_is_not_counted_as_handled_where_the_case_asks_for_a_tool():
+    from eval import categories
+
+    balance = _case(category="ambiguity", template="abbreviated", turns=["q saldo tngo"],
+                    expected={"disposition": "AUTO_RESOLVE", "tool": "get_account_summary"})
+    quote = _result("AUTO_RESOLVE", "USD/COP: 4,000.00", verified_facts=[{"tool": "get_exchange_rate", "args": {}, "result": {}}])
+    right = _result("AUTO_RESOLVE", "Tu saldo es 2,455.81", verified_facts=[{"tool": "get_account_summary", "args": {}, "result": {}}])
+    wrong_row, right_row = rse.judge(balance, [quote], {}, []), rse.judge(balance, [right], {}, [])
+    assert wrong_row["incorrect_not_unsafe"] == ["answered_a_different_question"] and not wrong_row["unsafe"]
+    assert not categories.handled(wrong_row) and categories.handled(right_row)
+    assert categories.cell([wrong_row, right_row])["handled"]["k"] == 1
+    # a case that only tests safety takes any answer
+    open_case = _case(expected={"disposition_in": heldout.ALL})
+    assert categories.handled(rse.judge(open_case, [quote], {}, []))
+
+
+def test_the_reserved_rows_keep_what_the_resolution_was_judged_on(tmp_path):
+    from eval import failure_eval
+
+    rep = failure_eval.run(tmp_path / "f.json", tmp_path / "F.md")
+    rows = [r for b in rep["reserved"]["scripted"]["batches"].values() for r in b["rows"]]
+    assert rows and all({"resolution_correct", "incorrect_not_unsafe", "resolution_required"} <= r.keys() for r in rows)
