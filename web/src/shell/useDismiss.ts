@@ -37,6 +37,18 @@ export function useDismiss(
       const stops = [...panel.current.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => !el.closest('[inert]') && el.tabIndex >= 0)
       if (stops.length === 0) return event.preventDefault()
       const at = stops.indexOf(document.activeElement as HTMLElement)
+      // Focus put by hand on something that is not a stop (the demo panel's active card): Tab goes on to the next stop in the
+      // document, Shift+Tab to the one before it, and the wrap is only for the ends.
+      const here = document.activeElement
+      if (at < 0 && here && here !== panel.current && panel.current.contains(here)) {
+        const order = event.shiftKey ? Node.DOCUMENT_POSITION_PRECEDING : Node.DOCUMENT_POSITION_FOLLOWING
+        const around = stops.filter((el) => here.compareDocumentPosition(el) & order)
+        const target = event.shiftKey ? around[around.length - 1] : around[0]
+        if (target) {
+          event.preventDefault()
+          return target.focus()
+        }
+      }
       const edge = event.shiftKey ? at <= 0 : at === stops.length - 1 || at < 0
       if (!edge) return
       event.preventDefault()

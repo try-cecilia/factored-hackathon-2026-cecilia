@@ -47,5 +47,20 @@ check(await card.evaluate((el) => document.activeElement === el), 'the focus is 
 check(await drawer.evaluate((el) => !el.hasAttribute('inert') && el.contains(document.activeElement)), 'the focus is inside the open drawer')
 await page.screenshot({ path: `${outDir}/demo-prearmado-movil-es-4-reabrir-en-tarjeta.png` })
 
+// Tab from the card goes on to the first control inside it, and the drawer keeps its scroll (it does not jump back to the head).
+const scrollOf = () => drawer.evaluate((el) => { let p = el; while (p && p.scrollHeight <= p.clientHeight) p = p.parentElement; return p ? p.scrollTop : 0 })
+const scrolled = await scrollOf()
+await page.keyboard.press('Tab')
+check(await card.evaluate((el) => el !== document.activeElement && el.contains(document.activeElement)), 'Tab from the card lands on a control inside the card')
+check(Math.abs((await scrollOf()) - scrolled) < 2 && scrolled > 0, `the drawer keeps its scroll (${scrolled} -> ${await scrollOf()})`)
+const after = await card.boundingBox()
+check(!!after && after.y >= view.y && after.y < view.y + view.height, 'the card is still in view')
+// Shift+Tab from the card (on a fresh reopening) goes to the control before it, not to the last of the drawer.
+await page.keyboard.press('Escape')
+await page.getByRole('button', { name: 'Demo' }).click()
+await page.waitForTimeout(500)
+await page.keyboard.press('Shift+Tab')
+check(await page.evaluate(() => { const a = document.activeElement; return !!a && a.tagName === 'BUTTON' && a.getAttribute('aria-label') !== 'Cerrar' && !!a.closest('article') }), 'Shift+Tab from the card goes to the control of the scenario above it')
+
 await browser.close()
 process.exit(failed ? 1 : 0)

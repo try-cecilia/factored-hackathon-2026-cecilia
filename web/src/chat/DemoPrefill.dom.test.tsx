@@ -309,6 +309,33 @@ describe('a scenario of the demo panel writes its message in the chat input', ()
       expect((container.querySelector('.shell__main') as HTMLElement).hasAttribute('inert')).toBe(false)
     })
 
+    async function reopenedOnCard() {
+      const user = userEvent.setup()
+      await draw()
+      await user.click(await screen.findByRole('button', { name: 'Demo' }))
+      const card = await load(user, 'Dos turnos')
+      await waitFor(() => expect(input().value).toBe('¿Cuál es mi saldo?'))
+      await user.click(screen.getByRole('button', { name: 'Demo' }))
+      expect(document.activeElement).toBe(card)
+      return { user, card }
+    }
+
+    it('Tab from the active card goes on to the next control after it, not back to the head of the panel', async () => {
+      const { user, card } = await reopenedOnCard()
+      await user.tab()
+      expect(document.activeElement).toBe(within(card).getByRole('button', { name: 'Reiniciar' }))
+    })
+
+    it('Shift+Tab from the active card goes to the control before it', async () => {
+      const { user, card } = await reopenedOnCard()
+      await user.tab({ shift: true })
+      const before = document.activeElement as HTMLElement
+      expect(before.tagName).toBe('BUTTON')
+      expect(card.contains(before)).toBe(false)
+      expect(before).not.toBe(screen.getByRole('button', { name: 'Cerrar' }))
+      expect(within(before.closest('article') as HTMLElement).getByRole('button', { name: 'Cargar' })).toBe(before)
+    })
+
     it('reopened with no scenario in course it still opens on the first control', async () => {
       const user = userEvent.setup()
       await draw()
