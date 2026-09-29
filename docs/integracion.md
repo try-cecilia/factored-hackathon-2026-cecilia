@@ -117,6 +117,17 @@ lectura y trazas. Cómo se configuran las claves:
   no puede forzar un ingreso sobre `https://`. **En producción es obligatoria**: sin ella, o con un valor que no sea un
   origen http(s), todos los POST de la consola dan 403 y el servidor escribe en el log qué falta. En desarrollo, si está
   vacía, se usa el origen de la URL de la petición (`http://127.0.0.1:<puerto>`). Está en `web/.env.example`.
+- *Cookies según el origen.* Que una cookie salga `Secure` y con prefijo `__Host-` lo decide **`WEB_PUBLIC_ORIGIN`**, no `NODE_ENV`
+  (la imagen de Docker corre con `NODE_ENV=production` también en local). Con un origen **https** son `Secure` con `__Host-`
+  (`__Host-cecilai_session`, `__Host-cecilai_operator`, `__Host-cecilai_operator_flash`; el idioma, `cecilai_lang`, va `Secure`
+  sin prefijo); con un origen **http** (el stack local, `http://127.0.0.1:3000`) no llevan ninguna de las dos cosas, porque Safari
+  y los navegadores fuera de `localhost` no guardan una cookie `Secure` recibida por http y el ingreso se perdía sin aviso.
+  Sin `WEB_PUBLIC_ORIGIN` en producción se conserva el comportamiento anterior (`Secure`). En cualquier caso siguen `httpOnly`,
+  `SameSite` (`Lax` la sesión de cliente, `Strict` la de operador) y el chequeo de origen de los formularios. Es una sola
+  función (`web/src/server/cookie-policy.ts`) para las cuatro cookies. Si aun así el navegador no guarda la sesión (cookies
+  bloqueadas, http fuera de localhost), el ingreso de cliente devuelve el botón a su estado y muestra «Tu navegador no guardó la
+  sesión…», y el de operador —que pasa por `/operador/ingreso`, una redirección que mira la cookie que el navegador sí trajo—
+  vuelve al formulario con el mismo aviso (ES y PT).
 - *Sesión nueva en cada ingreso y en cada elevación.* Un ingreso siempre crea un identificador nuevo y termina la sesión
   que ese navegador tuviera; agregar la clave de operador también cambia el identificador y el anterior deja de valer, así
   que una cookie de solo lectura copiada no gana permisos de acción. El tope de 8 horas sigue contando desde el ingreso original. La sesión anterior se consume en un solo paso
@@ -132,7 +143,7 @@ lectura y trazas. Cómo se configuran las claves:
   barras invertidas) y solo se acepta una ruta propia que no empiece con `//`; ante la duda va a `/operador/cola`.
 - *Dónde viven las claves.* Nunca en el JavaScript del navegador, en `localStorage` ni en una cookie. El servidor de la web
   (BFF) las guarda **en memoria**, atadas a un identificador aleatorio de 256 bits que viaja en una cookie
-  `httpOnly` + `SameSite=Strict` (y `Secure` con prefijo `__Host-` en producción). La sesión vence a los 30 minutos sin
+  `httpOnly` + `SameSite=Strict` (y `Secure` con prefijo `__Host-` cuando el origen público es https; ver «Cookies según el origen»). La sesión vence a los 30 minutos sin
   actividad de la persona (el refresco automático de la cola y del monitoreo **no** cuenta como actividad) o a las 8
   horas, y se descarta si la API rechaza la clave (rotada o revocada). Al vencer, la consola vuelve al ingreso con un aviso.
   `OPERATOR_IDLE_SECONDS` (en el servidor de la web, por defecto 1800, mínimo 10) acorta esa ventana para probar el vencimiento.

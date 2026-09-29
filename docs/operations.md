@@ -31,8 +31,9 @@ knows the origin the browser sees. The compose passes `WEB_PUBLIC_ORIGIN`, by de
 publishes the UI kit gallery at `/dev/ui`; `0`, the default, is a 404 as on a real deploy). `tests/test_setup.py` fails if the web
 reads a setting the compose does not pass. In the browser: `http://127.0.0.1:3000/login` with a test PIN from the chat page
 (`DEMO_MODE=1`) for the customer, and `/operador/login` with `ADMIN_API_KEY` and the key in `OPERATOR_KEYS` for the console (both
-in `.env`; `grep` them there yourself, nothing prints them). The session cookies are `Secure` `__Host-` cookies, which Chromium
-accepts from `http://127.0.0.1` (tried; LIMITATIONS.md says what was not).
+in `.env`; `grep` them there yourself, nothing prints them). The session cookies follow the origin, not `NODE_ENV`: with an `http://` `WEB_PUBLIC_ORIGIN`
+(the default here) they are plain `httpOnly` cookies without `Secure` or the `__Host-` prefix, so Safari and Chromium both keep them;
+behind an `https://` origin they are `Secure` `__Host-` cookies (docs/integracion.md).
 
 Everything the stack needs runs in it. The cloud services the project can use are options, never requirements, and each has
 a local equivalent:
@@ -81,7 +82,7 @@ started in CI.
 
 **Checked end to end.** `make compose-e2e` builds both images in its own throwaway compose project (`cecilai-e2e-<random>`, its own settings file and free ports: it never touches the stack of `make up`), starts API + web + Prometheus + Grafana on the fixture,
 runs the smoke test, checks that the web reaches the API and, through the web as a browser uses it, a customer's login (a wrong
-PIN is refused, the right one sets an httpOnly `__Host-` cookie) and a chat turn, an operator's login on the plain form (refused
+PIN is refused, the right one sets an httpOnly session cookie, plain over the compose's http origin) and a chat turn, an operator's login on the plain form (refused
 without an `Origin` or from another one, accepted from the configured origin) and the queue behind it with the tickets the stack
 filed, and that `/dev/ui` answers 404; then the security headers, the access checks, `/metrics` (with and without
 its token), that Prometheus scrapes the API and loaded every alert rule, that Grafana holds the dashboard and its 20 queries are
