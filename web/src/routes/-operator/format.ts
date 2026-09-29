@@ -56,9 +56,20 @@ export function ageShort(ts: number | null | undefined, now = Date.now()) {
 }
 
 /** "hace 4 min" / "há 4 min", for sentences. */
+// One formatter per language and kind, made once: building an Intl formatter costs far more than using it, and a table asks per cell.
+const formatters = new Map<string, Intl.DateTimeFormat | Intl.RelativeTimeFormat>()
+function cached<F extends Intl.DateTimeFormat | Intl.RelativeTimeFormat>(key: string, make: () => F): F {
+  let formatter = formatters.get(key) as F | undefined
+  if (!formatter) formatters.set(key, (formatter = make()))
+  return formatter
+}
+const relative = (locale: Locale) => cached(`relative:${locale}`, () => new Intl.RelativeTimeFormat(htmlLang[locale], { numeric: 'auto' }))
+const dateTime = (locale: Locale) => cached(`dateTime:${locale}`, () => new Intl.DateTimeFormat(htmlLang[locale], { dateStyle: 'medium', timeStyle: 'short' }))
+const hourMinute = (locale: Locale) => cached(`hourMinute:${locale}`, () => new Intl.DateTimeFormat(htmlLang[locale], { hour: '2-digit', minute: '2-digit' }))
+
 export function ago(ts: number | null | undefined, locale: Locale, now = Date.now()) {
   if (!ts) return '—'
-  const rtf = new Intl.RelativeTimeFormat(htmlLang[locale], { numeric: 'auto' })
+  const rtf = relative(locale)
   const seconds = Math.round((ts * 1000 - now) / 1000)
   const abs = Math.abs(seconds)
   if (abs < 60) return rtf.format(0, 'second')
@@ -67,8 +78,7 @@ export function ago(ts: number | null | undefined, locale: Locale, now = Date.no
   return rtf.format(Math.round(seconds / 86400), 'day')
 }
 
-export const when = (ts: number | null | undefined, locale: Locale) =>
-  ts ? new Intl.DateTimeFormat(htmlLang[locale], { dateStyle: 'medium', timeStyle: 'short' }).format(ts * 1000) : '—'
+export const when = (ts: number | null | undefined, locale: Locale) => (ts ? dateTime(locale).format(ts * 1000) : '—')
 
 /** `MM-DD HH:mm`, the compact stamp of the evidence rows. */
 export function shortStamp(value: unknown) {
@@ -76,8 +86,7 @@ export function shortStamp(value: unknown) {
   return match ? `${match[2]}-${match[3]}${match[4] ? ` ${match[4]}` : ''}` : '—'
 }
 
-export const clock = (ts: number, locale: Locale) =>
-  new Intl.DateTimeFormat(htmlLang[locale], { hour: '2-digit', minute: '2-digit' }).format(ts * 1000)
+export const clock = (ts: number, locale: Locale) => hourMinute(locale).format(ts * 1000)
 
 export const usd = (n: number | null | undefined, digits = 4) => (n == null ? '—' : `USD ${n.toFixed(digits)}`)
 export const ms = (n: number | null | undefined) => (n == null ? '—' : n >= 1000 ? `${(n / 1000).toFixed(1)} s` : `${Math.round(n)} ms`)
