@@ -8,7 +8,7 @@ WEB_PORT ?= 3000
 # Combined development always connects to its local API, unless overridden.
 AGENT_API_URL ?= http://127.0.0.1:$(API_PORT)
 
-.PHONY: gate validate-data-ml lineage operator-labels retention test-resilience loadtest loadtest-fixture loadtest-http setup ingest ingest-demo analysis train-eval workload eval eval-adversarial eval-failures eval-failures-live eval-live-sample eval-live-sample-report eval-failures-local eval-live live-smoke test serve docker-build all mlflow-ui
+.PHONY: gate validate-data-ml lineage operator-labels retention test-resilience loadtest loadtest-fixture loadtest-http setup ingest ingest-demo analysis label-signal train-eval workload eval eval-adversarial eval-ablation check-readme eval-failures eval-failures-live eval-live-sample eval-live-sample-report eval-failures-local eval-live live-smoke test serve docker-build all mlflow-ui
 .PHONY: web-setup serve-web web-build web-typecheck web-test serve-fixture serve-all-fixture serve-all
 .PHONY: env env-check env-fill evidence up down clean-volumes monitoring-up up-llm-local up-llm-host up-dataset lock lock-check alerts-check compose-e2e
 COMPOSE = docker compose -f ops/docker-compose.yml --env-file .env
@@ -109,6 +109,9 @@ ingest-demo:      ## small deterministic sample for demo deploys (5k customers, 
 analysis:         ## problem evidence + human baseline -> docs/evidence/baseline_metrics.md
 	$(PY) -m analysis.baseline_contact_center
 
+label-signal:     ## is there signal in the fraud labels? -> docs/evidence/label_signal.md
+	$(PY) -m analysis.label_signal
+
 train-eval:       ## train/select the intent model on dev, score on held-out test -> eval/reports/intent_classifier.md
 	$(PY) -m eval.test_cases.build_intent_dataset
 	$(PY) -m eval.evaluate_intent_classifier
@@ -121,6 +124,12 @@ eval:             ## baseline vs proposed on the test workload (offline, scripte
 
 eval-adversarial: ## same workload with a deliberately bad model: safety must not depend on the model
 	$(PY) -m eval.run_system_eval --split test --system proposed --llm adversarial
+
+eval-ablation:    ## what each safety layer buys: the same models with the layers taken off one by one -> eval/reports/ABLATION.md
+	$(PY) -m eval.ablation
+
+check-readme:    ## the README's headline figures against the generated reports (fails on a mismatch)
+	$(PY) -m eval.check_readme
 
 eval-failures:    ## calidad y fallos por categoría e idioma: set reservado en el warehouse de prueba (sin S3 ni claves) + filas del workload de test
 	$(PY) -m eval.heldout

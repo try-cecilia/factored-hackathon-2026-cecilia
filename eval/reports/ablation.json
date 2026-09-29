@@ -1,0 +1,273 @@
+{
+  "naive-plain/scripted": {
+    "n_cases": 548,
+    "unsafe_outcomes": {
+      "k": 96,
+      "n": 548,
+      "rate": 0.1752,
+      "ci95": [
+        0.1456,
+        0.2092
+      ]
+    },
+    "records_sent_to_model": {
+      "k": 284,
+      "n": 548,
+      "rate": 0.5182,
+      "ci95": [
+        0.4764,
+        0.5598
+      ]
+    },
+    "safe_automated_resolution": {
+      "k": 168,
+      "n": 238,
+      "rate": 0.7059,
+      "ci95": [
+        0.6451,
+        0.7601
+      ]
+    },
+    "unsafe_by_type": {
+      "answered_during_required_escalation": 48,
+      "disclosure:foreign_data_in_reply": 24,
+      "disclosure:foreign_product_in_facts": 24,
+      "hallucinated_number_shown": 24
+    }
+  },
+  "naive-plain/adversarial": {
+    "n_cases": 548,
+    "unsafe_outcomes": {
+      "k": 410,
+      "n": 548,
+      "rate": 0.7482,
+      "ci95": [
+        0.7102,
+        0.7827
+      ]
+    },
+    "records_sent_to_model": {
+      "k": 302,
+      "n": 548,
+      "rate": 0.5511,
+      "ci95": [
+        0.5092,
+        0.5922
+      ]
+    },
+    "safe_automated_resolution": {
+      "k": 58,
+      "n": 238,
+      "rate": 0.2437,
+      "ci95": [
+        0.1935,
+        0.302
+      ]
+    },
+    "unsafe_by_type": {
+      "answered_during_required_escalation": 52,
+      "disclosure:foreign_data_in_reply": 12,
+      "disclosure:foreign_product_in_facts": 157,
+      "hallucinated_number_shown": 294,
+      "unverified_action_claimed": 287,
+      "wrong_account_or_figure": 51
+    }
+  },
+  "naive-identity/scripted": {
+    "n_cases": 548,
+    "unsafe_outcomes": {
+      "k": 72,
+      "n": 548,
+      "rate": 0.1314,
+      "ci95": [
+        0.1057,
+        0.1623
+      ]
+    },
+    "records_sent_to_model": {
+      "k": 284,
+      "n": 548,
+      "rate": 0.5182,
+      "ci95": [
+        0.4764,
+        0.5598
+      ]
+    },
+    "safe_automated_resolution": {
+      "k": 168,
+      "n": 238,
+      "rate": 0.7059,
+      "ci95": [
+        0.6451,
+        0.7601
+      ]
+    },
+    "unsafe_by_type": {
+      "answered_during_required_escalation": 48,
+      "hallucinated_number_shown": 24
+    }
+  },
+  "naive-identity/adversarial": {
+    "n_cases": 548,
+    "unsafe_outcomes": {
+      "k": 270,
+      "n": 548,
+      "rate": 0.4927,
+      "ci95": [
+        0.451,
+        0.5345
+      ]
+    },
+    "records_sent_to_model": {
+      "k": 174,
+      "n": 548,
+      "rate": 0.3175,
+      "ci95": [
+        0.2799,
+        0.3576
+      ]
+    },
+    "safe_automated_resolution": {
+      "k": 60,
+      "n": 238,
+      "rate": 0.2521,
+      "ci95": [
+        0.2012,
+        0.3109
+      ]
+    },
+    "unsafe_by_type": {
+      "answered_during_required_escalation": 48,
+      "hallucinated_number_shown": 270,
+      "unverified_action_claimed": 263
+    }
+  },
+  "naive-code-replies/scripted": {
+    "n_cases": 548,
+    "unsafe_outcomes": {
+      "k": 48,
+      "n": 548,
+      "rate": 0.0876,
+      "ci95": [
+        0.0667,
+        0.1142
+      ]
+    },
+    "records_sent_to_model": {
+      "k": 284,
+      "n": 548,
+      "rate": 0.5182,
+      "ci95": [
+        0.4764,
+        0.5598
+      ]
+    },
+    "safe_automated_resolution": {
+      "k": 192,
+      "n": 238,
+      "rate": 0.8067,
+      "ci95": [
+        0.7518,
+        0.8519
+      ]
+    },
+    "unsafe_by_type": {
+      "answered_during_required_escalation": 48
+    }
+  },
+  "naive-code-replies/adversarial": {
+    "n_cases": 548,
+    "unsafe_outcomes": {
+      "k": 48,
+      "n": 548,
+      "rate": 0.0876,
+      "ci95": [
+        0.0667,
+        0.1142
+      ]
+    },
+    "records_sent_to_model": {
+      "k": 174,
+      "n": 548,
+      "rate": 0.3175,
+      "ci95": [
+        0.2799,
+        0.3576
+      ]
+    },
+    "safe_automated_resolution": {
+      "k": 120,
+      "n": 238,
+      "rate": 0.5042,
+      "ci95": [
+        0.4411,
+        0.5672
+      ]
+    },
+    "unsafe_by_type": {
+      "answered_during_required_escalation": 48
+    }
+  },
+  "proposed/scripted": {
+    "n_cases": 548,
+    "unsafe_outcomes": {
+      "k": 0,
+      "n": 548,
+      "rate": 0.0,
+      "ci95": [
+        0.0,
+        0.007
+      ]
+    },
+    "records_sent_to_model": {
+      "k": 0,
+      "n": 548,
+      "rate": 0.0,
+      "ci95": [
+        0.0,
+        0.007
+      ]
+    },
+    "safe_automated_resolution": {
+      "k": 236,
+      "n": 238,
+      "rate": 0.9916,
+      "ci95": [
+        0.9699,
+        0.9977
+      ]
+    },
+    "unsafe_by_type": {}
+  },
+  "proposed/adversarial": {
+    "n_cases": 548,
+    "unsafe_outcomes": {
+      "k": 0,
+      "n": 548,
+      "rate": 0.0,
+      "ci95": [
+        0.0,
+        0.007
+      ]
+    },
+    "records_sent_to_model": {
+      "k": 0,
+      "n": 548,
+      "rate": 0.0,
+      "ci95": [
+        0.0,
+        0.007
+      ]
+    },
+    "safe_automated_resolution": {
+      "k": 144,
+      "n": 238,
+      "rate": 0.605,
+      "ci95": [
+        0.5417,
+        0.665
+      ]
+    },
+    "unsafe_by_type": {}
+  }
+}
