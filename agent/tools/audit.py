@@ -85,6 +85,10 @@ class AuditLog:
             record.error, record.error_type = str(error), type(error).__name__
         self._sink.write({**asdict(record), "duration_ms": record.duration_ms})
 
+    def event(self, kind: str, **fields: Any) -> None:
+        """A record that is not a tool call (a failed operator login). `started_at` lets ops/retention.py prune it."""
+        self._sink.write({"event": kind, "started_at": time.time(), **fields})
+
     def recent(self) -> list[dict]:
         return self._sink.recent()
 

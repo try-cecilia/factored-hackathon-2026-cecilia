@@ -63,6 +63,19 @@ class RateLimiter:
             q.append(now)
             return True
 
+    def over(self, key: str) -> bool:
+        """Whether this key has used up its hits in the window. Looking does not count as a hit."""
+        now = time.time()
+        with self._lock:
+            q = self._hits[key]
+            while q and now - q[0] > self.window_s:
+                q.popleft()
+            return len(q) >= self.limit
+
+    def record(self, key: str) -> None:
+        with self._lock:
+            self._hits[key].append(time.time())
+
 
 chat_limiter = RateLimiter(int(os.environ.get("CHAT_RATE_PER_MIN", "20")), 60)
 login_limiter = RateLimiter(int(os.environ.get("LOGIN_RATE_PER_MIN", "10")), 60)
