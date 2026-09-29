@@ -82,3 +82,15 @@ test('evidence types, fact keys, review reasons, attempts and error types: known
   assert.equal(errorTypeName(spanish, 'PermissionDenied'), 'Recurso de otro cliente')
   assert.equal(errorTypeName(spanish, 'ZeroDivisionError'), 'ZeroDivisionError')
 })
+
+test('a parameter that is null, empty or not a text or a number falls back to the English text, in both languages; zero is a value', () => {
+  const review = (review_reason: unknown) => ({ ...base, reason_code: { code: 'trace_review', params: { review_reason } }, open_question_codes: [{ code: 'decide_trace', params: { review_reason } }, null] }) as unknown as Texts
+  for (const bad of [null, '', '   ', undefined, {}, [], NaN]) {
+    for (const t of [spanish, portuguese]) {
+      assert.equal(reasonText(t, review(bad)), base.reason, String(bad))
+      assert.deepEqual(questionTexts(t, review(bad)), base.open_questions, String(bad))
+    }
+  }
+  const count = { ...base, reason: 'The request names 0 product(s) owned by another customer.', reason_code: { code: 'foreign_reference', params: { count: 0 } } }
+  assert.equal(reasonText(spanish, count), 'El pedido nombra 0 producto(s) de otro cliente.')
+})

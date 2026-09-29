@@ -40,8 +40,12 @@ function paramsOf(t: Translate, params: Params | undefined): Params | undefined 
   return out
 }
 
+/** A parameter with a value: a text that says something, or a number (zero is one). Anything else would print as "null" or "()". */
+const hasValue = (value: unknown) => (typeof value === 'string' ? value.trim() !== '' : typeof value === 'number' && Number.isFinite(value))
+
 function coded(t: Translate, kind: 'reason' | 'question' | 'step', item: Coded | null | undefined, english: string): string {
   if (!item || typeof item.code !== 'string' || !IDENT.test(item.code)) return english
+  if (item.params && !Object.values(item.params).every(hasValue)) return english
   return translated(t, `operator.codes.${kind}.${item.code}`, paramsOf(t, item.params)) ?? english
 }
 
