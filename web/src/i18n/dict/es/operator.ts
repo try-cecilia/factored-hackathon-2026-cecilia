@@ -1,4 +1,4 @@
-/** Consola de operador: cascarón, cola, detalle del caso, ingreso. Los textos de la asistente y los datos del caso llegan de la API y no se traducen. */
+/** Consola de operador: cascarón, cola, detalle del caso, ingreso. Los datos del caso llegan de la API; los textos que la política escribe para el operador llegan como código y se traducen en `codes` y `terms` (docs/integracion.md, sección 5). */
 export const operator = {
   skip: 'Ir al contenido',
   unavailable: 'La consola no está disponible en este momento.',

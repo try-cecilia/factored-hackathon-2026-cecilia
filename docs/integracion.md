@@ -285,7 +285,9 @@ archivos JSONL.
 las acciones realizadas, la evidencia y las preguntas abiertas. Campos: `ticket_id`, `trace_id`, `category`, `priority`,
 `queue`, `customer_id`, `session_ref`, `segment`, `country`, `language`, `request` (máximo 500 caracteres),
 `prior_requests` (las últimas 3, cortadas a 160), `reason`, `policy_rule`, `verified_facts`, `evidence`,
-`actions_taken`, `open_questions`, `suggested_next_step` y, si hay una acción que aprobar, `pending_action`.
+`actions_taken`, `open_questions`, `suggested_next_step` y, si hay una acción que aprobar, `pending_action`. Los tres textos
+que la consola muestra al operador (`reason`, `open_questions`, `suggested_next_step`) viajan además como código, en
+`reason_code`, `open_question_codes` y `next_step_code` (más abajo).
 **Nunca lleva el token de sesión**, solo `session_ref`. Las colas son `fraud_ops`, `priority_care`, `complaints`,
 `security_review`, `compliance`, `payments_ops` y `account_payments_l2` por defecto.
 
@@ -298,6 +300,55 @@ cliente se entere del resultado se cubre con `GET /case/{id}` y con un aviso en 
 
 **Punto de sustitución.** `HumanQueue.enqueue/get` y `TicketDesk.act/state`.
 
+**Los textos del operador viajan como códigos.** El modelo nunca le escribe al cliente (ADR-001), y el texto que lee el
+operador tampoco lo escribe el modelo: sale del código de política. Ese texto estaba en inglés en `router.py` y
+`escalation.py`, y la consola lo mostraba tal cual aunque el operador trabajara en español o en portugués. Ahora cada
+ticket lleva el texto en inglés de siempre y, al lado, su código con los parámetros:
+
+| Campo | Qué es |
+| --- | --- |
+| `reason_code` | `{code, params}` o `null`. Es el código de `reason`. |
+| `open_question_codes` | Lista con un `{code, params}` (o `null`) por cada elemento de `open_questions`, en el mismo orden. Las notas de evidencia que suma `escalate` van al final, con su código también. |
+| `next_step_code` | La categoría del caso, o `default`. Es el código de `suggested_next_step` (sin parámetros). |
+
+Reglas del contrato:
+
+- **El texto en inglés se conserva** (`reason`, `open_questions`, `suggested_next_step`). Es el respaldo: un ticket guardado antes
+  de los códigos no tiene los campos nuevos (no se reescribe nada al leerlo), un texto suelto sin código lleva `null`, y la
+  consola muestra el inglés cuando el código no existe en su diccionario o le faltan datos para armar la frase. Nunca queda
+  vacío ni se oculta.
+- **El texto en inglés sale del mismo catálogo que el código** (`agent/policy/notes.py`, una línea por código con sus
+  `{parámetros}`), así que no pueden diverger.
+- **Los parámetros son lo que la frase necesita y nada del cliente**: una categoría o una lista de categorías, la cantidad de
+  productos ajenos, un motivo de revisión, el nombre del campo que falta, el tipo de error de una consulta, la probabilidad del
+  clasificador. Nunca el pedido, un identificador, un monto ni un número de tarjeta; `tests/test_operator_codes.py` lo
+  comprueba escalando un pedido con un número de tarjeta. `detail` (el mensaje de una excepción de una consulta) ya viajaba en
+  `reason` y viaja igual; se muestra tal cual, porque no es traducible.
+- **Lo que ya era un identificador estable no lleva código nuevo**: el tipo de evidencia (`transaction`, `denied_request`), las
+  claves de los hechos (`tool`, `result`), el motivo de revisión de `pending_action` (`older_than_review_threshold`,
+  `before_product_opening`, `before_customer_registration`, `turn_timeout`), `policy_rule` y, en la traza, el resultado y el
+  motivo de cada intento del modelo y el `error_type` de las herramientas. La consola los traduce con la misma técnica, y lo que
+  no conoce lo muestra como llegó.
+
+**En la consola.** `web/src/routes/-operator/notes.ts` escribe cada texto en el idioma del operador con los diccionarios
+`operator.codes.{reason,question,step}` y `operator.terms.*` (`web/src/i18n/dict/{es,pt}/operator.ts`), que viajan en el área
+del operador, que es la que carga la ruta, y también en la del detalle de la traza. `TicketPanel` los usa para el motivo, las
+preguntas abiertas, el próximo paso, el tipo de evidencia, las claves de los hechos y el motivo de revisión; `summary.ts`, para
+el resumen que el operador copia; y el detalle de la traza, para la regla, los intentos y los errores.
+
+**Cómo se agrega un código.**
+
+1. Una línea en el catálogo de su tipo en `agent/policy/notes.py`: `REASONS` (el motivo), `QUESTIONS` (una pregunta abierta), con
+   su texto en inglés y los `{parámetros}`. El próximo paso es `NEXT_STEP` de `escalation.py`, con la categoría como código.
+2. Usarlo donde se decide: `reason("codigo", parametro=...)` para el motivo y `question("codigo", ...)` para la pregunta, en el
+   `Decision` de `router.py`. Un `Decision` con un texto suelto sigue funcionando, pero sin código.
+3. Su traducción al español y al portugués en `operator.codes.<tipo>.<codigo>` de `dict/es/operator.ts` y `dict/pt/operator.ts`
+   (los mismos `{parámetros}` en los dos idiomas). Un motivo de revisión nuevo va en `operator.terms.reviewReason`, un
+   `policy_rule` nuevo en `operator.terms.rule` y en `wholeRules` o `ruleFamilies` de `notes.ts`.
+
+`tests/test_operator_codes.py` falla mientras un código del catálogo no tenga traducción en los dos idiomas y comprueba que cada
+pregunta lleve su código en su lugar.
+
 **Lo que la consola recibe de la cola.** `loadQueue` (`web/src/server/operator.functions.ts`) lee `/admin/human_queue?limit=200` (los 200 tickets más nuevos y, sin importar su antigüedad, todos los que siguen `open` o
 `claimed`: un caso que nadie decidió no sale de la cola por viejo, pero sí sale con la retención: pasados los 90 días el ticket
 deja el archivo y la API ya no lo ve) y devuelve al navegador `QueueRow` (`web/src/server/queue-row.ts`), no el ticket: `ticket_id`, `created_at`, `category`,
@@ -305,7 +356,10 @@ deja el archivo y la API ya no lo ve) y devuelve al navegador `QueueRow` (`web/s
 lo que usan la tabla, sus filtros, las pestañas y los contadores del sidebar, y la cola se relee cada 30 s. La evidencia,
 los hechos verificados, las acciones, las preguntas abiertas, la acción pendiente y el historial del desk viajan solo con
 el caso abierto (`loadTicket`, `/admin/tickets/{id}`). Una columna o un filtro que necesite otro campo lo agrega a
-`QueueRow` y a `toQueueRow`; `queue-row.test.ts` falla si la fila empieza a llevar algo del caso.
+`QueueRow` y a `toQueueRow`; `queue-row.test.ts` falla si la fila empieza a llevar algo del caso. La cola tolera un caso sin
+`priority` o sin `language` (un registro viejo o incompleto): se dibuja con "Desconocida" o "Desconocido" en la prioridad y en el
+idioma, sin ocultarlo y sin asignarle una prioridad que no tiene, y en el orden por defecto queda después de los que sí la
+tienen (`queue.ts`, `priorityOf` del kit).
 
 **En producción.** El sistema de casos del banco. Necesita: alta idempotente por `ticket_id`; transiciones con
 concurrencia optimista por versión; adjuntar evidencia; y la retención que fije el banco (aquí 90 días es un sustituto).
