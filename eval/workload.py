@@ -75,6 +75,11 @@ TRACE_ASK = {"es": {"Transfer": ["hice una transferencia que todavía no llega",
                     "Payment": ["fiz um pagamento que continua pendente", "podem rastrear meu pagamento? não foi creditado"],
                     "Deposit": ["tenho um depósito que não caiu", "podem rastrear meu depósito? continua pendente"]}}
 TRACEABLE = "('Transfer', 'Payment', 'Deposit')"
+
+# La regla de revisión de rastreos, como está escrita (docs/integracion.md, frontera 4, y el spec de esta evaluación),
+# copiada aquí y no importada del sistema: si el oráculo llamara al código que juzga, el sistema se evaluaría a sí mismo.
+# Un test comprueba que coincida con `account_tools.TRACE_REVIEW_AFTER_DAYS`; si la política cambia, se actualiza a propósito.
+REVIEW_AFTER_DAYS = 90
 CATEGORY = {"balance_all": "normal", "balance_specific": "normal", "transactions": "normal", "payment_ok": "normal",
             "fx": "normal", "payment_not_applicable": "normal", "code_switch": "multilingual_ambiguity",
             "ambiguous_type": "ambiguous", "multi_turn": "ambiguous", "out_of_scope": "unsupported",
@@ -106,6 +111,26 @@ def _rows(sql, params=()):
     cur = get_connection().execute(sql, list(params))
     cols = [d[0] for d in cur.description]
     return [dict(zip(cols, r)) for r in cur.fetchall()]
+
+
+def movement_review_reason(transaction_id: str) -> str | None:
+    """Por qué este movimiento pendiente exige que lo apruebe una persona, o None si el asistente puede abrir el
+    rastreo. Orden de prioridad de la política escrita: antigüedad, apertura del producto, registro del cliente. El
+    as-of es un dato del warehouse, no una política."""
+    from agent.tools.account_tools import data_as_of
+
+    row = _rows("""SELECT CAST(t.transaction_date AS DATE) AS day, CAST(p.opening_date AS DATE) AS opened,
+                          CAST(cu.registration_date AS DATE) AS registered
+                   FROM transactions t JOIN products p ON p.product_id = t.product_id
+                   JOIN customers cu ON cu.customer_id = t.customer_id WHERE t.transaction_id = ?""", (transaction_id,))[0]
+    as_of = data_as_of()
+    if as_of is not None and (as_of - row["day"]).days > REVIEW_AFTER_DAYS:
+        return "older_than_review_threshold"
+    if row["opened"] is not None and row["day"] < row["opened"]:
+        return "before_product_opening"
+    if row["registered"] is not None and row["day"] < row["registered"]:
+        return "before_customer_registration"
+    return None
 
 
 def tool(name, args):
