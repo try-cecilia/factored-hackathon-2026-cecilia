@@ -44,6 +44,12 @@ prueba confiable" que pide la consigna: un número de cliente solo no prueba ide
   en 15 minutos para ese cliente, e `IdentityUnavailable` si falta `DEMO_IDP_SECRET`: sin secreto no se emite ninguna
   sesión (falla cerrado). Un cliente desconocido o con la cuenta cerrada no puede abrir sesión.
 - *Seguridad:* comparación en tiempo constante; el endpoint `POST /auth/session` además limita intentos por origen.
+- *Consulta y cierre:* `GET /auth/session` con la cabecera `X-Session-Token` devuelve `customer_id`, `session_ref`, los
+  atributos y el tiempo restante, sin extender la sesión (401 si no está viva). `DELETE /auth/session` la revoca y
+  responde siempre 204, aunque el token no exista o ya esté revocado.
+- *Frontend web:* un BFF guarda el token en una cookie httpOnly y el navegador nunca lo ve. Envía la IP del usuario en
+  `X-Client-IP`; con `CLIENT_IP_HEADER=X-Client-IP` el límite de intentos es por usuario. Solo es seguro si nada más que
+  el BFF puede alcanzar la API (servicio privado); si no, cualquiera elige su propia IP.
 - *Datos:* aguas abajo solo circula el token; los tickets y logs llevan `session_ref`, un hash de un solo sentido.
 
 **Punto de sustitución.** La verificación dentro de `IdentityService.login` (`derive_test_pin`). Lo que sigue igual: quien
@@ -53,8 +59,8 @@ emite la sesión siempre termina en `SessionStore.issue(customer_id, atributos)`
 los atributos vendrían del IdP. `/demo/customers` publica PINs de prueba y debe estar vacío (`DEMO_PUBLIC_CUSTOMERS=`)
 en cualquier entorno real.
 
-**Cómo se verifica.** `tests/test_api.py` (inicio de sesión y límite de intentos), `tests/test_durable_state.py`
-(sesiones tras un reinicio, solo el hash en disco).
+**Cómo se verifica.** `tests/test_api.py` (inicio de sesión, consulta y cierre, límite de intentos detrás del BFF),
+`tests/test_durable_state.py` (sesiones tras un reinicio, solo el hash en disco).
 
 ---
 
