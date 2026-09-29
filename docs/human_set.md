@@ -40,3 +40,15 @@ else" are dropped and counted, and "ambiguous" ones accept a clarifying question
 The keyword bot and the live model (three runs) on the same cases, with the metrics of `EVALUATION.md`, the size
 of the set, who wrote it (by country and language) and the kappa. The results are reported whatever they are:
 they are not used to change the prompt, the rules or the classifier.
+
+## Herramienta (`eval/human_set/classifier_eval.py`)
+
+1. `python -m eval.human_set.classifier_eval sheet` genera la hoja para etiquetar (`eval/workload/human_labeling_sheet.csv`)
+   con los mensajes de quienes no vieron el sistema, en orden mezclado y sin ninguna salida del sistema. Cada anotador la
+   completa por su cuenta con `matches`, `ambiguous` o `something_else` en la columna `label`.
+2. `... agreement A.csv B.csv [--third C.csv]` calcula el kappa de Cohen **antes** de resolver desacuerdos y escribe las
+   etiquetas finales. Un desacuerdo sin tercera opinión queda fuera y contado.
+3. `... score` puntúa el clasificador **congelado** y la línea base sobre lo que dos personas llamaron `matches`. Se niega a
+   correr si el entrenamiento cambió respecto del modelo guardado, marca "NOT A RESULT" por debajo de 60 mensajes o de
+   8 personas, lista los fallos de la guarda **sin corregirlos**, y declara cuántos mensajes son casi idénticos a frases de
+   entrenamiento. Los resultados no se usan para ajustar el clasificador ni el léxico: un hueco se prueba en mensajes nuevos.
