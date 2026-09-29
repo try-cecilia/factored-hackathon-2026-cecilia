@@ -236,7 +236,9 @@ def chat(req: ChatRequest, response: Response, idempotency_key: str | None = Hea
                 if slot.replay is None:  # it ran, but the table filled up and its reply was dropped
                     raise HTTPException(409, "already processed: this message was received, its reply is no longer kept")
                 response.headers["Idempotent-Replayed"] = "true"  # a replay is not a new turn: no chat-limit hit
-                return ChatResponse.model_validate_json(slot.replay)
+                stored = ChatResponse.model_validate_json(slot.replay)
+                # Stored whole; what the caller may see is decided now, not when the turn ran.
+                return stored if demo.enabled() else stored.model_copy(update={"why": None, "policy_rule": ""})
             reply = _chat_turn(req)
             if reply.disposition != "REAUTH_REQUIRED":  # a dead session is answered afresh after signing in again
                 slot.save(reply.model_dump_json())

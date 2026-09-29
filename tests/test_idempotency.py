@@ -242,3 +242,21 @@ def test_a_retry_that_waited_for_the_first_turn_is_checked_again_when_its_turn_c
     first.join(5); second.join(5)
     assert out["first"].json()["disposition"] == "AUTO_RESOLVE"
     assert out["retry"].json()["disposition"] == "REAUTH_REQUIRED"
+
+
+def test_a_reply_stored_in_demo_mode_does_not_leak_demo_fields_when_replayed_outside_it(client, monkeypatch):
+    tok = token(client)
+    monkeypatch.setenv("DEMO_MODE", "1")
+    first = chat(client, tok, CLONED, key="msg-0014-aaaa").json()
+    assert first["why"] and first["policy_rule"]  # the sandbox shows them
+
+    monkeypatch.setenv("DEMO_MODE", "0")
+    replay = chat(client, tok, CLONED, key="msg-0014-aaaa")
+    assert replay.headers["Idempotent-Replayed"] == "true"
+    body = replay.json()
+    assert body["why"] is None and body["policy_rule"] == ""
+    assert {k: v for k, v in body.items() if k not in ("why", "policy_rule")} == {
+        k: v for k, v in first.items() if k not in ("why", "policy_rule")}
+
+    monkeypatch.setenv("DEMO_MODE", "1")  # and back in the sandbox the stored explanation is shown again
+    assert chat(client, tok, CLONED, key="msg-0014-aaaa").json()["why"] == first["why"]
