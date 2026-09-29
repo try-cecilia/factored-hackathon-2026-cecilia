@@ -862,7 +862,7 @@ def _model_of(system: str, llm: str) -> tuple[str, str]:
         return "none", "keyword-bot"
     if llm != "live":
         return "scripted", {"scripted": "scripted", "adversarial": "adversarial"}[llm]
-    return next(((p.name, p.model) for p in default_providers() if os.environ.get(p.api_key_env)), ("none", "none"))
+    return next(((p.name, p.model) for p in default_providers() if p.configured()), ("none", "none"))
 
 
 def main() -> None:

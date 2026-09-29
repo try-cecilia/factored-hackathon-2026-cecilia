@@ -146,7 +146,7 @@ service, and as our own roadmap.
   that is the customer speaking, not the system leaking. It always counts
   ids, 8+ digit numbers, emails and document numbers, because the system
   must mask those even when the customer types them.
-- No WAF or bot protection beyond per-session and per-IP rate limits.
+- No WAF or bot protection beyond per-session, per-customer and per-address rate limits and the concurrency gate.
 - **Web chat: retries rely on an idempotency key.** Each message travels with an `Idempotency-Key` and the API keeps
   the reply for as long as the session lives, so a retry after a lost answer does not file a second ticket or confirm
   twice. Replies live in the single-writer SQLite state like sessions; if that file is lost the turn runs again, and
@@ -168,6 +168,18 @@ service, and as our own roadmap.
   rate limiters, the model budget counter and the provider circuit breakers
   still live in memory and reset on restart. DuckDB on local disk has a single
   writer; production serves reads from the core system or a replicated store.
+- **Limits and retries are per process.** The rate limiters (per session, customer and address), the concurrency
+  gate, the model budgets and the circuit breakers live in memory of one process: several replicas multiply every
+  limit until they share a store. The capacity numbers (docs/operations.md) come from the fixture warehouse with the
+  model **simulated** at its measured latency: they show the limits and the behaviour under overload, not the
+  provider's own rate limits, which stay unmeasured.
+- **Traces are not exported.** Every turn has a correlation id (`X-Request-ID`, `traceparent`), per-stage timings
+  and structured logs, in a span-shaped format, but no OpenTelemetry exporter is wired and nothing reads them but the
+  JSONL and the admin endpoints. The trace record still holds the reply text and the masked request (see Data
+  retention). The server does not time out slow request headers; the edge proxy does.
+- **The tracing service is a sandbox.** Its retries and idempotency (trace id derived from customer and movement) are
+  written for a service with that contract; a bank's payments-operations API would need its own error mapping and a
+  real idempotency key.
 - **Ingestion runs at first boot** in the container. Production runs it on a
   schedule into persistent storage.
 - **Monitoring is JSONL plus admin endpoints.** The alert thresholds are

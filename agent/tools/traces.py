@@ -15,7 +15,14 @@ import threading
 import time
 from pathlib import Path
 
+from agent.resilience import Deadline, RetryPolicy, Transient, retry_call
+
 TRACE_SLA_BUSINESS_DAYS = 2  # synthetic policy
+TRACE_RETRY = RetryPolicy(max_attempts=3, base_s=0.1, cap_s=0.5)
+
+
+class TraceServiceUnavailable(Transient):
+    """The tracing service could not be reached or written to: a later attempt may work."""
 
 
 class TraceService:
@@ -46,6 +53,22 @@ class TraceService:
         """This customer's request for this movement. Checked field by field: an id is never trusted to be unique."""
         return next((t for t in self._all() if t["trace_id"] == self.trace_id(customer_id, transaction_id)
                      and t["customer_id"] == customer_id and t["transaction_id"] == transaction_id), None)
+
+    def open_verified(self, customer_id: str, transaction_id: str, product_id: str, session_ref: str,
+                      deadline: Deadline | None = None, sleep=time.sleep, attempts_log: list[dict] | None = None) -> dict | None:
+        """Open the request and read it back, retrying a busy or unreachable service a bounded number of times inside
+        the turn's deadline. Safe to repeat: `open` returns the request it already made, and its id comes from customer
+        and movement, so a second attempt after a write that landed but did not confirm cannot make a second request.
+        None if it still cannot be read back, and the caller then never says it exists."""
+        def attempt() -> dict | None:
+            try:
+                self.open(customer_id, transaction_id, product_id, session_ref)
+                return self.find(customer_id, transaction_id)
+            except OSError as exc:
+                raise TraceServiceUnavailable(str(exc)) from exc
+
+        return retry_call(attempt, policy=TRACE_RETRY, idempotency_key=self.trace_id(customer_id, transaction_id),
+                          deadline=deadline, sleep=sleep, attempts_log=attempts_log)
 
     def open(self, customer_id: str, transaction_id: str, product_id: str, session_ref: str) -> dict:
         """The existing request for this movement, or a new one."""

@@ -17,11 +17,16 @@ Invariants:
 - Bounded everything: one model call and two tool calls per turn, history
   length, number of live conversations, LLM time budget.
 Every turn writes one trace record (agent/tools/audit.py) with the policy
-rule that fired, LLM attempts/usage, tool calls and cost.
+rule that fired, LLM attempts/usage, tool calls, cost and the time each stage
+took (agent/observability.py). The turn has a time budget (agent/resilience.py)
+and a failure of any kind ends in a fixed reply or a handoff, never a guess or
+a half-done action.
 """
 from __future__ import annotations
 
 import json
+import logging
+import os
 import threading
 import time
 import uuid
@@ -32,7 +37,8 @@ from typing import Any, Callable
 from agent.core import render
 from agent.core.experiments import Experiments
 from agent.llm import prompts
-from agent.llm.budget import DailyBudget, default_budget
+from agent import observability
+from agent.llm.budget import DailyBudget, SessionBudget, default_budget
 from agent.llm.client import LLMUnavailable, Usage, get_default_client
 from agent.llm.pricing import cost_usd
 from agent.llm.privacy import mask_card_numbers, redact
@@ -40,8 +46,10 @@ from agent.policy import escalation, router
 from agent.policy.desk import default_desk
 from agent.policy.router import Decision, Disposition
 from agent.policy.signals import detect_language, normalize
+from agent.resilience import RetryPolicy, current_deadline, retry_call, turn_deadline
 from agent.session.auth import ExpiredSession, InvalidSession, SessionStore, default_store, session_ref
 from agent.tools import account_tools, state
+from agent.observability import stage
 from agent.tools.audit import current_trace_id, default_trace_log
 from agent.tools.errors import InvalidArgument, MissingSlot, NotApplicable, ToolError
 from agent.tools.traces import default_traces
@@ -65,6 +73,10 @@ MODEL_VIEW = {
     "trace_cancelled": "[El cliente no quiso abrir el pedido de rastreo; no se abrió nada]",
 }
 MAX_TOOL_CALLS_PER_TURN = 2
+TOOL_RETRY = RetryPolicy(max_attempts=2, base_s=0.05, cap_s=0.25)  # every tool here is a read: repeating one is harmless
+MAX_PROMPT_CHARS = int(os.environ.get("LLM_MAX_PROMPT_CHARS") or 24_000)  # ~6K tokens; the fixed prompt is ~2.1K tokens
+logger = logging.getLogger(__name__)
+turn_logger = logging.getLogger("cecilai.turn")  # one line per turn: ids, outcome, timings, nothing the customer wrote
 MAX_HISTORY_MESSAGES = 8
 MAX_CONVERSATIONS = 10_000
 DEGRADED_MIN_CONFIDENCE = 0.6
@@ -221,6 +233,30 @@ def sanitize_args(tool: str, raw: dict, catalog: list[dict]) -> tuple[dict, list
     return args, dropped
 
 
+def out_of_time() -> bool:
+    """Whether the turn's budget is spent. Checked before every lookup and every action, and after each lookup."""
+    d = current_deadline.get()
+    return d is not None and d.expired
+
+
+def run_tool(name: str, customer_id: str, **args: Any) -> Any:
+    """A tool call with a bounded retry for a transient failure of what it reads (a busy disk, a database connection).
+    Every tool here is a read, so repeating one is harmless; a ToolError (bad argument, not yours, no data) is a
+    real answer and is never retried. Within the turn's deadline, like every retry."""
+    return retry_call(lambda: TOOL_FUNCTIONS[name](customer_id, **args), policy=TOOL_RETRY, idempotent=True)
+
+
+def fit_prompt(messages: list[dict], limit: int = MAX_PROMPT_CHARS) -> list[dict]:
+    """The prompt within the size cap: the oldest history goes first. The two fixed system blocks and the customer's
+    message (at most 1,000 characters, masked) are never cut, so the cap bounds the cost of a turn without changing
+    what the model is asked."""
+    head, history, last = messages[:2], list(messages[2:-1]), messages[-1]
+    size = lambda ms: sum(len(str(m["content"])) for m in ms)  # noqa: E731
+    while history and size(head) + size(history) + size([last]) > limit:
+        history.pop(0)
+    return [*head, *history, last]
+
+
 def with_aliases(catalog: list[dict]) -> list[dict]:
     """P1, P2... in catalog order, the same order render.clarify lists them
     to the customer, so "la segunda" means P2 to the model too."""
@@ -245,31 +281,90 @@ def _clarify_view(missing: list[str], catalog: list[dict], reply_text: str) -> s
 class Orchestrator:
     def __init__(self, session_store: SessionStore | None = None, llm: Callable[[], Any] | None = None,
                  conversations: ConversationStore | None = None, budget: DailyBudget | None = None,
-                 experiments: Experiments | None = None):
+                 experiments: Experiments | None = None, session_budget: SessionBudget | None = None):
         # `is None`, not `or`: both stores define __len__, so an empty one is falsy.
         self.session_store = default_store if session_store is None else session_store
         self._llm = llm or get_default_client
         self.conversations = ConversationStore() if conversations is None else conversations
         self.budget = default_budget if budget is None else budget
+        self.session_budget = SessionBudget.from_env() if session_budget is None else session_budget
         self.experiments = Experiments.from_env() if experiments is None else experiments  # shadow/canary: off unless configured
 
     def handle_message(self, session_token: str, text: str) -> TurnResult:
-        trace_id = uuid.uuid4().hex
+        # The API gives each request its trace id and the turn adopts it: one id from the HTTP request to the ticket.
+        trace_id = current_trace_id.get() or observability.new_trace_id()
         ctx_token = current_trace_id.set(trace_id)
         # The record's timestamp is wall time; the latency, a monotonic clock fine enough for milliseconds (Windows'
         # wall clock ticks every 15.6 ms).
         ts, start = time.time(), time.perf_counter()
         trace: dict[str, Any] = {"trace_id": trace_id, "ts": ts, "prompt_version": prompts.PROMPT_VERSION,
-                                 "llm_steps": [], "model_route": "not_called"}
+                                 "llm_steps": [], "model_route": "not_called", **(observability.current_request.get() or {})}
         try:
-            result = self._with_case_news(session_token, self._handle(session_token, text, trace_id, trace))
+            with turn_deadline() as deadline, observability.recording() as recorder:
+                try:
+                    result = self._handle(session_token, text, trace_id, trace)
+                except Exception as exc:  # noqa: BLE001 - whatever broke, the customer gets a handoff, never a crash
+                    result = self._unexpected_failure(session_token, text, trace_id, trace, exc)
+                result = self._with_case_news(session_token, result)
+                trace["stages"] = recorder.spans
+                trace["turn_budget_left_ms"] = round(deadline.remaining() * 1000)
         finally:
             current_trace_id.reset(ctx_token)
-            self.conversations.save(session_ref(session_token))  # even on a crash: what the turn changed is kept
+            try:
+                self.conversations.save(session_ref(session_token))  # even on a crash: what the turn changed is kept
+            except Exception as exc:  # noqa: BLE001 - a failed save loses the history, never the reply
+                self._record_failed("conversation_save", trace_id, exc)
         result.latency_ms = (time.perf_counter() - start) * 1000
-        default_trace_log.write({**trace, **{k: v for k, v in asdict(result).items() if k not in ("verified_facts",)},
-                                 "verified_tools": [f["tool"] for f in result.verified_facts]})
+        try:
+            default_trace_log.write({**trace, **{k: v for k, v in asdict(result).items() if k not in ("verified_facts",)},
+                                     "verified_tools": [f["tool"] for f in result.verified_facts]})
+        except Exception as exc:  # noqa: BLE001 - a record that cannot be written must not take the customer's answer with it
+            self._record_failed("trace_write", trace_id, exc)
+        self._log_turn(result, trace)
         return result
+
+    @staticmethod
+    def _record_failed(kind: str, trace_id: str, exc: Exception) -> None:
+        """A record we could not write after the effects happened: counted (/admin/capacity) and logged by type, never by message."""
+        observability.count_failure(kind)
+        logger.error("%s failed (%s)", kind, type(exc).__name__,
+                     extra={"fields": {"trace_id": trace_id, "kind": kind, "error_type": type(exc).__name__}})
+
+    @staticmethod
+    def _log_turn(result: TurnResult, trace: dict) -> None:
+        """One log line per turn: ids, outcome and timings. Never the customer's words, a reply or a customer id."""
+        stages = {sp["stage"]: sp["ms"] for sp in trace.get("stages", [])}
+        turn_logger.info("turn disposition=%s category=%s rule=%s latency_ms=%.1f llm_calls=%d", result.disposition, result.category,
+                    result.policy_rule, result.latency_ms, result.llm_calls,
+                    extra={"fields": {"trace_id": result.trace_id, "disposition": result.disposition, "category": result.category,
+                                      "policy_rule": result.policy_rule, "ticket_id": result.ticket_id,
+                                      "latency_ms": round(result.latency_ms, 1), "llm_calls": result.llm_calls,
+                                      "provider": result.provider, "model": result.model, "cost_usd": result.cost_usd,
+                                      "stages_ms": stages}})
+
+    def _unexpected_failure(self, session_token: str, text: str, trace_id: str, trace: dict, exc: Exception) -> TurnResult:
+        """Something outside the tool calls broke (the profile lookup, the ownership check, the model client): the same
+        safe fallback as a failed tool, a handoff to a person that says nothing about the request. Only the exception's
+        type is kept, in the log, the trace and the ticket: its message can quote what the customer wrote."""
+        error_type = type(exc).__name__
+        logger.error("turn failed (%s)", error_type, extra={"fields": {"trace_id": trace_id, "error_type": error_type}})
+        lang = detect_language(text).language
+        trace.update({"rule": "unexpected_failure", "error_type": error_type})
+        try:
+            session = self.session_store.validate(session_token)
+        except (InvalidSession, ExpiredSession):
+            return TurnResult(trace_id, "REAUTH_REQUIRED", render.MSG["reauth"][lang], lang, "session", "session:expired_during_failure")
+        except Exception:  # noqa: BLE001 - the session store is what failed: nothing can be filed
+            return TurnResult(trace_id, Disposition.ESCALATE.value, render.MSG["escalate_unverified"][lang].format(code=trace_id[:8]),
+                              lang, "tool_failure", "unexpected_failure|handoff_unverified")
+        try:
+            conv = self.conversations.get(session.ref)
+            error = ToolError(f"unexpected failure: {error_type}")
+            return self._escalate(router.after_tool(error), session, conv, mask_card_numbers(text), conv.language, trace_id,
+                                  [{"tool": "turn", "success": False, "error_type": error_type}], [], {})
+        except Exception:  # noqa: BLE001 - even the handoff path failed: say so, with the code to quote
+            return TurnResult(trace_id, Disposition.ESCALATE.value, render.MSG["escalate_unverified"][lang].format(code=trace_id[:8]),
+                              lang, "tool_failure", "unexpected_failure|handoff_unverified")
 
     def _with_case_news(self, session_token: str, result: TurnResult) -> TurnResult:
         """What a person did with this customer's tickets since they last heard: said once, by code, ahead of the reply."""
@@ -316,10 +411,12 @@ class Orchestrator:
                   pending_action: dict | None = None) -> TurnResult:
         """File the ticket, read it back, and only then tell the customer they were transferred."""
         try:
-            ticket = escalation.escalate(decision, session.customer_id, session.ref, ticket_text, lang, actions,
-                                         [{"tool": f["tool"], "result": f["result"]} for f in facts],
-                                         list(conv.requests), session.attributes, trace_id, pending_action)
-            filed = escalation.default_queue.get(ticket.ticket_id) is not None
+            with stage("ticket", category=decision.category) as info:
+                ticket = escalation.escalate(decision, session.customer_id, session.ref, ticket_text, lang, actions,
+                                             [{"tool": f["tool"], "result": f["result"]} for f in facts],
+                                             list(conv.requests), session.attributes, trace_id, pending_action)
+                filed = escalation.default_queue.get(ticket.ticket_id) is not None
+                info["outcome"] = "ok" if filed else "not_read_back"
         except Exception:  # noqa: BLE001 - an unwritable queue must not crash the turn; it is reported as unfiled
             filed = False
         if not filed:
@@ -357,21 +454,41 @@ class Orchestrator:
     def _open_trace(self, proposal, session, lang, trace_id, done, escalate) -> TurnResult:
         """The customer said yes: open the trace, read it back, and only then say it exists."""
         action = {"tool": "request_trace", "args": {"product_id": proposal["product_id"]}, "confirmed_by_customer": True}
-        still_pending, review, age_days = True, None, None
+
+        def out_of_time_handoff() -> TurnResult:
+            # Nothing was written: the customer's yes is recorded and a person decides, with the proposal intact.
+            return escalate(router.turn_timeout(), [{**action, "success": False, "error_type": "TurnTimeout"}], [],
+                            {"tool": "request_trace", "transaction_id": proposal["transaction_id"],
+                             "product_id": proposal["product_id"], "review_reason": "turn_timeout", "age_days": None,
+                             "movement": proposal["movement"]})
+
+        if out_of_time():
+            return out_of_time_handoff()
+        still_pending, review, age_days, timed_out = True, None, None, False
         try:
             # The proposal is one turn old: the movement may have settled since, so eligibility is checked again.
-            pending = TOOL_FUNCTIONS["request_trace"](session.customer_id, product_id=proposal["product_id"],
-                                                      transaction_id=proposal["transaction_id"])["items"]
+            with stage("tool:request_trace"):
+                pending = run_tool("request_trace", session.customer_id, product_id=proposal["product_id"],
+                                   transaction_id=proposal["transaction_id"])["items"]
             found = next((m for m in pending if m["transaction_id"] == proposal["transaction_id"]), None)
             still_pending = found is not None
             review = found.get("review_reason") if found else None
             age_days = found.get("age_days") if found else None
             verified = None
-            if still_pending and not review:
-                default_traces.open(session.customer_id, proposal["transaction_id"], proposal["product_id"], session.ref)
-                verified = default_traces.find(session.customer_id, proposal["transaction_id"])  # this customer's, this movement's
+            timed_out = still_pending and not review and out_of_time()  # the lookup ate the budget: write nothing now
+            if still_pending and not review and not timed_out:
+                # Opened and read back (this customer's, this movement's), retrying a busy service a bounded number of times.
+                with stage("trace_service") as info:
+                    log: list[dict] = []
+                    try:
+                        verified = default_traces.open_verified(session.customer_id, proposal["transaction_id"],
+                                                                proposal["product_id"], session.ref, attempts_log=log)
+                    finally:
+                        info["attempts"] = len(log)
         except Exception:  # noqa: BLE001 - an unwritable service is an unverified action, never a crash
             verified = None
+        if timed_out:
+            return out_of_time_handoff()
         if review:  # old or self-contradicting: the customer's yes is recorded, a person decides
             return escalate(router.trace_review(review), [{**action, "success": False, "error_type": "NeedsHumanApproval"}], [],
                             {"tool": "request_trace", "transaction_id": proposal["transaction_id"],
@@ -415,7 +532,8 @@ class Orchestrator:
     def _handle(self, token: str, text: str, trace_id: str, trace: dict) -> TurnResult:
         guess = detect_language(text)
         try:
-            session = self.session_store.validate(token)
+            with stage("session"):
+                session = self.session_store.validate(token)
         except (InvalidSession, ExpiredSession) as exc:
             trace["rule"] = f"session:{type(exc).__name__}"
             return TurnResult(trace_id, "REAUTH_REQUIRED", render.MSG["reauth"][guess.language], guess.language,
@@ -464,30 +582,39 @@ class Orchestrator:
                 return self._trace_step({"items": [choices[index]]}, conv, lang, trace_id, [], done, escalate, llm_meta())
 
         # Decide (pre-LLM): compliance hold, safety lexicon, classifier guard.
-        pre, reading = router.pre_llm(text, session.attributes.get("customer_status"), conv.pending_clarification)
+        with stage("pre_llm"):
+            pre, reading = router.pre_llm(text, session.attributes.get("customer_status"), conv.pending_clarification)
         trace["intent_reading"] = asdict(reading)
         if pre:
             return escalate(pre, [], [])
-        foreign = account_tools.foreign_product_refs(session.customer_id, text)
+        with stage("ownership_check"):
+            foreign = account_tools.foreign_product_refs(session.customer_id, text)
         if foreign:  # caught in code, whatever a model would have done with it
             return escalate(router.foreign_reference(foreign), [
                 {"tool": "ownership_check", "args": {"product_id": pid}, "success": False, "error_type": "PermissionDenied"}
                 for pid in foreign], [])
 
-        profile = account_tools.get_customer_profile(session.customer_id)
+        with stage("catalog"):
+            profile = account_tools.get_customer_profile(session.customer_id)
         catalog = with_aliases(profile["products"])
         model_text = redact(text, {p["product_id"]: p["alias"] for p in catalog})
         messages = [{"role": "system", "content": prompts.SYSTEM_PROMPT},
                     {"role": "system", "content": prompts.context_block(profile.get("as_of"), catalog)},
                     *conv.messages, {"role": "user", "content": model_text}]
+        messages = fit_prompt(messages)
 
         # Understand: one model call chooses the tools. Its prose is never used.
         try:
             if self.budget.exhausted():  # past the daily spend cap: the model counts as down
                 raise LLMUnavailable("daily model budget reached", [{"provider": "budget", "outcome": "skipped",
                                                                      "reason": "daily_budget_exhausted"}])
+            if self.session_budget.exhausted(session.ref):  # this session has spent its share: same, for this session only
+                raise LLMUnavailable("session model budget reached", [{"provider": "budget", "outcome": "skipped",
+                                                                       "reason": "session_budget_exhausted"}])
             trace["model_route"] = "unavailable"
-            resp, model_route = self.experiments.chat(session.ref, self._llm, messages, prompts.TOOL_SCHEMAS)
+            with stage("llm") as info:
+                resp, model_route = self.experiments.chat(session.ref, self._llm, messages, prompts.TOOL_SCHEMAS)
+                info.update(provider=resp.provider, model=resp.model, route=model_route)
             trace["model_route"] = model_route
         except LLMUnavailable as exc:
             trace["llm_steps"].append({"step": 0, "outcome": "unavailable", "attempts": exc.attempts})
@@ -499,6 +626,7 @@ class Orchestrator:
         costs.append(cost_usd(resp.provider, resp.model, resp.usage.prompt_tokens, resp.usage.completion_tokens,
                               resp.usage.cache_read_tokens, resp.usage.cache_write_tokens))
         self.budget.add(costs[-1])
+        self.session_budget.add(session.ref, costs[-1])
         trace["llm_steps"].append({"step": 0, "provider": resp.provider, "model": resp.model, "latency_ms": round(resp.latency_ms, 1),
                                    "usage": asdict(resp.usage), "attempts": resp.attempts, "n_tool_calls": len(resp.tool_calls)})
 
@@ -518,6 +646,10 @@ class Orchestrator:
         actions: list[dict] = []
         for call in calls:
             name = call["name"]
+            deadline = current_deadline.get()
+            if deadline is not None and deadline.expired:  # only reads have run so far: hand it over, do not start another
+                trace["rule"] = "turn_timeout"
+                return escalate(router.turn_timeout(), actions, facts)
             try:
                 raw_args = json.loads(call["arguments"] or "{}")
                 raw_args = raw_args if isinstance(raw_args, dict) else {}
@@ -531,7 +663,8 @@ class Orchestrator:
                     raise ToolError(f"unknown tool {name}")
                 args, dropped = sanitize_args(name, raw_args, catalog)
                 action.update({"args": args, "dropped_args": dropped})
-                result = TOOL_FUNCTIONS[name](session.customer_id, **args)
+                with stage(f"tool:{name}"):
+                    result = run_tool(name, session.customer_id, **args)
             except NotApplicable as exc:
                 result = {"not_applicable": True, "reason": str(exc), **exc.payload}
             except ToolError as exc:
@@ -541,6 +674,9 @@ class Orchestrator:
             action.update({"success": error is None, "error_type": type(error).__name__ if error else None,
                            "error": str(error) if error else None})
             actions.append(action)
+            if out_of_time():  # a slow lookup finished after the budget: its result is not used, a person answers
+                trace["rule"] = "turn_timeout"
+                return escalate(router.turn_timeout(), actions, facts)
 
             decision = router.after_tool(error)
             if decision is not None:
@@ -556,7 +692,9 @@ class Orchestrator:
             facts.append({"tool": name, "args": action["args"], "result": result})
 
         # Verify + reply: rendered from the verified results only.
-        return done(TurnResult(trace_id, Disposition.AUTO_RESOLVE.value, render.render_answer(facts, lang, catalog), lang,
+        with stage("render"):
+            answer = render.render_answer(facts, lang, catalog)
+        return done(TurnResult(trace_id, Disposition.AUTO_RESOLVE.value, answer, lang,
                                "resolved", "verified_tool_results", None, facts, actions, **llm_meta(),
                                model_view=_answered_view(facts, catalog)))
 

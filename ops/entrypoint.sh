@@ -43,4 +43,4 @@ if [ -z "$DEMO_PUBLIC_CUSTOMERS" ]; then
   echo "[entrypoint] sandbox demo customers: $DEMO_PUBLIC_CUSTOMERS"
 fi
 
-exec uvicorn api.main:app --host 0.0.0.0 --port "${PORT:-8000}"
+exec uvicorn api.main:app --host 0.0.0.0 --port "${PORT:-8000}" --timeout-keep-alive 5 --timeout-graceful-shutdown 20

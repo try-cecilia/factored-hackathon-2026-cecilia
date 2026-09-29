@@ -320,15 +320,19 @@ def test_the_first_version_of_the_table_is_dropped_not_migrated(tmp_path):
 
 
 def test_a_turn_that_fails_after_it_started_is_never_run_again_by_a_retry(client, monkeypatch):
-    """The ticket is filed, then writing the trace log fails: the customer gets a 500, but the effect happened. The retry
-    must be told so (409), not file a second ticket."""
-    from agent.tools.audit import default_trace_log
-
+    """The ticket is filed, then the turn fails: the customer gets a 500, but the effect happened. The retry must be
+    told so (409), not file a second ticket."""
     tok = token(client)
     before = tickets(client)
+    run_turn = main._run_turn
+
+    def files_then_fails(req):
+        run_turn(req)
+        raise OSError("disk full")
+
     crashing = TestClient(main.app, raise_server_exceptions=False)
     with monkeypatch.context() as m:
-        m.setattr(default_trace_log, "write", lambda trace: (_ for _ in ()).throw(OSError("disk full")))
+        m.setattr(main, "_run_turn", files_then_fails)
         assert chat(crashing, tok, CLONED, key="msg-3000-aaaa").status_code == 500
     assert tickets(client) == before + 1  # the ticket was filed before the failure
 
@@ -336,6 +340,22 @@ def test_a_turn_that_fails_after_it_started_is_never_run_again_by_a_retry(client
     assert retry.status_code == 409 and "already processed" in retry.json()["detail"]
     assert tickets(client) == before + 1
     assert idempotency.default.count() == 1  # the mark stays until the session ends; the error is not kept as a reply
+
+
+def test_a_trace_log_that_cannot_be_written_still_answers_and_a_retry_replays(client, monkeypatch):
+    """A failed trace write no longer loses the confirmed reply, so it is stored and a retry gets it back."""
+    from agent.tools.audit import default_trace_log
+
+    tok = token(client)
+    before = tickets(client)
+    with monkeypatch.context() as m:
+        m.setattr(default_trace_log, "write", lambda trace: (_ for _ in ()).throw(OSError("disk full")))
+        first = chat(client, tok, CLONED, key="msg-3002-aaaa")
+    assert first.status_code == 200 and tickets(client) == before + 1
+
+    retry = chat(client, tok, CLONED, key="msg-3002-aaaa")
+    assert retry.status_code == 200 and retry.headers.get("Idempotent-Replayed") == "true"
+    assert retry.json()["trace_id"] == first.json()["trace_id"] and tickets(client) == before + 1
 
 
 def test_a_failure_while_saving_the_reply_keeps_the_mark_too(client, monkeypatch):

@@ -25,7 +25,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Callable
 
-from agent.llm.client import LLMUnavailable, candidate_client
+from agent.llm.client import LLMUnavailable, candidate_client, safe_error
 
 logger = logging.getLogger(__name__)
 
@@ -97,8 +97,8 @@ class Experiments:
                 return self._canary().chat(messages, tools=tools), "canary"
             except LLMUnavailable:
                 route = "canary_fallback"
-            except Exception:  # noqa: BLE001 - a broken candidate must never reach the customer
-                logger.exception("canary model failed; answering with the usual model")
+            except Exception as exc:  # noqa: BLE001 - a broken candidate must never reach the customer
+                logger.error("canary model failed (%s); answering with the usual model", safe_error(exc))
                 route = "canary_fallback"
             return primary().chat(messages, tools=tools), route
         return primary().chat(messages, tools=tools), "primary"
