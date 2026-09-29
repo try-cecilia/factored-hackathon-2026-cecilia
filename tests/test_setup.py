@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -452,3 +453,61 @@ def test_env_check_reads_ingest_args_the_way_dotenv_and_argparse_do():
     assert not env_check.ingests_from_s3("export INGEST_ARGS = --source local\n")
     assert env_check.ingests_from_s3("export INGEST_ARGS = --profile serving\n")
     assert not env_check.ingests_from_s3("INGEST_ARGS=\n")  # empty: compose falls back to its fixture default
+
+
+# --- dotenv, checked against Compose itself (skipped without Docker) --------------------------------------------------------------
+
+needs_compose = pytest.mark.skipif(shutil.which("docker") is None or subprocess.run(["docker", "compose", "version"], capture_output=True).returncode != 0,
+                                   reason="needs docker compose")
+
+
+def compose_reads(env_text: str, names: list[str]) -> dict[str, str]:
+    """What `docker compose --env-file` makes of each name: one service whose environment is `${NAME-}` for each."""
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp:
+        (Path(tmp) / "env").write_text(env_text, encoding="utf-8")
+        compose = {"services": {"probe": {"image": "probe", "environment": {n: "${%s-}" % n for n in names}}}}
+        (Path(tmp) / "c.yml").write_text(json.dumps(compose), encoding="utf-8")
+        done = subprocess.run(["docker", "compose", "-f", str(Path(tmp) / "c.yml"), "--env-file", str(Path(tmp) / "env"), "config", "--format", "json"],
+                              capture_output=True, text=True, env={"PATH": os.environ["PATH"], "HOME": os.environ.get("HOME", "")})
+        assert done.returncode == 0, done.stderr
+        return {k: v.replace("$$", "$") for k, v in json.loads(done.stdout)["services"]["probe"]["environment"].items()}  # config prints $ as $$
+
+
+@needs_compose
+def test_env_fill_copies_an_example_default_so_that_compose_resolves_it_as_it_resolves_the_example(tmp_path):
+    example = ("PROBE=${SYNTHETIC_UNSET:-fallback}\nQUOTED=\"it's $$SYNTHETIC_UNSET\"\nSINGLE='no $interpolation here'\n"
+               "PLAIN=plain # with a comment\nGENERATED_SECRET=\nMETRICS_TOKEN=\n")
+    text, names = env_check.fill(example, "")
+    assert set(names) == {"PROBE", "QUOTED", "SINGLE", "PLAIN", "GENERATED_SECRET", "METRICS_TOKEN"}
+    wanted = ["PROBE", "QUOTED", "SINGLE", "PLAIN"]
+    assert compose_reads(text, wanted) == compose_reads(example, wanted) == {
+        "PROBE": "fallback", "QUOTED": "it's $SYNTHETIC_UNSET", "SINGLE": "no $interpolation here", "PLAIN": "plain"}
+    assert "PROBE=${SYNTHETIC_UNSET:-fallback}\n" in text and "QUOTED=\"it's $$SYNTHETIC_UNSET\"\n" in text  # copied as written
+    assert len(env_check.parse(text)["METRICS_TOKEN"]) >= 32  # a generated secret is serialized by us, not copied
+
+
+VALUES = ["plain", "it's", "has # hash", 'say "hi"', "back\\slash", "$HOME", "a b  c", " edge", "x'y\"z"]
+
+
+@needs_compose
+def test_env_check_reads_quoted_values_as_compose_does_including_the_escaped_single_quote():
+    lines = {"A": r"'it\'s'", "B": r"'back\\slash'", "C": r"'a\nb'", "D": r'"q\"r"', "E": r"'x\'y' # comment", "F": "'plain'   # c", "G": '"it\'s"'}
+    text = "".join(f"{k}={v}\n" for k, v in lines.items())
+    assert env_check.parse(text) == compose_reads(text, list(lines))
+
+
+@needs_compose
+def test_a_value_env_fill_serializes_is_read_back_by_compose_and_by_env_check_as_it_was():
+    text = "".join(f"K{i}={env_check._written(v)}\n" for i, v in enumerate(VALUES))
+    names = [f"K{i}" for i in range(len(VALUES))]
+    assert compose_reads(text, names) == {n: v for n, v in zip(names, VALUES)}
+    assert env_check.parse(text) == {n: v for n, v in zip(names, VALUES)}
+
+
+def test_env_fill_copies_a_multi_line_quoted_default_whole():
+    example = 'BANNER="first\nsecond # kept"\nAFTER=1\n'
+    text, names = env_check.fill(example, "")
+    assert names == ["BANNER", "AFTER"] and 'BANNER="first\nsecond # kept"\nAFTER=1\n' in text
+    assert env_check.parse(text) == {"BANNER": "first\nsecond # kept", "AFTER": "1"}

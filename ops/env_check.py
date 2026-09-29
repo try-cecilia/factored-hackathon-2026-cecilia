@@ -28,7 +28,7 @@ NEEDS_A_VALUE = (*SECRETS, "OPERATOR_KEYS")
 
 def _value(rest: str, more: list[str]) -> str:
     """The value that follows `=`: a quoted one runs to its closing quote (a double-quoted one may span lines, and reads
-    \\n \\" \\\\ escapes) and what follows the quote is dropped; an unquoted one ends at the first ` #` and loses its trailing
+    \\n \\" \\\\ escapes; a single-quoted one is literal except for `\\'`, which Compose reads as a quote) and what follows the quote is dropped; an unquoted one ends at the first ` #` and loses its trailing
     spaces. `more` holds the lines after this one and is consumed by a quoted value that continues on them."""
     if rest[:1] in ("'", '"'):
         quote, out, i, line = rest[0], [], 1, rest
@@ -41,6 +41,10 @@ def _value(rest: str, more: list[str]) -> str:
                     out.append(ESCAPES.get(line[i + 1], "\\" + line[i + 1]))
                     i += 2
                     continue
+                if quote == "'" and ch == "\\" and line[i + 1:i + 2] == "'":
+                    out.append("'")
+                    i += 2
+                    continue
                 out.append(ch)
                 i += 1
             if not more:  # never closed: what there is
@@ -50,15 +54,27 @@ def _value(rest: str, more: list[str]) -> str:
     return re.split(r"\s#", rest, maxsplit=1)[0].strip()
 
 
+def assignments(text: str) -> list[tuple[str, str, str]]:
+    """(name, value, the text as written) for every assignment, in order; a multi-line quoted value keeps all its lines."""
+    found = []
+    lines = text.splitlines()
+    i = 0
+    while i < len(lines):
+        m = ASSIGNMENT.match(lines[i])
+        if not m:
+            i += 1
+            continue
+        rest = lines[i + 1:]
+        value = _value(m.group(2), rest)
+        used = len(lines) - i - 1 - len(rest)  # the lines a quoted value went on to consume
+        found.append((m.group(1), value, "\n".join(lines[i:i + 1 + used])))
+        i += 1 + used
+    return found
+
+
 def parse(text: str) -> dict[str, str]:
     """NAME -> value of every assignment, read as Compose's dotenv does (the last one wins, as there)."""
-    found: dict[str, str] = {}
-    lines = text.splitlines()
-    while lines:
-        m = ASSIGNMENT.match(lines.pop(0))
-        if m:
-            found[m.group(1)] = _value(m.group(2), lines)
-    return found
+    return {name: value for name, value, _ in assignments(text)}
 
 
 def missing(example: str, env: str) -> list[str]:
@@ -100,13 +116,14 @@ def _written(value: str) -> str:
 
 
 def fill(example: str, env: str) -> tuple[str, list[str]]:
-    """`env` plus each setting it lacks, appended: generated secrets and the local sandbox choices `make env` makes, else the
-    example's own value. Nothing already in `env` changes."""
+    """`env` plus each setting it lacks, appended: generated secrets and the local sandbox choices `make env` makes (serialized
+    here), else the example's own line, verbatim. Nothing already in `env` changes."""
     names = missing(example, env)
     if not names:
         return env, []
-    values = {**parse(example), **local_values()}
-    block = "".join(f"{name}={_written(values[name])}\n" for name in names)
+    written = {name: raw for name, _, raw in assignments(example)}  # a default from the example is copied as it is written there:
+    generated = local_values()                                       # ${X:-y} and $$ keep meaning what they mean to Compose
+    block = "".join(f"{name}={_written(generated[name])}\n" if name in generated else f"{written[name]}\n" for name in names)
     sep = "" if env.endswith("\n") or not env else "\n"
     return f"{env}{sep}\n# added by `make env-fill`: settings .env.example gained after this file was made\n{block}", names
 
