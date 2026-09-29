@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { I18nProvider } from '../../i18n/context'
 import type { Locale } from '../../i18n/locales'
 import type { LoginResult } from '../../server/auth.functions'
+import { dictionaries } from '../../test/render'
 import { LoginForm } from './LoginForm'
 
 /**
@@ -27,7 +28,7 @@ function mount(signIn: () => Promise<LoginResult>, { hasSession, locale = 'es' }
     component: () => <p>conversación</p>,
   })
   const router = createRouter({ routeTree: root.addChildren([login, chat]), history: createMemoryHistory({ initialEntries: ['/login'] }) })
-  render(<I18nProvider locale={locale}><RouterProvider router={router} /></I18nProvider>)
+  render(<I18nProvider locale={locale} messages={dictionaries[locale]}><RouterProvider router={router} /></I18nProvider>)
   return router
 }
 
