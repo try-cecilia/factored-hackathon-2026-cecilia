@@ -66,8 +66,8 @@ service, and as our own roadmap.
   filtrada sigue valiendo hasta rotarla. Cada persona teclea sus claves en un formulario nativo que las envía una vez al BFF (nunca pasan por el
   JavaScript de la página ni vuelven al navegador), así que dependen de que el canal sea TLS. Sin `CLIENT_IP_HEADER=X-Client-IP` detrás del BFF, el límite de intentos fallidos cuenta por la IP del
   BFF. La cola se lee entera (las últimas 200 entradas del archivo) y se refresca por sondeo cada 30 s, sin
-  notificaciones ni paginación. La web tiene pocos tests (`pnpm --dir web test`: el formulario de ingreso y que las claves no pasen por el cliente; no hay tests de
-  componentes ni de extremo a extremo, y el CI no los corre): el resto se verificó con `typecheck`, `build` y un
+  notificaciones ni paginación. La web tiene pocos tests (`make web-test`: el formulario de ingreso, el plazo de la sesión, y pruebas HTTP contra el build de
+  producción de CSRF, redirecciones y rotación de sesión; no hay tests de componentes, y el CI no los corre): el resto se verificó con `typecheck`, `build` y un
   recorrido en navegador (`docs/demo/operador-*.png`, con datos sintéticos de `ops.seed_operator_demo`); con el modelo
   de clientes y un banco real quedaría por probar la carga y la accesibilidad con lector de pantalla.
 - `/demo/customers` publishes test PINs for a few sandbox accounts, like any

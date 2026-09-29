@@ -104,9 +104,20 @@ lectura y trazas. Cómo se configuran las claves:
   la guarda en su memoria y responde con una redirección 303 (post/redirect/get) que solo lleva un destino y, a lo
   sumo, un código fijo como `operator_401` en una cookie de un solo uso. Como es un formulario nativo, funciona sin
   JavaScript, y ningún estado, store, log ni respuesta del cliente contiene la clave. Un chequeo lo sostiene:
-  `pnpm --dir web test` (o `make web-test`) prueba la lógica del formulario con claves de mentira, comprueba que ni el
+  `make web-test` (`pnpm --dir web test:all`) prueba la lógica del formulario con claves de mentira, comprueba que ni el
   destino ni el código de error las contienen, y falla si un componente de la consola guarda una clave en estado,
-  controla un campo de contraseña o pasa una clave a una función de servidor.
+  controla un campo de contraseña o pasa una clave a una función de servidor. Además hay pruebas HTTP contra el handler del
+  build de producción (`web/tests/http/`, con una API falsa): CSRF, destinos de redirección hostiles y rotación de sesión.
+- *Formularios protegidos contra CSRF.* Los tres POST (`/operador/sesion`, `/operador/clave`, `/operador/salir`) se rechazan
+  con 403, sin tocar cookies, si no prueban venir de una página de la consola: `Sec-Fetch-Site`, cuando el navegador lo
+  manda, tiene que ser `same-origin`; `Origin` (o `Referer` si falta) tiene que ser el host propio; sin ninguna de las dos
+  cabeceras no hay prueba y se rechaza. `SameSite=Strict` no alcanzaba para el ingreso porque todavía no hay cookie. El host
+  propio es el de la petición, así que **un proxy delante tiene que pasar la cabecera `Host` original**.
+- *Sesión nueva en cada ingreso y en cada elevación.* Un ingreso siempre crea un identificador nuevo y termina la sesión
+  que ese navegador tuviera; agregar la clave de operador también cambia el identificador y el anterior deja de valer, así
+  que una cookie de solo lectura copiada no gana permisos de acción. El tope de 8 horas sigue contando desde el ingreso original.
+- *Destino tras el ingreso.* Se decodifica y normaliza como lo haría un navegador (puntos, `%2f`, `%5c`, tabuladores,
+  barras invertidas) y solo se acepta una ruta propia que no empiece con `//`; ante la duda va a `/operador/cola`.
 - *Dónde viven las claves.* Nunca en el JavaScript del navegador, en `localStorage` ni en una cookie. El servidor de la web
   (BFF) las guarda **en memoria**, atadas a un identificador aleatorio de 256 bits que viaja en una cookie
   `httpOnly` + `SameSite=Strict` (y `Secure` con prefijo `__Host-` en producción). La sesión vence a los 30 minutos sin
