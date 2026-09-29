@@ -116,6 +116,7 @@ class _Conversation:
     messages: list[dict] = field(default_factory=list)  # what the model may see
     requests: list[str] = field(default_factory=list)  # what a human agent may see: card numbers masked only
     language: str = "es"
+    language_set: bool = False  # whether the customer's own words ever showed a language; "es" above is only the default until then
     pending_clarification: bool = False
     pending_action: dict | None = None  # a trace proposed on the last turn, kept in code: never sent to the model
     pending_choice: list[dict] | None = None  # the pending movements listed on the last turn, to pick one by number
@@ -482,6 +483,7 @@ class Orchestrator:
         for ticket in tickets:
             ticket_id = ticket["ticket_id"]
             state = default_desk.state(ticket_id)
+            # In the language of the reply it goes ahead of (the turn's, which is the session's once the customer has written).
             line = render.case_update(state["status"], result.language, default_traces.get(state["trace_id"] or ""))
             if line and self.conversations.mark_case_notified(session.customer_id, ticket_id, state["status"]):
                 # Seed notices already delivered by the earlier, session-scoped implementation without repeating them.
@@ -494,14 +496,16 @@ class Orchestrator:
 
     def case_status(self, session_token: str, ticket_id: str) -> dict | None:
         """The status of one of this customer's tickets, worded as the chat would; None if it is not theirs.
-        The language is the session's (the one the customer last wrote in, as for the news in the chat), not the ticket's.
+        The language is the session's (the one the customer last wrote in, as for the news in the chat), not the ticket's;
+        a session whose customer has not yet written anything that shows a language falls back to the ticket's.
         Raises InvalidSession/ExpiredSession for a bad token."""
         session = self.session_store.validate(session_token)
         ticket = escalation.default_queue.get(ticket_id)
         if ticket is None or ticket["customer_id"] != session.customer_id:
             return None
         state = default_desk.state(ticket_id)
-        lang = self.conversations.get(session.ref).language
+        conv = self.conversations.get(session.ref)
+        lang = conv.language if conv.language_set else ticket.get("language") or conv.language
         text = render.case_update(state["status"], lang, default_traces.get(state["trace_id"] or ""))
         return {"ticket_id": ticket_id, "status": state["status"], "message": text}
 
@@ -661,6 +665,7 @@ class Orchestrator:
         conv = self.conversations.get(session.ref)
         lang = guess.language if (guess.pt_score or guess.es_score) else conv.language
         conv.language = lang
+        conv.language_set = conv.language_set or bool(guess.pt_score or guess.es_score)
         # The raw text only feeds local policy checks. The model gets `model_text` (identifiers masked, own product
         # ids as aliases); a human agent's ticket gets `ticket_text` (card numbers masked, amounts kept).
         model_text, ticket_text = redact(text), mask_card_numbers(text)

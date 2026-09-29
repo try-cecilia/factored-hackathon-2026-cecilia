@@ -243,3 +243,23 @@ def test_the_case_status_speaks_the_language_the_customer_is_writing_in_now_not_
 
     orch.handle_message(tok, "ok")  # no language signal: the session keeps the last one, and so does the case
     assert orch.case_status(tok, ticket_id)["message"] == render.case_update("claimed", "pt")
+
+
+def test_a_session_that_has_not_spoken_yet_reads_its_case_in_the_language_of_the_ticket():
+    """A new session has no language of its own (the default is not something the customer chose). Asking for a ticket from an earlier
+    session then falls back to the language the ticket was filed in; once the customer writes, the session's language wins."""
+    fake = FakeLLMClient([tool_call_response("request_trace", {}), *[text_response("ok")] * 10])
+    orch = Orchestrator(SessionStore(ttl_seconds=900), llm=lambda: fake)
+    attrs = {"segment": "Student", "country": "México", "customer_status": "Active"}
+    first = orch.session_store.issue("CLI-FIX0004", attrs).token
+    assert orch.handle_message(first, "fiz uma transferência que ainda não chegou").policy_rule == "action:trace_proposed"
+    filed = orch.handle_message(first, "sim")
+    assert (filed.disposition, filed.language) == ("ESCALATE", "pt") and default_queue.get(filed.ticket_id)["language"] == "pt"
+    default_desk.act(filed.ticket_id, "claim", "ana")
+
+    fresh = orch.session_store.issue("CLI-FIX0004", attrs).token  # a later login: no turns yet
+    assert orch.case_status(fresh, filed.ticket_id)["message"] == render.case_update("claimed", "pt")
+    orch.handle_message(fresh, "ok")  # says nothing about its language: still the ticket's
+    assert orch.case_status(fresh, filed.ticket_id)["message"] == render.case_update("claimed", "pt")
+    orch.handle_message(fresh, "cuál es mi saldo?")
+    assert orch.case_status(fresh, filed.ticket_id)["message"] == render.case_update("claimed", "es")
