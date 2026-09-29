@@ -114,7 +114,7 @@ export function SidebarRow<C extends ElementType = 'button'>({
           <span className="ui-sidebar__trail">
             {meta != null && <span className="ui-sidebar__meta">{meta}</span>}
             {shortcut && <span className="ui-sidebar__shortcut" aria-hidden="true">{shortcut}</span>}
-            {status === 'working' && <Spinner size={12} tone="brand" />}
+            {status === 'working' && <Spinner size={12} tone="ink" />}
             {status === 'unread' && <span className="ui-sidebar__unread" aria-hidden="true" />}
             {statusText && !collapsed && <span className="ui-sidebar__sr">{statusText}</span>}
           </span>

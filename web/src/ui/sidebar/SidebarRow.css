@@ -25,7 +25,7 @@
 /* Case rows: two lines, a status dot on the first one. */
 .ui-sidebar__item--two-line { min-height: 0; }
 .ui-sidebar__item--two-line .ui-sidebar__row { align-items: flex-start; gap: 10px; padding-block: 7px; }
-.ui-sidebar__dot { flex-shrink: 0; width: 7px; height: 7px; margin-top: 5px; border-radius: var(--radius-pill); background: var(--color-cecil-blue); }
+.ui-sidebar__dot { flex-shrink: 0; width: 7px; height: 7px; margin-top: 5px; border-radius: var(--radius-pill); background: var(--color-ink-70); }
 .ui-sidebar__dot[data-tone='success'] { background: var(--color-success); }
 .ui-sidebar__dot[data-tone='caution'] { background: var(--color-caution); }
 .ui-sidebar__dot[data-tone='danger'] { background: var(--color-danger); }
