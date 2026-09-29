@@ -5,6 +5,10 @@ import { randomBytes } from 'node:crypto'
 export const IDLE_MS = 30 * 60_000
 export const ABSOLUTE_MS = 8 * 60 * 60_000
 export const MAX_SESSIONS = 200
+// Ids that were just consumed (replaced by a login or an elevation) are remembered briefly, only to tell a second request
+// that arrives with the same cookie from a cookie that was never valid.
+export const CONSUMED_MS = 5 * 60_000
+export const MAX_CONSUMED = 1000
 
 export type OperatorSession = {
   adminKey: string // reads: queue, tickets, monitoring (X-Admin-Key)
@@ -14,10 +18,13 @@ export type OperatorSession = {
   lastSeen: number
 }
 
+export type Take = 'taken' | 'already' | 'none'
+
 export type Lookup = { status: 'active'; session: OperatorSession } | { status: 'expired' } | { status: 'unknown' }
 
 export class SessionStore {
   private sessions = new Map<string, OperatorSession>()
+  private consumed = new Map<string, number>()
   private now: () => number
   private idleMs: number
   private absoluteMs: number
@@ -57,6 +64,32 @@ export class SessionStore {
     return { status: 'active', session }
   }
 
+  private remember(id: string, at: number) {
+    for (const [old, when] of this.consumed) if (at - when >= CONSUMED_MS) this.consumed.delete(old)
+    if (this.consumed.size >= MAX_CONSUMED) this.consumed.delete(this.consumed.keys().next().value!)
+    this.consumed.set(id, at)
+  }
+
+  /**
+   * Consumes a session in one step, so of two requests that arrive with the same cookie only one gets 'taken' and the
+   * other 'already'. 'none' is a cookie that never held (or no longer holds) a live session: nothing to replace.
+   */
+  take(id: string | undefined): Take {
+    if (!id) return 'none'
+    const at = this.now()
+    const session = this.sessions.get(id)
+    if (session) {
+      this.sessions.delete(id)
+      if (!this.alive(session, at)) return 'none'
+      this.remember(id, at)
+      return 'taken'
+    }
+    const when = this.consumed.get(id)
+    if (when !== undefined && at - when < CONSUMED_MS) return 'already'
+    this.consumed.delete(id)
+    return 'none'
+  }
+
   /**
    * The same session with an operator key added, under a new id; the old id stops working. Rights never grow under an id
    * that may already have been copied (fixation), and the 8-hour cap keeps counting from the original login.
@@ -64,7 +97,7 @@ export class SessionStore {
   elevate(id: string | undefined, operatorKey: string, operator?: string): string | null {
     const found = this.lookup(id, false)
     if (found.status !== 'active' || !id) return null
-    this.sessions.delete(id)
+    this.take(id)
     const fresh = randomBytes(32).toString('base64url')
     this.sessions.set(fresh, { ...found.session, operatorKey, operator, lastSeen: this.now() })
     return fresh
