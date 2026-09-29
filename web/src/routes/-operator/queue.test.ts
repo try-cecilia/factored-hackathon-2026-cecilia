@@ -125,3 +125,12 @@ test('a page past the end is brought back to the last one, with its rows', () =>
   assert.deepEqual(pageSlice([], 3, 25), { page: 1, rows: [] })
   assert.equal(pageSlice(rows, 0, 25).page, 1)
 })
+
+test('an old open case among many newer closed ones still counts as pending work and stays in the unassigned view', () => {
+  const oldOpen = ticket({ created_at: 1, priority: 'Low' })
+  const history = Array.from({ length: 250 }, () => ticket({ status: 'approved', operator: 'ana.ruiz' }))
+  const queue = [oldOpen, ...history]
+  assert.equal(sidebarCounts(queue, 'ana.ruiz').unassigned, 1)
+  assert.deepEqual(filterTickets(queue, { view: 'unassigned', tab: 'all' }, 'ana.ruiz').map((t) => t.ticket_id), [oldOpen.ticket_id])
+  assert.equal(defaultOrder(queue)[0].ticket_id, oldOpen.ticket_id)
+})

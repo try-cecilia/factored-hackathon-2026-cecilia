@@ -1,9 +1,9 @@
 import type { DeskState, Ticket } from './operator.functions.ts'
 
 /**
- * What the queue, its filters and the sidebar counts use of a ticket. The queue is read again every 30 seconds, up to 200
- * tickets each time: the evidence, the verified facts, the actions and the desk's history stay on the server and travel only
- * with the case that is opened (`loadTicket`).
+ * What the queue, its filters and the sidebar counts use of a ticket. The queue is read again every 30 seconds: the 200
+ * newest tickets and every one still open or claimed, however old. The evidence, the verified facts, the actions and the
+ * desk's history stay on the server and travel only with the case that is opened (`loadTicket`).
  */
 export type QueueRow = Pick<Ticket, 'ticket_id' | 'created_at' | 'category' | 'priority' | 'queue' | 'customer_id' | 'country' | 'language' | 'request'> & {
   desk: Pick<DeskState, 'status' | 'operator' | 'version'>
