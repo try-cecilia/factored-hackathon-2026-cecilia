@@ -23,7 +23,7 @@ function ticket(status: DeskStatus = 'open', over: Partial<Ticket> = {}, desk: P
 
 function setup(t: Ticket, view: TicketPanelProps['view'] = { canAct: true, operator: 'ana.ruiz' }, over: Partial<TicketPanelProps> = {}) {
   const act = vi.fn<TicketPanelProps['act']>(async () => ({ ok: true, data: t.desk }))
-  const reload = vi.fn(async () => undefined)
+  const reload = vi.fn(async () => true)
   const utils = renderWithI18n(<TicketPanel ticket={t} view={view} act={act} reload={reload} keyForm={<form aria-label="Clave de operador" />} {...over} />)
   return { act, reload, ...utils }
 }
@@ -83,7 +83,7 @@ describe('version conflict (409)', () => {
   it('shows the conflict panel, locks the decision and reloads on demand', async () => {
     const seen = ticket('claimed', {}, { version: 3 })
     const act = vi.fn<TicketPanelProps['act']>(async () => ({ ok: false, status: 409, message: 'the ticket changed (you saw version 3, now 4)' }))
-    const reload = vi.fn(async () => undefined)
+    const reload = vi.fn(async () => true)
     const { rerender } = renderWithI18n(<TicketPanel ticket={seen} view={{ canAct: true, operator: 'ana.ruiz' }} act={act} reload={reload} />)
     const user = userEvent.setup()
     await user.click(button(/Aprobar rastreo/)!)
@@ -110,6 +110,44 @@ describe('version conflict (409)', () => {
     await userEvent.setup().click(button(/Tomar caso/)!)
     expect((await screen.findByRole('alert')).textContent).toMatch(/servicio no está disponible/)
     expect(disabled(button(/Tomar caso/))).toBe(false)
+  })
+})
+
+describe('version conflict when the reload fails', () => {
+  const view = { canAct: true, operator: 'ana.ruiz' }
+  const release = [{ action: 'release', status: 'handed_back', operator: 'diego.m', ts: NOW - 60, detail: {} }]
+
+  async function conflicted(reload: TicketPanelProps['reload']) {
+    const act = vi.fn<TicketPanelProps['act']>(async () => ({ ok: false, status: 409, message: 'the ticket changed' }))
+    const utils = renderWithI18n(<TicketPanel ticket={ticket('claimed', {}, { version: 3 })} view={view} act={act} reload={reload} />)
+    const user = userEvent.setup()
+    await user.click(button(/Aprobar rastreo/)!)
+    utils.rerender(<I18nProvider locale="es"><TicketPanel ticket={ticket('open', {}, { version: 4, history: release })} view={view} act={act} reload={reload} /></I18nProvider>)
+    await screen.findByText('No se aplicó: el caso cambió')
+    return { user, act }
+  }
+
+  it('keeps the lock, and says so, when the explicit reload did not work', async () => {
+    const reload = vi.fn<TicketPanelProps['reload']>().mockResolvedValueOnce(true).mockResolvedValueOnce(false)
+    const { user } = await conflicted(reload)
+    await user.click(button(/Recargar caso/)!)
+    await screen.findByText('No se pudo recargar el caso')
+    expect(screen.getByText('No se aplicó: el caso cambió')).toBeTruthy()
+    expect(disabled(button(/Tomar caso/))).toBe(true)
+    // A later reload that works is what lifts it.
+    reload.mockResolvedValueOnce(true)
+    await user.click(button(/Recargar caso/)!)
+    await waitFor(() => expect(screen.queryByText('No se aplicó: el caso cambió')).toBeNull())
+    expect(screen.queryByText('No se pudo recargar el caso')).toBeNull()
+    expect(disabled(button(/Tomar caso/))).toBe(false)
+  })
+
+  it('a reload that throws is a failed reload too', async () => {
+    const reload = vi.fn<TicketPanelProps['reload']>().mockResolvedValueOnce(true).mockRejectedValueOnce(new Error('offline'))
+    const { user } = await conflicted(reload)
+    await user.click(button(/Recargar caso/)!)
+    await screen.findByText('No se pudo recargar el caso')
+    expect(screen.getByText('No se aplicó: el caso cambió')).toBeTruthy()
   })
 })
 
@@ -156,7 +194,7 @@ describe('evidence', () => {
 
 describe('portuguese', () => {
   it('draws the same panel in the other language', () => {
-    renderWithI18n(<TicketPanel ticket={ticket('open')} view={{ canAct: true, operator: 'ana.ruiz' }} act={vi.fn()} reload={vi.fn()} />, 'pt')
+    renderWithI18n(<TicketPanel ticket={ticket('open')} view={{ canAct: true, operator: 'ana.ruiz' }} act={vi.fn()} reload={vi.fn(async () => true)} />, 'pt')
     expect(disabled(button(/Assumir caso/))).toBe(false)
     expect(screen.getByText('Solicitação')).toBeTruthy()
   })

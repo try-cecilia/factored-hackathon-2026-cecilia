@@ -15,8 +15,10 @@ export type TicketPanelProps = {
   view: { canAct: boolean; operator: string | null }
   /** Sends one action. The panel always passes the version it is showing. */
   act: (action: DeskAction, input: { expectedVersion: number; reason?: string }) => Promise<Result<DeskState>>
-  /** Reads the ticket again from the server. */
-  reload: () => Promise<unknown>
+  /** Reads the ticket again from the server. `true` only when the case was read and is now on screen. */
+  reload: () => Promise<boolean>
+  /** Status of the last read of this case when it failed: the panel keeps what it has and says it is not fresh. */
+  loadError?: number
   /** Close button of the header. Left out where there is nothing to close (small screens show a back link instead). */
   onClose?: () => void
   /** Read-only sessions: the form that adds an operator key. It posts natively, so it comes from outside. */
@@ -31,7 +33,7 @@ type Conflict = { seen: number; detail?: string }
 const tones: Record<DeskState['status'], StatusTone> = { open: 'open', claimed: 'info', approved: 'success', rejected: 'danger', handed_back: 'neutral', stale: 'caution' }
 
 /** The ticket desk of the operator console: what the case is, what the assistant did, and what the operator can do next. */
-export function TicketPanel({ ticket, view, act, reload, onClose, keyForm, traceLink }: TicketPanelProps) {
+export function TicketPanel({ ticket, view, act, reload, loadError, onClose, keyForm, traceLink }: TicketPanelProps) {
   const t = useT()
   const { locale } = useI18n()
   const [reason, setReason] = useState('')
@@ -39,6 +41,7 @@ export function TicketPanel({ ticket, view, act, reload, onClose, keyForm, trace
   const [flash, setFlash] = useState<Flash | null>(null)
   const [conflict, setConflict] = useState<Conflict | null>(null)
   const [copied, setCopied] = useState<'ok' | 'error' | null>(null)
+  const [reloadFailed, setReloadFailed] = useState(false)
 
   const { desk } = ticket
   const closed = CLOSED.includes(desk.status)
@@ -73,14 +76,13 @@ export function TicketPanel({ ticket, view, act, reload, onClose, keyForm, trace
     setPending(null)
   }
 
+  // The lock of a 409 is lifted only by a reload that worked: with the case not read again, what is on screen may still be stale.
   async function reloadNow() {
     setPending('reload')
-    try {
-      await reload()
-    } finally {
-      setConflict(null)
-      setPending(null)
-    }
+    const fresh = await reload().catch(() => false)
+    if (fresh) setConflict(null)
+    setReloadFailed(!fresh)
+    setPending(null)
   }
 
   async function copySummary() {
@@ -130,6 +132,11 @@ export function TicketPanel({ ticket, view, act, reload, onClose, keyForm, trace
 
       <div className="op-ticket__body">
         <div aria-live="polite">
+          {(reloadFailed || loadError !== undefined) && (
+            <Banner tone="danger" title={t('operator.ticket.banner.reloadFailedTitle')}>
+              {loadError !== undefined ? t(explainKey(loadError)) : t('operator.ticket.banner.reloadFailedBody')}
+            </Banner>
+          )}
           {conflict && <ConflictBanner conflict={conflict} ticket={ticket} />}
           {!conflict && flash && flash.tone === 'error' && <Banner tone="danger" title={t('operator.ticket.banner.errorTitle')}>{flash.text}{flash.detail ? ` (${flash.detail})` : ''}</Banner>}
           {!conflict && flash?.tone === 'ok' && !closed && <Banner tone="info">{flash.text}</Banner>}
