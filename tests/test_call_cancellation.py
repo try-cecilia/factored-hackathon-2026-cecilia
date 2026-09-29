@@ -57,7 +57,11 @@ def wait_until(check, seconds=2.0):
     return check()
 
 
-def three_expired_calls(client):
+def three_expired_calls(client, server):
+    with pytest.raises(LLMUnavailable):  # a first call to load the SDK's lazy modules, which is not what is being timed
+        client.chat([{"role": "user", "content": "hi"}], tools=None)
+    wait_until(lambda: server.active == 0)
+    server.disconnected = 0
     for _ in range(3):
         t0 = time.perf_counter()
         with pytest.raises(LLMUnavailable):
@@ -69,7 +73,7 @@ def test_expired_local_calls_leave_no_thread_and_no_open_connection(endless, mon
     monkeypatch.setenv("LLM_PROVIDERS", "local")
     monkeypatch.setenv("LOCAL_LLM_BASE_URL", f"http://127.0.0.1:{endless.server_address[1]}/v1")
     baseline = threading.active_count()
-    three_expired_calls(LLMClient(sleep=lambda s: None, timeout_s=5, total_budget_s=0.15, max_attempts_per_provider=1, breaker_threshold=100))
+    three_expired_calls(LLMClient(sleep=lambda s: None, timeout_s=5, total_budget_s=0.15, max_attempts_per_provider=1, breaker_threshold=100), endless)
     assert wait_until(lambda: endless.active == 0 and endless.disconnected == 3), (endless.active, endless.disconnected)
     # the server saw each client leave: the connections were closed, not left to drain for the 10 s it would go on sending
     assert not [t for t in threading.enumerate() if t.name == "llm-call"] and threading.active_count() <= baseline
@@ -79,7 +83,7 @@ def test_the_same_holds_for_the_anthropic_sdk(endless, monkeypatch):
     monkeypatch.setenv("LLM_PROVIDERS", "anthropic")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
     monkeypatch.setenv("ANTHROPIC_BASE_URL", f"http://127.0.0.1:{endless.server_address[1]}")
-    three_expired_calls(LLMClient(sleep=lambda s: None, timeout_s=5, total_budget_s=0.15, max_attempts_per_provider=1, breaker_threshold=100))
+    three_expired_calls(LLMClient(sleep=lambda s: None, timeout_s=5, total_budget_s=0.15, max_attempts_per_provider=1, breaker_threshold=100), endless)
     assert wait_until(lambda: endless.active == 0 and endless.disconnected == 3), (endless.active, endless.disconnected)
 
 

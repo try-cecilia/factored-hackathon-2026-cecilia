@@ -46,7 +46,7 @@ from agent.policy import escalation, router
 from agent.policy.desk import default_desk
 from agent.policy.router import Decision, Disposition
 from agent.policy.signals import detect_language, normalize
-from agent.resilience import RetryPolicy, current_deadline, retry_call, turn_deadline
+from agent.resilience import RetryPolicy, current_deadline, handoff_deadline, retry_call, turn_deadline
 from agent.session.auth import ExpiredSession, InvalidSession, SessionStore, default_store, session_ref
 from agent.tools import account_tools, state
 from agent.observability import stage
@@ -411,11 +411,12 @@ class Orchestrator:
                   pending_action: dict | None = None) -> TurnResult:
         """File the ticket, read it back, and only then tell the customer they were transferred."""
         try:
-            with stage("ticket", category=decision.category) as info:
+            with handoff_deadline() as budget, stage("ticket", category=decision.category) as info:
                 ticket = escalation.escalate(decision, session.customer_id, session.ref, ticket_text, lang, actions,
                                              [{"tool": f["tool"], "result": f["result"]} for f in facts],
                                              list(conv.requests), session.attributes, trace_id, pending_action)
-                filed = escalation.default_queue.get(ticket.ticket_id) is not None
+                # The read-back is the last step of the same budget: past it the ticket cannot be confirmed, so it is not claimed.
+                filed = not budget.expired and escalation.default_queue.get(ticket.ticket_id) is not None
                 info["outcome"] = "ok" if filed else "not_read_back"
         except Exception:  # noqa: BLE001 - an unwritable queue must not crash the turn; it is reported as unfiled
             filed = False
