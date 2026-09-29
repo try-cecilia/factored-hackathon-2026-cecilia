@@ -1,7 +1,8 @@
 import { createServerFn } from '@tanstack/react-start'
-import type { CaseResult, SendResult } from '../chat/types'
+import type { CaseResult, HistoryResult, SendResult } from '../chat/types'
 import { AgentApiError, agentFetch } from './agent-api'
 import { parseSend, sendChat } from './chat-core'
+import { loadHistory } from './history-core'
 import { clearSessionToken, getSessionToken } from './session-cookie'
 
 // The model call can take up to LLM_TOTAL_BUDGET_SECONDS (25 s by default) on the API side.
@@ -61,3 +62,12 @@ export const getCase = createServerFn({ method: 'GET' })
       return { ok: false, failure: 'unavailable' }
     }
   })
+
+/** The live session's conversation as the API rendered it, so a reload shows it again. */
+export const getHistory = createServerFn({ method: 'GET' }).handler(
+  (): Promise<HistoryResult> =>
+    loadHistory(
+      { token: getSessionToken(), clear: clearSessionToken },
+      { get: (token) => agentFetch('/chat/history', { token }) },
+    ),
+)
