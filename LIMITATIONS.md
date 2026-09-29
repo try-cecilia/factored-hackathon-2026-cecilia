@@ -118,7 +118,8 @@ service, and as our own roadmap.
 - **Ingestion runs at first boot** in the container. Production runs it on a
   schedule into persistent storage.
 - **Monitoring is JSONL plus admin endpoints.** The alert thresholds are
-  specified (docs/operations.md) but not wired to a metrics stack.
+  specified (docs/operations.md); `python -m ops.alerts` checks the stateless ones, but nothing schedules it yet
+  and the week-over-week ones are not wired to a metrics stack.
 - **Voice is not built.** 85% of account/payment contacts are phone calls; this
   system serves the 15% on text channels until speech-to-text and
   text-to-speech are added.

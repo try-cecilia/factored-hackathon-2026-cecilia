@@ -197,6 +197,13 @@ tool call writes an audit record. Signals to alert on, from those records:
 | cost per safe resolution | unit economics | budget-dependent |
 | `_dq_results` failed errors, `_ingestion_log` failures | pipeline health | any |
 
+`python -m ops.alerts` checks the signals that need no history (unverified handoffs, `llm_unavailable`, p95 latency,
+security escalations, exhausted model budget, data-quality errors) against a running service through the admin
+endpoints, prints one `ALERT` line each, posts them to `ALERT_WEBHOOK_URL` if set, and exits 1 if any fired
+(`ALERT_BASE_URL` and `ADMIN_API_KEY` are required; `tests/test_alerts.py`). It is **not scheduled or deployed
+yet**: run it from a cron job or CI on the cadence you want. The week-over-week thresholds need a stored baseline
+and are still not wired.
+
 Production would ship these to a metrics stack (e.g. OpenTelemetry → Grafana)
 instead of reading JSONL. The field names are already stable for that.
 
