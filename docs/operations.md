@@ -101,12 +101,15 @@ laptop (Docker with OrbStack, fast network): `docker compose build --no-cache` o
 | Node dependencies | `web/pnpm-lock.yaml`, `pnpm install --frozen-lockfile` | CI job `web` | `make web-setup` |
 | `.env.example` lists every setting the code reads | `.env.example` | `tests/test_setup.py` scans the code for `os.environ` reads and fails on a missing one; an empty `X_PATH=` that would replace a default is rejected | `pytest tests/test_setup.py` |
 | One command for the whole stack | `Makefile` (`up`, `env-check`, `env-fill`), `ops/docker-compose.yml`, `ops/bootstrap_env.py`, `ops/env_check.py`, `ops/Dockerfile`, `ops/Dockerfile.web` | `tests/test_setup.py` (compose structure, defaults, ports on 127.0.0.1, images unprivileged, the settings the API and the web read all reach their container, `env-check`/`env-fill`); `ops/compose_e2e.sh` | `make up` · `make env-check` · `make compose-e2e` |
-| CI validates it | `.github/workflows/ci.yml`: parallel jobs `python`, `web` (typecheck, build and `pnpm test:all`), `alerts`, `container`, `web-image`, `compose` | `tests/test_setup.py` (the jobs, their limits, the hash-checked install, that the gate and the resilience tests are covered) | the same commands, locally |
+| CI validates it | `.github/workflows/ci.yml` (on every pull request, on each push to `main` and by hand): parallel jobs `python`, `web` (typecheck, build and `pnpm test:all`), `alerts`, `container`, `web-image`, `compose` | `tests/test_setup.py` (the jobs, their limits, the hash-checked install, that the gate and the resilience tests are covered) | the same commands, locally |
 
 Measured on the same laptop: a fresh virtualenv with `pip install --require-hashes -r requirements-tracking.txt` (serving
 lock plus mlflow, 2,918 lines of lock) took 32 s; the serving lock alone is what the API image installs. The hermetic suite
 (`make test`: 945 passed, 1 skipped) takes 80 s. The Docker base images (`python:3.11-slim`, `node:24-slim`) are tags, not digests, so a rebuild
 can pick up a newer patch release of them (LIMITATIONS.md).
+
+**CI triggers.** A push to `main`, every pull request (any base branch) and `workflow_dispatch` for a branch without a PR. A branch with
+an open PR runs once. A newer run cancels the older one only in a pull request: on `main` every commit is verified, even two merges in a row.
 
 **CI hooks.** Other branches add checks without rewriting the workflow: `make gate` runs whatever `eval.gate` checks (per-category
 floors included) and then `make validate-data-ml`; `make test` runs the whole `tests/` folder, `make test-resilience`'s files
@@ -220,7 +223,7 @@ then serves on `$PORT`.
   local --raw-dir /app/tests/fixtures/raw"` loads the hand-made fixture (5
   customers) that ships in the image.
 
-CI builds this image on every push, boots it the way Render does (a disk
+CI builds this image on every pull request and every push to `main`, boots it the way Render does (a disk
 mounted owned by root, its own `PORT`), runs `ops/container_smoke.py`, checks
 that the app runs unprivileged and owns its data, restarts it and checks the
 disk kept the warehouse and its quality report. It also boots it with a load

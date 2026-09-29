@@ -567,7 +567,7 @@ Reading it:
 
 `make test`: 1016 hermetic tests on a hand-made fixture warehouse, plus one
 opt-in integration test (`RUN_INTEGRATION=1`). CI runs them
-on every push, plus the classifier evaluation. They cover:
+on every pull request and every push to `main`, plus the classifier evaluation. They cover:
 - pipeline idempotency, late-arrival update, quarantine and rollback, schema
   evolution; S3 daily files downloaded in parallel, each once, the cache reused;
 - tool ownership, masking, freshness, FX fallback;

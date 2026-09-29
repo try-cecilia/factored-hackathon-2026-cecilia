@@ -185,6 +185,15 @@ def test_the_entrypoint_schedules_retention_and_only_the_sandbox_publishes_test_
 WORKFLOW = yaml.safe_load((ROOT / ".github" / "workflows" / "ci.yml").read_text())
 
 
+def test_the_ci_runs_on_main_pushes_and_on_every_pull_request_and_only_cancels_pull_request_runs():
+    triggers = WORKFLOW.get("on", WORKFLOW.get(True))  # PyYAML reads the bare key `on` as True
+    assert triggers["push"] == {"branches": ["main"]}  # a branch with an open PR runs once (pull_request), not twice
+    assert not triggers["pull_request"]  # no branch filter: any base branch
+    assert "workflow_dispatch" in triggers  # by hand, on a branch without a PR
+    # a second merge must not cancel the run that verifies the first one on main
+    assert WORKFLOW["concurrency"]["cancel-in-progress"] == "${{ github.event_name == 'pull_request' }}"
+
+
 def test_the_ci_runs_every_layer_in_parallel_jobs_with_a_time_limit():
     jobs = WORKFLOW["jobs"]
     assert {"python", "web", "alerts", "container", "web-image", "compose"} <= set(jobs)
