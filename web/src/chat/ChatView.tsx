@@ -73,8 +73,11 @@ export function ChatView({ session }: { session: Session }) {
     return () => observer.disconnect()
   }, [])
 
+  // After a turn ends the focus goes back to the composer; on load it stays where the page put it (the skip link first).
+  const wasSending = useRef(false)
   useEffect(() => {
-    if (!sending) composer.current?.focus()
+    if (wasSending.current && !sending) composer.current?.focus()
+    wasSending.current = sending
   }, [sending])
 
   const signIn = useCallback(() => {
