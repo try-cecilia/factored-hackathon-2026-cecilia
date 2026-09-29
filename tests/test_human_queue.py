@@ -134,3 +134,18 @@ def test_a_corrupt_desk_line_still_fails_the_way_the_desk_does():
     with pytest.raises(json.JSONDecodeError):
         default_desk.state("T-0000")
     assert TestClient(main.app).get("/admin/human_queue", headers=ADMIN).status_code == 500  # as it did: the desk is not silently skipped
+
+
+def test_an_open_ticket_older_than_the_retention_leaves_the_queue_with_the_purge_not_with_its_age():
+    """The promise is about what the file still holds (docs/operations.md): the retention purge (90 days for tickets) is what removes a
+    ticket nobody decided, and once it has, the endpoint cannot list it."""
+    import time
+
+    from ops import retention
+    now = time.time()
+    day = 86400
+    rows = [{**ticket(0), "ticket_id": "T-91d", "created_at": now - 91 * day}, {**ticket(1), "created_at": now - 89 * day}]
+    Path(main.default_queue.path).write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+    assert "T-91d" in ids(queue())  # still in the file: listed, however old
+    retention.run(now=now)
+    assert ids(queue()) == ["T-0001"]
