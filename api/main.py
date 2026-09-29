@@ -183,6 +183,7 @@ class ChatResponse(BaseModel):
     policy_rule: str = ""
     ticket_id: str | None = None
     latency_ms: float
+    degraded: bool = False  # limited mode: the model was unavailable, so the code answered alone (the screen says so)
     why: dict | None = None  # DEMO_MODE only: the rule, what the model received and chose, what the code verified
 
 
@@ -332,6 +333,7 @@ def read_session(x_session_token: str | None = Header(default=None)) -> SessionI
 def end_session(x_session_token: str | None = Header(default=None)) -> Response:
     """Logout. Always 204, so an unknown or already revoked token is not an error."""
     if x_session_token:
+        default_orchestrator.conversations.clear_transcript(session_ref(x_session_token))
         default_store.revoke(x_session_token)
     return Response(status_code=204)
 
@@ -406,8 +408,31 @@ def _run_turn(req: ChatRequest) -> ChatResponse:
     shown = demo.enabled()  # which rule decided is for the trace log; outside the jury demo it would guide an attacker
     return ChatResponse(trace_id=r.trace_id, disposition=r.disposition, response_text=r.response_text,
                         language=r.language, category=r.category, policy_rule=r.policy_rule if shown else "",
-                        ticket_id=r.ticket_id, latency_ms=round(r.latency_ms, 1),
+                        ticket_id=r.ticket_id, latency_ms=round(r.latency_ms, 1), degraded=r.degraded,
                         why=demo.explain(r, req.session_token) if shown else None)
+
+
+class HistoryTurn(BaseModel):
+    role: Literal["user", "assistant"]
+    text: str
+    at: float
+    trace_id: str | None = None
+    disposition: str | None = None
+    category: str | None = None
+    language: str | None = None
+    ticket_id: str | None = None
+    degraded: bool = False
+
+
+@app.get("/chat/history", response_model=list[HistoryTurn], response_model_exclude_none=True)
+def chat_history(x_session_token: str | None = Header(default=None)) -> list[HistoryTurn]:
+    """The live session's conversation as the customer saw it: their words (card numbers masked) and the rendered replies,
+    oldest first. Read only; no model data, no rule, no `why`. Another session's is never reachable: the key is the token's."""
+    try:
+        turns = demo.orchestrator_for(x_session_token or "").history(x_session_token or "")
+    except (InvalidSession, ExpiredSession):
+        raise HTTPException(401, "invalid or expired session") from None
+    return [HistoryTurn(**turn) for turn in turns]
 
 
 @app.get("/case/{ticket_id}")
