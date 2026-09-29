@@ -37,6 +37,8 @@ else" are dropped and counted, and "ambiguous" ones accept a clarifying question
 
 ## What is reported
 
+The pass/fail rules (G0 to G4) were fixed before any message was scored: [`docs/preregistration.md`](preregistration.md).
+
 The keyword bot and the live model (three runs) on the same cases, with the metrics of `EVALUATION.md`, the size
 of the set, who wrote it (by country and language) and the kappa. The results are reported whatever they are:
 they are not used to change the prompt, the rules or the classifier.
