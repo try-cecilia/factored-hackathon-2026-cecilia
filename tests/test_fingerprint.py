@@ -1,6 +1,7 @@
 """La huella de las políticas: igual con otros saltos de línea, distinta si el código cambia."""
 from __future__ import annotations
 
+import ast
 import subprocess
 import sys
 from pathlib import Path
@@ -138,3 +139,55 @@ def test_the_fingerprint_is_the_same_with_and_without_git(tmp_path):
             (tmp_path / rel).write_bytes(source.read_bytes())
     assert not (tmp_path / ".git").exists()
     assert fingerprint.policy_fingerprint(tmp_path) == fingerprint.policy_fingerprint()
+
+
+# --- static check: imports written inside functions (lazy) are in the fingerprint too ---------------------------------------
+
+FIRST_PARTY = ("agent", "eval", "data")
+# Modules the measured code imports on purpose without being measured: package markers, the tools around the run itself, and
+# eval/leakage.py (workload.py runs it only when it generates the cases; what it decides is in cases_test.jsonl, which is measured)
+NOT_MEASURED_ON_PURPOSE = {"eval/__init__.py", "data/__init__.py", "eval/fingerprint.py", "eval/gate.py", "eval/tracking.py",
+                           "data/lineage.py", "eval/leakage.py"}
+
+
+def first_party_imports(path: Path, root: Path) -> set[str]:
+    """Every first-party module a file imports, at the top or inside any function, as repo-relative paths that exist."""
+    tree_ = ast.parse(path.read_text(encoding="utf-8"))
+    package = path.relative_to(root).parent.parts
+    names: set[str] = set()
+    for node in ast.walk(tree_):
+        if isinstance(node, ast.Import):
+            names.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            base = ".".join(package[:len(package) - node.level + 1]) if node.level else ""
+            module = ".".join(part for part in (base, node.module) if part)
+            names.add(module)
+            names.update(f"{module}.{alias.name}" for alias in node.names)
+    found = set()
+    for name in names:
+        if name.split(".")[0] in FIRST_PARTY:
+            for candidate in (Path(*name.split(".")).with_suffix(".py"), Path(*name.split("."), "__init__.py")):
+                if (root / candidate).is_file():
+                    found.add(candidate.as_posix())
+    return found
+
+
+def uncovered_imports(root: Path) -> dict[str, set[str]]:
+    files = fingerprint.policy_files(root)
+    covered = {p.relative_to(root).as_posix() for p in files} | NOT_MEASURED_ON_PURPOSE
+    result = {p.relative_to(root).as_posix(): first_party_imports(p, root) - covered for p in files if p.suffix == ".py"}
+    return {name: missing for name, missing in result.items() if missing}
+
+
+def test_no_measured_module_imports_something_the_fingerprint_leaves_out_even_inside_a_function():
+    assert uncovered_imports(fingerprint.ROOT) == {}
+
+
+def test_the_static_check_catches_a_lazy_import_of_a_module_outside_the_fingerprint(tmp_path):
+    root = tree(tmp_path, b"x = 1\n")
+    (root / "eval").mkdir(exist_ok=True)
+    (root / "eval/run_system_eval.py").write_text("def judge():\n    from eval.helper import verdict\n    return verdict()\n", encoding="utf-8")
+    (root / "eval/helper.py").write_text("def verdict():\n    return True\n", encoding="utf-8")
+    assert uncovered_imports(root) == {"eval/run_system_eval.py": {"eval/helper.py"}}
+    (root / "eval/run_system_eval.py").write_text("def judge():\n    return True\n", encoding="utf-8")
+    assert uncovered_imports(root) == {}
