@@ -72,6 +72,7 @@ MODEL_VIEW = {
     "trace_opened": "[Se abrió el pedido de rastreo que el cliente confirmó]",
     "trace_cancelled": "[El cliente no quiso abrir el pedido de rastreo; no se abrió nada]",
 }
+
 MAX_TOOL_CALLS_PER_TURN = 2
 TOOL_RETRY = RetryPolicy(max_attempts=2, base_s=0.05, cap_s=0.25)  # every tool here is a read: repeating one is harmless
 MAX_PROMPT_CHARS = int(os.environ.get("LLM_MAX_PROMPT_CHARS") or 24_000)  # ~6K tokens; the fixed prompt is ~2.1K tokens
@@ -374,7 +375,12 @@ class Orchestrator:
             return result
         conv = self.conversations.get(session.ref)
         news = []
-        for ticket in escalation.default_queue.for_customer(session.customer_id):
+        try:
+            tickets = escalation.default_queue.for_customer(session.customer_id)
+        except Exception:  # noqa: BLE001 - the notices are a courtesy: with the queue unreadable, the answer still goes out
+            logger.exception("could not read the customer's tickets")
+            return result
+        for ticket in tickets:
             ticket_id = ticket["ticket_id"]
             state = default_desk.state(ticket_id)
             line = render.case_update(state["status"], result.language, default_traces.get(state["trace_id"] or ""))
@@ -518,7 +524,7 @@ class Orchestrator:
                               "degraded:classifier_out_of_scope", **meta)
         mentions_product = any(ch.isdigit() for ch in text) or any(
             normalize(w) in normalize(text) for w in ("ahorro", "corriente", "credito", "debito", "prestamo", "hipotec",
-                                                      "poupanca", "cartao", "emprestimo", "financiamento"))
+                                                      "poupanca", "corrente", "cartao", "emprestimo", "financiamento"))
         if reading.intent == "balance_inquiry" and not mentions_product:
             result = account_tools.get_account_summary(session.customer_id)
             facts = [{"tool": "get_account_summary", "args": {}, "result": result}]

@@ -21,6 +21,17 @@ service, and as our own roadmap.
    checks that a first load that fails or is killed leaves nothing a later
    boot would serve.
 
+3. **Failure handling with a live model.** The reserved failure set (`eval/heldout/`, 226 cases: expired sessions,
+   unauthorized access, prompt injection, tool failures, ES/PT ambiguity) ran with the scripted ideal model and the
+   deliberately bad one, never with a live model: it needs a key (or a local Ollama model), and none was available
+   where it was written. `make eval-failures-live` (or `eval-failures-local`) runs the same cases on one. So it measures
+   the deterministic layers and whether safety depends on the model; it says nothing about what a live model
+   understands from these phrasings.
+4. **The reserved set is small and no longer held out for what it found.** Five fixture customers, 17-31 cases per
+   category and language: the 95% intervals are 10 to 40 points wide, and 0 unsafe in 226 bounds the true rate
+   only below ≈1.3%. Batch 1 was written and committed before the system ran on it; batch 2 after seeing batch 1's
+   failures and before fixing them; the fixes came after seeing both. Their post-fix numbers are regression evidence,
+   not a held-out measurement, for the failures they fixed. A fresh, human-written set is the remaining fix.
 ## Data and ML
 
 - **No usable text in the supplied data.** 171K transcripts hold 42 distinct
@@ -166,6 +177,22 @@ service, and as our own roadmap.
 - **Web chat: contrast and screen readers are checked by hand only.** Text contrast was computed in the browser on
   the chat page (no pair under 4.5:1; oklch/color-mix values it cannot parse are skipped), focus rings and the
   live region were inspected, but no assistive technology or automated audit (axe) has run.
+- **An internal id typed in lowercase and split is not masked** ("prd fix 0006", "prd_fix_0006"). The masker requires a
+  capital letter in the middle of a split id on purpose (so "el cli de 2024" stays as written), and the ownership check
+  in the pre-LLM guard uses the same reader. The reserved failure set has it as its one open failure in each language
+  (`foreign_id_spelled`): the text reaches the model unmasked, the tool layer refuses the product (`PermissionDenied`,
+  handed to a person as a security case), so nothing of another customer's is shown. Organizer ids look like
+  `***REMOVED***`: written in lowercase without a split ("prd 04di2iny5hzt") they are masked, but split once
+  ("prd 04di 2iny5hzt") they are not. Reported, not tuned: masking more would also hide ordinary words, and the
+  ownership check downstream holds either way.
+- **A tool call has no clock of its own.** The orchestrator bounds the model call and the number of tool calls, not the
+  time of a tool. The evaluation injects a timeout as the exception a client would raise, and the system hands that to
+  a person; a call that hangs would hold its turn until the database driver gives up. DuckDB is local, so it is a
+  risk of the production stores that replace it.
+- **A broken audit or trace log has two different answers.** If the per-tool audit record cannot be written, the
+  lookup fails and a person takes the case (no answer without its audit record). If the per-turn trace record cannot
+  be written, the customer still gets the answer and the failure is logged. Both were chosen without the bank's
+  policy; the bank may want the second to fail closed too.
 
 ## Operations
 
