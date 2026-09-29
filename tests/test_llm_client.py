@@ -221,3 +221,17 @@ def test_the_daily_model_budget_counts_spend_per_utc_day_and_is_off_without_a_li
     unlimited = DailyBudget(limit_usd=None)
     unlimited.add(1_000_000)
     assert not unlimited.exhausted()
+
+
+def test_a_groq_tool_call_rejected_for_a_null_slot_is_recovered_not_failed():
+    from agent.llm.client import _recover_failed_tool_call
+
+    class Rejected(Exception):
+        body = {"error": {"code": "tool_use_failed",
+                          "failed_generation": '{"name": "get_account_summary", "arguments": {"product_id": null}}'}}
+
+    tools = [{"function": {"name": "get_account_summary"}}]
+    call = _recover_failed_tool_call(Rejected(), tools)
+    assert (call["name"], call["arguments"]) == ("get_account_summary", '{"product_id": null}')
+    assert _recover_failed_tool_call(Rejected(), [{"function": {"name": "other"}}]) is None  # not an offered tool
+    assert _recover_failed_tool_call(ValueError("timeout"), tools) is None
