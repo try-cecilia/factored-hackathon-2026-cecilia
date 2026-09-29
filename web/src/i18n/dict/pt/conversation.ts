@@ -1,0 +1,73 @@
+import type { Like } from '../../types.ts'
+import type { conversation as es } from '../es/conversation.ts'
+
+export const conversation: Like<typeof es> = {
+  title: 'Assistente de conta',
+  trust: 'Nada é feito sem a sua confirmação',
+  empty: {
+    title: 'Olá, sou a Cecilia.',
+    body: 'Ajudo com saldos, movimentações, situação de pagamentos e câmbio. Você pode me escrever em português ou em espanhol.',
+  },
+  suggestions: {
+    label: 'Sugestões',
+    balance: 'Qual é o meu saldo?',
+    recent: 'Minhas últimas movimentações',
+    credit: 'Estou em dia com o meu cartão de crédito?',
+    fx: 'Quanto está o dólar?',
+    trace: 'Fiz uma transferência que ainda não chegou',
+  },
+  composer: {
+    label: 'Escreva a sua mensagem para a Cecilia',
+    placeholder: 'Pergunte à Cecilia sobre as suas contas',
+    send: 'Enviar mensagem',
+    sending: 'Enviando…',
+    help: 'Enter envia, Shift+Enter adiciona uma linha. A Cecilia pode errar: confira os dados importantes nos seus extratos.',
+    remaining: '{n} caracteres restantes',
+    offline: 'Sem conexão',
+    sessionEnded: 'Sua sessão terminou. Entre de novo para continuar.',
+  },
+  steps: {
+    label: 'O que a Cecilia está fazendo',
+    sent: 'Mensagem enviada',
+    checking: 'Verificando a sua consulta com dados do banco',
+  },
+  delivery: {
+    uncertain: 'Não consegui confirmar se o serviço recebeu a sua mensagem. Tentar de novo é seguro: se já recebeu, ela não se repete.',
+    timeout: 'Demorou demais para responder e não consegui confirmar se a sua mensagem chegou. Tentar de novo é seguro: se já chegou, ela não se repete.',
+    rateLimited: 'Você está enviando mensagens muito rápido. Espere um minuto e tente de novo.',
+    busy: 'Ainda estou respondendo a sua mensagem anterior. Espere um momento e tente de novo.',
+    unexpected: 'Recebi uma resposta que não consegui mostrar. Tentar de novo é seguro: se já a processei, ela não se repete.',
+    processed: 'O serviço já recebeu esta mensagem. Carregar a conversa mostra a resposta.',
+    ended: 'A sessão terminou antes de enviar a mensagem.',
+  },
+  history: {
+    restored: 'Conversa retomada',
+    failed: 'Não consegui recuperar a conversa anterior.',
+    retry: 'Tentar novamente',
+    loading: 'Carregando a conversa…',
+  },
+  session: {
+    endsOne: 'Sua sessão termina em 1 minuto.',
+    endsMany: 'Sua sessão termina em {n} minutos.',
+    expired: 'Sua sessão expirou',
+    reauth: 'Por segurança, a sessão terminou. Entre de novo para continuar; a conversa começará do zero.',
+    offline: 'Você está sem conexão. Poderá enviar mensagens quando ela voltar.',
+  },
+  limited: 'A Cecilia está limitada por enquanto: só consegue consultar saldos simples e o resto é analisado por uma pessoa.',
+  why: {
+    reason: 'Motivo',
+    rule: 'Regra',
+    modelSaw: 'O modelo recebeu',
+    modelChose: 'O modelo escolheu',
+    codeChecked: 'O código verificou',
+    cost: 'Custo',
+    noModel: 'Nada: foi resolvido no código, sem chamar o modelo.',
+    noLookups: 'Nenhuma consulta.',
+    callsOne: '1 chamada · {ms} ms',
+    callsMany: '{n} chamadas · {ms} ms',
+  },
+  trace: {
+    yes: 'Sim',
+    no: 'Não',
+  },
+}

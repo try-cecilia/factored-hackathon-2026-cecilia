@@ -1,0 +1,38 @@
+/** The customer's cases in the sidebar and in the handoff message. The status words are the customer's, not the desk's. */
+export const cases = {
+  title: 'Casos',
+  openOne: '1 abierto',
+  openMany: '{n} abiertos',
+  empty: {
+    title: 'Sin casos por ahora',
+    description: 'Si Cecilia pasa una consulta a una persona, el caso aparece aquí con su estado.',
+  },
+  loading: 'Consultando el estado…',
+  unavailable: 'No se pudo consultar el estado',
+  update: 'Actualizar el estado',
+  row: '{title}, {status}, caso {id}',
+  status: {
+    open: 'Recibido',
+    claimed: 'En revisión',
+    approved: 'Aprobado',
+    rejected: 'Rechazado',
+    handed_back: 'Devuelto a Cecilia',
+    stale: 'Sin cambios necesarios',
+    unknown: 'En curso',
+  },
+  category: {
+    fraud: 'Posible fraude',
+    theft: 'Robo o clonación de tarjeta',
+    account_takeover: 'Acceso no autorizado',
+    safety: 'Atención prioritaria',
+    legal_or_regulator: 'Reclamo o consulta legal',
+    classifier_escalation: 'Movimiento no reconocido',
+    compliance_hold: 'Revisión de tu cuenta',
+    security: 'Revisión de seguridad',
+    trace_unmatched: 'Pago o transferencia que no llegó',
+    trace_unverified: 'Rastreo de un movimiento',
+    trace_review: 'Rastreo de un movimiento',
+    pending: 'Consulta pendiente de revisión',
+    other: 'Caso pasado a una persona',
+  },
+}
