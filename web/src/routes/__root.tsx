@@ -1,6 +1,6 @@
 import { createRootRoute, HeadContent, Outlet, rootRouteId, Scripts } from '@tanstack/react-router'
 import { areasOf, covers, loadMessages, type Area } from '../i18n/areas'
-import { I18nProvider } from '../i18n/context'
+import { RootI18n } from '../i18n/root'
 import { htmlLang } from '../i18n/locales'
 import { getLocale } from '../server/locale.functions'
 import stylesheet from '../styles.css?url'
@@ -39,12 +39,12 @@ export const Route = createRootRoute({
 })
 
 function RootDocument() {
-  const { locale, messages } = Route.useLoaderData()
+  const { locale } = Route.useLoaderData()
   return (
     <html lang={htmlLang[locale]}>
       <head><HeadContent /></head>
       <body>
-        <I18nProvider locale={locale} messages={messages}><Outlet /></I18nProvider>
+        <RootI18n><Outlet /></RootI18n>
         <Scripts />
       </body>
     </html>
