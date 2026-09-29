@@ -8,7 +8,7 @@ import { Button, DataTable, PriorityChip, StatusIndicator, type Column, type Sor
 import type { Priority } from '../../ui'
 import { ageShort, categoryName, statusKey, when } from '../-operator/format'
 import {
-  countryCode, distinct, filterTickets, filtersOf, hasFilters, inScope, isClosed, localeOf, orderTickets, tabCounts, validateSearch, type QueueSearch, type StatusTab,
+  countryOptions, distinct, filterTickets, filtersOf, hasFilters, inScope, isClosed, localeOf, orderTickets, pageSlice, tabCounts, validateSearch, type QueueSearch, type StatusTab,
 } from '../-operator/queue'
 import { Notice } from '../-operator/ui'
 
@@ -71,13 +71,13 @@ function Queue() {
   const counts = tabCounts(scope)
   const rows = useMemo(() => orderTickets(filterTickets(scope, filters, me), sort), [scope, filters.tab, sort, me]) // eslint-disable-line react-hooks/exhaustive-deps
   const pending = scope.filter((ticket) => !isClosed(ticket)).length
-  const countries = useMemo(() => distinct(tickets, (ticket) => ticket.country), [tickets])
+  const countries = useMemo(() => countryOptions(tickets), [tickets])
   const languages = useMemo(() => distinct(tickets, (ticket) => ticket.language), [tickets])
 
   // Any change of what is being looked at goes back to the first page.
   const scopeKey = JSON.stringify([filters, sort])
   const [paged, setPaged] = useState({ key: scopeKey, page: 1 })
-  const page = paged.key === scopeKey ? paged.page : 1
+  const shown = pageSlice(rows, paged.key === scopeKey ? paged.page : 1, PAGE_SIZE)
 
   const set = (patch: Partial<QueueSearch>) => void navigate({ search: (prev: QueueSearch) => ({ ...prev, ...patch }) as never, replace: true })
   const clear = () => {
@@ -140,7 +140,7 @@ function Queue() {
               </div>
               <FilterSelect name={t('operator.queue.filter.priority')} value={search.prioridad} onChange={(v) => set({ prioridad: v })}
                 options={PRIORITIES.map((p) => ({ value: p, label: t(`table.priority.${p.toLowerCase() as Lowercase<typeof p>}`) }))} />
-              <FilterSelect name={t('operator.queue.filter.country')} value={search.pais} onChange={(v) => set({ pais: v })} options={countries.map((c) => ({ value: c, label: `${countryCode(c)}${countryCode(c) === c ? '' : ` · ${c}`}` }))} />
+              <FilterSelect name={t('operator.queue.filter.country')} value={filters.country} onChange={(v) => set({ pais: v })} options={countries} />
               <FilterSelect name={t('operator.queue.filter.language')} value={search.idioma} onChange={(v) => set({ idioma: v })} options={languages.map((l) => ({ value: l, label: l.toUpperCase() }))} />
               {hasFilters(filters) && <Button variant="ghost" size="xs" onClick={clear}>{t('operator.queue.filter.clear')}</Button>}
               <div className="op-head__spacer" />
@@ -150,7 +150,7 @@ function Queue() {
               className="op-table"
               density="compact"
               caption={t('operator.queue.caption')}
-              rows={rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)}
+              rows={shown.rows}
               columns={columns}
               getRowId={(r) => r.ticket_id}
               sort={sort}
@@ -158,7 +158,7 @@ function Queue() {
               onRowClick={(r) => void navigate({ to: '/operador/cola/$ticketId', params: { ticketId: r.ticket_id }, search: ((prev: QueueSearch) => prev) as never })}
               activeRowId={ticketId}
               empty={empty}
-              pagination={{ page, pageSize: PAGE_SIZE, total: rows.length, onPageChange: (next) => setPaged({ key: scopeKey, page: next }) }}
+              pagination={{ page: shown.page, pageSize: PAGE_SIZE, total: rows.length, onPageChange: (next) => setPaged({ key: scopeKey, page: next }) }}
             />
           </>
         )}

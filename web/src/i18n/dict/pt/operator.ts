@@ -58,6 +58,7 @@ export const operator: Like<typeof es> = {
     CLARIFY: 'Esclarecimento',
     ABSTAIN: 'Sem resposta',
     ESCALATE: 'Encaminhado',
+    REAUTH_REQUIRED: 'Novo acesso necessário',
   },
   category: {
     fraud: 'Fraude',
@@ -267,6 +268,8 @@ export const operator: Like<typeof es> = {
         release: 'devolveu à assistente',
         other: 'alterou',
       },
+      reloadFailedTitle: 'Não foi possível recarregar o caso',
+      reloadFailedBody: 'O que aparece pode não estar atualizado e o bloqueio continua até recarregar direito.',
       errorTitle: 'Não foi possível aplicar',
     },
     summary: {

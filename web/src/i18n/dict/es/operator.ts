@@ -56,6 +56,7 @@ export const operator = {
     CLARIFY: 'Aclaración',
     ABSTAIN: 'Sin respuesta',
     ESCALATE: 'Derivado',
+    REAUTH_REQUIRED: 'Reingreso requerido',
   },
   category: {
     fraud: 'Fraude',
@@ -265,6 +266,8 @@ export const operator = {
         release: 'lo devolvió a la asistente',
         other: 'lo modificó',
       },
+      reloadFailedTitle: 'No se pudo recargar el caso',
+      reloadFailedBody: 'Lo que se ve puede no estar al día y el bloqueo sigue hasta recargar bien.',
       errorTitle: 'No se pudo aplicar',
     },
     summary: {
