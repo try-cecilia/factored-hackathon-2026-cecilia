@@ -59,7 +59,7 @@ export const Stat = ({ name, value, hint }: { name: string; value: ReactNode; hi
   </div>
 )
 
-export function Bars({ data, total }: { data: Record<string, number>; total?: number }) {
+export function Bars({ data, total, names }: { data: Record<string, number>; total?: number; names?: Record<string, string> }) {
   const rows = Object.entries(data).sort((a, b) => b[1] - a[1])
   const max = total ?? Math.max(1, ...rows.map(([, n]) => n))
   if (!rows.length) return <p className="op-muted">Sin datos.</p>
@@ -67,7 +67,7 @@ export function Bars({ data, total }: { data: Record<string, number>; total?: nu
     <ul className="op-bars">
       {rows.map(([name, n]) => (
         <li key={name}>
-          <span className="op-bars-name">{name}</span>
+          <span className="op-bars-name" title={name}>{names?.[name] ?? name}</span>
           <span className="op-bars-track" aria-hidden="true"><span style={{ width: `${Math.max(2, (n / max) * 100)}%` }} /></span>
           <span className="op-bars-n">{n}</span>
         </li>

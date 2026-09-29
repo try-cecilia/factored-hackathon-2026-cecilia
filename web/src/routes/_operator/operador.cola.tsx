@@ -62,7 +62,7 @@ function Queue() {
         </div>
         <nav className="op-tabs" aria-label="Filtrar casos">
           {FILTERS.map((f) => (
-            <Link key={f.key} to="/operador/cola" search={{ estado: f.key === 'abiertos' ? undefined : f.key }} aria-current={estado === f.key ? 'true' : undefined}>
+            <Link key={f.key} to="/operador/cola" search={{ estado: f.key === 'abiertos' ? undefined : f.key }} data-on={estado === f.key ? 'true' : undefined}>
               {f.name}
             </Link>
           ))}

@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useRouter } from '@tanstack/react-router'
 import { useEffect } from 'react'
 import { loadMonitor } from '../../server/operator.functions'
-import { ago, ms, usd, when } from '../-operator/format'
+import { ago, categoryLabel, dispositionLabel, ms, usd, when } from '../-operator/format'
 import { Bars, Loaded, Stat } from '../-operator/ui'
 
 export const Route = createFileRoute('/_operator/operador/monitoreo')({
@@ -56,9 +56,9 @@ function Monitor() {
                   <Stat name="Rastreos abiertos" value={o.traces_opened} hint={o.handoff_unverified ? `${o.handoff_unverified} traspasos sin confirmar` : undefined} />
                 </dl>
                 <h3>Resultado de los turnos</h3>
-                <Bars data={o.dispositions} total={o.turns} />
+                <Bars data={o.dispositions} total={o.turns} names={dispositionLabel} />
                 <h3>Derivaciones por categoría</h3>
-                <Bars data={o.escalations_by_category} />
+                <Bars data={o.escalations_by_category} names={categoryLabel} />
                 <h3>Reglas más frecuentes</h3>
                 <Bars data={o.top_rules} />
                 {Object.keys(o.models).length > 0 && (

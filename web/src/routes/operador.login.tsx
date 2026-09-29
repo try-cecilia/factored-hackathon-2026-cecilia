@@ -86,7 +86,7 @@ function OperatorLogin() {
             />
           </label>
           <label>
-            Clave de operador <span className="op-optional">opcional</span>
+            <span>Clave de operador <span className="op-optional">(opcional)</span></span>
             <input
               name="operator_key"
               type="password"
