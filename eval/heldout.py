@@ -22,6 +22,7 @@ Rules it follows:
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import asdict
 from pathlib import Path
 
@@ -293,6 +294,27 @@ def ambiguity() -> None:
          {"disposition": "AUTO_RESOLVE", "tool": "get_payment_status", "product_id": "PRD-FIX0009"}, [[tool("get_payment_status", {"product_id": "0009"})]])
 
 
+def build_warehouse(path: Path) -> None:
+    """The fixture warehouse (tests/fixtures/raw, built by the real ingestion pipeline) with WAREHOUSE_PATCH applied.
+    `path` becomes DUCKDB_PATH for the run; a live run of this set points DUCKDB_PATH at the file this writes."""
+    import duckdb
+
+    from agent.tools import db
+    from data.pipeline import RunConfig, run_pipeline
+
+    os.environ["DUCKDB_PATH"] = str(path)
+    db.close_all()
+    run_pipeline(["branches", "daily_exchange_rates", "customers", "products", "transactions"],
+                 RunConfig(source="local", raw_dir=Path("tests/fixtures/raw")))
+    con = duckdb.connect(str(path))
+    try:
+        for statement in WAREHOUSE_PATCH:
+            con.execute(statement)
+    finally:
+        con.close()
+    db.close_all()
+
+
 def generate() -> list[Case]:
     _cases.clear()
     for build in (expired_session, unauthorized_access, prompt_injection, tool_failure, ambiguity):
@@ -308,8 +330,12 @@ def save(cases: list[Case], path: Path = OUT) -> None:
 
 
 if __name__ == "__main__":
+    import sys
     from collections import Counter
 
+    if len(sys.argv) == 3 and sys.argv[1] == "--build-warehouse":  # for a live run: DUCKDB_PATH=<path> python -m eval.run_system_eval --cases ...
+        build_warehouse(Path(sys.argv[2]))
+        raise SystemExit(0)
     cases = generate()
     ids = Counter(c.case_id for c in cases)
     assert max(ids.values()) == 1, [i for i, n in ids.items() if n > 1]
