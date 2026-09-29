@@ -24,6 +24,7 @@ ENV DUCKDB_PATH=/app/data/warehouse/bank.duckdb \
     RAW_DATA_DIR=/app/data/raw \
     DUCKDB_MEMORY_LIMIT=400MB \
     INGEST_ARGS="--profile serving --sample-customers 5000 --since 2025-06-17" \
+    RETENTION_STATUS_PATH=/app/data/warehouse/retention_status.json \
     SESSION_TTL_SECONDS=900
 
 # The app runs as this unprivileged user. The container starts as root only so the entrypoint can hand it the
@@ -32,7 +33,8 @@ RUN useradd --create-home --uid 10001 agent && mkdir -p /app/data/warehouse /app
     && chown -R agent:agent /app/data
 
 EXPOSE 8000
+# Readiness, not just liveness: an instance whose warehouse or state store does not answer is unhealthy
 HEALTHCHECK --interval=30s --timeout=10s --start-period=900s --retries=3 \
-    CMD curl -f http://localhost:${PORT:-8000}/health || exit 1
+    CMD curl -f http://localhost:${PORT:-8000}/readyz || exit 1
 
 ENTRYPOINT ["./ops/entrypoint.sh"]

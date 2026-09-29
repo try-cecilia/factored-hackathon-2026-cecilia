@@ -5,7 +5,9 @@ set -e
 # root), then everything below runs as that user.
 if [ "$(id -u)" = "0" ]; then
   mkdir -p /app/data/warehouse /app/data/raw /app/data/reports
-  chown -R agent:agent /app/data
+  # Not /app/data/raw: it may be the operator's dataset mounted read-only (RAW_DIR in the compose stack), and it is only read
+  chown agent:agent /app/data
+  chown -R agent:agent /app/data/warehouse /app/data/reports
   exec setpriv --reuid=agent --regid=agent --init-groups "$0" "$@"
 fi
 
@@ -37,10 +39,20 @@ fi
 if [ -z "$DEMO_IDP_SECRET" ]; then
   echo "[entrypoint] WARNING: DEMO_IDP_SECRET not set; /auth/session will refuse all logins (fails closed)"
 fi
-if [ -z "$DEMO_PUBLIC_CUSTOMERS" ]; then
+# Sandbox test credentials are published only by the jury sandbox: outside DEMO_MODE=1 the list stays empty and
+# /demo/customers does not exist.
+if [ "$DEMO_MODE" = "1" ] && [ -z "$DEMO_PUBLIC_CUSTOMERS" ]; then
   DEMO_PUBLIC_CUSTOMERS="$(python -m ops.demo_customers)"
   export DEMO_PUBLIC_CUSTOMERS
   echo "[entrypoint] sandbox demo customers: $DEMO_PUBLIC_CUSTOMERS"
 fi
 
-exec uvicorn api.main:app --host 0.0.0.0 --port "${PORT:-8000}"
+# Retention: apply the policy now and every RETENTION_INTERVAL_HOURS (default 24; 0 = do not schedule) in a background loop
+# that shares the disk with the API. It records each run in the audit log and in retention_status.json, which /metrics
+# reads, so a loop that stopped shows up as an alert (ops/alerts.yml). Docs: docs/operations.md, "Data retention".
+if [ "${RETENTION_INTERVAL_HOURS:-24}" != "0" ]; then
+  python -m ops.retention --loop --interval-hours "${RETENTION_INTERVAL_HOURS:-24}" &
+  echo "[entrypoint] retention loop started (every ${RETENTION_INTERVAL_HOURS:-24} h)"
+fi
+
+exec uvicorn api.main:app --host 0.0.0.0 --port "${PORT:-8000}" --no-server-header

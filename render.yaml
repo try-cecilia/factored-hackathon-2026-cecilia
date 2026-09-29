@@ -10,7 +10,7 @@ services:
     dockerContext: .
     plan: 0.5c-512mb        # paid: it never sleeps while the jury tries it, and a disk needs a paid instance
     region: oregon
-    healthCheckPath: /health
+    healthCheckPath: /readyz  # readiness: the warehouse and the state store answer (/livez is the bare process check)
     autoDeployTrigger: "off"  # deploy by hand: a push must not restart the instance while the jury is using it
     disk:
       name: warehouse
@@ -28,6 +28,12 @@ services:
         generateValue: true
       - key: OPERATOR_KEYS
         sync: false           # nombre=clave,nombre=clave (se pide al crear el Blueprint)
+      - key: METRICS_TOKEN    # the bearer a Prometheus scraper presents at /metrics (it opens nothing else)
+        generateValue: true
+      - key: SECURITY_HSTS    # Render serves only HTTPS
+        value: "1"
+      - key: RETENTION_INTERVAL_HOURS  # the container purges expired records daily (docs/operations.md, "Data retention")
+        value: "24"
       # The real client address on Render: set by its Cloudflare edge, unforgeable; Render sends no X-Forwarded-For.
       - key: CLIENT_IP_HEADER
         value: CF-Connecting-IP

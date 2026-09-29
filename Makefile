@@ -10,6 +10,12 @@ AGENT_API_URL ?= http://127.0.0.1:$(API_PORT)
 
 .PHONY: gate operator-labels retention loadtest setup ingest ingest-demo analysis train-eval workload eval eval-adversarial eval-live live-smoke test serve docker-build all mlflow-ui
 .PHONY: web-setup serve-web web-build web-typecheck serve-all
+.PHONY: env up down monitoring-up up-llm-local up-llm-host up-dataset lock lock-check alerts-check compose-e2e
+COMPOSE = docker compose -f ops/docker-compose.yml --env-file .env
+GPU_FILE = $(if $(GPU),-f ops/docker-compose.gpu.yml)
+# The model-serving choices below only set what the API is told; the `local` provider itself is agent/llm/client.py's
+LOCAL_IN_COMPOSE = LLM_PROVIDERS=local LOCAL_LLM_BASE_URL=http://ollama:11434/v1
+LOCAL_ON_HOST = LLM_PROVIDERS=local LOCAL_LLM_BASE_URL=http://host.docker.internal:11434/v1
 
 web-setup:        ## install the frontend's pinned dependencies (Node 24, pnpm 10.33.2)
 	$(PNPM) --dir web install --frozen-lockfile
@@ -27,8 +33,49 @@ serve-all:       ## run serve and serve-web; stop both when either exits
 	AGENT_API_URL="$(AGENT_API_URL)" $(PNPM) --dir web exec concurrently --kill-others --kill-timeout 5000 --names api,web \
 		"$(MAKE) -C .. serve" "$(MAKE) -C .. serve-web"
 
-setup:            ## install pinned dependencies, with experiment tracking (the serving image takes requirements.txt only)
-	$(PY) -m pip install -r requirements-tracking.txt
+setup:            ## install the locked dependencies (exact versions and hashes), with experiment tracking (the serving image takes requirements.txt only)
+	$(PY) -m pip install --require-hashes -r requirements-tracking.txt
+
+lock:             ## regenerate both lock files (versions and sha256 of every wheel) from requirements*.in
+	uv pip compile requirements.in --universal --python-version 3.11 --generate-hashes -o requirements.txt
+	uv pip compile requirements-tracking.in --universal --python-version 3.11 --generate-hashes -o requirements-tracking.txt
+
+lock-check:       ## fail if a lock file no longer matches its .in (the CI runs this)
+	python3 ops/check_locks.py
+
+env:              ## create .env from .env.example with generated secrets (leaves an existing one alone)
+	$(PY) ops/bootstrap_env.py
+
+up: env           ## the whole stack (API + web) in Docker on the fixture warehouse: http://127.0.0.1:3000 and :8000
+	$(COMPOSE) up --build --wait
+
+monitoring-up: env ## the same plus Prometheus (alert rules) and Grafana (provisioned dashboard): :9090 and :3001
+	$(COMPOSE) --profile monitoring up --build --wait
+
+up-llm-local: env ## the stack plus a local model (Ollama in Docker, CPU unless GPU=1; LOCAL_LLM_MODEL, default gpt-oss:20b)
+	$(LOCAL_IN_COMPOSE) $(COMPOSE) $(GPU_FILE) --profile llm-local up --build --wait api web ollama
+	$(LOCAL_IN_COMPOSE) $(COMPOSE) $(GPU_FILE) --profile llm-local up -d ollama-pull
+	@echo "the model downloads in the background: docker compose -f ops/docker-compose.yml --profile llm-local logs -f ollama-pull"
+
+up-llm-host: env  ## the stack using an Ollama already running on this machine (macOS: Metal speed): ollama serve, then this
+	$(LOCAL_ON_HOST) $(COMPOSE) up --build --wait
+
+up-dataset: env   ## the stack on your local CSVs (RAW_DIR=/path/to/data/raw), read-only, no S3; first boot ingests them
+	@test -n "$(RAW_DIR)" || { echo "usage: make up-dataset RAW_DIR=/path/to/data/raw   (INGEST_ARGS to change what is ingested)"; exit 1; }
+	RAW_DIR="$(RAW_DIR)" INGEST_ARGS="$${INGEST_ARGS:---profile serving --source local --raw-dir /app/data/raw --sample-customers 5000 --since 2025-06-17}" \
+	  $(COMPOSE) up --build --wait --wait-timeout 1800
+
+down:             ## stop the stack and drop its volumes (the fixture warehouse is rebuilt on the next up)
+	$(COMPOSE) --profile monitoring --profile llm-local down -v
+
+PROMTOOL = docker run --rm --entrypoint promtool -v "$(CURDIR)/ops:/ops:ro" prom/prometheus:v3.5.0
+
+alerts-check:     ## promtool: syntax of ops/alerts.yml and its unit tests (needs Docker)
+	$(PROMTOOL) check rules /ops/alerts.yml
+	$(PROMTOOL) test rules /ops/alerts_test.yml
+
+compose-e2e:      ## the stack from scratch on the fixture, checked end to end (what the CI's compose job runs; needs Docker)
+	sh ops/compose_e2e.sh
 
 ingest:           ## full warehouse (serving + analysis tables) from S3, with contracts + lineage
 	$(PY) -m data.pipeline --profile all --report data/reports/quality_report.json
@@ -80,7 +127,7 @@ docker-build:
 
 all: ingest analysis train-eval workload eval eval-adversarial test
 
-retention:        ## prune traces/audit (30d) and local tickets (90d)
+retention:        ## apply the retention policy to every record store (docs/operations.md, "Data retention")
 	$(PY) -m ops.retention
 
 loadtest:         ## throughput of the non-LLM layers on the real warehouse
