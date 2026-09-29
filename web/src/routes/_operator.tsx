@@ -1,0 +1,68 @@
+import { createFileRoute, Link, Outlet, redirect, useNavigate } from '@tanstack/react-router'
+import { useState } from 'react'
+import { getOperatorView, operatorLogout } from '../server/operator.functions'
+import operatorStylesheet from '../styles/operator.css?url'
+import { OperatorKeyForm } from './-operator/OperatorKeyForm'
+
+export const Route = createFileRoute('/_operator')({
+  beforeLoad: async ({ location }) => {
+    const view = await getOperatorView()
+    if (!view) throw redirect({ to: '/operador/login', search: { redirect: location.href } })
+    return { view }
+  },
+  head: () => ({
+    meta: [{ name: 'robots', content: 'noindex' }],
+    links: [{ rel: 'stylesheet', href: operatorStylesheet }],
+  }),
+  errorComponent: () => (
+    <div className="op">
+      <main className="op-main">
+        <p className="op-notice" role="alert">La consola no está disponible en este momento.</p>
+      </main>
+    </div>
+  ),
+  component: OperatorLayout,
+})
+
+function OperatorLayout() {
+  const { view } = Route.useRouteContext()
+  const navigate = useNavigate()
+  const [leaving, setLeaving] = useState(false)
+  const [leaveError, setLeaveError] = useState(false)
+
+  async function onLogout() {
+    setLeaving(true)
+    setLeaveError(false)
+    try {
+      await operatorLogout()
+      await navigate({ to: '/operador/login' })
+    } catch {
+      setLeaveError(true)
+    } finally {
+      setLeaving(false)
+    }
+  }
+
+  return (
+    <div className="op">
+      <a className="op-skip" href="#contenido">Ir al contenido</a>
+      <header className="op-bar">
+        <a className="op-brand" href="/operador/cola" aria-label="Cecilai, consola de operador">cecilai<span>.</span></a>
+        <nav aria-label="Consola">
+          <Link to="/operador/cola" activeProps={{ 'aria-current': 'page' }}>Cola</Link>
+          <Link to="/operador/monitoreo" activeProps={{ 'aria-current': 'page' }}>Monitoreo</Link>
+          <Link to="/operador/trazas" activeProps={{ 'aria-current': 'page' }}>Trazas</Link>
+        </nav>
+        <div className="op-who">
+          {view.canAct ? <span>Operador <strong>{view.operator}</strong></span> : <span className="op-chip">Solo lectura</span>}
+          {!view.canAct && <OperatorKeyForm compact />}
+          <button type="button" className="op-link" onClick={onLogout} disabled={leaving}>{leaving ? 'Saliendo…' : 'Salir'}</button>
+        </div>
+      </header>
+      {leaveError && <p className="op-error op-page-note" role="alert">No se pudo cerrar la sesión. Probá de nuevo.</p>}
+      <main className="op-main" id="contenido" tabIndex={-1}>
+        <Outlet />
+      </main>
+    </div>
+  )
+}

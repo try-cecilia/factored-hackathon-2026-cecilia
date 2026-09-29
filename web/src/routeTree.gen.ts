@@ -11,9 +11,19 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthedRouteImport } from './routes/_authed'
+import { Route as OperatorRouteImport } from './routes/_operator'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthedChatRouteImport } from './routes/_authed/chat'
+import { Route as OperadorLoginRouteImport } from './routes/operador.login'
+import { Route as OperatorOperadorIndexRouteImport } from './routes/_operator/operador.index'
+import { Route as OperatorOperadorColaRouteImport } from './routes/_operator/operador.cola'
+import { Route as OperatorOperadorMonitoreoRouteImport } from './routes/_operator/operador.monitoreo'
+import { Route as OperatorOperadorTrazasRouteImport } from './routes/_operator/operador.trazas'
 import { Route as ApiAgentHealthRouteImport } from './routes/api.agent.health'
+import { Route as OperatorOperadorColaIndexRouteImport } from './routes/_operator/operador.cola.index'
+import { Route as OperatorOperadorColaTicketIdRouteImport } from './routes/_operator/operador.cola.$ticketId'
+import { Route as OperatorOperadorTrazasIndexRouteImport } from './routes/_operator/operador.trazas.index'
+import { Route as OperatorOperadorTrazasTraceIdRouteImport } from './routes/_operator/operador.trazas.$traceId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -22,6 +32,10 @@ const IndexRoute = IndexRouteImport.update({
 } as any)
 const AuthedRoute = AuthedRouteImport.update({
   id: '/_authed',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OperatorRoute = OperatorRouteImport.update({
+  id: '/_operator',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -34,50 +48,162 @@ const AuthedChatRoute = AuthedChatRouteImport.update({
   path: '/chat',
   getParentRoute: () => AuthedRoute,
 } as any)
+const OperadorLoginRoute = OperadorLoginRouteImport.update({
+  id: '/operador/login',
+  path: '/operador/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OperatorOperadorIndexRoute = OperatorOperadorIndexRouteImport.update({
+  id: '/operador/',
+  path: '/operador/',
+  getParentRoute: () => OperatorRoute,
+} as any)
+const OperatorOperadorColaRoute = OperatorOperadorColaRouteImport.update({
+  id: '/operador/cola',
+  path: '/operador/cola',
+  getParentRoute: () => OperatorRoute,
+} as any)
+const OperatorOperadorMonitoreoRoute =
+  OperatorOperadorMonitoreoRouteImport.update({
+    id: '/operador/monitoreo',
+    path: '/operador/monitoreo',
+    getParentRoute: () => OperatorRoute,
+  } as any)
+const OperatorOperadorTrazasRoute = OperatorOperadorTrazasRouteImport.update({
+  id: '/operador/trazas',
+  path: '/operador/trazas',
+  getParentRoute: () => OperatorRoute,
+} as any)
 const ApiAgentHealthRoute = ApiAgentHealthRouteImport.update({
   id: '/api/agent/health',
   path: '/api/agent/health',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OperatorOperadorColaIndexRoute =
+  OperatorOperadorColaIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => OperatorOperadorColaRoute,
+  } as any)
+const OperatorOperadorColaTicketIdRoute =
+  OperatorOperadorColaTicketIdRouteImport.update({
+    id: '/$ticketId',
+    path: '/$ticketId',
+    getParentRoute: () => OperatorOperadorColaRoute,
+  } as any)
+const OperatorOperadorTrazasIndexRoute =
+  OperatorOperadorTrazasIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => OperatorOperadorTrazasRoute,
+  } as any)
+const OperatorOperadorTrazasTraceIdRoute =
+  OperatorOperadorTrazasTraceIdRouteImport.update({
+    id: '/$traceId',
+    path: '/$traceId',
+    getParentRoute: () => OperatorOperadorTrazasRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/chat': typeof AuthedChatRoute
+  '/operador/login': typeof OperadorLoginRoute
+  '/operador/cola': typeof OperatorOperadorColaRouteWithChildren
+  '/operador/monitoreo': typeof OperatorOperadorMonitoreoRoute
+  '/operador/trazas': typeof OperatorOperadorTrazasRouteWithChildren
   '/api/agent/health': typeof ApiAgentHealthRoute
+  '/operador/': typeof OperatorOperadorIndexRoute
+  '/operador/cola/$ticketId': typeof OperatorOperadorColaTicketIdRoute
+  '/operador/trazas/$traceId': typeof OperatorOperadorTrazasTraceIdRoute
+  '/operador/cola/': typeof OperatorOperadorColaIndexRoute
+  '/operador/trazas/': typeof OperatorOperadorTrazasIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/chat': typeof AuthedChatRoute
+  '/operador/login': typeof OperadorLoginRoute
+  '/operador/monitoreo': typeof OperatorOperadorMonitoreoRoute
   '/api/agent/health': typeof ApiAgentHealthRoute
+  '/operador': typeof OperatorOperadorIndexRoute
+  '/operador/cola/$ticketId': typeof OperatorOperadorColaTicketIdRoute
+  '/operador/trazas/$traceId': typeof OperatorOperadorTrazasTraceIdRoute
+  '/operador/cola': typeof OperatorOperadorColaIndexRoute
+  '/operador/trazas': typeof OperatorOperadorTrazasIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authed': typeof AuthedRouteWithChildren
+  '/_operator': typeof OperatorRouteWithChildren
   '/login': typeof LoginRoute
   '/_authed/chat': typeof AuthedChatRoute
+  '/operador/login': typeof OperadorLoginRoute
+  '/_operator/operador/cola': typeof OperatorOperadorColaRouteWithChildren
+  '/_operator/operador/monitoreo': typeof OperatorOperadorMonitoreoRoute
+  '/_operator/operador/trazas': typeof OperatorOperadorTrazasRouteWithChildren
   '/api/agent/health': typeof ApiAgentHealthRoute
+  '/_operator/operador/': typeof OperatorOperadorIndexRoute
+  '/_operator/operador/cola/$ticketId': typeof OperatorOperadorColaTicketIdRoute
+  '/_operator/operador/trazas/$traceId': typeof OperatorOperadorTrazasTraceIdRoute
+  '/_operator/operador/cola/': typeof OperatorOperadorColaIndexRoute
+  '/_operator/operador/trazas/': typeof OperatorOperadorTrazasIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/chat' | '/api/agent/health'
+  fullPaths:
+    | '/'
+    | '/login'
+    | '/chat'
+    | '/operador/login'
+    | '/operador/cola'
+    | '/operador/monitoreo'
+    | '/operador/trazas'
+    | '/api/agent/health'
+    | '/operador/'
+    | '/operador/cola/$ticketId'
+    | '/operador/trazas/$traceId'
+    | '/operador/cola/'
+    | '/operador/trazas/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/chat' | '/api/agent/health'
+  to:
+    | '/'
+    | '/login'
+    | '/chat'
+    | '/operador/login'
+    | '/operador/monitoreo'
+    | '/api/agent/health'
+    | '/operador'
+    | '/operador/cola/$ticketId'
+    | '/operador/trazas/$traceId'
+    | '/operador/cola'
+    | '/operador/trazas'
   id:
     | '__root__'
     | '/'
     | '/_authed'
+    | '/_operator'
     | '/login'
     | '/_authed/chat'
+    | '/operador/login'
+    | '/_operator/operador/cola'
+    | '/_operator/operador/monitoreo'
+    | '/_operator/operador/trazas'
     | '/api/agent/health'
+    | '/_operator/operador/'
+    | '/_operator/operador/cola/$ticketId'
+    | '/_operator/operador/trazas/$traceId'
+    | '/_operator/operador/cola/'
+    | '/_operator/operador/trazas/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthedRoute: typeof AuthedRouteWithChildren
+  OperatorRoute: typeof OperatorRouteWithChildren
   LoginRoute: typeof LoginRoute
+  OperadorLoginRoute: typeof OperadorLoginRoute
   ApiAgentHealthRoute: typeof ApiAgentHealthRoute
 }
 
@@ -97,6 +223,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_operator': {
+      id: '/_operator'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof OperatorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login': {
       id: '/login'
       path: '/login'
@@ -111,12 +244,75 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedChatRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/operador/login': {
+      id: '/operador/login'
+      path: '/operador/login'
+      fullPath: '/operador/login'
+      preLoaderRoute: typeof OperadorLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_operator/operador/': {
+      id: '/_operator/operador/'
+      path: '/operador'
+      fullPath: '/operador/'
+      preLoaderRoute: typeof OperatorOperadorIndexRouteImport
+      parentRoute: typeof OperatorRoute
+    }
+    '/_operator/operador/cola': {
+      id: '/_operator/operador/cola'
+      path: '/operador/cola'
+      fullPath: '/operador/cola'
+      preLoaderRoute: typeof OperatorOperadorColaRouteImport
+      parentRoute: typeof OperatorRoute
+    }
+    '/_operator/operador/monitoreo': {
+      id: '/_operator/operador/monitoreo'
+      path: '/operador/monitoreo'
+      fullPath: '/operador/monitoreo'
+      preLoaderRoute: typeof OperatorOperadorMonitoreoRouteImport
+      parentRoute: typeof OperatorRoute
+    }
+    '/_operator/operador/trazas': {
+      id: '/_operator/operador/trazas'
+      path: '/operador/trazas'
+      fullPath: '/operador/trazas'
+      preLoaderRoute: typeof OperatorOperadorTrazasRouteImport
+      parentRoute: typeof OperatorRoute
+    }
     '/api/agent/health': {
       id: '/api/agent/health'
       path: '/api/agent/health'
       fullPath: '/api/agent/health'
       preLoaderRoute: typeof ApiAgentHealthRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_operator/operador/cola/': {
+      id: '/_operator/operador/cola/'
+      path: '/'
+      fullPath: '/operador/cola/'
+      preLoaderRoute: typeof OperatorOperadorColaIndexRouteImport
+      parentRoute: typeof OperatorOperadorColaRoute
+    }
+    '/_operator/operador/cola/$ticketId': {
+      id: '/_operator/operador/cola/$ticketId'
+      path: '/$ticketId'
+      fullPath: '/operador/cola/$ticketId'
+      preLoaderRoute: typeof OperatorOperadorColaTicketIdRouteImport
+      parentRoute: typeof OperatorOperadorColaRoute
+    }
+    '/_operator/operador/trazas/': {
+      id: '/_operator/operador/trazas/'
+      path: '/'
+      fullPath: '/operador/trazas/'
+      preLoaderRoute: typeof OperatorOperadorTrazasIndexRouteImport
+      parentRoute: typeof OperatorOperadorTrazasRoute
+    }
+    '/_operator/operador/trazas/$traceId': {
+      id: '/_operator/operador/trazas/$traceId'
+      path: '/$traceId'
+      fullPath: '/operador/trazas/$traceId'
+      preLoaderRoute: typeof OperatorOperadorTrazasTraceIdRouteImport
+      parentRoute: typeof OperatorOperadorTrazasRoute
     }
   }
 }
@@ -132,10 +328,59 @@ const AuthedRouteChildren: AuthedRouteChildren = {
 const AuthedRouteWithChildren =
   AuthedRoute._addFileChildren(AuthedRouteChildren)
 
+interface OperatorOperadorColaRouteChildren {
+  OperatorOperadorColaTicketIdRoute: typeof OperatorOperadorColaTicketIdRoute
+  OperatorOperadorColaIndexRoute: typeof OperatorOperadorColaIndexRoute
+}
+
+const OperatorOperadorColaRouteChildren: OperatorOperadorColaRouteChildren = {
+  OperatorOperadorColaTicketIdRoute: OperatorOperadorColaTicketIdRoute,
+  OperatorOperadorColaIndexRoute: OperatorOperadorColaIndexRoute,
+}
+
+const OperatorOperadorColaRouteWithChildren =
+  OperatorOperadorColaRoute._addFileChildren(OperatorOperadorColaRouteChildren)
+
+interface OperatorOperadorTrazasRouteChildren {
+  OperatorOperadorTrazasTraceIdRoute: typeof OperatorOperadorTrazasTraceIdRoute
+  OperatorOperadorTrazasIndexRoute: typeof OperatorOperadorTrazasIndexRoute
+}
+
+const OperatorOperadorTrazasRouteChildren: OperatorOperadorTrazasRouteChildren =
+  {
+    OperatorOperadorTrazasTraceIdRoute: OperatorOperadorTrazasTraceIdRoute,
+    OperatorOperadorTrazasIndexRoute: OperatorOperadorTrazasIndexRoute,
+  }
+
+const OperatorOperadorTrazasRouteWithChildren =
+  OperatorOperadorTrazasRoute._addFileChildren(
+    OperatorOperadorTrazasRouteChildren,
+  )
+
+interface OperatorRouteChildren {
+  OperatorOperadorColaRoute: typeof OperatorOperadorColaRouteWithChildren
+  OperatorOperadorMonitoreoRoute: typeof OperatorOperadorMonitoreoRoute
+  OperatorOperadorTrazasRoute: typeof OperatorOperadorTrazasRouteWithChildren
+  OperatorOperadorIndexRoute: typeof OperatorOperadorIndexRoute
+}
+
+const OperatorRouteChildren: OperatorRouteChildren = {
+  OperatorOperadorColaRoute: OperatorOperadorColaRouteWithChildren,
+  OperatorOperadorMonitoreoRoute: OperatorOperadorMonitoreoRoute,
+  OperatorOperadorTrazasRoute: OperatorOperadorTrazasRouteWithChildren,
+  OperatorOperadorIndexRoute: OperatorOperadorIndexRoute,
+}
+
+const OperatorRouteWithChildren = OperatorRoute._addFileChildren(
+  OperatorRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthedRoute: AuthedRouteWithChildren,
+  OperatorRoute: OperatorRouteWithChildren,
   LoginRoute: LoginRoute,
+  OperadorLoginRoute: OperadorLoginRoute,
   ApiAgentHealthRoute: ApiAgentHealthRoute,
 }
 export const routeTree = rootRouteImport
