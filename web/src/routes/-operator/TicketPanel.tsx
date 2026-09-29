@@ -16,7 +16,7 @@ export type TicketPanelProps = {
   /** Sends one action. The panel always passes the version it is showing. */
   act: (action: DeskAction, input: { expectedVersion: number; reason?: string }) => Promise<Result<DeskState>>
   /** Reads the ticket again from the server. `true` only when the case was read and is now on screen. */
-  reload: () => Promise<boolean>
+  reload: (minVersion: number) => Promise<boolean>
   /** Status of the last read of this case when it failed: the panel keeps what it has and says it is not fresh. */
   loadError?: number
   /** Close button of the header. Left out where there is nothing to close (small screens show a back link instead). */
@@ -69,7 +69,7 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
         setFlash({ tone: 'error', text: t(explainKey(result.status, true)), detail: result.status === 400 ? result.message : undefined })
       }
       // Whatever happened the case is read again: after a 409 the screen was out of date.
-      await reload()
+      await reload(desk.version)
     } catch {
       setFlash({ tone: 'error', text: t('operator.errors.actionFailed') })
     }
@@ -79,7 +79,7 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
   // The lock of a 409 is lifted only by a reload that worked: with the case not read again, what is on screen may still be stale.
   async function reloadNow() {
     setPending('reload')
-    const fresh = await reload().catch(() => false)
+    const fresh = await reload(desk.version).catch(() => false)
     if (fresh) setConflict(null)
     setReloadFailed(!fresh)
     setPending(null)

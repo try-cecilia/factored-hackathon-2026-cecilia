@@ -5,6 +5,7 @@ import { getOperatorView, loadQueue } from '../server/operator.functions'
 import operatorStylesheet from '../styles/operator.css?url'
 import { OperatorShell } from './-operator/OperatorShell'
 import { isAutomatic, refreshQuietly } from './-operator/refresh'
+import { guarded } from './-operator/reload'
 import { QueueSkeleton } from './-operator/QueueSkeleton'
 
 export const Route = createFileRoute('/_operator')({
@@ -16,7 +17,8 @@ export const Route = createFileRoute('/_operator')({
     return { view }
   },
   // The queue is read here, not in /operador/cola: the sidebar counts come from it on every page of the console.
-  loader: () => loadQueue({ data: { auto: isAutomatic() } }),
+  // `guarded`: a read that cannot even leave the browser is an error result, not a route error that would replace the whole console.
+  loader: () => guarded(() => loadQueue({ data: { auto: isAutomatic() } })),
   head: () => ({
     meta: [{ name: 'robots', content: 'noindex' }],
     links: [{ rel: 'stylesheet', href: operatorStylesheet }],
