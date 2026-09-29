@@ -299,7 +299,7 @@ does. Labels are bounded (no customer, session, ticket or message ever becomes a
 | Metric | What it tells you |
 |---|---|
 | `cecilai_turns_total{disposition,category}`, `cecilai_escalations_total{category}` | outcomes and escalations |
-| `cecilai_turn_latency_seconds`, `cecilai_stage_latency_seconds{stage}` (`llm`, `tools`, `policy_render`), `cecilai_tool_call_seconds{tool}` | latency, whole and by stage |
+| `cecilai_turn_latency_seconds`, `cecilai_stage_latency_seconds{stage}` (`llm`, `tools`, `policy_render`), `cecilai_tool_call_seconds{tool}` | latency, whole and by stage. The stages come from the trace's own `stages` spans when the orchestrator records them; otherwise from the model steps' latency, and for a chain where every provider failed from the sum of its attempts' durations (plus any `wait_ms` they record), so an outage counts as model time and not as policy time |
 | `cecilai_tool_calls_total{tool,outcome,error_type}` | tool calls, and why they failed (`MissingSlot`, `InvalidArgument`...) |
 | `cecilai_llm_attempts_total{provider,outcome,reason}`, `cecilai_model_refusals_total`, `cecilai_llm_unavailable_turns_total`, `cecilai_degraded_turns_total` | model errors, skips, refusals and the fallback |
 | `cecilai_llm_circuit_open{provider}`, `cecilai_llm_consecutive_failures{provider}`, `cecilai_llm_provider_configured{provider}` | circuit-breaker state |

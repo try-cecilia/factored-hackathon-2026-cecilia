@@ -37,6 +37,18 @@ MAX_PENDING_TRACES = 4096  # trace ids waiting for their turn's record, so their
 CONTENT_TYPE = "text/plain; version=0.0.4; charset=utf-8"
 
 
+def _model_seconds(record: dict) -> float:
+    """Time the turn spent on the model when the record has no stage spans: what each successful step says, and for a step that
+    ended in failure (no provider answered, so no latency) the sum of its attempts' durations plus any backoff they record."""
+    total = 0.0
+    for step in record.get("llm_steps") or []:
+        if step.get("latency_ms") is not None:
+            total += float(step["latency_ms"]) / 1000
+        else:
+            total += sum((float(a.get("ms") or 0) + float(a.get("wait_ms") or 0)) for a in step.get("attempts") or []) / 1000
+    return total
+
+
 class Metrics:
     def __init__(self) -> None:
         self.registry = CollectorRegistry()
@@ -107,9 +119,13 @@ class Metrics:
             self.llm_unavailable_turns.inc()
 
         total = float(record.get("latency_ms") or 0) / 1000
-        llm_s = 0.0
+        llm_s, stage_tools_s = _model_seconds(record), None
+        spans = record.get("stages")
+        if spans:  # the turn's own timings, when the orchestrator records them: one span per step, with its duration
+            llm_s = sum(float(sp.get("ms") or 0) for sp in spans if sp.get("stage") == "llm") / 1000
+            stage_tools_s = sum(float(sp.get("ms") or 0) for sp in spans
+                                if str(sp.get("stage")).startswith("tool:") or sp.get("stage") == "trace_service") / 1000
         for step in record.get("llm_steps") or []:
-            llm_s += float(step.get("latency_ms") or 0) / 1000
             for attempt in step.get("attempts") or []:
                 outcome = str(attempt.get("outcome") or "unknown")
                 reason = str(attempt.get("kind") or attempt.get("reason") or "")
@@ -118,7 +134,8 @@ class Metrics:
                 if str(attempt.get("error") or "").startswith("ModelRefusal"):
                     self.model_refusals.labels(provider).inc()
         with self._lock:
-            tools_s = self._tool_seconds.pop(str(record.get("trace_id")), 0.0)
+            audited_tools_s = self._tool_seconds.pop(str(record.get("trace_id")), 0.0)
+        tools_s = audited_tools_s if stage_tools_s is None else stage_tools_s
         self.turn_latency.observe(total)
         self.stage_latency.labels("llm").observe(llm_s)
         self.stage_latency.labels("tools").observe(tools_s)

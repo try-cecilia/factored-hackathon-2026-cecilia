@@ -273,3 +273,54 @@ def test_readiness_gives_up_on_a_warehouse_that_does_not_answer_in_time(client, 
     r = client.get("/readyz")
     assert r.status_code == 503 and r.json()["checks"]["warehouse"] is False
     assert time_module.perf_counter() - started < 1.5
+
+
+class _EveryProviderFails:
+    """A model chain that spends its time and then gives up, as LLMClient does when every provider fails."""
+
+    def chat(self, *args, **kwargs):
+        import time as time_module
+
+        from agent.llm.client import LLMUnavailable
+
+        time_module.sleep(0.3)
+        raise LLMUnavailable("all LLM providers failed", [
+            {"provider": "groq", "outcome": "error", "kind": "transient", "error": "Timeout: slow", "ms": 200.0},
+            {"provider": "anthropic", "outcome": "error", "kind": "transient", "error": "Timeout: slow", "ms": 100.0}])
+
+
+def test_a_turn_where_every_provider_fails_counts_its_wait_as_model_time_not_as_policy(client, monkeypatch):
+    """No step of a failed chain has a latency_ms; the time still went to the model, through the orchestrator's real trace."""
+    from agent.core.orchestrator import default_orchestrator
+
+    monkeypatch.setattr(default_orchestrator, "_llm", lambda: _EveryProviderFails())
+    token = login(client)
+    reply = client.post("/chat", json={"session_token": token, "message": "¿Cuál es mi saldo?"}).json()
+    _, s = scrape(client)
+    assert reply["latency_ms"] >= 300
+    llm = value(s, "cecilai_stage_latency_seconds_sum", stage="llm")
+    policy = value(s, "cecilai_stage_latency_seconds_sum", stage="policy_render")
+    assert llm == pytest.approx(0.3, abs=0.001)  # the attempts' own durations
+    assert policy < 0.25  # the rest of the turn (the 0.3 s the chain spent is not in it)
+
+
+def test_stage_spans_of_the_trace_are_the_preferred_source(m):
+    """The orchestrator's `stages` (one span per step) win over anything derived from attempts or the audit log."""
+    m.observe_turn({"trace_id": "s1", "disposition": "AUTO_RESOLVE", "category": "resolved", "latency_ms": 2000,
+                    "llm_steps": [{"latency_ms": 9999, "attempts": [{"provider": "x", "outcome": "ok", "ms": 9999}]}],
+                    "stages": [{"stage": "session", "ms": 3.0}, {"stage": "llm", "ms": 1200.0}, {"stage": "tool:get_account_summary", "ms": 300.0},
+                               {"stage": "tool:list_transactions", "ms": 100.0}, {"stage": "render", "ms": 5.0}]})
+    r = m.registry.get_sample_value
+    assert r("cecilai_stage_latency_seconds_sum", {"stage": "llm"}) == pytest.approx(1.2)
+    assert r("cecilai_stage_latency_seconds_sum", {"stage": "tools"}) == pytest.approx(0.4)
+    assert r("cecilai_stage_latency_seconds_sum", {"stage": "policy_render"}) == pytest.approx(0.4)
+
+
+def test_without_stage_spans_a_failed_chain_is_the_sum_of_its_attempts_and_their_waits(m):
+    m.observe_turn({"trace_id": "s2", "disposition": "ESCALATE", "category": "llm_unavailable", "latency_ms": 1000,
+                    "llm_steps": [{"outcome": "unavailable", "attempts": [
+                        {"provider": "groq", "outcome": "error", "kind": "transient", "ms": 300.0, "wait_ms": 200.0},
+                        {"provider": "anthropic", "outcome": "error", "kind": "transient", "ms": 100.0}]}]})
+    r = m.registry.get_sample_value
+    assert r("cecilai_stage_latency_seconds_sum", {"stage": "llm"}) == pytest.approx(0.6)
+    assert r("cecilai_stage_latency_seconds_sum", {"stage": "policy_render"}) == pytest.approx(0.4)
