@@ -1,12 +1,12 @@
 import { createFileRoute, Outlet, redirect, useRouter, useRouterState } from '@tanstack/react-router'
 import { useEffect } from 'react'
-import { useT } from '../i18n/context'
 import { getOperatorView, loadQueue } from '../server/operator.functions'
 import operatorStylesheet from '../styles/operator.css?url'
 import { OperatorShell } from './-operator/OperatorShell'
 import { isAutomatic, refreshQuietly } from './-operator/refresh'
 import { guarded } from './-operator/reload'
 import { QueueSkeleton } from './-operator/QueueSkeleton'
+import { Unavailable } from './-operator/Unavailable'
 
 export const Route = createFileRoute('/_operator')({
   beforeLoad: async ({ location }) => {
@@ -28,17 +28,6 @@ export const Route = createFileRoute('/_operator')({
   errorComponent: Unavailable,
   component: OperatorLayout,
 })
-
-function Unavailable() {
-  const t = useT()
-  return (
-    <div className="op">
-      <main className="op-unavailable">
-        <p className="op-notice" role="alert">{t('operator.unavailable')}</p>
-      </main>
-    </div>
-  )
-}
 
 const REFRESH_MS = 30_000
 

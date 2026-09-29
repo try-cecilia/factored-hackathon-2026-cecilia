@@ -7,6 +7,7 @@ import { AlertCircleIcon, AlertTriangleIcon, CheckIcon, InfoCircleIcon } from '.
 import { CloseIcon } from '../../ui/table/icons'
 import { ago, clock, CLOSED, explainKey, money, shortStamp, when } from './format'
 import { FRAUD_SCORE_FLAG, isFlagged, scoreLabel, ticketSummary } from './summary'
+import { conflictOf, holdConflict, type Conflict } from './conflicts'
 import { KeyValues } from './ui'
 
 export type TicketPanelProps = {
@@ -28,7 +29,6 @@ export type TicketPanelProps = {
 }
 
 type Flash = { tone: 'ok' | 'error'; title?: string; text: string; detail?: string }
-type Conflict = { seen: number; detail?: string }
 
 const tones: Record<DeskState['status'], StatusTone> = { open: 'open', claimed: 'info', approved: 'success', rejected: 'danger', handed_back: 'neutral', stale: 'caution' }
 
@@ -39,7 +39,11 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
   const [reason, setReason] = useState('')
   const [pending, setPending] = useState<DeskAction | 'reload' | null>(null)
   const [flash, setFlash] = useState<Flash | null>(null)
-  const [conflict, setConflict] = useState<Conflict | null>(null)
+  const [conflict, setConflictNow] = useState<Conflict | null>(() => conflictOf(ticket.ticket_id))
+  const setConflict = (next: Conflict | null) => {
+    holdConflict(ticket.ticket_id, next)
+    setConflictNow(next)
+  }
   const [copied, setCopied] = useState<'ok' | 'error' | null>(null)
   const [reloadFailed, setReloadFailed] = useState(false)
 
