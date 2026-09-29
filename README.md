@@ -31,7 +31,8 @@ movimiento que sigue pendiente, ocurre solo con el "sí" del propio cliente, juz
 4. **Ejecutarlo:** `make test` no necesita claves ni red; `make ingest-demo && make serve` corre la app en
    tu máquina; `make all` reconstruye cada número ([Inicio rápido](#inicio-rápido)).
 5. **Qué falta todavía:** [`LIMITATIONS.md`](LIMITATIONS.md).
-6. **Probar todo en local, paso a paso** (cliente, operador, métricas): [Probar todo en local](#probar-todo-en-local-paso-a-paso).
+6. **Ver dónde se cumple cada requisito de la consigna:** [`docs/requirements_traceability.md`](docs/requirements_traceability.md).
+7. **Probar todo en local, paso a paso** (cliente, operador, métricas): [Probar todo en local](#probar-todo-en-local-paso-a-paso).
 
 ## Por qué este flujo (medido sobre los datos provistos)
 
