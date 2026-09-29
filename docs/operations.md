@@ -14,11 +14,25 @@ make down        # stops it (its volumes stay); `make clean-volumes` also delete
 
 `make env` (run by `make up`) copies `.env.example` to `.env` with a random `DEMO_IDP_SECRET`, `ADMIN_API_KEY`,
 `METRICS_TOKEN`, `GRAFANA_ADMIN_PASSWORD` and an `OPERATOR_KEYS` entry, the fixture warehouse (`tests/fixtures/raw`, 5
-customers, no bucket) and `DEMO_MODE=1` so the guided scenarios and test PINs work. An existing `.env` is left alone. With no
-model key the assistant runs in degraded mode: plain balances from verified data, everything else goes to a person, and no
+customers, no bucket) and `DEMO_MODE=1` so the guided scenarios and test PINs work. An existing `.env` is left alone, which is
+right for your edits but means an old one can lack settings added since, or carry an `INGEST_ARGS` copied from the example (it has
+no `--source local`, so the first boot would read the organizer's bucket). So `make up` (and the other `up-*` targets) also runs
+`make env-check`: a warning, never an error, that lists the names `.env.example` has and `.env` lacks (names only, no value is
+ever printed) and says if `INGEST_ARGS` would use S3. `make env-fill` appends the missing ones, secrets generated, and changes
+nothing that is already there. With no model key the assistant runs in degraded mode: plain balances from verified data, everything else goes to a person, and no
 model is called. Every setting of `.env.example` reaches the API container as written there (a test fails if the compose file stops passing one the
 code reads; `make compose-e2e` checks that `SECURITY_HSTS`, `FRESHNESS_SLO_HOURS` and `RETENTION_*_DAYS` take effect inside it).
 Ports are published on `127.0.0.1` only.
+
+**The web in Docker runs in production mode**, so the operator console (`/operador`) refuses every form post unless the web
+knows the origin the browser sees. The compose passes `WEB_PUBLIC_ORIGIN`, by default `http://127.0.0.1:${WEB_PORT}` (right for
+`make up`; set it in `.env` if you reach the web by another name), and the other settings the web reads: `TRUSTED_CLIENT_IP_HEADER`
+(leave empty locally), `OPERATOR_IDLE_SECONDS` (to try the idle expiry without waiting 30 minutes) and `UI_GALLERY` (`1`
+publishes the UI kit gallery at `/dev/ui`; `0`, the default, is a 404 as on a real deploy). `tests/test_setup.py` fails if the web
+reads a setting the compose does not pass. In the browser: `http://127.0.0.1:3000/login` with a test PIN from the chat page
+(`DEMO_MODE=1`) for the customer, and `/operador/login` with `ADMIN_API_KEY` and the key in `OPERATOR_KEYS` for the console (both
+in `.env`; `grep` them there yourself, nothing prints them). The session cookies are `Secure` `__Host-` cookies, which Chrome and
+Firefox accept from `http://127.0.0.1`; see LIMITATIONS.md for what was and was not tried.
 
 Everything the stack needs runs in it. The cloud services the project can use are options, never requirements, and each has
 a local equivalent:
@@ -66,11 +80,15 @@ config` resolves every profile. Chatting through the `local` provider waits for 
 started in CI.
 
 **Checked end to end.** `make compose-e2e` builds both images in its own throwaway compose project (`cecilai-e2e-<random>`, its own settings file and free ports: it never touches the stack of `make up`), starts API + web + Prometheus + Grafana on the fixture,
-runs the smoke test, checks that the web reaches the API, the security headers, the access checks, `/metrics` (with and without
+runs the smoke test, checks that the web reaches the API and, through the web as a browser uses it, a customer's login (a wrong
+PIN is refused, the right one sets an httpOnly `__Host-` cookie) and a chat turn, an operator's login on the plain form (refused
+without an `Origin` or from another one, accepted from the configured origin) and the queue behind it with the tickets the stack
+filed, and that `/dev/ui` answers 404; then the security headers, the access checks, `/metrics` (with and without
 its token), that Prometheus scrapes the API and loaded every alert rule, that Grafana holds the dashboard and its 20 queries are
 valid, and that the container's retention loop ran and audited itself; then it removes the stack. The same script is the CI job
-`compose`. Measured on a 2026-09 laptop (Docker with OrbStack, fast network): `docker compose build --no-cache` of both images
-42 s; stack healthy in about 10 s after that; the whole script 27 s on a warm cache. Pulling the base images is not included.
+`compose`. Without `WEB_PUBLIC_ORIGIN` in the compose the operator-login check fails (tried on purpose). Measured on a 2026-09
+laptop (Docker with OrbStack, fast network): `docker compose build --no-cache` of both images
+42 s; stack healthy in about 10 s after that; the whole script 24 s on a warm cache. Pulling the base images is not included.
 
 ### Setup, reproducibly
 
@@ -80,17 +98,24 @@ valid, and that the container's retention loop ran and audited itself; then it r
 | Runtime versions declared once | `.python-version` (3.11), `.node-version` (24), `web/package.json` (`engines`, `packageManager` pnpm 10.33.2); the Dockerfiles use the same | `tests/test_setup.py` (they agree) | `cat .python-version .node-version` |
 | Node dependencies | `web/pnpm-lock.yaml`, `pnpm install --frozen-lockfile` | CI job `web` | `make web-setup` |
 | `.env.example` lists every setting the code reads | `.env.example` | `tests/test_setup.py` scans the code for `os.environ` reads and fails on a missing one; an empty `X_PATH=` that would replace a default is rejected | `pytest tests/test_setup.py` |
-| One command for the whole stack | `Makefile` (`up`), `ops/docker-compose.yml`, `ops/bootstrap_env.py`, `ops/Dockerfile`, `ops/Dockerfile.web` | `tests/test_setup.py` (compose structure, defaults, ports on 127.0.0.1, images unprivileged); `ops/compose_e2e.sh` | `make up` · `make compose-e2e` |
-| CI validates it | `.github/workflows/ci.yml`: parallel jobs `python`, `web`, `alerts`, `container`, `web-image`, `compose` | `tests/test_setup.py` (the jobs, their limits, the hash-checked install) | the same commands, locally |
+| One command for the whole stack | `Makefile` (`up`, `env-check`, `env-fill`), `ops/docker-compose.yml`, `ops/bootstrap_env.py`, `ops/env_check.py`, `ops/Dockerfile`, `ops/Dockerfile.web` | `tests/test_setup.py` (compose structure, defaults, ports on 127.0.0.1, images unprivileged, the settings the API and the web read all reach their container, `env-check`/`env-fill`); `ops/compose_e2e.sh` | `make up` · `make env-check` · `make compose-e2e` |
+| CI validates it | `.github/workflows/ci.yml`: parallel jobs `python`, `web` (typecheck, build and `pnpm test:all`), `alerts`, `container`, `web-image`, `compose` | `tests/test_setup.py` (the jobs, their limits, the hash-checked install, that the gate and the resilience tests are covered) | the same commands, locally |
 
 Measured on the same laptop: a fresh virtualenv with `pip install --require-hashes -r requirements-tracking.txt` (serving
 lock plus mlflow, 2,918 lines of lock) took 32 s; the serving lock alone is what the API image installs. The hermetic suite
-(`make test`, 681 tests) takes 40-50 s. The Docker base images (`python:3.11-slim`, `node:24-slim`) are tags, not digests, so a rebuild
+(`make test`: 945 passed, 1 skipped) takes 80 s. The Docker base images (`python:3.11-slim`, `node:24-slim`) are tags, not digests, so a rebuild
 can pick up a newer patch release of them (LIMITATIONS.md).
 
 **CI hooks.** Other branches add checks without rewriting the workflow: `make gate` runs whatever `eval.gate` checks (per-category
-floors included), and `ops/ci_optional.sh <target>` runs a Makefile target only if this checkout defines it (the `python` job
-calls it for `validate-data-ml`).
+floors included) and then `make validate-data-ml`; `make test` runs the whole `tests/` folder, `make test-resilience`'s files
+included. `ops/ci_optional.sh <target>` (runs a Makefile target only if this checkout defines it) is still there for a target a
+branch adds later. The `web` job also runs `pnpm test:all` (node:test, vitest on the DOM, and the HTTP tests against the production build).
+
+**Verifying does not write.** `make gate` and `make validate-data-ml` only check: they leave every versioned file as it was, and the
+`python` job fails if the suite or the gate rewrote one (`git status --porcelain`). The evidence in `docs/evidence/` is regenerated
+on purpose with `make evidence` (its date and commit are those of the run), and the evaluation reports with `make eval
+eval-adversarial eval-failures`. `validate-data-ml` warns, without failing, when the committed `data_ml_validation.json` lists
+different tests than the ones that ran: that is when to run `make evidence`.
 
 ### Without Docker
 

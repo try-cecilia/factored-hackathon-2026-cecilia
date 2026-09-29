@@ -107,7 +107,7 @@ def to_markdown(rows: list[dict], generated_at: str, code: str, pytest_line: str
     declared = "\n".join(f"- {d}" for d in DECLARED)
     return f"""# Validación de buenas prácticas de datos y ML (auto-generado)
 
-Generado por `make validate-data-ml` (`python -m eval.validate_data_ml`) el {generated_at} sobre el código `{code}`.
+Generado por `make evidence` (`python -m eval.validate_data_ml --out-dir docs/evidence`) el {generated_at} sobre el código `{code}`.
 Rúbrica: «Buena práctica de datos y ML: contratos, calidad, linaje, política de frescura, y al menos un componente aprendido
 contra una línea base, sin fuga de datos». Resultado global: **{verdict}**. {pytest_line}
 

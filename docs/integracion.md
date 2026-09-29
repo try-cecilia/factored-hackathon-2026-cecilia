@@ -466,13 +466,21 @@ proveedores de modelos) son opciones, nunca requisitos.
 
 ```bash
 make up                 # API + web sobre el warehouse de fixtures; escribe .env con secretos nuevos; http://127.0.0.1:3000 y :8000
+make env-check          # con un .env viejo: qué variables de .env.example le faltan (solo nombres) y si INGEST_ARGS leería S3; make up lo corre como aviso
+make env-fill           # agrega al .env solo las que faltan, con secretos generados; no cambia nada de lo que ya está
 make monitoring-up      # además Prometheus (con las reglas de alerta) y Grafana con su dashboard: :9090 y :3001
 make up-dataset RAW_DIR=/ruta/a/data/raw   # tus CSV locales, montados de solo lectura, ingeridos en el primer arranque
 make up-llm-local       # además un modelo local (Ollama en Docker); make up-llm-host usa el Ollama del host
 make compose-e2e        # levanta todo desde cero en un proyecto aparte y descartable, lo comprueba de punta a punta y lo baja (es el job `compose` del CI)
 make down               # baja el stack; sus volúmenes se conservan
+make evidence           # regenera docs/evidence/data_ml_validation.{md,json}; make gate y validate-data-ml verifican sin escribir
 make clean-volumes      # además borra los volúmenes (pregunta antes)
 ```
+
+La web del compose corre en modo producción: la consola de operador exige `WEB_PUBLIC_ORIGIN`, y el compose se la pasa
+(por defecto `http://127.0.0.1:${WEB_PORT}`, junto con `TRUSTED_CLIENT_IP_HEADER`, `OPERATOR_IDLE_SECONDS` y `UI_GALLERY`; están en
+`.env.example`). `make compose-e2e` entra por la web como un navegador: login de cliente y un turno de chat, login de operador por el
+formulario (con y sin el `Origin` correcto) y su cola, y `/dev/ui` en 404.
 
 Sin clave de modelo el asistente corre en modo degradado seguro: saldos simples desde datos verificados y todo lo demás a una
 persona. Requisitos de RAM y disco de los modelos locales, y por qué en macOS conviene el Ollama del host: `docs/operations.md`

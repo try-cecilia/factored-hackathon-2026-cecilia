@@ -135,7 +135,11 @@ Qué falta todavía: [`LIMITATIONS.md`](LIMITATIONS.md).
 make up                     # API + web sobre el warehouse de fixtures: http://127.0.0.1:3000 (web) y :8000 (chat); `make down` lo baja
 ```
 
-Sin clave de modelo corre en modo degradado seguro. Con monitoreo (Prometheus + Grafana), con tus CSV locales o con un modelo
+Sin clave de modelo corre en modo degradado seguro. Con un `.env` que ya tenías, `make up` no lo toca: `make env-check` (lo corre `make up`
+como aviso) lista las variables que le faltan respecto de `.env.example` (solo nombres) y avisa si `INGEST_ARGS` leería S3; `make env-fill` agrega
+las ausentes con secretos generados. Para probar la web: `http://127.0.0.1:3000/login` (cliente, con un PIN de prueba de la página del chat) y
+`http://127.0.0.1:3000/operador/login` (consola, con `ADMIN_API_KEY` y la clave de `OPERATOR_KEYS` de tu `.env`). `make compose-e2e` comprueba todo eso
+en un proyecto Docker aparte, sin tocar el tuyo. Con monitoreo (Prometheus + Grafana), con tus CSV locales o con un modelo
 local (Ollama): [`docs/operations.md`](docs/operations.md#local-development). Sin Docker:
 
 ```bash
@@ -146,7 +150,7 @@ make ingest                 # warehouse completo desde S3 (~6 min: 1,1 GB de arc
 make serve                  # http://localhost:8000 — chat web con logins de prueba del sandbox
 make test                   # 346 tests herméticos: warehouse de fixtures, sin S3, sin claves de API
 make all                    # reconstruye cada número de los docs
-make validate-data-ml       # contratos, calidad, linaje, frescura, clasificador vs línea base y fuga: PASS/FAIL en docs/evidence/data_ml_validation.md
+make validate-data-ml       # contratos, calidad, linaje, frescura, clasificador vs línea base y fuga: PASS/FAIL, sin escribir nada; `make evidence` regenera docs/evidence/data_ml_validation.md
 make mlflow-ui              # cada selección y evaluación del clasificador, registrada en MLflow
 ```
 

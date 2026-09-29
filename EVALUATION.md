@@ -130,8 +130,8 @@ diversity mitigates it; a human-authored or production-sampled set is the fix
 (LIMITATIONS.md).
 
 **What is checked, and by what.** `make validate-data-ml` runs
-`tests/test_data_ml_validation.py` and writes
-[`docs/evidence/data_ml_validation.md`](docs/evidence/data_ml_validation.md).
+`tests/test_data_ml_validation.py` (`make evidence` writes
+[`docs/evidence/data_ml_validation.md`](docs/evidence/data_ml_validation.md); the check itself writes nothing).
 For this component it fails if:
 - the committed report is not what the code and the data produce, or the
   deployed model does not give the reported model's probabilities;
