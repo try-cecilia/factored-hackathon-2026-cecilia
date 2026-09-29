@@ -125,7 +125,9 @@ lectura y trazas. Cómo se configuran las claves:
   huérfana). Si el navegador perdió la respuesta ganadora, la cookie vieja se rechaza durante 30 segundos y luego se trata
   como una cookie desconocida. Ninguna respuesta a un identificador muerto (vencido, reemplazado o desconocido) borra la cookie de
   sesión: solo la borra el cierre de sesión explícito, y un ingreso nuevo la sobrescribe; así una respuesta lenta a un GET no
-  puede borrar la sesión que otro ingreso acaba de fijar.
+  puede borrar la sesión que otro ingreso acaba de fijar. Lo mismo vale para los errores de la API: un 401 al leer (la clave de lectura se
+  rotó) invalida en el servidor solo la sesión que usó esa petición, por identificador y sin `Set-Cookie`; 403, 429 y 5xx no
+  terminan ninguna sesión. El borrado de la cookie queda reservado al cierre de sesión explícito.
 - *Destino tras el ingreso.* Se decodifica y normaliza como lo haría un navegador (puntos, `%2f`, `%5c`, tabuladores,
   barras invertidas) y solo se acepta una ruta propia que no empiece con `//`; ante la duda va a `/operador/cola`.
 - *Dónde viven las claves.* Nunca en el JavaScript del navegador, en `localStorage` ni en una cookie. El servidor de la web

@@ -1,6 +1,6 @@
 import '@tanstack/react-start/server-only'
 import { agentFetch } from './agent-api'
-import { endOperatorSession, getOperatorSession } from './operator-session'
+import { getOperatorSession, invalidateOperatorSession, operatorSessionId } from './operator-session'
 
 // What every operator server function returns: the data, or the HTTP status the UI should explain.
 // 0 = no BFF session; 403 = the session has no operator key (reading is allowed, acting is not).
@@ -16,12 +16,14 @@ async function call<T>(path: string, headers: Record<string, string>, method: 'G
   return { ok: true, data: (await response.json()) as T }
 }
 
-/** A read with the session's admin key; `touch` is false for the automatic refresh. A rejected key ends the session. */
+/** A read with the session's admin key; `touch` is false for the automatic refresh. A rejected key ends that session on the server. */
 export async function adminRead<T>(path: string, touch: boolean): Promise<Result<T>> {
+  const id = operatorSessionId() // which session this request used, taken before waiting on the API
   const session = getOperatorSession(touch)
   if (!session) return { ok: false, status: 0 }
   const result = await call<T>(path, { 'X-Admin-Key': session.adminKey }, 'GET')
-  if (!result.ok && result.status === 401) endOperatorSession()
+  // Only that session is ended, and without a Set-Cookie: a late 401 must not delete the cookie of a newer login.
+  if (!result.ok && result.status === 401) invalidateOperatorSession(id)
   return result
 }
 
