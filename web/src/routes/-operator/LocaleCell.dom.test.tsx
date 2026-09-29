@@ -21,9 +21,14 @@ describe('LocaleCell', () => {
   ] as const)('a case without language keeps the short mark visible and says the word to assistive technology (%s)', (locale, full) => {
     for (const language of [undefined, null, ''] as const) {
       const { container, unmount } = renderWithI18n(<LocaleCell row={row({ language })} />, locale)
+      expect(screen.getAllByText(full)).toHaveLength(1) // the words are read once
       expect(screen.getByText(full).className).toContain('sr-only') // by text: what a screen reader reads
-      expect(container.querySelector('[aria-hidden="true"]')?.textContent).toBe('MX·?')
-      expect(container.querySelector('[title]')?.getAttribute('title')).toBe(full)
+      const mark = container.querySelector('[aria-hidden="true"]')
+      expect(mark?.textContent).toBe('MX·?')
+      // The title is on the hidden mark: on the element a screen reader reads it would be described a second time.
+      expect(container.querySelectorAll('[title]')).toHaveLength(1)
+      expect(container.querySelector('[title]')).toBe(mark)
+      expect(mark?.getAttribute('title')).toBe(full)
       unmount()
     }
   })

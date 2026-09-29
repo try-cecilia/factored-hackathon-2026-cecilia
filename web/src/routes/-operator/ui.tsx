@@ -104,15 +104,15 @@ export function KeyValues({ data, label }: { data: Record<string, unknown>; labe
 export const Code = ({ children }: { children: ReactNode }) => <span className="op-mono">{children}</span>
 
 /** Country and language of a queue row. Without a language the column shows `MX·?`, which is all the width has room for; the words
- * ("Desconocido") are for screen readers and for a long press, so the case does not read as having a language it does not have. */
+ * ("Desconocido") are for screen readers (once: the `title` sits on the hidden mark) and for a long press, so the case does not read as having a language it does not have. */
 export function LocaleCell({ row }: { row: QueueRow }) {
   const t = useT()
   if (row.language) return <>{localeOf(row)}</>
   const full = localeOf(row, t('operator.queue.unknownLanguage'))
   return (
-    <span title={full}>
-      <span aria-hidden="true">{localeOf(row)}</span>
+    <>
+      <span aria-hidden="true" title={full}>{localeOf(row)}</span>
       <span className="sr-only">{full}</span>
-    </span>
+    </>
   )
 }
