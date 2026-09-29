@@ -239,6 +239,44 @@ describe('the texts of the case', () => {
     expect(within(block('Próximo passo sugerido')).getByText(/^Revisar a movimentação/)).toBeTruthy()
   })
 
+  // What a lookup raised is English and can carry ids and paths: the code carries the field or the type of error, so the operator
+  // reads one sentence in their language, and the message stays in the English fallback (which the panel does not show over a code).
+  const rawMessage = 'unexpected failure in get_account_summary: OperationalError: IO Error: Cannot open file "C:/srv/data/warehouse/bank.duckdb"'
+  const failed = {
+    reason: `Tool failure: ${rawMessage}`,
+    open_questions: ['A lookup failed; answer requires a manual check.'],
+    suggested_next_step: 'Answer manually from the core system and report the lookup that failed.',
+    reason_code: { code: 'tool_failure', params: { error_type: 'ToolError' } },
+    open_question_codes: [{ code: 'manual_check', params: {} }],
+    next_step_code: 'tool_failure',
+  }
+  const missing = {
+    reason: 'Data needed for a verified answer is unavailable: balance missing for product PRD-AB12CD34EF56',
+    open_questions: ["Look up 'current_balance' in the core system."],
+    suggested_next_step: 'Look up the missing data in the core system and answer the customer.',
+    reason_code: { code: 'data_unavailable', params: { field: 'current_balance' } },
+    open_question_codes: [{ code: 'lookup_field', params: { field: 'current_balance' } }],
+    next_step_code: 'data_unavailable',
+  }
+  it.each([
+    ['es', failed, 'Falló una consulta (ToolError): hace falta una verificación manual.'],
+    ['pt', failed, 'Falhou uma consulta (ToolError): é preciso uma verificação manual.'],
+    ['es', missing, 'Falta un dato necesario para responder con verificación: current_balance.'],
+    ['pt', missing, 'Falta um dado necessário para responder com verificação: current_balance.'],
+  ] as const)('a lookup that failed reads as one sentence in %s, without the English message (%#)', (locale, texts, sentence) => {
+    panel(ticket('open', texts), locale)
+    expect(screen.getByText(sentence, { exact: false })).toBeTruthy() // the reason shares its line with the rule
+    const page = document.body.textContent ?? ''
+    for (const raw of ['PRD-AB12CD34EF56', 'bank.duckdb', 'C:/srv', 'balance missing', 'Cannot open file', 'Tool failure', 'Data needed']) expect(page).not.toContain(raw)
+  })
+
+  it('a missing data with no field named reads without a placeholder', () => {
+    const unspecified = { ...missing, reason_code: { code: 'data_unavailable_unspecified', params: {} } }
+    panel(ticket('open', unspecified), 'es')
+    expect(screen.getByText('Falta un dato necesario para responder con verificación.', { exact: false })).toBeTruthy()
+    expect(document.body.textContent).not.toContain('balance missing')
+  })
+
   it('the evidence type, the keys of the facts and the review reason are written too', () => {
     panel(ticket('open', { ...english, ...codes }), 'es')
     expect(screen.getByRole('heading', { name: 'Pedido denegado · P-9' })).toBeTruthy()
