@@ -1,7 +1,9 @@
 import { Link } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 import { I18nProvider, useI18n, useT } from '../../i18n/context'
+import { es } from '../../i18n/es'
 import { locales, localeNames, type Locale } from '../../i18n/locales'
+import { pt } from '../../i18n/pt'
 import { LanguageSwitcher } from '../LanguageSwitcher'
 import { LoadersGallery } from '../loaders/LoadersGallery'
 import { MessagesGallery } from '../messages/MessagesGallery'
@@ -10,6 +12,9 @@ import { TableGallery } from '../table/TableGallery'
 import { ButtonGallery } from './ButtonGallery'
 import { Section } from './Section'
 import './Gallery.css'
+
+// The whole kit in both languages: the full dictionaries, only in the gallery's own chunk (the pages load theirs by area).
+const dictionaries = { es, pt }
 
 const sections = ['buttons', 'language', 'loaders', 'sidebar', 'table', 'messages'] as const
 
@@ -54,7 +59,7 @@ export function Gallery({ both }: { both: boolean }) {
         </header>
         <div className="gal__lang">
           {shown.map((code) => (
-            <I18nProvider key={code} locale={code}>
+            <I18nProvider key={code} locale={code} messages={dictionaries[code]}>
               <div className="gal__lang" data-locale={code} lang={code}>
                 {both && <p className="gal__lang-tag">{localeNames[code]}</p>}
                 <Sections code={code} />

@@ -520,11 +520,29 @@ Colombia: sin voseo ni tuteo imperativo (infinitivos y construcciones nominales:
    dinámicos van como `{nombre}`).
 2. Escribir su traducción en `web/src/i18n/dict/pt/<área>.ts`. Está tipado contra el español: si falta una clave o sobra
    una, `make web-typecheck` falla.
-3. Usarlo: `const t = useT()` y `t('shell.customer', { id })`. Fuera de React, `translate(locale, clave, params)`. El título
-   de una ruta usa `headTitle(matches, clave)`. Una clave inexistente no compila.
+3. Usarlo: `const t = useT()` y `t('shell.customer', { id })`. Fuera de React, `translate(messages, clave, params)`, con el
+   diccionario que da el loader raíz. El título de una ruta usa `headTitle(matches, clave)`, que lee ese mismo diccionario.
+   Una clave inexistente no compila.
+
+**Diccionarios por área.** Ninguna página descarga todos los textos: cada una carga, en su idioma, los espacios de claves
+(`common`, `shell`, `operator`...) de su área, y nada más. Las áreas y sus espacios están en `web/src/i18n/areas.ts`: cliente
+(`/`, `/login`, `/chat`), operador (`/operador/...`), monitoreo (lo que suman `/operador/monitoreo` y `/operador/trazas`) y
+galería (`/dev/ui`, que carga los diccionarios completos en su propio chunk). El loader raíz (`routes/__root.tsx`) resuelve el
+idioma y el área de la ruta, y el diccionario viaja en sus datos: el HTML del servidor y la hidratación usan el mismo, y los
+componentes de carga y de error de una ruta lo tienen aunque su loader falle. Se vuelve a cargar al cambiar de idioma y al
+entrar a una página cuya área no está cargada (de la cola al monitoreo), antes de dibujarla. Por eso:
+
+- Una clave nueva en un espacio que ya existe no pide nada más.
+- Un espacio nuevo es un archivo en cada `dict/`, una línea en `es.ts` y `pt.ts`, una entrada por idioma en `sources` de
+  `areas.ts` y su nombre en la lista de cada área que lo use. Si una pantalla usa una clave de un espacio que su área no carga,
+  en pantalla aparece la clave tal cual; `web/src/i18n/areas.test.ts` sigue los imports de las rutas de cada área y falla antes.
+- Una ruta nueva fuera de esos prefijos es del área cliente: si es de otra, agregarla en `areasOf` y en `areas.test.ts`.
+
+El costo: el diccionario del área va dentro del HTML de cada página (unos 6,5 kB en gzip para `/chat` o la cola) en vez de
+un JS que el navegador guarda en caché; a cambio, el JS inicial ya no trae los textos de las otras áreas ni del otro idioma.
 
 `make web-test` comprueba además que las dos lenguas tengan las mismas claves y los mismos marcadores, y que el español no
-tenga voseo. Un área nueva se agrega como un archivo en cada `dict/` y una línea en `es.ts` y `pt.ts`.
+tenga voseo.
 
 **Galería.** `/dev/ui` muestra cada componente en todas sus variantes y estados, para cotejarlos contra los artboards de
 Paper; con `?both=1` dibuja el kit entero en español y en portugués. Existe con `make serve-web` (desarrollo) o con un

@@ -58,3 +58,17 @@ describe('what the agent API answers to a read decides the session on the server
     })
   }
 })
+
+describe('each console page carries the texts of its areas, in its language', () => {
+  test('the queue has the operator\'s texts and neither the monitor\'s nor the customer\'s; the traces add the monitor\'s', async () => {
+    const cookie = sessionCookie(await login())!
+    const queue = await (await app.send('/operador/cola', { headers: { Cookie: cookie } })).text()
+    assert.match(queue, /<title>Cola · Cecilai<\/title>/)
+    assert.ok(!queue.includes('Solo lectura. Sale de los últimos turnos'), 'monitor texts on the queue')
+    assert.ok(!queue.includes('Nada se hace sin tu confirmación'), 'customer texts on the queue')
+    const traces = await (await app.send('/operador/trazas', { headers: { Cookie: cookie } })).text()
+    assert.match(traces, /<title>Trazas · Cecilai<\/title>/)
+    assert.match(traces, /Solo lectura\. Sale de los últimos turnos/)
+    for (const html of [queue, traces]) assert.doesNotMatch(html, />\s*(common|loaders|sidebar|table|operator|monitor)\.[a-z][\w.]*\s*</)
+  })
+})

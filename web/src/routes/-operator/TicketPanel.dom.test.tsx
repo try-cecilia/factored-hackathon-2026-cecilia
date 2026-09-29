@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { DeskState, DeskStatus, Ticket } from '../../server/operator.functions'
 import { I18nProvider } from '../../i18n/context'
-import { renderWithI18n } from '../../test/render'
+import { renderWithI18n, dictionaries } from '../../test/render'
 import { TicketPanel, type TicketPanelProps } from './TicketPanel'
 
 const NOW = Date.now() / 1000
@@ -91,7 +91,7 @@ describe('version conflict (409)', () => {
 
     // The server now holds v4: diego.m took it back to the assistant.
     const now = ticket('open', {}, { version: 4, history: [{ action: 'release', status: 'handed_back', operator: 'diego.m', ts: NOW - 60, detail: {} }] })
-    rerender(<I18nProvider locale="es"><TicketPanel ticket={now} view={{ canAct: true, operator: 'ana.ruiz' }} act={act} reload={reload} /></I18nProvider>)
+    rerender(<I18nProvider locale="es" messages={dictionaries.es}><TicketPanel ticket={now} view={{ canAct: true, operator: 'ana.ruiz' }} act={act} reload={reload} /></I18nProvider>)
     const alert = await screen.findByRole('alert')
     expect(within(alert).getByText('No se aplicó: el caso cambió')).toBeTruthy()
     expect(alert.textContent).toMatch(/v3.*v4.*diego\.m lo devolvió a la asistente/)
@@ -122,7 +122,7 @@ describe('version conflict when the reload fails', () => {
     const utils = renderWithI18n(<TicketPanel ticket={ticket('claimed', {}, { version: 3 })} view={view} act={act} reload={reload} />)
     const user = userEvent.setup()
     await user.click(button(/Aprobar rastreo/)!)
-    utils.rerender(<I18nProvider locale="es"><TicketPanel ticket={ticket('open', {}, { version: 4, history: release })} view={view} act={act} reload={reload} /></I18nProvider>)
+    utils.rerender(<I18nProvider locale="es" messages={dictionaries.es}><TicketPanel ticket={ticket('open', {}, { version: 4, history: release })} view={view} act={act} reload={reload} /></I18nProvider>)
     await screen.findByText('No se aplicó: el caso cambió')
     return { user, act }
   }

@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import { es } from '../../i18n/es.ts'
+import { pt } from '../../i18n/pt.ts'
 import { translator } from '../../i18n/translate.ts'
 import { ageShort, ago, categoryName, dispositionName, explainKey, money, shortStamp } from './format.ts'
 
@@ -21,12 +23,12 @@ test('ago reads in the language of the interface', () => {
 })
 
 test('a known category is translated, an unknown one is shown as it came, a missing one is a dash', () => {
-  assert.equal(categoryName(translator('es'), 'fraud'), 'Fraude')
-  assert.equal(categoryName(translator('pt'), 'account_takeover'), 'Invasão de conta')
-  assert.equal(categoryName(translator('es'), 'brand_new'), 'brand_new')
-  assert.equal(categoryName(translator('es'), 'toString'), 'toString')
-  assert.equal(categoryName(translator('es'), null), '—')
-  assert.equal(dispositionName(translator('es'), 'ESCALATE'), 'Derivado')
+  assert.equal(categoryName(translator(es), 'fraud'), 'Fraude')
+  assert.equal(categoryName(translator(pt), 'account_takeover'), 'Invasão de conta')
+  assert.equal(categoryName(translator(es), 'brand_new'), 'brand_new')
+  assert.equal(categoryName(translator(es), 'toString'), 'toString')
+  assert.equal(categoryName(translator(es), null), '—')
+  assert.equal(dispositionName(translator(es), 'ESCALATE'), 'Derivado')
 })
 
 test('money and evidence stamps', () => {
@@ -49,9 +51,9 @@ test('each failure status maps to a key, and a failed action reads differently f
 test('every disposition a turn can end with has a name in both languages, never the raw code', () => {
   // AUTO_RESOLVE, CLARIFY, ABSTAIN and ESCALATE come from agent/policy/router.py; REAUTH_REQUIRED from agent/core/orchestrator.py.
   for (const code of ['AUTO_RESOLVE', 'CLARIFY', 'ABSTAIN', 'ESCALATE', 'REAUTH_REQUIRED']) {
-    for (const locale of ['es', 'pt'] as const) assert.notEqual(dispositionName(translator(locale), code), code, `${code} in ${locale}`)
+    for (const locale of ['es', 'pt'] as const) assert.notEqual(dispositionName(translator({ es, pt }[locale]), code), code, `${code} in ${locale}`)
   }
-  assert.equal(dispositionName(translator('es'), 'REAUTH_REQUIRED'), 'Reingreso requerido')
-  assert.equal(dispositionName(translator('pt'), 'REAUTH_REQUIRED'), 'Novo acesso necessário')
-  assert.equal(dispositionName(translator('es'), 'SOMETHING_NEW'), 'SOMETHING_NEW')
+  assert.equal(dispositionName(translator(es), 'REAUTH_REQUIRED'), 'Reingreso requerido')
+  assert.equal(dispositionName(translator(pt), 'REAUTH_REQUIRED'), 'Novo acesso necessário')
+  assert.equal(dispositionName(translator(es), 'SOMETHING_NEW'), 'SOMETHING_NEW')
 })

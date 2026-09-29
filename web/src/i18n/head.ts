@@ -1,9 +1,7 @@
-import { defaultLocale, isLocale, type Locale } from './locales.ts'
-import { translate, type MessageKey, type Params } from './translate.ts'
+import { translate, type Dictionary, type MessageKey, type Params } from './translate.ts'
 
-/** For a route's `head()`: the locale the root loader resolved, and a translated title. */
+/** For a route's `head()`: a title from the texts the root loader resolved for the page, in its language. */
 export function headTitle(matches: ReadonlyArray<{ routeId: string; loaderData?: unknown }>, key: MessageKey, params?: Params) {
-  const root = matches.find((match) => match.routeId === '__root__')?.loaderData as { locale?: unknown } | undefined
-  const locale: Locale = isLocale(root?.locale) ? root.locale : defaultLocale
-  return { meta: [{ title: translate(locale, key, params) }] }
+  const root = matches.find((match) => match.routeId === '__root__')?.loaderData as { messages?: Dictionary } | undefined
+  return { meta: [{ title: translate(root?.messages ?? {}, key, params) }] }
 }

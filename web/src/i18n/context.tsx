@@ -1,13 +1,14 @@
 import { createContext, use, useMemo, type ReactNode } from 'react'
 import type { Locale } from './locales.ts'
-import { translator, type Translate } from './translate.ts'
+import { translator, type Dictionary, type Translate } from './translate.ts'
 
 type I18n = { locale: Locale; t: Translate }
 
 const I18nContext = createContext<I18n | null>(null)
 
-export function I18nProvider({ locale, children }: { locale: Locale; children: ReactNode }) {
-  const value = useMemo<I18n>(() => ({ locale, t: translator(locale) }), [locale])
+/** `messages`: the texts of the page's areas in `locale`, as the root loader resolved them (`areas.ts`). */
+export function I18nProvider({ locale, messages, children }: { locale: Locale; messages: Dictionary; children: ReactNode }) {
+  const value = useMemo<I18n>(() => ({ locale, t: translator(messages) }), [locale, messages])
   return <I18nContext value={value}>{children}</I18nContext>
 }
 
