@@ -146,16 +146,17 @@ Los comandos asumen Linux o macOS con `make`. En Windows, usá WSL o ejecutá el
 
 ### Frontend con TanStack Start
 
-El nuevo frontend vive en `web/`. Por ahora contiene una página de inicio y
-un proxy de salud del backend en `/api/agent/health`. El chat y la demo siguen
-disponibles en la URL raíz de la API de Python.
+El nuevo frontend vive en `web/`: inicio de sesión del cliente, el chat (`/chat`) sobre el design system de
+Cecil.ai y un proxy de salud del backend en `/api/agent/health`. La UI de demo anterior sigue disponible en la URL
+raíz de la API de Python. Cómo se conecta y cómo se prueba: `docs/integracion.md`, sección 8.
 
 Con Node 24 y pnpm 10.33.2 instalados, usá el mismo Makefile de la raíz:
 
 ```bash
 make web-setup              # instala las dependencias fijadas del frontend
 make serve-all                   # web: http://127.0.0.1:3000, Python: http://127.0.0.1:8000
-make web-typecheck web-build
+make serve-all-fixture           # lo mismo sobre el warehouse de los tests y un modelo simulado: sin S3 ni claves
+make web-typecheck web-test web-build
 ```
 
 Activá primero el entorno de Python o pasá `PY=.venv/bin/python` a `make`.

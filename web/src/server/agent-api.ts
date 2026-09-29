@@ -2,7 +2,8 @@ import '@tanstack/react-start/server-only'
 import { getRequestHeader, getRequestIP } from '@tanstack/react-start/server'
 
 export class AgentApiError extends Error {
-  constructor(readonly status: number) {
+  // `timeout` means the request may have been processed; `network` means it never reached the API.
+  constructor(readonly status: number, readonly reason?: 'timeout' | 'network') {
     super(`agent API responded ${status}`)
   }
 }
@@ -11,6 +12,8 @@ type RequestOptions = {
   method?: 'GET' | 'POST' | 'DELETE'
   body?: unknown
   token?: string
+  timeoutMs?: number
+  headers?: Record<string, string>
 }
 
 function clientIp() {
@@ -18,8 +21,8 @@ function clientIp() {
   return (trusted && getRequestHeader(trusted)) || getRequestIP()
 }
 
-export async function agentFetch(path: string, { method = 'GET', body, token }: RequestOptions = {}) {
-  const headers = new Headers({ Accept: 'application/json' })
+export async function agentFetch(path: string, { method = 'GET', body, token, timeoutMs = 5_000, headers: extra }: RequestOptions = {}) {
+  const headers = new Headers({ Accept: 'application/json', ...extra })
   const ip = clientIp()
   if (ip) headers.set('X-Client-IP', ip)
   if (token) headers.set('X-Session-Token', token)
@@ -30,10 +33,10 @@ export async function agentFetch(path: string, { method = 'GET', body, token }: 
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
-      signal: AbortSignal.timeout(5_000),
+      signal: AbortSignal.timeout(timeoutMs),
     })
-  } catch {
-    throw new AgentApiError(503)
+  } catch (error) {
+    throw new AgentApiError(503, error instanceof Error && error.name === 'TimeoutError' ? 'timeout' : 'network')
   }
 }
 

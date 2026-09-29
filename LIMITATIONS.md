@@ -138,6 +138,17 @@ service, and as our own roadmap.
   ids, 8+ digit numbers, emails and document numbers, because the system
   must mask those even when the customer types them.
 - No WAF or bot protection beyond per-session and per-IP rate limits.
+- **Web chat: retries rely on an idempotency key.** Each message travels with an `Idempotency-Key` and the API keeps
+  the reply for as long as the session lives, so a retry after a lost answer does not file a second ticket or confirm
+  twice. Replies live in the single-writer SQLite state like sessions; if that file is lost the turn runs again, and
+  past 50,000 kept replies the oldest are dropped and their retries get a 409 instead of a reply. Keys of live
+  sessions are never evicted: at 500,000 held keys new turns get a 503 with `Retry-After` until sessions end.
+- **Web chat: the conversation does not survive a login.** An expired session ends its conversation with it (the
+  API keys it by session), so signing in again starts from zero; there is no "stay signed in" because the API
+  has no refresh endpoint. Case status is read on demand ("Actualizar estado"), not pushed.
+- **Web chat: contrast and screen readers are checked by hand only.** Text contrast was computed in the browser on
+  the chat page (no pair under 4.5:1; oklch/color-mix values it cannot parse are skipped), focus rings and the
+  live region were inspected, but no assistive technology or automated audit (axe) has run.
 
 ## Operations
 
