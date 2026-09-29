@@ -71,7 +71,8 @@ export function AppShell({ session, kit, children }: { session: Session; kit: Pr
   useDismiss(menuOpen, phone, () => setMenuOpen(false), side)
   useDismiss(demoOpen, narrow, () => setDemoOpen(false), demo)
   // Always modal, on every screen: the view is over the page, and Escape gives the focus back to what opened it.
-  useDismiss(caseOpen, true, closeCase, casePanel)
+  // Opened from the phone drawer's row, the drawer closes at once: the focus comes back to the menu button instead.
+  useDismiss(caseOpen, true, closeCase, casePanel, () => document.getElementById('shell-menu'))
   // Leaving the phone size closes the drawer that no longer exists.
   useEffect(() => {
     if (!phone) setMenuOpen(false)
@@ -169,6 +170,7 @@ export function AppShell({ session, kit, children }: { session: Session; kit: Pr
         <div className="shell__main" inert={behind ? true : undefined}>
           <header className="shell__bar">
             <IconButton
+              id="shell-menu"
               className="shell__menu"
               variant="ghost"
               size="md"

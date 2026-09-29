@@ -156,4 +156,18 @@ describe('the case view', () => {
     expect(within(dialog).getByRole('button', { name: 'Atualizar o status' })).toBeTruthy()
     expect(within(dialog).getByRole('button', { name: 'Fechar o caso' })).toBeTruthy()
   })
+
+  it('on a phone, opened from the drawer\'s row, the drawer closes and Escape gives the focus to the menu button', async () => {
+    window.matchMedia = ((query: string) => ({ matches: true, media: query, addEventListener: () => {}, removeEventListener: () => {} })) as unknown as typeof window.matchMedia
+    const user = userEvent.setup()
+    const { container } = await draw()
+    await user.click(screen.getByRole('button', { name: 'Abrir el menú' }))
+    const side = container.querySelector('#shell-side') as HTMLElement
+    await user.click(await within(side).findByRole('button', { name: /Robo o clonación de tarjeta/ }))
+    expect(await screen.findByRole('dialog', { name: 'Robo o clonación de tarjeta' })).toBeTruthy()
+    expect(side.hasAttribute('inert')).toBe(true)
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Abrir el menú' }))
+  })
 })
