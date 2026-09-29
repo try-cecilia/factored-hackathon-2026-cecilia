@@ -191,7 +191,21 @@ def test_the_ci_runs_on_main_pushes_and_on_every_pull_request_and_only_cancels_p
     assert not triggers["pull_request"]  # no branch filter: any base branch
     assert "workflow_dispatch" in triggers  # by hand, on a branch without a PR
     # a second merge must not cancel the run that verifies the first one on main
-    assert WORKFLOW["concurrency"]["cancel-in-progress"] == "${{ github.event_name == 'pull_request' }}"
+    assert _compact(WORKFLOW["concurrency"]["cancel-in-progress"]) == "${{github.event_name=='pull_request'}}"
+
+
+def _compact(expression):
+    return "".join(str(expression).split())
+
+
+def test_the_ci_groups_a_pull_request_by_its_number_and_gives_every_other_run_a_group_of_its_own():
+    # a group keeps one active and one pending run and a third cancels the pending one, so a shared group for pushes to
+    # main (or a manual run on main) would leave a commit unverified
+    group = _compact(WORKFLOW["concurrency"]["group"])
+    assert group.startswith("ci-${{") and group.endswith("}}")
+    condition, _, otherwise = group[len("ci-${{"):-2].partition("||")
+    assert condition == "github.event_name=='pull_request'&&format('pr-{0}',github.event.pull_request.number)"
+    assert otherwise == "github.run_id"  # not github.ref: main's pushes and dispatches would share one group
 
 
 def test_the_ci_runs_every_layer_in_parallel_jobs_with_a_time_limit():
