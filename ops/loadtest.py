@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import os
 import socket
 import statistics
@@ -114,13 +115,18 @@ def percentile(values: list[float], p: float) -> float | None:
     return round(values[min(len(values) - 1, int(p * (len(values) - 1)))], 1) if values else None
 
 
-async def drive(base: str, clients: int, requests: int, sessions: list[str], honor_retry_after: bool = True) -> dict:
+async def drive(base: str, clients: int, requests: int, sessions: list[str], honor_retry_after: bool = True,
+                message: str = "cual es mi saldo", expect: tuple[str, str, bool] = ("AUTO_RESOLVE", "resolved", False)) -> dict:
     """Closed loop: each client sends its next message as soon as the last answer arrives, until `requests` are sent.
-    A well-behaved client waits out `Retry-After` after a 429 or 503; `honor_retry_after=False` is a client that hammers."""
+    A well-behaved client waits out `Retry-After` after a 429 or 503; `honor_retry_after=False` is a client that hammers.
+    Every 200 is checked against `expect` = (disposition, category, whether it carries a ticket id): an answer of
+    another kind is counted in `wrong_outcome`, so a scenario cannot measure something else than what it names."""
     import httpx
 
     left = [requests]
     results: list[tuple[int, float, bool]] = []
+    wrong: list[int] = []
+    tickets: set[str] = set()
     async with httpx.AsyncClient(base_url=base, timeout=60, limits=httpx.Limits(max_connections=clients + 5)) as c:
         async def client(i: int) -> None:
             # A ramp of 5 ms per client: 128+ connections opened in the same instant overflow the OS accept queue
@@ -130,8 +136,14 @@ async def drive(base: str, clients: int, requests: int, sessions: list[str], hon
             while left[0] > 0:
                 left[0] -= 1
                 t0 = time.perf_counter()
-                r = await c.post("/chat", json={"session_token": tok, "message": "cual es mi saldo"})
+                r = await c.post("/chat", json={"session_token": tok, "message": message})
                 results.append((r.status_code, (time.perf_counter() - t0) * 1000, "retry-after" in r.headers))
+                if r.status_code == 200:
+                    body = r.json()
+                    if (body["disposition"], body["category"], bool(body.get("ticket_id"))) != expect:
+                        wrong.append(1)
+                    elif body.get("ticket_id"):
+                        tickets.add(body["ticket_id"])
                 if honor_retry_after and r.status_code in (429, 503):
                     await asyncio.sleep(min(float(r.headers.get("retry-after", 1)), 10))
 
@@ -143,7 +155,8 @@ async def drive(base: str, clients: int, requests: int, sessions: list[str], hon
     return {"clients": clients, "sent": len(results), "ok": len(by(200)), "rate_limited_429": len(by(429)), "busy_503": len(by(503)),
             "other": len([1 for c_, _, _ in results if c_ not in (200, 429, 503)]), "served_per_s": round(len(by(200)) / wall, 1),
             "ok_p50_ms": percentile(by(200), 0.5), "ok_p95_ms": percentile(by(200), 0.95),
-            "refused_p95_ms": percentile(by(503) + by(429), 0.95), "refusals_with_retry_after": f"{sum(ra for _, ra in refused)}/{len(refused)}"}
+            "refused_p95_ms": percentile(by(503) + by(429), 0.95), "refusals_with_retry_after": f"{sum(ra for _, ra in refused)}/{len(refused)}",
+            "wrong_outcome": len(wrong), "ticket_ids": tickets}
 
 
 def table(rows: list[dict]) -> str:
@@ -194,14 +207,27 @@ def run_http(a) -> None:
            f"chat_queue_wait_seconds={limits['chat_queue_wait_seconds']} retry_after_seconds={limits['retry_after_seconds']}; "
            f"rate limits raised out of the way for this run. Clients "
            f"{'ignore Retry-After and resend at once' if a.ignore_retry_after else 'wait out Retry-After'}.\n"]
-    for title, down in (("Model answering", False), ("Model down (every turn falls back to a handoff)", True)):
+    balance, movements = "cual es mi saldo", "movimientos de mi tarjeta"
+    scenarios = (  # (title, model down, message, expected (disposition, category, has a ticket))
+        ("Model answering", False, balance, ("AUTO_RESOLVE", "resolved", False)),
+        ("Model down: degraded resolution (a plain balance question is answered without the model)", True, balance,
+         ("AUTO_RESOLVE", "resolved", False)),
+        ("Model down: handoff (a request that needs the model is handed to a person, and a ticket is written)", True, movements,
+         ("ESCALATE", "llm_unavailable", True)),
+    )
+    for title, down, message, expect in scenarios:
         model.down = down
         rows = []
         for n in a.levels:
-            Path(os.environ["HUMAN_QUEUE_PATH"]).write_text("")  # the queue is read linearly: keep each level's tickets its own
-            asyncio.run(drive(base, min(n, 4), 8, sessions))  # warm the connections and the warehouse
-            rows.append(asyncio.run(drive(base, n, max(a.requests, n * 3), sessions, not a.ignore_retry_after)))
-        out.append(f"## {title}\n\n{table(rows)}\n")
+            queue = Path(os.environ["HUMAN_QUEUE_PATH"])
+            queue.write_text("")  # the queue is read linearly: keep each level's tickets its own
+            asyncio.run(drive(base, min(n, 4), 8, sessions, message=message, expect=expect))  # warm connections and the warehouse
+            queue.write_text("")
+            row = asyncio.run(drive(base, n, max(a.requests, n * 3), sessions, not a.ignore_retry_after, message, expect))
+            filed = {json.loads(line)["ticket_id"] for line in queue.read_text(encoding="utf-8").splitlines() if line.strip()}
+            row["tickets_written"] = len(filed & row.pop("ticket_ids"))  # a ticket the API named is a ticket that is on disk
+            rows.append(row)
+        out.append(f"## {title.split(' (')[0]}\n\n{title.split(' (')[1][:-1].capitalize() if ' (' in title else ''}\n\n{table(rows)}\n")
     state = httpx.get(f"{base}/admin/capacity", headers={"X-Admin-Key": "loadtest"}).json()["state"]
     out.append(f"Server counters at the end: {state}\n")
     # Rate limits on their real defaults: one session sending as fast as it can.
