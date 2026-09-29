@@ -123,7 +123,9 @@ lectura y trazas. Cómo se configuran las claves:
   (tomar y borrar): de dos ingresos simultáneos con la misma cookie solo uno crea sesión; el otro vuelve al ingreso con un
   aviso y **sin tocar la cookie de sesión** (un borrado que llegara después del Set-Cookie del ganador dejaría esa sesión
   huérfana). Si el navegador perdió la respuesta ganadora, la cookie vieja se rechaza durante 30 segundos y luego se trata
-  como una cookie desconocida.
+  como una cookie desconocida. Ninguna respuesta a un identificador muerto (vencido, reemplazado o desconocido) borra la cookie de
+  sesión: solo la borra el cierre de sesión explícito, y un ingreso nuevo la sobrescribe; así una respuesta lenta a un GET no
+  puede borrar la sesión que otro ingreso acaba de fijar.
 - *Destino tras el ingreso.* Se decodifica y normaliza como lo haría un navegador (puntos, `%2f`, `%5c`, tabuladores,
   barras invertidas) y solo se acepta una ruta propia que no empiece con `//`; ante la duda va a `/operador/cola`.
 - *Dónde viven las claves.* Nunca en el JavaScript del navegador, en `localStorage` ni en una cookie. El servidor de la web
