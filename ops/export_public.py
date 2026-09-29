@@ -5,15 +5,17 @@
 - Removes from every commit what is organizer row-level data or out of date: every case file under eval/workload
   (the generated workloads and any other set, such as the human one: customer ids, digits of real products),
   every per-case eval JSON (eval/reports/system_eval*.json, whatever its name), and the v2 demo video (dataset
-  customers on screen). The generated ones are rebuilt with `make workload eval`.
+  customers on screen), at the root or under any folder, since the history also has them under
+  x-payments-agent/. The generated ones are rebuilt with `make workload eval`.
 - Removes every PDF from every commit: the organizer's documents were committed once, and the complete data
   dictionary carries their AWS keys as compressed text, which the scan below cannot read. A PDF that survives
   fails the export.
 - Replaces the strings listed in REDACTIONS_FILE (git filter-repo format, "value==>***REMOVED***"), kept outside
-  any repository: the organizer's bucket name and account id, which early commits carried.
+  any repository: the organizer's bucket name and account id, which early commits carried, and the links to
+  their documents.
 - Scans every blob of every commit by shape, not by known prefix (keys, tokens, JWTs, private keys, credential
   assignments, env-var fallbacks with a literal, S3 URIs, 12-digit numbers, real dataset ids), prints what it
-  finds for a person to read, and fails if a redacted value survives.
+  finds for a person to read, and fails if a redacted value or a real dataset id survives.
 
 Publish the result as a NEW repository: a force-push over an old one leaves the old blobs reachable. Needs
 git-filter-repo (pip install git-filter-repo); GIT_FILTER_REPO overrides its path.
@@ -26,9 +28,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-REMOVE = ["docs/demo/demo_app.webm"]
-REMOVE_GLOBS = ["eval/workload/*.jsonl", "eval/reports/system_eval*.json",  # by pattern: a new case file or report too
-                "*.pdf"]  # any folder: fnmatch's * crosses "/"
+# Each pattern also runs under any folder ("*/" prefix, fnmatch's * crosses "/"): the history carries these files at
+# the root and under x-payments-agent/, where the subtree import put them before the move to the root.
+REMOVE_GLOBS = [p for g in ("docs/demo/demo_app.webm",
+                            "eval/workload/*.jsonl", "eval/reports/system_eval*.json")  # by pattern: a new file too
+                for p in (g, "*/" + g)] + ["*.pdf"]
 SHAPES = {
     "aws_access_key": r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b",
     "anthropic_key": r"sk-ant-[A-Za-z0-9_-]{10,}",
@@ -57,8 +61,7 @@ def main(src: Path, target: Path, redactions: Path) -> int:
         if "/" in ref and not ref.endswith("/HEAD"):
             subprocess.run(["git", "branch", "--quiet", ref.split("/", 1)[1], ref], cwd=target, capture_output=True)
     filtered = subprocess.run([os.environ.get("GIT_FILTER_REPO", "git-filter-repo"), "--force", "--invert-paths",
-                               *[a for p in REMOVE for a in ("--path", p)], *[a for g in REMOVE_GLOBS for a in ("--path-glob", g)],
-                               "--replace-text", str(redactions)],
+                               *[a for g in REMOVE_GLOBS for a in ("--path-glob", g)], "--replace-text", str(redactions)],
                               cwd=target, capture_output=True, text=True, encoding="utf-8", errors="replace")
     if filtered.returncode:  # say why: the history was not rewritten, so nothing here may be published
         sys.exit(f"git-filter-repo failed (exit {filtered.returncode}); {target} must not be published:\n"
@@ -73,7 +76,7 @@ def main(src: Path, target: Path, redactions: Path) -> int:
             _, _, sha, size = meta.split()
             blobs.setdefault(sha, (path, int(size) if size.isdigit() else 0))
     print(f"{len(commits)} commits, {len(blobs)} distinct blobs, branches {git('branch', '--format=%(refname:short)', cwd=target).split()}")
-    survived = 0
+    survived, real_ids = 0, 0
     for name in [*SHAPES, "large_blob"]:
         hits = set()
         for sha, (path, size) in blobs.items():
@@ -84,13 +87,16 @@ def main(src: Path, target: Path, redactions: Path) -> int:
             text = git("cat-file", "-p", sha, cwd=target)
             hits |= {(path, m.group(0)[:32]) for m in re.finditer(SHAPES[name], text, re.M)}
         print(f"{name}: {len(hits)}" + "".join(f"\n    {p}: {v}" for p, v in sorted(hits)[:12]))
+        real_ids = len(hits) if name == "real_dataset_id" else real_ids
     for sha, (path, _) in blobs.items():
         text = git("cat-file", "-p", sha, cwd=target)
         survived += sum(v in text for v in redacted)
     print(f"redacted values still present: {survived}")
     pdfs = sorted({path for path, _ in blobs.values() if path.lower().endswith(".pdf")})
     print(f"PDF files still present: {len(pdfs)}" + "".join(f"\n    {p}" for p in pdfs))
-    return 1 if survived or pdfs else 0
+    # A real dataset id is organizer row-level data: the files that carry them are removed above, so one left means a
+    # pattern missed a copy (as the x-payments-agent/ one did) and nothing here may be published.
+    return 1 if survived or pdfs or real_ids else 0
 
 
 if __name__ == "__main__":
