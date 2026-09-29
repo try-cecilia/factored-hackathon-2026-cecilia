@@ -143,6 +143,32 @@ make mlflow-ui              # cada selección y evaluación del clasificador, re
 Los comandos asumen Linux o macOS con `make`. En Windows, usá WSL o ejecutá el comando de cada target del
 `Makefile` con el `python` del venv.
 
+### Frontend con TanStack Start
+
+El nuevo frontend vive en `web/`. Por ahora contiene una página de inicio y
+un proxy de salud del backend en `/api/agent/health`. El chat y la demo siguen
+disponibles en la URL raíz de la API de Python.
+
+Con Node 24 y pnpm 10.33.2 instalados, usá el mismo Makefile de la raíz:
+
+```bash
+make web-setup              # instala las dependencias fijadas del frontend
+make serve-all                   # web: http://127.0.0.1:3000, Python: http://127.0.0.1:8000
+make web-typecheck web-build
+```
+
+Activá primero el entorno de Python o pasá `PY=.venv/bin/python` a `make`.
+`make serve-all` ejecuta `make serve` y `make serve-web` con `concurrently`,
+muestra sus logs y detiene ambos cuando uno termina o presionás Ctrl-C.
+Vite recarga el frontend; la API se ejecuta sin recarga automática, igual que
+con `make serve`. La instalación y los tests de Python siguen siendo
+independientes de Node.
+
+Para usar otros puertos, ejecutá `make serve-all WEB_PORT=3001 API_PORT=8001`.
+El proxy de salud usa automáticamente `API_PORT`. Consultá la sección de
+[desarrollo local](docs/operations.md#local-development) para ejecutar cada
+servicio por separado o preparar los fixtures sin acceso a S3.
+
 Se inicia sesión con un id de cliente y su **PIN de prueba** (un número de cliente solo no se acepta). La
 interfaz web lista las cuentas del sandbox desde `DEMO_PUBLIC_CUSTOMERS`. Quienes operan pueden obtener
 cualquier PIN de prueba con `X-Admin-Key` en `/admin/demo_pin/{id}`. Los traces, tickets, el registro de
@@ -175,6 +201,7 @@ agent/       core/ orquestador, render · policy/ router, señales, guarda del c
              tools/ herramientas de cuenta con permisos, logs de auditoría y traces · llm/ cliente, prompts, enmascarado de privacidad, precios, clasificadores
              session/ almacén de sesiones, proveedor de identidad de la demo
 api/         FastAPI + chat web estático; demo.py: la demo para el jurado (DEMO_MODE=1)
+web/         página de inicio con TanStack Start y proxy de salud de la API
 analysis/    evidencia del problema y línea base humana a partir de los datos provistos
 eval/        sets held-out, generador de workload, bot base, runners de evaluación, tracking en MLflow, reports/
 ops/         Dockerfile, entrypoint, selector de clientes de demo, prueba de carga, corrida smoke en vivo, retención

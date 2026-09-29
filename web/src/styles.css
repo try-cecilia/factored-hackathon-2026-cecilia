@@ -1,0 +1,15 @@
+:root {
+  font-family: 'Helvetica Neue', Arial, sans-serif;
+  color: #163c32;
+  background: #f7f7ef;
+  font-synthesis: none;
+}
+* { box-sizing: border-box; }
+body { margin: 0; }
+main { max-width: 1200px; margin: auto; padding: 40px clamp(24px, 7vw, 88px); }
+.brand { color: inherit; text-decoration: none; font-size: 32px; font-weight: 700; letter-spacing: -1.5px; }
+.brand span { color: #83a23e; }
+section { max-width: 720px; padding: clamp(80px, 17vh, 180px) 0; }
+.eyebrow { font-size: 13px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; }
+h1 { font-size: clamp(40px, 6vw, 72px); line-height: 1.08; letter-spacing: -2.5px; font-weight: 500; margin: 26px 0; }
+.description { max-width: 460px; color: #607368; font-size: 19px; line-height: 1.65; }

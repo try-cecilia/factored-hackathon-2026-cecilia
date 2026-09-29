@@ -1,7 +1,31 @@
 # Reproducible entry points. Every number in the docs comes from one of these.
 PY ?= python3
+PNPM ?= pnpm
+API_HOST ?= 0.0.0.0
+API_PORT ?= 8000
+WEB_HOST ?= 127.0.0.1
+WEB_PORT ?= 3000
+# Combined development always connects to its local API, unless overridden.
+AGENT_API_URL ?= http://127.0.0.1:$(API_PORT)
 
 .PHONY: retention loadtest setup ingest ingest-demo analysis train-eval workload eval eval-adversarial eval-live live-smoke test serve docker-build all mlflow-ui
+.PHONY: web-setup serve-web web-build web-typecheck serve-all
+
+web-setup:        ## install the frontend's pinned dependencies (Node 24, pnpm 10.33.2)
+	$(PNPM) --dir web install --frozen-lockfile
+
+serve-web:       ## frontend only; AGENT_API_URL can also come from web/.env
+	$(PNPM) --dir web dev --host "$(WEB_HOST)" --port "$(WEB_PORT)"
+
+web-build:        ## build the TanStack Start client and server
+	$(PNPM) --dir web build
+
+web-typecheck:    ## check frontend TypeScript
+	$(PNPM) --dir web typecheck
+
+serve-all:       ## run serve and serve-web; stop both when either exits
+	AGENT_API_URL="$(AGENT_API_URL)" $(PNPM) --dir web exec concurrently --kill-others --kill-timeout 5000 --names api,web \
+		"$(MAKE) -C .. serve" "$(MAKE) -C .. serve-web"
 
 setup:            ## install pinned dependencies, with experiment tracking (the serving image takes requirements.txt only)
 	$(PY) -m pip install -r requirements-tracking.txt
@@ -43,7 +67,7 @@ mlflow-ui:        ## browse every tracked classifier selection and evaluation ru
 	$(PY) -m mlflow ui --backend-store-uri sqlite:///mlruns/mlflow.db
 
 serve:
-	uvicorn api.main:app --host 0.0.0.0 --port 8000
+	$(PY) -m uvicorn api.main:app --host "$(API_HOST)" --port "$(API_PORT)"
 
 docker-build:
 	docker build -f ops/Dockerfile -t latam-bank-agent .
