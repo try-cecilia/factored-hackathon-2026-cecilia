@@ -13,7 +13,7 @@ const scenario: DemoScenario = {
 }
 
 const draw = (locale: 'es' | 'pt', scenarios = [scenario]) =>
-  renderWithI18n(<DemoPanel scenarios={scenarios} sessionRef="s" entries={[]} pending={false} escalations={0} prefill={() => {}} overlay={false} onSessionChanged={async () => {}} onClose={() => {}} />, locale)
+  renderWithI18n(<DemoPanel scenarios={scenarios} sessionRef="s" entries={[]} pending={false} escalations={0} send={async () => null} prefill={() => {}} overlay={false} onSessionChanged={async () => {}} onClose={() => {}} />, locale)
 
 describe('DemoPanel', () => {
   it('shows each scenario in the language of the interface', () => {

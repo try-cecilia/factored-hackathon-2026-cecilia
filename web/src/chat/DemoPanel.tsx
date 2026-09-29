@@ -10,9 +10,9 @@ import './DemoPanel.css'
 /**
  * The scenario in course. `from` is the session it was chosen in: the new one is there when `sessionRef` differs, and `base` is
  * how many entries that conversation already had (what comes after them can answer the steps). `prefilled` is the last step
- * written into the composer.
+ * written into the composer; `started` says the first one was sent.
  */
-type Active = { scenario: DemoScenario; from: string; base: number | null; prefilled: number }
+type Active = { scenario: DemoScenario; from: string; base: number | null; prefilled: number; started: boolean }
 
 const PATHS = ['normal', 'ambiguous', 'out_of_scope', 'action', 'human', 'attack', 'failure'] as const
 const DISPOSITIONS = ['AUTO_RESOLVE', 'CLARIFY', 'ABSTAIN', 'ESCALATE'] as const
@@ -45,13 +45,15 @@ function progress(entries: Entry[], turns: string[]): { got: string[]; off: bool
   return { got, off }
 }
 
-export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations, prefill, overlay, onSessionChanged, onClose }: {
+export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations, send, prefill, overlay, onSessionChanged, onClose }: {
   scenarios: DemoScenario[]
   sessionRef: string
   entries: Entry[]
   pending: boolean
   escalations: number
   /** Writes a message into the chat's input; `replace` says the person chose it, so it goes over a draft. */
+  /** The chat's own send: the first message of a scenario goes through it, with the same key, the same state and the same retry. */
+  send: (text: string) => Promise<unknown>
   prefill: (text: string, replace: boolean) => void
   /** The panel is a drawer over the page: choosing a scenario closes it, so the input is in reach. */
   overlay: boolean
@@ -86,7 +88,7 @@ export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations
     try {
       const result = await startScenario({ data: { id: scenario.id } })
       if (!result.ok) return setNote('demo.scenarios.failed')
-      setActive({ scenario, from: sessionRef, base: null, prefilled: -1 })
+      setActive({ scenario, from: sessionRef, base: null, prefilled: 0, started: false })
       setModelDown(scenario.fault === 'llm_outage')
       await onSessionChanged()
     } catch {
@@ -118,14 +120,20 @@ export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations
     setActive((a) => (a && a.base === null && sessionRef !== a.from ? { ...a, base: entries.length } : a))
   }, [sessionRef, entries.length])
 
-  // The step to come is written into the input: the first over what was there (the person just chose it), the ones after only
-  // if the input is empty, so a message being written is not lost.
+  // The scenario's first message is sent as soon as its session is up, and the drawer (over the chat) gives the page back.
+  useEffect(() => {
+    if (!active || active.base === null || active.started || pending || turns.length === 0) return
+    setActive({ ...active, started: true })
+    void send(turns[0])
+    if (overlay) onClose()
+  }, [active, pending, turns, send, overlay, onClose])
+
+  // The steps after it are still written into the input, only if it is empty, so a message being written is not lost.
   useEffect(() => {
     if (!active || active.base === null || next <= active.prefilled || next >= turns.length) return
     setActive({ ...active, prefilled: next })
-    prefill(turns[next], next === 0)
-    if (next === 0 && overlay) onClose()
-  }, [active, next, turns, prefill, overlay, onClose])
+    prefill(turns[next], false)
+  }, [active, next, turns, prefill])
 
   function again() {
     prefill(turns[next], true)
