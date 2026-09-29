@@ -130,34 +130,66 @@ class ConversationStore:
     conversation, including a trace proposed and waiting for the customer's yes."""
 
     RETENTION_SECONDS = 24 * 3600  # a conversation outlives its 15-minute session only briefly
+    # The retention job (ops/retention.py) deletes rows from another process. The copy kept in memory is served only while its
+    # row is still there, checked at most this often, and never past the retention window: what was purged is not brought back.
+    VERIFY_SECONDS = 60
 
     def __init__(self, max_conversations: int = MAX_CONVERSATIONS, max_messages: int = MAX_HISTORY_MESSAGES,
                  db_path: str | None = None):
         self._data: OrderedDict[str, _Conversation] = OrderedDict()
+        self._touched: dict[str, float] = {}  # when each conversation in memory was last read or written
+        self._checked: dict[str, float] = {}  # when its row was last seen in the file (only for those that were saved)
         self.max_conversations, self.max_messages = max_conversations, max_messages
         self._db, self._lock = state.connect(db_path), threading.Lock()
         with self._lock, self._db:
             self._db.execute("DELETE FROM conversations WHERE updated_at < ?", (time.time() - self.RETENTION_SECONDS,))
 
     def get(self, key: str) -> _Conversation:
-        conv = self._data.pop(key, None) or self._load(key) or _Conversation()
+        now = time.time()
+        conv = self._data.pop(key, None)
+        if conv is not None and not self._still_valid(key, now):
+            conv = None  # past the retention window, or purged from the file: not served, and not written back by a later save
+            self._touched.pop(key, None)
+            self._checked.pop(key, None)
+        conv = conv or self._load(key, now) or _Conversation()
         self._data[key] = conv
+        self._touched[key] = now
         while len(self._data) > self.max_conversations:
-            self._data.popitem(last=False)
+            old, _ = self._data.popitem(last=False)
+            self._touched.pop(old, None)
+            self._checked.pop(old, None)
         return conv
 
-    def _load(self, key: str) -> _Conversation | None:
+    def _still_valid(self, key: str, now: float) -> bool:
+        if now - self._touched.get(key, now) > self.RETENTION_SECONDS:
+            return False
+        checked = self._checked.get(key)
+        if checked is None or now - checked <= self.VERIFY_SECONDS:
+            return True  # never saved (its first turn is still in flight), or looked at a moment ago
         with self._lock:
-            row = self._db.execute("SELECT data FROM conversations WHERE key = ?", (key,)).fetchone()
+            row = self._db.execute("SELECT 1 FROM conversations WHERE key = ?", (key,)).fetchone()
+        if row is None:
+            return False
+        self._checked[key] = now
+        return True
+
+    def _load(self, key: str, now: float) -> _Conversation | None:
+        with self._lock:
+            row = self._db.execute("SELECT data FROM conversations WHERE key = ? AND updated_at >= ?",
+                                   (key, now - self.RETENTION_SECONDS)).fetchone()
+        if row:
+            self._checked[key] = now
         return _Conversation(**json.loads(row[0])) if row else None
 
     def save(self, key: str) -> None:
         """Write the conversation as the turn left it (a no-op for a key this store has not handed out)."""
         conv = self._data.get(key)
         if conv is not None:
+            now = time.time()
             with self._lock, self._db:
                 self._db.execute("INSERT OR REPLACE INTO conversations VALUES (?, ?, ?)",
-                                 (key, json.dumps(asdict(conv), ensure_ascii=False, default=str), time.time()))
+                                 (key, json.dumps(asdict(conv), ensure_ascii=False, default=str), now))
+            self._touched[key] = self._checked[key] = now
 
     def append(self, conv: _Conversation, role: str, content: str) -> None:
         conv.messages.append({"role": role, "content": content})
@@ -175,7 +207,7 @@ class ConversationStore:
 
     def clear_transcript(self, key: str) -> None:
         """Forget what was shown (logout): the figures in it are not kept for the rest of the retention window."""
-        conv = self._data.pop(key, None) or self._load(key)
+        conv = self._data.pop(key, None) or self._load(key, time.time())
         if conv is not None and conv.transcript:
             conv.transcript.clear()
             self._data[key] = conv
@@ -341,7 +373,8 @@ class Orchestrator:
         finally:
             current_trace_id.reset(ctx_token)
             try:
-                self.conversations.save(session_ref(session_token))  # even on a crash: what the turn changed is kept
+                if self._session_is_live(session_token):  # a session that is over saves nothing: it would revive a purged row
+                    self.conversations.save(session_ref(session_token))  # even on a crash: what the turn changed is kept
             except Exception as exc:  # noqa: BLE001 - a failed save loses the history, never the reply
                 self._record_failed("conversation_save", trace_id, exc)
         result.latency_ms = (time.perf_counter() - start) * 1000
@@ -370,6 +403,15 @@ class Orchestrator:
         """The session's rendered conversation, oldest first. Raises InvalidSession/ExpiredSession for a bad token."""
         session = self.session_store.validate(session_token)
         return [dict(turn) for turn in self.conversations.get(session.ref).transcript]
+
+    def _session_is_live(self, session_token: str) -> bool:
+        try:
+            self.session_store.validate(session_token)
+        except (InvalidSession, ExpiredSession):
+            return False
+        except Exception:  # noqa: BLE001 - the store itself failing is not a reason to lose the turn's state
+            return True
+        return True
 
     @staticmethod
     def _record_failed(kind: str, trace_id: str, exc: Exception) -> None:

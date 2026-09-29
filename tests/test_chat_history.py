@@ -161,3 +161,62 @@ def test_the_orchestrator_reads_only_its_own_sessions_conversation():
     a, b = orch.session_store.issue("CLI-FIX0001", attrs).token, orch.session_store.issue("CLI-FIX0001", attrs).token
     orch.handle_message(a, CLONED)
     assert len(orch.history(a)) == 2 and orch.history(b) == []
+
+
+# --- retention: what the API keeps in memory follows what it keeps on disk -------------------------------------------------
+
+def _rows(db) -> int:
+    import sqlite3
+
+    with sqlite3.connect(db) as c:
+        return c.execute("SELECT COUNT(*) FROM conversations").fetchone()[0]
+
+
+def test_a_conversation_purged_from_the_database_is_not_served_from_memory(tmp_path, monkeypatch):
+    """The retention job deletes rows from another process; the API's copy in memory must not outlive it."""
+    import sqlite3
+
+    monkeypatch.setattr(ConversationStore, "VERIFY_SECONDS", 0)  # look at the file on every read
+    db = str(tmp_path / "state.db")
+    store = ConversationStore(db_path=db)
+    conv = store.get("ref-a")
+    store.record_turn(conv, "hola", type("R", (), {"response_text": "Hola", "trace_id": "t", "disposition": "AUTO_RESOLVE",
+                                                   "category": "none", "language": "es", "ticket_id": None, "degraded": False})())
+    store.save("ref-a")
+    with sqlite3.connect(db) as c:
+        c.execute("DELETE FROM conversations")  # what ops/retention.py does to a stale row
+    assert store.get("ref-a").transcript == []
+
+
+def test_a_conversation_in_memory_expires_with_the_retention_window(tmp_path, monkeypatch):
+    import time
+
+    db = str(tmp_path / "state.db")
+    store = ConversationStore(db_path=db)
+    conv = store.get("ref-a")
+    conv.requests.append("hola")
+    store.save("ref-a")
+    later = time.time() + ConversationStore.RETENTION_SECONDS + 60
+    monkeypatch.setattr("agent.core.orchestrator.time.time", lambda: later)
+    assert store.get("ref-a").requests == []  # neither the memory copy nor the (not yet purged) row is served past the window
+
+
+def test_a_turn_of_a_session_that_is_over_saves_nothing(tmp_path):
+    """REAUTH_REQUIRED must not write the conversation back: it would revive a purged row and refresh its age."""
+    db = str(tmp_path / "state.db")
+    orch = Orchestrator(SessionStore(ttl_seconds=900, db_path=db), conversations=ConversationStore(db_path=db))
+    attrs = {"segment": "Student", "country": "México", "customer_status": "Active"}
+    tok = orch.session_store.issue("CLI-FIX0001", attrs).token
+    orch.handle_message(tok, CLONED)
+    assert _rows(db) == 1
+    import sqlite3
+
+    with sqlite3.connect(db) as c:
+        c.execute("DELETE FROM conversations")  # purged by retention
+    orch.session_store.expire(tok)
+    assert orch.handle_message(tok, BALANCE).disposition == "REAUTH_REQUIRED"
+    assert _rows(db) == 0
+    orch.session_store.revoke(tok)
+    assert orch.handle_message(tok, BALANCE).disposition == "REAUTH_REQUIRED"
+    assert _rows(db) == 0
+
