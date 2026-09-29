@@ -313,6 +313,8 @@ def request_trace(customer_id: str, product_id: Optional[str] = None, amount: An
         for it in items:
             it["last4"] = _last4(it.pop("product_number"))
             it["review_reason"] = _review_reason(it, as_of)
+            it["age_days"] = (as_of - (it["transaction_date"].date() if isinstance(it["transaction_date"], datetime)
+                                       else it["transaction_date"])).days if as_of else None
             it.pop("opening_date"), it.pop("registration_date")
             it["open_trace"] = default_traces.find(customer_id, it["transaction_id"])
         return {"items": items, "as_of": as_of, "filters": {"product_id": product_id, "amount": amount, "on_date": day}}

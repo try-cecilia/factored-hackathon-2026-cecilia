@@ -353,7 +353,7 @@ class Orchestrator:
     def _open_trace(self, proposal, session, lang, trace_id, done, escalate) -> TurnResult:
         """The customer said yes: open the trace, read it back, and only then say it exists."""
         action = {"tool": "request_trace", "args": {"product_id": proposal["product_id"]}, "confirmed_by_customer": True}
-        still_pending, review = True, None
+        still_pending, review, age_days = True, None, None
         try:
             # The proposal is one turn old: the movement may have settled since, so eligibility is checked again.
             pending = TOOL_FUNCTIONS["request_trace"](session.customer_id, product_id=proposal["product_id"],
@@ -361,6 +361,7 @@ class Orchestrator:
             found = next((m for m in pending if m["transaction_id"] == proposal["transaction_id"]), None)
             still_pending = found is not None
             review = found.get("review_reason") if found else None
+            age_days = found.get("age_days") if found else None
             verified = None
             if still_pending and not review:
                 default_traces.open(session.customer_id, proposal["transaction_id"], proposal["product_id"], session.ref)
@@ -370,7 +371,8 @@ class Orchestrator:
         if review:  # old or self-contradicting: the customer's yes is recorded, a person decides
             return escalate(router.trace_review(review), [{**action, "success": False, "error_type": "NeedsHumanApproval"}], [],
                             {"tool": "request_trace", "transaction_id": proposal["transaction_id"],
-                             "product_id": proposal["product_id"], "review_reason": review, "movement": proposal["movement"]})
+                             "product_id": proposal["product_id"], "review_reason": review, "age_days": age_days,
+                             "movement": proposal["movement"]})
         if not still_pending:
             return escalate(router.trace_step({"items": []}), [{**action, "success": False, "error_type": "MovementNoLongerPending"}], [])
         if not verified:
