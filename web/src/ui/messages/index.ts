@@ -1,4 +1,5 @@
-// Public surface of the messages components: one export line per component. The gallery is not exported from here.
+// Public surface of the messages components: one export line per component. The gallery is not exported from here, nor what only
+// the gallery draws (DataInAnswer): the gallery imports it from its file, so the app's bundle does not carry it.
 export * from './disposition'
 export * from './MessageList'
 export * from './MessageFrame'
@@ -14,4 +15,3 @@ export * from './ActionResultMessage'
 export * from './LimitedModeBanner'
 export * from './CouldNotVerifyMessage'
 export * from './SystemNote'
-export * from './DataInAnswer'

@@ -495,7 +495,9 @@ espera (puntos y pasos) y el chat sin demo.
 ### UI kit, i18n y galería
 
 **Cómo usar el kit.** Los componentes viven en `web/src/ui/` y salen de un solo punto:
-`import { Button, DataTable, Sidebar, AnswerMessage, Toast } from '../ui'`. Son presentacionales (reciben props, no llaman a
+`import { Button, DataTable, Sidebar, AnswerMessage, Toast } from '../ui'`. Lo que hoy solo dibuja la galería (`Progress`,
+`SidebarMenu`, `DataInAnswer`) no está en ese punto y se importa de su archivo: todo módulo del barrel, con su CSS, viaja en el
+bundle inicial de la app. Un componente que empiece a usar la app se agrega al `index.ts` de su área. Son presentacionales (reciben props, no llaman a
 la API), no dibujan bordes (solo el botón `outline` y el anillo de foco) y consumen únicamente variables de
 `web/src/tokens.css`; cada uno trae su CSS al lado, con clases `ui-*` que no chocan con las de `styles.css`. Las áreas son
 `Button` e `IconButton`; `loaders/` (`Spinner`, `ThinkingDots`, `CheckingSteps`, `Skeleton`, `Progress`, `DeliveryStatus`,
