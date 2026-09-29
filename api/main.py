@@ -30,6 +30,7 @@ from pydantic import BaseModel, Field
 from agent.llm.budget import default_budget
 from agent.llm.client import default_providers
 from agent.policy import intent_guard
+from agent.session.auth import ExpiredSession, InvalidSession
 from agent.session.identity import AuthError, IdentityUnavailable, LockedOut, default_identity, derive_test_pin
 from agent.tools import account_tools
 from agent.tools.audit import default_audit_log, default_trace_log
@@ -152,6 +153,18 @@ def chat(req: ChatRequest) -> ChatResponse:
                         language=r.language, category=r.category, policy_rule=r.policy_rule if shown else "",
                         ticket_id=r.ticket_id, latency_ms=round(r.latency_ms, 1),
                         why=demo.explain(r, req.session_token) if shown else None)
+
+
+@app.get("/case/{ticket_id}")
+def case_status(ticket_id: str, x_session_token: str | None = Header(default=None)) -> dict:
+    """Where the customer's own ticket stands (claimed, approved, rejected...). Someone else's ticket is a 404."""
+    try:
+        found = demo.orchestrator_for(x_session_token or "").case_status(x_session_token or "", ticket_id)
+    except (InvalidSession, ExpiredSession):
+        raise HTTPException(401, "invalid or expired session") from None
+    if found is None:
+        raise HTTPException(404, "case not found")
+    return found
 
 
 @app.get("/demo/customers")
