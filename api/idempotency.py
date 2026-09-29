@@ -61,6 +61,8 @@ class IdempotencyStore:
     def __init__(self, max_entries: int = MAX_ENTRIES, max_marks: int = MAX_MARKS, db_path: str | None = None):
         self._max_entries, self._max_marks = max_entries, max_marks
         self._db = state.connect(db_path)
+        # First version of the table, only ever on an unmerged branch (keys unhashed, no session expiry): dropped, not migrated.
+        self._db.execute("DROP TABLE IF EXISTS idempotency")
         self._db.execute("CREATE TABLE IF NOT EXISTS idempotency_keys (session_ref TEXT NOT NULL, key_hash TEXT NOT NULL, "
                          "message_hash TEXT NOT NULL, response TEXT, created_at REAL NOT NULL, expires_at REAL NOT NULL, "
                          "PRIMARY KEY (session_ref, key_hash))")

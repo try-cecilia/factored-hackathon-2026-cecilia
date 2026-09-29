@@ -300,3 +300,20 @@ def test_a_reservation_is_taken_together_with_the_capacity_check():
             with store.guard("ref", "key-00000002", "hola", expires_at=9e9):
                 pass
         first.save('{"n": 1}')
+
+
+def test_the_first_version_of_the_table_is_dropped_not_migrated(tmp_path):
+    """It only ever existed on this unmerged branch, with keys stored as they came and no expiry tied to the session."""
+    import sqlite3
+
+    db = str(tmp_path / "state.db")
+    old = sqlite3.connect(db)
+    old.execute("CREATE TABLE idempotency (session_ref TEXT NOT NULL, key TEXT NOT NULL, message_hash TEXT NOT NULL, "
+                "response TEXT NOT NULL, created_at REAL NOT NULL, PRIMARY KEY (session_ref, key))")
+    old.execute("INSERT INTO idempotency VALUES ('ref', 'plain-key-0001', 'h', '{}', 1.0)")
+    old.commit()
+    old.close()
+
+    idempotency.IdempotencyStore(db_path=db)
+    names = {r[0] for r in sqlite3.connect(db).execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+    assert "idempotency" not in names and "idempotency_keys" in names
