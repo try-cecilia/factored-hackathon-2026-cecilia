@@ -76,6 +76,16 @@ def schema_drift(con, raw: str, table: str) -> list[CheckResult]:
     ]
 
 
+def _cast_fails(col: str, typ: str) -> str:
+    """A non-null raw value that does not become `typ` without loss. TRY_CAST alone rounds "700.5" to 701 in an
+    INTEGER column; "700.0" is fine because the value is unchanged."""
+    q = _q(col)
+    bad = f"TRY_CAST({q} AS {typ}) IS NULL"
+    if typ == "INTEGER":
+        bad += f" OR TRY_CAST({q} AS DECIMAL(38, 9)) <> TRY_CAST({q} AS INTEGER)"
+    return f"{q} IS NOT NULL AND ({bad})"
+
+
 def build_typed_staging(con, raw: str, typed: str, table: str) -> None:
     """TRY_CAST every contract column; unknown raw columns (schema evolution)
     pass through untouched so they aren't silently dropped."""
@@ -94,8 +104,7 @@ def build_typed_staging(con, raw: str, typed: str, table: str) -> None:
     for col in COLUMN_TYPES[table]:
         if col in raw_cols:
             raw_errs.append(
-                f"CASE WHEN {_q(col)} IS NOT NULL AND TRY_CAST({_q(col)} AS {COLUMN_TYPES[table][col]}) IS NULL "
-                f"THEN 'cast:{col}' END"
+                f"CASE WHEN {_cast_fails(col, COLUMN_TYPES[table][col])} THEN 'cast:{col}' END"
             )
     for col in NOT_NULL_COLUMNS.get(table, []):
         raw_errs.append(f"CASE WHEN {_q(col)} IS NULL THEN 'not_null:{col}' END" if col in raw_cols else f"'not_null:{col}'")
@@ -134,7 +143,7 @@ def measure(con, raw: str, typed: str, table: str) -> list[CheckResult]:
         if col not in raw_cols:
             continue
         failed = con.execute(
-            f"SELECT count(*) FROM {raw} WHERE {_q(col)} IS NOT NULL AND TRY_CAST({_q(col)} AS {typ}) IS NULL"
+            f"SELECT count(*) FROM {raw} WHERE {_cast_fails(col, typ)}"
         ).fetchone()[0]
         if failed:
             out.append(CheckResult(table, f"type_cast:{col}", "type", "error", failed, total, f"expected {typ}"))
