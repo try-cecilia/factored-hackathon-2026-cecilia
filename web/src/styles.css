@@ -302,3 +302,7 @@ a { color: inherit; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
 }
+
+/* Language switcher placed in the pre-kit screens; the screen workers position it in the new layouts. */
+.sidebar-foot .ui-lang { grid-column: 1 / -1; justify-self: start; }
+.auth-card .ui-lang, .home .ui-lang { margin-top: 8px; }

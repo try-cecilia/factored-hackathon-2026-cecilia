@@ -2,6 +2,9 @@ import type { Like } from '../../types.ts'
 import type { shell as es } from '../es/shell.ts'
 
 export const shell: Like<typeof es> = {
+  pageTitle: {
+    chat: 'Chat · Cecilai',
+  },
   mainNav: 'Principal',
   nav: {
     chat: 'Chat',

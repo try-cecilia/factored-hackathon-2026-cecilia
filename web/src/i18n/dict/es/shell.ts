@@ -1,4 +1,7 @@
 export const shell = {
+  pageTitle: {
+    chat: 'Chat · Cecilai',
+  },
   mainNav: 'Principal',
   nav: {
     chat: 'Chat',
