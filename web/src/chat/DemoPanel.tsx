@@ -9,7 +9,7 @@ import './DemoPanel.css'
 
 /**
  * The scenario in course. `from` is the session it was chosen in: the new one is there when `sessionRef` differs, and `base` is
- * how many replies that conversation already had (what comes after them answers the steps). `prefilled` is the last step
+ * how many entries that conversation already had (what comes after them can answer the steps). `prefilled` is the last step
  * written into the composer.
  */
 type Active = { scenario: DemoScenario; from: string; base: number | null; prefilled: number }
@@ -25,7 +25,22 @@ function known<T extends string>(list: readonly T[], value: string): value is T 
 // DEMO_MODE only. Everything here talks to the API's /demo endpoints through the server; the customer app works
 // the same without it, and it is drawn apart, on its own panel with its own label, so nobody mistakes it for the service.
 // A scenario does not send anything: it writes its next message into the chat's input, and the person sends it from there like
-// any other; the steps below only read the replies the conversation gets.
+// any other; the steps below only read the conversation. A step is answered when the message sent is that step's own text; a
+// reply to any other message is not a step (the card says so), so an edited or unrelated message does not move the scenario.
+function progress(entries: Entry[], turns: string[]): { got: string[]; off: boolean } {
+  const got: string[] = []
+  let off = false
+  entries.forEach((entry, i) => {
+    if (entry.role !== 'user') return
+    const answer = entries.slice(i + 1).find((e) => e.role !== 'note')
+    if (answer?.role !== 'assistant') return
+    const step = turns[got.length]
+    off = step === undefined || entry.text.trim() !== step.trim()
+    if (!off) got.push(answer.reply.disposition)
+  })
+  return { got, off }
+}
+
 export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations, prefill, overlay, onSessionChanged, onClose }: {
   scenarios: DemoScenario[]
   sessionRef: string
@@ -90,15 +105,14 @@ export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations
     }
   }
 
-  const replies = entries.filter((e) => e.role === 'assistant')
-  const got = active && active.base !== null ? replies.slice(active.base).map((e) => e.reply.disposition) : []
-  const next = got.length
   const turns = active?.scenario.turns ?? []
+  const { got, off } = active && active.base !== null ? progress(entries.slice(active.base), turns) : { got: [] as string[], off: false }
+  const next = got.length
 
   // The new session is the scenario's: from then on its replies are the steps' answers.
   useEffect(() => {
-    setActive((a) => (a && a.base === null && sessionRef !== a.from ? { ...a, base: replies.length } : a))
-  }, [sessionRef, replies.length])
+    setActive((a) => (a && a.base === null && sessionRef !== a.from ? { ...a, base: entries.length } : a))
+  }, [sessionRef, entries.length])
 
   // The step to come is written into the input: the first over what was there (the person just chose it), the ones after only
   // if the input is empty, so a message being written is not lost.
@@ -159,6 +173,7 @@ export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations
                         )
                       })}
                     </ol>
+                    {off && <p className="demo__note" role="status">{t('demo.steps.offScript')}</p>}
                     <div className="demo__actions">
                       {active.base !== null && next < turns.length && <Button variant="ghost" size="sm" tinted onClick={again}>{t('demo.steps.refill')}</Button>}
                       <Button variant="ghost" size="sm" onClick={() => setActive(null)}>{t('demo.steps.close')}</Button>

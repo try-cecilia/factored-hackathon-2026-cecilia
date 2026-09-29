@@ -31,6 +31,7 @@ export const demo = {
     came: '✓ {what}',
     cameWrong: '✗ Salió {what}',
     refill: 'Volver a escribir el mensaje',
+    offScript: 'Se envió otro texto: esa respuesta no cuenta como paso. «Volver a escribir el mensaje» retoma el paso.',
     close: 'Cerrar pasos',
   },
   scenarios: {

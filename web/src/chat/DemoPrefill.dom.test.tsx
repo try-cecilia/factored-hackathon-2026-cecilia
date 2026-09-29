@@ -159,6 +159,31 @@ describe('a scenario of the demo panel writes its message in the chat input', ()
     expect(document.activeElement).toBe(input())
   })
 
+  it('a reply to a message that is not the step is not the step: the card says so and the scenario stays where it was', async () => {
+    const user = userEvent.setup()
+    sendMessage.mockResolvedValue({ ok: true, reply: reply('AUTO_RESOLVE', 'El dólar está a 17 pesos.') })
+    await draw()
+    const card = await load(user, 'Dos turnos')
+    await waitFor(() => expect(input().value).toBe('¿Cuál es mi saldo?'))
+
+    await user.clear(input())
+    await user.type(input(), '¿A cuánto está el dólar?')
+    await user.click(screen.getByRole('button', { name: 'Enviar mensaje' }))
+
+    expect(await screen.findByText('El dólar está a 17 pesos.')).toBeTruthy()
+    expect(within(card).getByRole('status', { name: '' }).textContent).toContain('no cuenta como paso')
+    expect(within(card).queryByText(/^✓/)).toBeNull()
+    // Still on the first step: asking for it again writes the first message, not the second.
+    await user.click(within(card).getByRole('button', { name: 'Volver a escribir el mensaje' }))
+    expect(input().value).toBe('¿Cuál es mi saldo?')
+
+    // Back on the script, the step is answered and the note goes.
+    await user.click(screen.getByRole('button', { name: 'Enviar mensaje' }))
+    expect(await within(card).findByText('✓ Resuelto')).toBeTruthy()
+    expect(within(card).queryByRole('status')).toBeNull()
+    await waitFor(() => expect(input().value).toBe('Me clonaron la tarjeta'))
+  })
+
   it('loading a scenario replaces a draft: the person chose it, and the session it belonged to is gone', async () => {
     const user = userEvent.setup()
     await draw()

@@ -33,6 +33,7 @@ export const demo: Like<typeof es> = {
     came: '✓ {what}',
     cameWrong: '✗ Saiu {what}',
     refill: 'Escrever a mensagem de novo',
+    offScript: 'Foi enviado outro texto: essa resposta não conta como passo. «Escrever a mensagem de novo» retoma o passo.',
     close: 'Fechar passos',
   },
   scenarios: {
