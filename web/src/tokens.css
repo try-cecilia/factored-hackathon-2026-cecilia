@@ -1,0 +1,129 @@
+/*
+ * Cecil.ai design system tokens, exported from the Paper file "Cecil.ai" (artboard "Cecil Design System").
+ * Names and values are the same as in Paper so the customer app and the operator console share them;
+ * do not rename. Only the font stacks add fallbacks, and the "app aliases" at the end are named uses of
+ * the same colors that Paper draws with raw values.
+ */
+:root {
+  --color-gray-50: oklch(98.5% 0 0);
+  --color-gray-100: oklch(97% 0 0);
+  --color-gray-200: oklch(92.2% 0 0);
+  --color-gray-300: oklch(87% 0 0);
+  --color-gray-400: oklch(70.8% 0 0);
+  --color-gray-500: oklch(55.6% 0 0);
+  --color-gray-600: oklch(43.9% 0 0);
+  --color-gray-700: oklch(37.1% 0 0);
+  --color-gray-800: oklch(26.9% 0 0);
+  --color-gray-900: oklch(20.5% 0 0);
+  --color-gray-950: oklch(14.5% 0 0);
+  --color-blue-50: oklch(97% 0.014 258);
+  --color-blue-100: oklch(93.2% 0.032 258);
+  --color-blue-200: oklch(88.2% 0.059 258);
+  --color-blue-300: oklch(80.9% 0.105 258);
+  --color-blue-400: oklch(70.7% 0.165 258);
+  --color-blue-500: oklch(62.3% 0.214 258);
+  --color-blue-600: oklch(54.6% 0.220 258);
+  --color-blue-700: oklch(49% 0.200 258);
+  --color-blue-800: oklch(44% 0.162 258);
+  --color-blue-900: oklch(37.9% 0.146 258);
+  --color-blue-950: oklch(28.2% 0.091 258);
+  --color-paper: #FFFFFF;
+  --color-ink: #000000;
+  --color-ink-80: #000000CC;
+  --color-ink-70: #000000B3;
+  --color-ink-app: #1D1C1D;
+  --color-glass: #0000001A;
+  --color-glass-edge: #0000000D;
+  --color-glass-label: #000000D9;
+  --color-sun-yellow: #FFE066;
+  --color-sun-amber: #FFC21A;
+  --color-sun-orange: #FF8A1F;
+  --color-sun-ember: #F2540C;
+  --color-cecil-blue: #014FFB;
+  --color-success: #0E7A4B;
+  --color-danger: #D12C1F;
+
+  --font-sans: 'Inter Variable', Inter, system-ui, sans-serif;
+  --font-serif: Georgia, serif;
+  --font-mono: 'DM Mono', ui-monospace, monospace;
+
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-base: 16px;
+  --text-lg: 18px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+  --text-3xl: 30px;
+  --text-4xl: 36px;
+  --text-5xl: 48px;
+  --text-6xl: 60px;
+  --text-7xl: 72px;
+  --text-8xl: 96px;
+  --text-9xl: 128px;
+
+  --font-weight-thin: 100;
+  --font-weight-extralight: 200;
+  --font-weight-light: 300;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --font-weight-extrabold: 800;
+  --font-weight-black: 900;
+
+  --tracking-tighter: -0.05em;
+  --tracking-tight: -0.025em;
+  --tracking-normal: 0em;
+  --tracking-wide: 0.025em;
+  --tracking-wider: 0.05em;
+  --tracking-widest: 0.1em;
+
+  --leading-tight: 125%;
+  --leading-snug: 137.5%;
+  --leading-normal: 150%;
+  --leading-relaxed: 162.5%;
+  --leading-loose: 200%;
+
+  --breakpoint-sm: 640px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1280px;
+  --breakpoint-2xl: 1536px;
+
+  --container-3xs: 256px;
+  --container-2xs: 288px;
+  --container-xs: 320px;
+  --container-sm: 384px;
+  --container-md: 448px;
+  --container-lg: 512px;
+  --container-xl: 576px;
+  --container-2xl: 672px;
+  --container-3xl: 768px;
+  --container-4xl: 896px;
+  --container-5xl: 1024px;
+  --container-6xl: 1152px;
+  --container-7xl: 1280px;
+
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
+  --radius-3xl: 24px;
+  --radius-4xl: 32px;
+  --radius-pill: 9999px;
+  --radius-window: 42px;
+  --radius-app: 24px;
+
+  /* App aliases: colors and lines the Paper frames draw with raw values. */
+  --color-ink-muted: #616061; /* secondary text on white: names, times, captions */
+  --color-ink-soft: #43414A; /* navigation and quiet controls */
+  --hairline: color-mix(in srgb, var(--color-ink) 6%, transparent);
+  --hairline-strong: color-mix(in srgb, var(--color-ink) 16%, transparent);
+  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--color-cecil-blue) 22%, transparent);
+  --shadow-window: 0 0 0 1px var(--color-glass), 0 1px 1px #0F0A1414, 0 24px 50px -24px #0F0A148C;
+  --sun: radial-gradient(ellipse 90% 70% at 0% 100%, var(--color-sun-ember) 0%, transparent 70%),
+    radial-gradient(ellipse 80% 60% at 100% 100%, var(--color-sun-orange) 0%, transparent 70%),
+    linear-gradient(165deg, var(--color-sun-yellow) 0%, var(--color-sun-amber) 45%, var(--color-sun-orange) 100%);
+}

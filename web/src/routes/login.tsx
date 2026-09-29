@@ -1,5 +1,6 @@
-import { createFileRoute, redirect, useRouter } from '@tanstack/react-router'
+import { createFileRoute, Link, redirect, useRouter } from '@tanstack/react-router'
 import { useState, type FormEvent } from 'react'
+import { ClockIcon } from '../chat/icons'
 import { getDemoCustomers, getSession, login } from '../server/auth.functions'
 
 function sameOriginPath(value: unknown) {
@@ -14,9 +15,9 @@ function sameOriginPath(value: unknown) {
 }
 
 export const Route = createFileRoute('/login')({
-  validateSearch: (search: Record<string, unknown>): { redirect?: string } => {
+  validateSearch: (search: Record<string, unknown>): { redirect?: string; motivo?: 'expired' } => {
     const redirect = sameOriginPath(search.redirect)
-    return redirect ? { redirect } : {}
+    return { ...(redirect ? { redirect } : {}), ...(search.motivo === 'expired' ? { motivo: 'expired' as const } : {}) }
   },
   beforeLoad: async ({ search }) => {
     const session = await getSession().catch(() => null)
@@ -36,7 +37,7 @@ const unavailable = 'El servicio no está disponible en este momento.'
 
 function Login() {
   const demoCustomers = Route.useLoaderData()
-  const { redirect: target } = Route.useSearch()
+  const { redirect: target, motivo } = Route.useSearch()
   const router = useRouter()
   const [customerId, setCustomerId] = useState('')
   const [pin, setPin] = useState('')
@@ -58,12 +59,19 @@ function Login() {
   }
 
   return (
-    <main>
-      <a className="brand" href="/" aria-label="Cecilai, inicio">cecilai<span>.</span></a>
-      <section className="auth">
-        <p className="eyebrow">Ingresar</p>
+    <div className="sun sun-center">
+      <main className="auth-card" id="main">
+        <Link className="brand" to="/" aria-label="Cecilai, inicio">
+          <span className="brand-mark"><img src="/cecilia-avatar.png" alt="" width={24} height={24} /></span>cecilai
+        </Link>
         <h1>Hola de nuevo.</h1>
-        <p className="description">Ingresá con tu número de cliente y tu PIN de 6 dígitos.</p>
+        <p className="lead">Ingresá con tu número de cliente y tu PIN de 6 dígitos.</p>
+        {motivo === 'expired' && (
+          <div className="callout callout-sun" role="status">
+            <ClockIcon />
+            <span>Tu sesión venció. Ingresá de nuevo para continuar; la conversación empieza de cero.</span>
+          </div>
+        )}
         <form className="form" onSubmit={onSubmit}>
           <label>
             Número de cliente
@@ -93,17 +101,17 @@ function Login() {
             />
           </label>
           {error && <p className="error" role="alert">{error}</p>}
-          <button className="button" type="submit" disabled={pending}>
+          <button className="btn btn-primary btn-lg" type="submit" disabled={pending}>
             {pending ? 'Ingresando…' : 'Ingresar'}
           </button>
         </form>
         {demoCustomers.length > 0 && (
-          <div className="demo">
-            <p className="eyebrow">Cuentas de prueba</p>
+          <div className="demo-accounts">
+            <p className="eyebrow"><span className="badge-demo">Demo</span> Cuentas de prueba</p>
             <ul>
               {demoCustomers.map((c) => (
                 <li key={c.customer_id}>
-                  <button type="button" onClick={() => { setCustomerId(c.customer_id); setPin(c.test_pin) }}>
+                  <button type="button" className="chip" onClick={() => { setCustomerId(c.customer_id); setPin(c.test_pin) }}>
                     {c.customer_id}
                   </button>
                 </li>
@@ -111,7 +119,7 @@ function Login() {
             </ul>
           </div>
         )}
-      </section>
-    </main>
+      </main>
+    </div>
   )
 }

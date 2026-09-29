@@ -4,14 +4,15 @@ export const Route = createFileRoute('/')({ component: Home })
 
 function Home() {
   return (
-    <main>
-      <a className="brand" href="/" aria-label="Cecilai, inicio">cecilai<span>.</span></a>
-      <section>
-        <p className="eyebrow">Próximamente</p>
-        <h1>Tu espacio de<br />atención bancaria.</h1>
-        <p className="description">Estamos preparando una forma más simple de consultar tus cuentas y recibir ayuda.</p>
-        <Link className="button" to="/login">Ingresar</Link>
-      </section>
+    <main className="home" id="main">
+      <span className="brand">
+        <span className="brand-mark"><img src="/cecilia-avatar.png" alt="" width={24} height={24} /></span>cecilai
+      </span>
+      <h1>Conocé a Cecilia,<br />tu asistente bancaria.</h1>
+      <p className="lead">
+        Consultá saldos, movimientos y pagos en lenguaje simple. Si hace falta una persona, Cecilia le pasa tu caso completo.
+      </p>
+      <Link className="btn btn-primary btn-lg" to="/login">Ingresar</Link>
     </main>
   )
 }
