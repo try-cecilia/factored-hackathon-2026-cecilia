@@ -1,7 +1,13 @@
 import { createRootRoute, HeadContent, Outlet, Scripts } from '@tanstack/react-router'
+import { I18nProvider } from '../i18n/context'
+import { htmlLang } from '../i18n/locales'
+import { getLocale } from '../server/locale.functions'
 import stylesheet from '../styles.css?url'
 
 export const Route = createRootRoute({
+  // Once per page load: switching language calls router.invalidate(), which runs this again.
+  loader: async () => ({ locale: await getLocale() }),
+  staleTime: Infinity,
   head: () => ({
     meta: [
       { charSet: 'utf-8' },
@@ -14,10 +20,18 @@ export const Route = createRootRoute({
       { rel: 'icon', type: 'image/png', href: '/cecilia-avatar.png' },
     ],
   }),
-  component: () => (
-    <html lang="es">
-      <head><HeadContent /></head>
-      <body><Outlet /><Scripts /></body>
-    </html>
-  ),
+  component: RootDocument,
 })
+
+function RootDocument() {
+  const { locale } = Route.useLoaderData()
+  return (
+    <html lang={htmlLang[locale]}>
+      <head><HeadContent /></head>
+      <body>
+        <I18nProvider locale={locale}><Outlet /></I18nProvider>
+        <Scripts />
+      </body>
+    </html>
+  )
+}

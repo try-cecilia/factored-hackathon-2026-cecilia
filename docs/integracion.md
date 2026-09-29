@@ -417,6 +417,44 @@ completo se probó en el navegador con `make serve-all-fixture`, y las capturas 
 (login, chat vacío, propuesta de rastreo, escalamiento con número de caso, sesión vencida y su aviso previo, aclaración,
 límite de tasa, API caída, plazo agotado, escenario en portugués, móvil, respuesta inesperada, chat sin `DEMO_MODE`).
 
+### UI kit, i18n y galería
+
+**Cómo usar el kit.** Los componentes viven en `web/src/ui/` y salen de un solo punto:
+`import { Button, DataTable, Sidebar, AnswerMessage, Toast } from '../ui'`. Son presentacionales (reciben props, no llaman a
+la API), no dibujan bordes (solo el botón `outline` y el anillo de foco) y consumen únicamente variables de
+`web/src/tokens.css`; cada uno trae su CSS al lado, con clases `ui-*` que no chocan con las de `styles.css`. Las áreas son
+`Button` e `IconButton`; `loaders/` (`Spinner`, `ThinkingDots`, `CheckingSteps`, `Skeleton`, `Progress`, `DeliveryStatus`,
+`PageLoader`, `Toast`); `sidebar/` (cliente, rail, operador, menú de fila, vacío y cargando); `table/` (`DataTable` cómoda
+de 48 px y compacta de 32 px, selección con `BulkActionBar`, orden, `Pagination`); `messages/` (un componente por
+variante del chat, y `resolveMessage` que traduce la disposición de la API a una variante: AUTO_RESOLVE es respuesta,
+CLARIFY aclaración, ABSTAIN rechazo, ESCALATE pase a una persona, REAUTH_REQUIRED ingresar de nuevo). Las respuestas de la
+asistente llegan por props ya en el idioma del cliente y no se traducen. La lógica con reglas (orden, selección,
+paginación, estados de entrega, mapeo de disposiciones) está en archivos `.ts` puros con tests.
+
+**Idioma.** Español (`es`) y portugués de Brasil (`pt`). El servidor lo resuelve en este orden: cookie `cecilai_lang`,
+después `Accept-Language`, después `es` (`web/src/i18n/resolve.ts`); el loader de la ruta raíz lo entrega, así el HTML sale
+en el idioma correcto y `<html lang>` es `es` o `pt-BR`. `LanguageSwitcher` guarda la cookie (un año, no es un secreto) y
+recarga los datos de la ruta sin recargar la página. El español de la interfaz es neutro para Argentina, México y
+Colombia: sin voseo ni tuteo imperativo (infinitivos y construcciones nominales: "Reintentar", "Intentar de nuevo").
+
+**Cómo agregar un texto.**
+
+1. Escribirlo en el diccionario español del área, en `web/src/i18n/dict/es/<área>.ts` (objeto anidado; los valores
+   dinámicos van como `{nombre}`).
+2. Escribir su traducción en `web/src/i18n/dict/pt/<área>.ts`. Está tipado contra el español: si falta una clave o sobra
+   una, `make web-typecheck` falla.
+3. Usarlo: `const t = useT()` y `t('shell.customer', { id })`. Fuera de React, `translate(locale, clave, params)`. El título
+   de una ruta usa `headTitle(matches, clave)`. Una clave inexistente no compila.
+
+`make web-test` comprueba además que las dos lenguas tengan las mismas claves y los mismos marcadores, y que el español no
+tenga voseo. Un área nueva se agrega como un archivo en cada `dict/` y una línea en `es.ts` y `pt.ts`.
+
+**Galería.** `/dev/ui` muestra cada componente en todas sus variantes y estados, para cotejarlos contra los artboards de
+Paper; con `?both=1` dibuja el kit entero en español y en portugués. Existe con `make serve-web` (desarrollo) o con un
+build arrancado con `UI_GALLERY=1`; en cualquier otro build responde 404 y su código va en un chunk aparte que el
+cliente nunca descarga. Los estados que solo se alcanzan con el puntero o el teclado (hover, pressed, focus) se dibujan
+con la prop `forceState`. Las capturas de la galería contra Paper están en `docs/demo/ui-kit-*.png`.
+
 ---
 
 ## Levantar todo con un comando

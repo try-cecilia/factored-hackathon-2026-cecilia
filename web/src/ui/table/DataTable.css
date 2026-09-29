@@ -1,0 +1,69 @@
+/*
+ * Data table (Paper "UI · Data tables"). No rules between rows: separation is the row height, and the hover and
+ * selected states are fills. Comfortable is the customer view, compact the operator desk.
+ */
+.ui-dt { --dt-check: 16px; display: flex; flex-direction: column; color: var(--color-ink-app); }
+.ui-dt--comfortable {
+  --dt-row: 48px; --dt-head: 32px; --dt-pad: 16px; --dt-gap: 16px; --dt-radius: var(--radius-control);
+  --dt-size: var(--text-compact-md); --dt-line: 16px; --dt-head-size: var(--text-compact-sm); --dt-head-line: 16px; --dt-mono-size: var(--text-compact-sm);
+}
+.ui-dt--compact {
+  --dt-row: 32px; --dt-head: 28px; --dt-pad: 12px; --dt-gap: 12px; --dt-radius: var(--radius-compact);
+  --dt-size: var(--text-compact-sm); --dt-line: 16px; --dt-head-size: var(--text-compact-xs); --dt-head-line: 14px; --dt-mono-size: var(--text-compact-xs);
+}
+
+.ui-dt__table { width: 100%; border-collapse: separate; border-spacing: 0; table-layout: fixed; font-size: var(--dt-size); line-height: var(--dt-line); }
+.ui-dt__col-check { width: calc(var(--dt-pad) + var(--dt-check) + var(--dt-gap) / 2); }
+
+/* Header */
+.ui-dt__table thead th {
+  height: var(--dt-head); padding: 0 calc(var(--dt-gap) / 2); color: var(--color-ink-70); font-size: var(--dt-head-size); font-weight: var(--font-weight-medium);
+  line-height: var(--dt-head-line); text-align: left; white-space: nowrap;
+}
+.ui-dt__table thead th.ui-dt__th--end { text-align: right; }
+.ui-dt__table th:first-child, .ui-dt__table td:first-child { padding-left: var(--dt-pad); }
+.ui-dt__table th:last-child, .ui-dt__table td:last-child { padding-right: var(--dt-pad); }
+
+/* Cells. Row headers (`<th scope="row">`) look like any other cell. */
+.ui-dt__table tbody th, .ui-dt__table tbody td {
+  height: var(--dt-row); padding: 0 calc(var(--dt-gap) / 2); background: transparent; font-weight: var(--font-weight-normal); text-align: left; vertical-align: middle;
+}
+.ui-dt__table tbody th:first-child, .ui-dt__table tbody td:first-child { border-radius: var(--dt-radius) 0 0 var(--dt-radius); padding-left: var(--dt-pad); }
+.ui-dt__table tbody th:last-child, .ui-dt__table tbody td:last-child { border-radius: 0 var(--dt-radius) var(--dt-radius) 0; padding-right: var(--dt-pad); }
+.ui-dt__table .ui-dt__cell--end { text-align: right; }
+.ui-dt__cell--end .ui-dt__bar { margin-left: auto; }
+.ui-dt__table .ui-dt__cell--mono { font-family: var(--font-mono); font-size: var(--dt-mono-size); line-height: 14px; }
+.ui-dt__table .ui-dt__cell--strong { font-weight: var(--font-weight-semibold); }
+.ui-dt__table .ui-dt__cell--muted { color: var(--color-ink-70); }
+.ui-dt__table .ui-dt__cell--truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Checkbox column */
+.ui-dt__table th.ui-dt__check, .ui-dt__table td.ui-dt__check { line-height: 0; }
+
+/* Row states: fills only. Selected wins over hover. */
+.ui-dt__row:hover > *, .ui-dt__row[data-state='hover'] > * { background: var(--color-row-hover); }
+.ui-dt__row[data-selected] > * { background: var(--color-row-selected); }
+.ui-dt__row--skeleton:hover > * { background: transparent; }
+.ui-dt__row--action { cursor: pointer; }
+.ui-dt__row--action:focus { outline: none; }
+/* Focus ring for a row: the blue ring of the kit, drawn inside the cells because a `<tr>` cannot take a shadow. */
+.ui-dt__row--action:focus-visible > * { box-shadow: inset 0 2px 0 var(--color-cecil-blue), inset 0 -2px 0 var(--color-cecil-blue); }
+.ui-dt__row--action:focus-visible > :first-child { box-shadow: inset 2px 0 0 var(--color-cecil-blue), inset 0 2px 0 var(--color-cecil-blue), inset 0 -2px 0 var(--color-cecil-blue); }
+.ui-dt__row--action:focus-visible > :last-child { box-shadow: inset -2px 0 0 var(--color-cecil-blue), inset 0 2px 0 var(--color-cecil-blue), inset 0 -2px 0 var(--color-cecil-blue); }
+
+/* Row identity: a 28px mark and the name, as in the comfortable table */
+.ui-dt__identity { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.ui-dt__mark {
+  display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: var(--radius-pill);
+  background: var(--color-fill-subtle); color: var(--color-ink-70); font-size: var(--text-compact-sm); font-weight: var(--font-weight-semibold); line-height: 16px;
+}
+.ui-dt__row:hover .ui-dt__mark, .ui-dt__row[data-state='hover'] .ui-dt__mark { background: var(--color-paper); }
+.ui-dt__name { min-width: 0; overflow: hidden; font-weight: var(--font-weight-semibold); letter-spacing: -0.01em; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Loading: alternate tonal rows, the same heights as real rows */
+.ui-dt__row--skeleton:nth-child(even) .ui-dt__bar { background: var(--color-fill-subtle); }
+
+/* Footer and bulk bar */
+.ui-dt__pager { margin-top: 12px; }
+.ui-dt__bulk { position: sticky; bottom: 16px; z-index: 1; }
+.ui-dt__bulk:has(.ui-bulk) { margin-top: 12px; }

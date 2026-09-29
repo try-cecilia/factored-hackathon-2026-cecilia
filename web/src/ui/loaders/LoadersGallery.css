@@ -1,0 +1,22 @@
+/* Chrome of the loaders gallery only; the components draw themselves. */
+.gal-loaders { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 600px), 1fr)); gap: 56px 48px; align-items: start; }
+.gal-loaders > * { min-width: 0; }
+.gal-loaders .gal__group { align-content: start; gap: 12px; }
+.gal-loaders__row { display: flex; flex-wrap: wrap; align-items: center; gap: 28px; margin-top: 6px; }
+.gal-loaders__row--top { align-items: center; gap: 24px; }
+.gal-loaders__item { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.gal-loaders__item--start { align-items: flex-start; }
+.gal-loaders__cap { color: var(--color-ink-70); font-size: var(--text-compact-xs); line-height: 14px; }
+.gal-loaders__rule { flex-shrink: 0; width: 1px; height: 28px; background: var(--color-fill-muted); }
+.gal-loaders__tile { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: var(--radius-control); background: var(--color-ink-app); }
+.gal-loaders__stack { display: grid; gap: 22px; margin-top: 6px; }
+.gal-loaders__stack--wide { width: 100%; max-width: 600px; }
+.gal-loaders__stack--end { justify-items: end; gap: 16px; width: 100%; }
+.gal-loaders__cards { display: flex; gap: 16px; padding-left: 44px; }
+.gal-loaders__message { display: grid; justify-items: end; gap: 5px; max-width: 100%; }
+.gal-loaders__bubble {
+  max-width: 100%; margin: 0; padding: 9px 14px; border-radius: 16px 16px 4px 16px; background: var(--color-fill-muted);
+  color: var(--color-ink-app); font-size: var(--text-sm); line-height: 18px;
+}
+.gal-loaders__bubble--failed { background: color-mix(in srgb, var(--color-danger) 8%, transparent); }
+.gal-loaders__page { width: 260px; min-height: 200px; flex-shrink: 0; }

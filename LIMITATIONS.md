@@ -193,6 +193,15 @@ service, and as our own roadmap.
   lookup fails and a person takes the case (no answer without its audit record). If the per-turn trace record cannot
   be written, the customer still gets the answer and the failure is logged. Both were chosen without the bank's
   policy; the bank may want the second to fail closed too.
+- **Web UI kit: checked against Paper by eye and by measurement, not by pixel diff.** The gallery at `/dev/ui`
+  (`docs/demo/ui-kit-*.png`) was compared with each Paper artboard; values come from Paper's `get_jsx` and
+  `get_computed_styles`. Where Paper draws only one state, the rest was designed in the same language and is listed in
+  `docs/integracion.md`: the open "Why?" panel, the failed action result, the hover and selected quick replies, and the
+  failed step and error toast of the loaders. Paper draws no "delivered" message state and no skeleton avatar in tables,
+  so the kit has neither.
+- **Web UI: the Portuguese was written by the team, not reviewed by a native speaker**, and the interface has only Spanish
+  and Portuguese (the assistant's replies come from the API in the customer's language). The chat screen and the
+  operator console are not migrated to the kit or to i18n yet.
 
 ## Operations
 

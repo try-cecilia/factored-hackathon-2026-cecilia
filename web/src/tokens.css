@@ -1,8 +1,9 @@
 /*
- * Cecil.ai design system tokens, exported from the Paper file "Cecil.ai" (artboard "Cecil Design System").
- * Names and values are the same as in Paper so the customer app and the operator console share them;
- * do not rename. Only the font stacks add fallbacks, and the "app aliases" at the end are named uses of
- * the same colors that Paper draws with raw values.
+ * Cecil.ai design system tokens, exported from the Paper file "Cecil.ai" (get_tokens, format css).
+ * The first block keeps the names and values of Paper, in Paper's order, so the customer app and the operator
+ * console share them; do not rename. The only differences are the font stacks, which add fallbacks.
+ * The second block holds what Paper does not name: aliases for tokens that Paper renamed or replaced, and the
+ * colors the Paper frames draw with raw values.
  */
 :root {
   --color-gray-50: oklch(98.5% 0 0);
@@ -34,14 +35,24 @@
   --color-ink-app: #1D1C1D;
   --color-glass: #0000001A;
   --color-glass-edge: #0000000D;
-  --color-glass-label: #000000D9;
-  --color-sun-yellow: #FFE066;
-  --color-sun-amber: #FFC21A;
-  --color-sun-orange: #FF8A1F;
-  --color-sun-ember: #F2540C;
+  --color-glass-label: #FFFFFFD9;
+  --color-sky-100: #DCE8FF;
+  --color-caution: #FFC21A;
+  --color-sky-500: #2F6BFF;
+  --color-sky-900: #0B2A93;
   --color-cecil-blue: #014FFB;
   --color-success: #0E7A4B;
   --color-danger: #D12C1F;
+  --color-line: #00000014;
+  --color-row-hover: #0000000A;
+  --color-row-selected: #014FFB0F;
+  --color-warning: #8A5A00;
+  --color-fill-subtle: #0000000A;
+  --color-fill-muted: #00000014;
+  --color-fill-strong: #0000001F;
+  --color-ink-hover: #3A393B;
+  --color-sky-300: #7EA8FF;
+  --color-sky-700: #1B47D6;
 
   --font-sans: 'Inter Variable', Inter, system-ui, sans-serif;
   --font-serif: Georgia, serif;
@@ -60,6 +71,12 @@
   --text-7xl: 72px;
   --text-8xl: 96px;
   --text-9xl: 128px;
+  --text-compact-2xs: 10px;
+  --text-compact-xs: 11px;
+  --text-compact-sm: 12px;
+  --text-compact-md: 13px;
+  --text-compact-lg: 15px;
+  --text-compact-xl: 22px;
 
   --font-weight-thin: 100;
   --font-weight-extralight: 200;
@@ -104,6 +121,11 @@
   --container-6xl: 1152px;
   --container-7xl: 1280px;
 
+  --spacing-compact-1: 4px;
+  --spacing-compact-2: 8px;
+  --spacing-compact-3: 12px;
+  --spacing-compact-4: 16px;
+
   --radius-xs: 2px;
   --radius-sm: 4px;
   --radius-md: 6px;
@@ -115,13 +137,27 @@
   --radius-pill: 9999px;
   --radius-window: 42px;
   --radius-app: 24px;
+  --radius-compact: 6px;
+  --radius-control: 8px;
 
-  /* App aliases: colors and lines the Paper frames draw with raw values. */
+  /* Aliases for tokens that Paper replaced, kept so the screens written before the UI kit keep working. */
+  --color-sun-amber: var(--color-caution);
+  --color-sun-yellow: #FFE066;
+  --color-sun-orange: #FF8A1F;
+  --color-sun-ember: #F2540C;
+  --color-glass-label-dark: #000000D9; /* --color-glass-label was #000000D9 before Paper made it white */
+
+  /* App aliases: colors and shadows the Paper frames draw with raw values. */
   --color-ink-muted: #616061; /* secondary text on white: names, times, captions */
   --color-ink-soft: #43414A; /* navigation and quiet controls */
+  --color-danger-hover: #B5261B; /* destructive button, hover */
+  --color-danger-pressed: #9C2016; /* destructive button, pressed */
+  --color-disabled-text: color-mix(in srgb, var(--color-ink) 35%, transparent);
   --hairline: color-mix(in srgb, var(--color-ink) 6%, transparent);
   --hairline-strong: color-mix(in srgb, var(--color-ink) 16%, transparent);
   --focus-ring: 0 0 0 3px color-mix(in srgb, var(--color-cecil-blue) 22%, transparent);
+  /* Paper's focus ring: 2px gap in paper color, then 2px cecil-blue. The only stroke besides the outline button. */
+  --ring-focus: 0 0 0 2px var(--color-paper), 0 0 0 4px var(--color-cecil-blue);
   --shadow-window: 0 0 0 1px var(--color-glass), 0 1px 1px #0F0A1414, 0 24px 50px -24px #0F0A148C;
   --sun: radial-gradient(ellipse 90% 70% at 0% 100%, var(--color-sun-ember) 0%, transparent 70%),
     radial-gradient(ellipse 80% 60% at 100% 100%, var(--color-sun-orange) 0%, transparent 70%),

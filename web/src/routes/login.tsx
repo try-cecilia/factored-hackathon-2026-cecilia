@@ -1,7 +1,11 @@
 import { createFileRoute, Link, redirect, useRouter } from '@tanstack/react-router'
 import { useState, type FormEvent } from 'react'
 import { ClockIcon } from '../chat/icons'
+import { headTitle } from '../i18n/head'
+import { useT } from '../i18n/context'
+import type { MessageKey } from '../i18n/translate'
 import { getDemoCustomers, getSession, login } from '../server/auth.functions'
+import { LanguageSwitcher } from '../ui/LanguageSwitcher'
 
 function sameOriginPath(value: unknown) {
   if (typeof value !== 'string' || !value.startsWith('/')) return undefined
@@ -24,24 +28,25 @@ export const Route = createFileRoute('/login')({
     if (session) throw redirect({ href: search.redirect ?? '/chat' })
   },
   loader: () => getDemoCustomers(),
-  head: () => ({ meta: [{ title: 'Ingresar · Cecilai' }] }),
+  head: ({ matches }) => headTitle(matches, 'login.pageTitle'),
   component: Login,
 })
 
-const messages: Record<number, string> = {
-  401: 'Número de cliente o PIN incorrectos.',
-  422: 'Número de cliente o PIN incorrectos.',
-  429: 'Demasiados intentos. Probá de nuevo en unos minutos.',
+const messages: Record<number, MessageKey> = {
+  401: 'login.errors.badCredentials',
+  422: 'login.errors.badCredentials',
+  429: 'login.errors.tooManyAttempts',
 }
-const unavailable = 'El servicio no está disponible en este momento.'
+const unavailable: MessageKey = 'login.errors.unavailable'
 
 function Login() {
   const demoCustomers = Route.useLoaderData()
   const { redirect: target, motivo } = Route.useSearch()
   const router = useRouter()
+  const t = useT()
   const [customerId, setCustomerId] = useState('')
   const [pin, setPin] = useState('')
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<MessageKey | null>(null)
   const [pending, setPending] = useState(false)
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -61,20 +66,20 @@ function Login() {
   return (
     <div className="sun sun-center">
       <main className="auth-card" id="main">
-        <Link className="brand" to="/" aria-label="Cecilai, inicio">
+        <Link className="brand" to="/" aria-label={t('common.brandHome')}>
           <span className="brand-mark"><img src="/cecilia-avatar.png" alt="" width={24} height={24} /></span>cecilai
         </Link>
-        <h1>Hola de nuevo.</h1>
-        <p className="lead">Ingresá con tu número de cliente y tu PIN de 6 dígitos.</p>
+        <h1>{t('login.title')}</h1>
+        <p className="lead">{t('login.lead')}</p>
         {motivo === 'expired' && (
           <div className="callout callout-sun" role="status">
             <ClockIcon />
-            <span>Tu sesión venció. Ingresá de nuevo para continuar; la conversación empieza de cero.</span>
+            <span>{t('login.expired')}</span>
           </div>
         )}
         <form className="form" onSubmit={onSubmit}>
           <label>
-            Número de cliente
+            {t('login.customerId')}
             <input
               name="customer_id"
               value={customerId}
@@ -87,7 +92,7 @@ function Login() {
             />
           </label>
           <label>
-            PIN
+            {t('login.pin')}
             <input
               name="pin"
               type="password"
@@ -100,14 +105,14 @@ function Login() {
               autoComplete="one-time-code"
             />
           </label>
-          {error && <p className="error" role="alert">{error}</p>}
+          {error && <p className="error" role="alert">{t(error)}</p>}
           <button className="btn btn-primary btn-lg" type="submit" disabled={pending}>
-            {pending ? 'Ingresando…' : 'Ingresar'}
+            {pending ? t('login.submitting') : t('login.submit')}
           </button>
         </form>
         {demoCustomers.length > 0 && (
           <div className="demo-accounts">
-            <p className="eyebrow"><span className="badge-demo">Demo</span> Cuentas de prueba</p>
+            <p className="eyebrow"><span className="badge-demo">{t('login.demoBadge')}</span> {t('login.demoAccounts')}</p>
             <ul>
               {demoCustomers.map((c) => (
                 <li key={c.customer_id}>
@@ -119,6 +124,7 @@ function Login() {
             </ul>
           </div>
         )}
+        <LanguageSwitcher />
       </main>
     </div>
   )

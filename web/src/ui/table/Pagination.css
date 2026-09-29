@@ -1,0 +1,17 @@
+/* Footer (Paper "UI · Data tables", block 4): a tonal bar, no rule above it. */
+.ui-pager {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 40px; padding: 0 4px 0 12px;
+  border-radius: var(--radius-control); background: var(--color-fill-subtle);
+}
+.ui-pager__range { margin: 0; color: var(--color-ink-70); font-size: var(--text-compact-sm); line-height: 16px; }
+.ui-pager__controls { display: flex; align-items: center; gap: 4px; }
+.ui-pager__page {
+  display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 0;
+  border-radius: var(--radius-control); background: transparent; color: var(--color-ink-app); font: inherit;
+  font-size: var(--text-compact-sm); font-weight: var(--font-weight-medium); line-height: 16px; cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+.ui-pager__page:hover { background: var(--color-fill-muted); }
+.ui-pager__page[aria-current='page'] { background: var(--color-fill-muted); font-weight: var(--font-weight-semibold); cursor: default; }
+.ui-pager__page:focus-visible { outline: none; box-shadow: var(--ring-focus); }
+.ui-pager__gap { display: inline-flex; width: 20px; justify-content: center; color: var(--color-ink-70); font-size: var(--text-compact-sm); }

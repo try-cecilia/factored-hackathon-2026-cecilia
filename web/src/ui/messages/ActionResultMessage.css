@@ -1,0 +1,12 @@
+/* Action result (Paper "UI · Chat messages" · Action result): success tint, 20px check badge. Failure uses the danger tint. */
+.ui-result { gap: 10px; }
+.ui-result__badge {
+  display: flex; flex-shrink: 0; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: var(--radius-pill);
+  color: var(--color-paper);
+}
+.ui-result__badge--ok { background: var(--color-success); }
+.ui-result__badge--failed { background: var(--color-danger); }
+.ui-result__body { display: flex; flex: 1 1 0; flex-direction: column; gap: 2px; min-width: 0; }
+.ui-result__title { color: var(--color-ink-app); font-size: var(--text-compact-md); font-weight: var(--font-weight-bold); line-height: 16px; }
+.ui-result__detail { margin: 0; color: var(--color-ink-app); font-size: var(--text-compact-md); line-height: 150%; overflow-wrap: anywhere; }
+.ui-result__ref { font-family: var(--font-mono); letter-spacing: 0; }

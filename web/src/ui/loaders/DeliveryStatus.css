@@ -1,0 +1,13 @@
+.ui-delivery {
+  display: inline-flex; align-items: center; gap: 5px;
+  color: var(--color-ink-70); font-size: var(--text-compact-xs); line-height: 14px;
+}
+.ui-delivery--danger { gap: 8px; color: var(--color-danger); font-weight: var(--font-weight-medium); }
+/* Paper: the check is ink at 55%, quieter than the text. */
+.ui-delivery__check { flex-shrink: 0; color: color-mix(in srgb, var(--color-ink) 55%, transparent); }
+.ui-delivery__retry {
+  margin: -3px -5px; padding: 3px 5px; border: 0; border-radius: var(--radius-compact); background: transparent;
+  color: var(--color-ink-app); font: inherit; font-weight: var(--font-weight-semibold); line-height: 14px; cursor: pointer;
+}
+.ui-delivery__retry:hover { background: var(--color-fill-subtle); }
+.ui-delivery__retry:focus-visible { outline: none; box-shadow: var(--ring-focus); }

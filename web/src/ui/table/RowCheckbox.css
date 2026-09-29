@@ -1,0 +1,17 @@
+/* Row checkbox (Paper "UI · Data tables", block 3): a tonal square, blue when on, no stroke. */
+.ui-check { position: relative; display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center; width: 28px; height: 28px; margin: -6px; }
+.ui-check > input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.ui-check > input:disabled { cursor: default; }
+.ui-check__box {
+  display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: var(--radius-sm);
+  background: var(--color-fill-strong); color: var(--color-paper); pointer-events: none;
+  transition: background-color 0.12s ease, box-shadow 0.12s ease;
+}
+.ui-check__check, .ui-check__dash { display: none; }
+.ui-check > input:checked + .ui-check__box, .ui-check > input:indeterminate + .ui-check__box { background: var(--color-cecil-blue); }
+.ui-check > input:checked + .ui-check__box .ui-check__check { display: block; }
+.ui-check > input:indeterminate + .ui-check__box .ui-check__check { display: none; }
+.ui-check > input:indeterminate + .ui-check__box .ui-check__dash { display: block; }
+.ui-check > input:hover:not(:disabled):not(:checked):not(:indeterminate) + .ui-check__box { background: var(--color-fill-muted); }
+.ui-check > input:focus-visible + .ui-check__box, .ui-check[data-state='focus'] > .ui-check__box { box-shadow: var(--ring-focus); }
+.ui-check > input:disabled + .ui-check__box { opacity: 0.5; }

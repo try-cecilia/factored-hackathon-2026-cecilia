@@ -1,0 +1,31 @@
+.ui-progress { display: grid; gap: 8px; }
+.ui-progress__head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.ui-progress__label { color: var(--color-ink-app); font-size: var(--text-compact-sm); font-weight: var(--font-weight-medium); line-height: 16px; }
+.ui-progress__value { color: var(--color-ink-70); font-family: var(--font-mono); font-size: var(--text-compact-xs); line-height: 14px; }
+.ui-progress__track { height: 6px; overflow: hidden; border-radius: var(--radius-pill); background: var(--color-fill-muted); }
+.ui-progress__fill { height: 100%; border-radius: var(--radius-pill); background: var(--color-cecil-blue); transition: width 0.2s ease; }
+.ui-progress--indeterminate .ui-progress__fill { width: 32%; animation: ui-progress-slide 1.4s ease-in-out infinite; }
+@keyframes ui-progress-slide { from { transform: translateX(-100%); } to { transform: translateX(313%); } }
+/* The slide ends off-track, so without motion the bar rests where Paper draws it. */
+@media (prefers-reduced-motion: reduce) {
+  .ui-progress--indeterminate .ui-progress__fill { margin-left: 34%; animation: none; }
+}
+
+/* Steps: circles on a line. Paper draws the line as a 2px pill. */
+.ui-pstep { display: flex; align-items: center; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.ui-pstep__slot { display: flex; flex: 1 1 auto; align-items: center; gap: 8px; min-width: 0; }
+.ui-pstep__slot:first-child { flex: 0 0 auto; }
+.ui-pstep__line { flex: 1 1 0; min-width: 12px; height: 2px; border-radius: var(--radius-pill); background: var(--color-fill-muted); }
+.ui-pstep__line--done { background: var(--color-success); }
+.ui-pstep__item {
+  display: inline-flex; flex-shrink: 0; align-items: center; gap: 8px;
+  color: var(--color-ink-70); font-size: var(--text-compact-sm); font-weight: var(--font-weight-medium); line-height: 16px;
+}
+.ui-pstep__num {
+  display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center; width: 20px; height: 20px;
+  border-radius: var(--radius-pill); background: var(--color-fill-muted); color: var(--color-ink-70);
+  font-size: var(--text-compact-xs); font-weight: var(--font-weight-bold); line-height: 14px;
+}
+.ui-pstep__item--done { color: var(--color-ink-app); }
+.ui-pstep__item--active { color: var(--color-ink-app); font-weight: var(--font-weight-semibold); }
+.ui-pstep__item--active .ui-pstep__num { background: var(--color-cecil-blue); color: var(--color-paper); }

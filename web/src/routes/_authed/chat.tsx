@@ -1,10 +1,11 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { ChatView } from '../../chat/ChatView'
+import { headTitle } from '../../i18n/head'
 import { getDemoKit } from '../../server/demo.functions'
 
 export const Route = createFileRoute('/_authed/chat')({
   loader: () => getDemoKit(),
-  head: () => ({ meta: [{ title: 'Chat · Cecilai' }] }),
+  head: ({ matches }) => headTitle(matches, 'shell.pageTitle.chat'),
   component: Chat,
 })
 

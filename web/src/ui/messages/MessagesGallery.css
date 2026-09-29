@@ -1,0 +1,4 @@
+/* Layout of the messages gallery only. The messages draw themselves; nothing here styles them. */
+.gal-msg { display: grid; gap: 56px; }
+.gal-msg__stage { display: grid; gap: 20px; width: 600px; max-width: 100%; }
+.gal-msg__state { display: grid; gap: 8px; }

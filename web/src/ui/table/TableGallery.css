@@ -1,0 +1,9 @@
+/* Chrome of the table gallery only. The tables draw themselves. */
+.gal-table { display: grid; gap: 56px; }
+.gal-table__cell { min-width: 0; }
+.gal-table__block { display: grid; align-content: start; gap: 14px; min-width: 0; }
+.gal-table__pair { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 48px; }
+.gal-table__pair > .gal-table__cell { width: 600px; flex-shrink: 0; }
+.gal-table__sort { color: var(--color-ink-70); font-size: var(--text-compact-xs); font-weight: var(--font-weight-medium); line-height: 14px; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px 16px; }
+.gal-table__chips { display: flex; flex-wrap: wrap; align-items: center; gap: 24px; }
+.gal-table__chip-row { display: flex; align-items: center; gap: 16px; font-size: var(--text-compact-sm); }

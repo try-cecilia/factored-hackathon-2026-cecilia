@@ -1,0 +1,22 @@
+/* Floating row menu (Paper "Row menu"): the only sidebar surface with a shadow, because it floats. No strokes. */
+.ui-sidebar-menu {
+  --sb-ring: 0 0 0 2px var(--color-cecil-blue);
+  display: flex; flex-direction: column; box-sizing: border-box; width: 200px; padding: 6px; border-radius: var(--radius-xl);
+  background: var(--color-paper); color: var(--color-ink-app); font-family: var(--font-sans);
+  /* Paper draws this shadow with raw values. */
+  box-shadow: 0 12px 32px -12px #00000055, 0 2px 8px -2px #00000026;
+}
+/* Portal layer: placed by `placeMenu` in viewport coordinates. */
+.ui-sidebar-menu--layer { position: fixed; z-index: 60; }
+.ui-sidebar-menu__item {
+  display: flex; flex-shrink: 0; align-items: center; gap: 10px; height: 32px; padding: 0 10px; border: 0; border-radius: var(--radius-control);
+  background: transparent; color: var(--color-ink-app); font: inherit; font-size: var(--text-compact-md); font-weight: var(--font-weight-medium);
+  line-height: 16px; text-align: left; cursor: pointer;
+}
+.ui-sidebar-menu__item > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ui-sidebar-menu__item[data-separated] { margin-top: 6px; }
+.ui-sidebar-menu__item[data-danger] { color: var(--color-danger); }
+.ui-sidebar-menu__item:hover, .ui-sidebar-menu__item:focus, .ui-sidebar-menu__item[data-active] { background: var(--color-fill-subtle); outline: none; }
+.ui-sidebar-menu__item:focus-visible { box-shadow: var(--sb-ring); }
+.ui-sidebar-menu__item[aria-disabled='true'] { color: var(--color-disabled-text); cursor: default; }
+.ui-sidebar-menu__item[aria-disabled='true']:hover { background: transparent; }
