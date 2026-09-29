@@ -3,10 +3,16 @@ import { useI18n, useT } from '../i18n/context'
 import type { MessageKey } from '../i18n/translate'
 import { applyDemoFault, getDemoTickets, startScenario } from '../server/demo.functions'
 import { Button, IconButton } from '../ui'
-import type { DemoFault, DemoScenario, DemoTicket, Reply } from './types'
+import type { Entry } from './conversation'
+import type { DemoFault, DemoScenario, DemoTicket } from './types'
 import './DemoPanel.css'
 
-type Active = { scenario: DemoScenario; got: string[] }
+/**
+ * The scenario in course. `from` is the session it was chosen in: the new one is there when `sessionRef` differs, and `base` is
+ * how many replies that conversation already had (what comes after them answers the steps). `prefilled` is the last step
+ * written into the composer.
+ */
+type Active = { scenario: DemoScenario; from: string; base: number | null; prefilled: number }
 
 const PATHS = ['normal', 'ambiguous', 'out_of_scope', 'action', 'human', 'attack', 'failure'] as const
 const DISPOSITIONS = ['AUTO_RESOLVE', 'CLARIFY', 'ABSTAIN', 'ESCALATE'] as const
@@ -18,12 +24,18 @@ function known<T extends string>(list: readonly T[], value: string): value is T 
 
 // DEMO_MODE only. Everything here talks to the API's /demo endpoints through the server; the customer app works
 // the same without it, and it is drawn apart, on its own panel with its own label, so nobody mistakes it for the service.
-export function DemoPanel({ scenarios, sessionRef, pending, escalations, send, onSessionChanged, onClose }: {
+// A scenario does not send anything: it writes its next message into the chat's input, and the person sends it from there like
+// any other; the steps below only read the replies the conversation gets.
+export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations, prefill, overlay, onSessionChanged, onClose }: {
   scenarios: DemoScenario[]
   sessionRef: string
+  entries: Entry[]
   pending: boolean
   escalations: number
-  send: (text: string) => Promise<Reply | null>
+  /** Writes a message into the chat's input; `replace` says the person chose it, so it goes over a draft. */
+  prefill: (text: string, replace: boolean) => void
+  /** The panel is a drawer over the page: choosing a scenario closes it, so the input is in reach. */
+  overlay: boolean
   onSessionChanged: () => Promise<void>
   onClose: () => void
 }) {
@@ -55,7 +67,7 @@ export function DemoPanel({ scenarios, sessionRef, pending, escalations, send, o
     try {
       const result = await startScenario({ data: { id: scenario.id } })
       if (!result.ok) return setNote('demo.scenarios.failed')
-      setActive({ scenario, got: [] })
+      setActive({ scenario, from: sessionRef, base: null, prefilled: -1 })
       setModelDown(scenario.fault === 'llm_outage')
       await onSessionChanged()
     } catch {
@@ -63,13 +75,6 @@ export function DemoPanel({ scenarios, sessionRef, pending, escalations, send, o
     } finally {
       setBusy(false)
     }
-  }
-
-  async function sendStep() {
-    if (!active) return
-    const step = active.scenario.turns[active.got.length]
-    const reply = await send(step)
-    if (reply) setActive((a) => (a ? { ...a, got: [...a.got, reply.disposition] } : a))
   }
 
   async function fault(kind: DemoFault) {
@@ -85,8 +90,31 @@ export function DemoPanel({ scenarios, sessionRef, pending, escalations, send, o
     }
   }
 
+  const replies = entries.filter((e) => e.role === 'assistant')
+  const got = active && active.base !== null ? replies.slice(active.base).map((e) => e.reply.disposition) : []
+  const next = got.length
+  const turns = active?.scenario.turns ?? []
+
+  // The new session is the scenario's: from then on its replies are the steps' answers.
+  useEffect(() => {
+    setActive((a) => (a && a.base === null && sessionRef !== a.from ? { ...a, base: replies.length } : a))
+  }, [sessionRef, replies.length])
+
+  // The step to come is written into the input: the first over what was there (the person just chose it), the ones after only
+  // if the input is empty, so a message being written is not lost.
+  useEffect(() => {
+    if (!active || active.base === null || next <= active.prefilled || next >= turns.length) return
+    setActive({ ...active, prefilled: next })
+    prefill(turns[next], next === 0)
+    if (next === 0 && overlay) onClose()
+  }, [active, next, turns, prefill, overlay, onClose])
+
+  function again() {
+    prefill(turns[next], true)
+    if (overlay) onClose()
+  }
+
   const groups = [...new Set(scenarios.map((s) => s.path))]
-  const next = active ? active.got.length : 0
 
   return (
     <aside className="demo" aria-labelledby="demo-title">
@@ -97,35 +125,13 @@ export function DemoPanel({ scenarios, sessionRef, pending, escalations, send, o
       </div>
       <p className="demo__lead">{t('demo.lead')}</p>
 
-      {active && (
-        <section className="demo__card" aria-label={t('demo.steps.label')}>
-          <strong>{text(active.scenario.title)}</strong>
-          <ol className="demo__steps">
-            {active.scenario.turns.map((turn, i) => {
-              const expected = active.scenario.expect[i]
-              const got = active.got[i]
-              const matches = !expected || expected === got
-              return (
-                <li key={i}>
-                  <span className="demo__quote">“{turn}”</span>
-                  <span className="demo__muted">{t('demo.steps.expected', { what: expected ? disposition(expected) : t('demo.steps.anyOutcome') })}</span>
-                  {got && <span className={matches ? 'demo__ok' : 'demo__bad'}>{t(matches ? 'demo.steps.came' : 'demo.steps.cameWrong', { what: disposition(got) })}</span>}
-                  {i === next && <Button variant="ghost" size="sm" tinted disabled={pending} onClick={() => void sendStep()}>{t('demo.steps.send')}</Button>}
-                </li>
-              )
-            })}
-          </ol>
-          <Button variant="ghost" size="sm" onClick={() => setActive(null)}>{t('demo.steps.close')}</Button>
-        </section>
-      )}
-
       <section aria-label={t('demo.scenarios.title')}>
         <h3>{t('demo.scenarios.title')}</h3>
         {groups.map((path) => (
           <div key={path} className="demo__group">
             <h4>{known(PATHS, path) ? t(`demo.paths.${path}`) : path}</h4>
             {scenarios.filter((s) => s.path === path).map((s) => (
-              <div key={s.id} className="demo__card">
+              <article key={s.id} className="demo__card" aria-label={text(s.title)}>
                 <div className="demo__row">
                   <span className="demo__name">{text(s.title)}</span>
                   <span className="demo__tag" title={t('demo.scenarios.language', { lang: s.language.toUpperCase() })}>{s.language.toUpperCase()}</span>
@@ -137,7 +143,29 @@ export function DemoPanel({ scenarios, sessionRef, pending, escalations, send, o
                     {active?.scenario.id === s.id ? t('demo.scenarios.restart') : t('demo.scenarios.load')}
                   </Button>
                 </div>
-              </div>
+                {active?.scenario.id === s.id && (
+                  <section className="demo__steps-box" aria-label={t('demo.steps.label')}>
+                    <ol className="demo__steps">
+                      {active.scenario.turns.map((turn, i) => {
+                        const expected = active.scenario.expect[i]
+                        const reply = got[i]
+                        const matches = !expected || expected === reply
+                        return (
+                          <li key={i} aria-current={active.base !== null && i === next ? 'step' : undefined}>
+                            <span className="demo__quote">“{turn}”</span>
+                            <span className="demo__muted">{t('demo.steps.expected', { what: expected ? disposition(expected) : t('demo.steps.anyOutcome') })}</span>
+                            {reply && <span className={matches ? 'demo__ok' : 'demo__bad'}>{t(matches ? 'demo.steps.came' : 'demo.steps.cameWrong', { what: disposition(reply) })}</span>}
+                          </li>
+                        )
+                      })}
+                    </ol>
+                    <div className="demo__actions">
+                      {active.base !== null && next < turns.length && <Button variant="ghost" size="sm" tinted onClick={again}>{t('demo.steps.refill')}</Button>}
+                      <Button variant="ghost" size="sm" onClick={() => setActive(null)}>{t('demo.steps.close')}</Button>
+                    </div>
+                  </section>
+                )}
+              </article>
             ))}
           </div>
         ))}

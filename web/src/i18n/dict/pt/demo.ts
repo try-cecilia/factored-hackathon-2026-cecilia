@@ -32,7 +32,7 @@ export const demo: Like<typeof es> = {
     anyOutcome: 'qualquer um',
     came: '✓ {what}',
     cameWrong: '✗ Saiu {what}',
-    send: 'Enviar esta mensagem',
+    refill: 'Escrever a mensagem de novo',
     close: 'Fechar passos',
   },
   scenarios: {

@@ -16,7 +16,9 @@
 .demo__name { font-weight: var(--font-weight-semibold); }
 .demo__tag { padding: 1px 5px; border-radius: var(--radius-sm); background: var(--color-fill-muted); color: var(--color-ink-70); font-size: var(--text-compact-2xs); font-weight: var(--font-weight-semibold); line-height: 12px; }
 .demo__card code { color: var(--color-ink-70); font-size: var(--text-compact-xs); }
-.demo__steps { display: grid; gap: 10px; margin: 6px 0; padding: 0; list-style: none; }
+.demo__steps-box { display: grid; gap: 8px; padding: 8px 10px; border-radius: var(--radius-lg); background: var(--color-fill-muted); }
+.demo__steps { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.demo__steps li[aria-current='step'] .demo__quote { text-decoration: underline; text-decoration-color: var(--color-sky-700); text-underline-offset: 3px; }
 .demo__steps li { display: grid; justify-items: start; gap: 4px; }
 .demo__quote { font-weight: var(--font-weight-medium); }
 .demo__ok { color: var(--color-success); font-weight: var(--font-weight-semibold); }

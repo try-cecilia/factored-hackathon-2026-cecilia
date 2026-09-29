@@ -30,7 +30,7 @@ export const demo = {
     anyOutcome: 'cualquiera',
     came: '✓ {what}',
     cameWrong: '✗ Salió {what}',
-    send: 'Enviar este mensaje',
+    refill: 'Volver a escribir el mensaje',
     close: 'Cerrar pasos',
   },
   scenarios: {
