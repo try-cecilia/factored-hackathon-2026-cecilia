@@ -430,7 +430,9 @@ class Orchestrator:
                 # it: a ticket confirmed late is not claimed as filed.
                 try:
                     found = run_bounded(lambda: escalation.default_queue.get(ticket.ticket_id), budget.remaining())
-                except TimeoutError:
+                    if found is None:  # read in time and it is not there: the write was lost, there is no ticket to name
+                        known_id = None
+                except TimeoutError:  # could not be read in time: it may well exist, so its id is kept
                     found = None
                 filed = found is not None and not budget.expired
                 info["outcome"] = "ok" if filed else "not_read_back"
