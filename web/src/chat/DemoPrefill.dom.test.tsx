@@ -238,5 +238,34 @@ describe('a scenario of the demo panel writes its message in the chat input', ()
       expect((container.querySelector('.shell__main') as HTMLElement).hasAttribute('inert')).toBe(false)
       expect(document.activeElement).toBe(input())
     })
+    it('reopening the drawer with a scenario in course puts the focus on its card, not on the top of the panel', async () => {
+      const user = userEvent.setup()
+      const { container } = await draw()
+      await user.click(await screen.findByRole('button', { name: 'Demo' }))
+      const card = await load(user, 'Dos turnos')
+      await waitFor(() => expect(input().value).toBe('¿Cuál es mi saldo?'))
+      const drawer = container.querySelector('#shell-demo') as HTMLElement
+      expect(drawer.hasAttribute('inert')).toBe(true)
+
+      await user.click(screen.getByRole('button', { name: 'Demo' }))
+
+      expect(drawer.hasAttribute('inert')).toBe(false)
+      expect(document.activeElement).toBe(card)
+      expect(within(card).getByRole('region', { name: 'Pasos del escenario' })).toBeTruthy()
+      // The focus stays inside the drawer, and Escape gives the page back.
+      for (let i = 0; i < 12; i++) {
+        await user.tab()
+        expect(drawer.contains(document.activeElement), `Tab #${i + 1}`).toBe(true)
+      }
+      await user.keyboard('{Escape}')
+      expect((container.querySelector('.shell__main') as HTMLElement).hasAttribute('inert')).toBe(false)
+    })
+
+    it('reopened with no scenario in course it still opens on the first control', async () => {
+      const user = userEvent.setup()
+      await draw()
+      await user.click(await screen.findByRole('button', { name: 'Demo' }))
+      expect((document.activeElement as HTMLElement).getAttribute('aria-label') ?? document.activeElement?.textContent).toMatch(/Cerrar/)
+    })
   })
 })

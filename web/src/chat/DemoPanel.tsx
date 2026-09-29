@@ -145,7 +145,13 @@ export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations
           <div key={path} className="demo__group">
             <h4>{known(PATHS, path) ? t(`demo.paths.${path}`) : path}</h4>
             {scenarios.filter((s) => s.path === path).map((s) => (
-              <article key={s.id} className="demo__card" aria-label={text(s.title)}>
+              <article
+                key={s.id}
+                className="demo__card"
+                aria-label={text(s.title)}
+                tabIndex={active?.scenario.id === s.id ? -1 : undefined}
+                data-active-scenario={active?.scenario.id === s.id ? '' : undefined}
+              >
                 <div className="demo__row">
                   <span className="demo__name">{text(s.title)}</span>
                   <span className="demo__tag" title={t('demo.scenarios.language', { lang: s.language.toUpperCase() })}>{s.language.toUpperCase()}</span>

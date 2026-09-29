@@ -14,18 +14,23 @@ export function useDismiss(
   panel: RefObject<HTMLElement | null>,
   /** Where the focus goes back when what opened the panel cannot take it any more (a row of a drawer that closed as this opened). */
   fallback?: () => HTMLElement | null,
+  /** Where the focus goes when it opens, instead of the first control (the demo panel's active scenario); it is brought into view. */
+  initial?: () => HTMLElement | null,
 ) {
   const opener = useRef<Element | null>(null)
   const close = useRef(onClose)
   close.current = onClose
   const fallbackRef = useRef(fallback)
   fallbackRef.current = fallback
+  const initialRef = useRef(initial)
+  initialRef.current = initial
 
   useEffect(() => {
     if (!open || !active) return
     opener.current = document.activeElement
-    const first = panel.current?.querySelector<HTMLElement>(FOCUSABLE)
+    const first = initialRef.current?.() ?? panel.current?.querySelector<HTMLElement>(FOCUSABLE)
     first?.focus()
+    first?.scrollIntoView?.({ block: 'nearest' })
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') return close.current()
       if (event.key !== 'Tab' || !panel.current) return

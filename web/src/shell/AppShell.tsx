@@ -71,7 +71,8 @@ export function AppShell({ session, kit, children }: { session: Session; kit: Pr
 
   const closeCase = useCallback(() => setCaseView((view) => view && { ...view, open: false }), [])
   useDismiss(menuOpen, phone, () => setMenuOpen(false), side)
-  useDismiss(demoOpen, narrow, () => setDemoOpen(false), demo)
+  // Reopened with a scenario in course, the drawer opens on its card (with the steps) and not at the top of the list.
+  useDismiss(demoOpen, narrow, () => setDemoOpen(false), demo, undefined, () => demo.current?.querySelector<HTMLElement>('[data-active-scenario]') ?? null)
   // Always modal, on every screen: the view is over the page, and Escape gives the focus back to what opened it.
   // Opened from the phone drawer's row, the drawer closes at once: the focus comes back to the menu button instead.
   useDismiss(caseOpen, true, closeCase, casePanel, () => document.getElementById('shell-menu'))
