@@ -37,6 +37,12 @@ describe('cookie policy: Secure and __Host- follow the public origin, not NODE_E
     assert.equal(policy({ NODE_ENV: 'production', WEB_PUBLIC_ORIGIN: ' http://127.0.0.1:3000 ' }).secure, false)
   })
 
+  test('a list of origins is decided by the first one', () => {
+    assert.equal(policy({ NODE_ENV: 'production', WEB_PUBLIC_ORIGIN: 'http://127.0.0.1:3000,http://localhost:3000' }).secure, false)
+    assert.equal(policy({ NODE_ENV: 'production', WEB_PUBLIC_ORIGIN: 'https://a.example, https://b.example' }).secure, true)
+    assert.equal(policy({ NODE_ENV: 'production', WEB_PUBLIC_ORIGIN: ',' }).secure, true)
+  })
+
   test('the prefix is applied to any cookie name the same way', () => {
     assert.equal(cookiePolicy({ WEB_PUBLIC_ORIGIN: 'https://x.example' }).name('cecilai_operator_flash'), '__Host-cecilai_operator_flash')
     assert.equal(cookiePolicy({ WEB_PUBLIC_ORIGIN: 'http://x.example' }).name('cecilai_operator_flash'), 'cecilai_operator_flash')

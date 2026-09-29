@@ -115,7 +115,11 @@ lectura y trazas. Cómo se configuran las claves:
   para el ingreso porque todavía no hay cookie. El origen público sale de **`WEB_PUBLIC_ORIGIN`** en el servidor de la web
   (por ejemplo `https://console.bank.example`, sin ruta), nunca de cabeceras de proxy: una página `http://` del mismo host
   no puede forzar un ingreso sobre `https://`. **En producción es obligatoria**: sin ella, o con un valor que no sea un
-  origen http(s), todos los POST de la consola dan 403 y el servidor escribe en el log qué falta. En desarrollo, si está
+  origen http(s), todos los POST de la consola se rechazan y el servidor escribe en el log qué falta.
+  **Puede ser una lista de orígenes exactos separados por comas** (esquema, host y puerto de cada uno): el stack local de Docker
+  responde en `http://127.0.0.1:3000` y en `http://localhost:3000`, y el compose pasa ambos por defecto. Sin comodines: una entrada
+  que no sea un origen http(s) invalida todo el valor (se rechaza todo en vez de abrir algo por un error de tipeo), y las cabeceras
+  `X-Forwarded-*` siguen sin leerse. En producción va **un origen https explícito**. Si hay lista, el primero decide las cookies. En desarrollo, si está
   vacía, se usa el origen de la URL de la petición (`http://127.0.0.1:<puerto>`). Está en `web/.env.example`.
 - *Cookies según el origen.* Que una cookie salga `Secure` y con prefijo `__Host-` lo decide **`WEB_PUBLIC_ORIGIN`**, no `NODE_ENV`
   (la imagen de Docker corre con `NODE_ENV=production` también en local). Con un origen **https** son `Secure` con `__Host-`
@@ -599,7 +603,7 @@ make clean-volumes      # además borra los volúmenes (pregunta antes)
 ```
 
 La web del compose corre en modo producción: la consola de operador exige `WEB_PUBLIC_ORIGIN`, y el compose se la pasa
-(por defecto `http://127.0.0.1:${WEB_PORT}`, junto con `TRUSTED_CLIENT_IP_HEADER`, `OPERATOR_IDLE_SECONDS` y `UI_GALLERY`; están en
+(por defecto `http://127.0.0.1:${WEB_PORT}` y `http://localhost:${WEB_PORT}`, junto con `TRUSTED_CLIENT_IP_HEADER`, `OPERATOR_IDLE_SECONDS` y `UI_GALLERY`; están en
 `.env.example`). `make compose-e2e` entra por la web como un navegador: login de cliente y un turno de chat, login de operador por el
 formulario (con y sin el `Origin` correcto) y su cola, y `/dev/ui` en 404.
 

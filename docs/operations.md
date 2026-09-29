@@ -25,7 +25,7 @@ code reads; `make compose-e2e` checks that `SECURITY_HSTS`, `FRESHNESS_SLO_HOURS
 Ports are published on `127.0.0.1` only.
 
 **The web in Docker runs in production mode**, so the operator console (`/operador`) refuses every form post unless the web
-knows the origin the browser sees. The compose passes `WEB_PUBLIC_ORIGIN`, by default `http://127.0.0.1:${WEB_PORT}` (right for
+knows the origin the browser sees. The compose passes `WEB_PUBLIC_ORIGIN`, by default `http://127.0.0.1:${WEB_PORT}` and `http://localhost:${WEB_PORT}` (a comma-separated list of exact origins, no wildcards; right for
 `make up`; set it in `.env` if you reach the web by another name), and the other settings the web reads: `TRUSTED_CLIENT_IP_HEADER`
 (leave empty locally), `OPERATOR_IDLE_SECONDS` (to try the idle expiry without waiting 30 minutes) and `UI_GALLERY` (`1`
 publishes the UI kit gallery at `/dev/ui`; `0`, the default, is a 404 as on a real deploy). `tests/test_setup.py` fails if the web

@@ -63,6 +63,41 @@ describe('the origin the forms trust is the configured public one, scheme, host 
   })
 })
 
+describe('a list of origins: the local stack answers on 127.0.0.1 and on localhost', () => {
+  const LOCAL = ['http://127.0.0.1:3000', 'http://localhost:3000']
+  beforeEach(() => { process.env.WEB_PUBLIC_ORIGIN = LOCAL.join(',') })
+
+  for (const origin of LOCAL) {
+    test(`${origin} is accepted, and its session cookie opens the console`, async () => {
+      const res = await login({ Origin: origin, Referer: `${origin}/operador/login`, 'Sec-Fetch-Site': 'same-origin' }, origin)
+      assert.equal(res.status, 303)
+      assert.equal(res.headers.get('location'), '/operador/ingreso?to=%2Foperador%2Fcola')
+      const cookie = sessionCookie(res)
+      assert.ok(cookie)
+      assert.equal((await app.send('/operador/cola', { headers: { Cookie: cookie }, base: origin })).status, 200)
+    })
+  }
+
+  test('another host, another port or another scheme is refused', async () => {
+    for (const foreign of ['http://localhost:3001', 'http://127.0.0.1:8000', 'https://localhost:3000', 'http://192.168.1.20:3000', 'https://attacker.invalid']) {
+      const res = await login({ Origin: foreign, Referer: `${foreign}/x`, 'Sec-Fetch-Site': 'cross-site' }, LOCAL[0])
+      assert.equal(res.status, 403, foreign)
+      assert.equal(sessionCookie(res), null, foreign)
+    }
+  })
+
+  test('proxy headers still do not add an origin to the list', async () => {
+    const res = await login({ Origin: 'http://console.bank.example', 'X-Forwarded-Host': 'localhost:3000', 'X-Forwarded-Proto': 'http' }, LOCAL[0])
+    assert.equal(res.status, 403)
+  })
+
+  test('a wildcard is not an origin: the whole value is refused', async () => {
+    process.env.WEB_PUBLIC_ORIGIN = `${LOCAL[0]},*`
+    const res = await login({ Origin: LOCAL[0], 'Sec-Fetch-Site': 'same-origin' }, LOCAL[0])
+    assert.equal(res.status, 403)
+  })
+})
+
 describe('in production the public origin is required', () => {
   const errors: string[] = []
   const original = console.error

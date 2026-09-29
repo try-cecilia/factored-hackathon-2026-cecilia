@@ -2,10 +2,13 @@
 // login is exactly what a hostile page would want to force on a visitor (log the victim into the attacker's session).
 // SameSite=Strict on the cookies does not help there: a login has no cookie yet.
 //
-// "Ours" is one origin, scheme + host + port, taken from configuration, because behind a TLS-terminating proxy the
+// "Ours" is an origin, scheme + host + port, taken from configuration, because behind a TLS-terminating proxy the
 // request URL says http while the browser is on https, and a proxy header is only as trustworthy as the proxy:
 //  - production: WEB_PUBLIC_ORIGIN is required (for example https://console.bank.example). Without it, or with a value that
 //    is not an http(s) origin, every form post is refused and the server logs why.
+//  - WEB_PUBLIC_ORIGIN may list several origins separated by commas, each one exact (a local run answers on both
+//    http://127.0.0.1:3000 and http://localhost:3000). No wildcards: one entry that is not an http(s) origin makes the whole
+//    value invalid, so a typo refuses everything instead of opening something.
 //  - development: without WEB_PUBLIC_ORIGIN, the origin of the request URL (Vite serves http://127.0.0.1:<port>).
 // X-Forwarded-* and Forwarded are never read.
 //
@@ -26,15 +29,21 @@ const originOf = (value: string) => {
   }
 }
 
+/** The exact origins a WEB_PUBLIC_ORIGIN value lists, or null when it lists none or one of them is not an http(s) origin. */
+export function publicOrigins(value: string | undefined): string[] | null {
+  const parts = (value ?? '').split(',').map((part) => part.trim()).filter(Boolean)
+  const origins = parts.map(originOf)
+  return origins.length > 0 && origins.every((origin) => origin !== null) ? (origins as string[]) : null
+}
+
 export function originConfigFromEnv(env: Record<string, string | undefined> = process.env): OriginConfig {
   return { production: env.NODE_ENV === 'production', publicOrigin: env.WEB_PUBLIC_ORIGIN }
 }
 
 export function checkOrigin(request: Request, config: OriginConfig): OriginVerdict {
   const configured = config.publicOrigin?.trim()
-  let ours: string | null
-  if (configured) ours = originOf(configured)
-  else ours = config.production ? null : originOf(request.url)
+  const own = originOf(request.url)
+  const ours = configured ? publicOrigins(configured) : config.production || own === null ? null : [own]
   if (ours === null) return { ok: false, reason: 'misconfigured' }
 
   const headers = request.headers
@@ -42,8 +51,9 @@ export function checkOrigin(request: Request, config: OriginConfig): OriginVerdi
   if (site !== null && site !== 'same-origin') return { ok: false, reason: 'cross-site' }
 
   const origin = headers.get('origin')
-  if (origin !== null) return origin === ours || originOf(origin) === ours ? { ok: true } : { ok: false, reason: 'cross-site' }
+  const isOurs = (value: string | null) => value !== null && ours.includes(value)
+  if (origin !== null) return isOurs(origin) || isOurs(originOf(origin)) ? { ok: true } : { ok: false, reason: 'cross-site' }
   const referer = headers.get('referer')
-  if (referer !== null) return originOf(referer) === ours ? { ok: true } : { ok: false, reason: 'cross-site' }
+  if (referer !== null) return isOurs(originOf(referer)) ? { ok: true } : { ok: false, reason: 'cross-site' }
   return site === 'same-origin' ? { ok: true } : { ok: false, reason: 'cross-site' }
 }

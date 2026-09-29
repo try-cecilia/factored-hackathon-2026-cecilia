@@ -304,7 +304,8 @@ def test_the_compose_passes_every_setting_the_web_reads_and_a_working_origin_for
     declared = set(re.findall(r"^#?\s*([A-Z][A-Z0-9_]+)=", EXAMPLE, re.M))
     assert WEB_SETTINGS <= declared
     origin = next(e for e in COMPOSE["services"]["web"]["environment"] if e.startswith("WEB_PUBLIC_ORIGIN="))
-    assert origin == "WEB_PUBLIC_ORIGIN=${WEB_PUBLIC_ORIGIN:-http://127.0.0.1:${WEB_PORT:-3000}}"  # follows the published port
+    # follows the published port, by IP and by name
+    assert origin == "WEB_PUBLIC_ORIGIN=${WEB_PUBLIC_ORIGIN:-http://127.0.0.1:${WEB_PORT:-3000},http://localhost:${WEB_PORT:-3000}}"
     assert re.search(r"^WEB_PUBLIC_ORIGIN=$", EXAMPLE, re.M) and re.search(r"^UI_GALLERY=0$", EXAMPLE, re.M)  # gallery off by default
 
 
