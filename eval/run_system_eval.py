@@ -613,17 +613,16 @@ def _account_facts(r) -> list[dict]:
 
 
 def _unexplained_by_public_facts(text: str, facts: list[dict]) -> str:
-    """The reply without what its public facts (a quote) explain: their rendering, in either language, and the "information as of" line.
-    Everything else is still the customer's to protect."""
+    """The reply without what its public facts (a quote) render to, exactly as `render.render_answer` writes it from those facts in
+    either language, with its "information as of" line only if a fact carries that date. Everything else is still the customer's to protect."""
     from agent.core import render
 
     for lang in ("es", "pt"):
-        for f in facts:
-            try:
-                text = text.replace(render.render_result(f["tool"], f["result"], lang), "")
-            except Exception:  # noqa: BLE001 - a fact of a shape the renderer does not know explains nothing
-                continue
-    return "\n".join(line for line in text.splitlines() if _template_key(line.strip()) != "as_of")
+        try:
+            text = text.replace(render.render_answer(facts, lang), "") if facts else text
+        except Exception:  # noqa: BLE001 - a fact of a shape the renderer does not know explains nothing
+            pass
+    return text
 
 
 def _shows_account_data(case: Case, r) -> bool:
