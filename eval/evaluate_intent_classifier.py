@@ -18,6 +18,7 @@ phrasing habits can inflate both systems' scores; see EVALUATION.md.
 """
 from __future__ import annotations
 
+import csv
 import hashlib
 import json
 import sys
@@ -31,8 +32,9 @@ from sklearn.metrics import confusion_matrix, f1_score, precision_recall_fscore_
 
 from agent.llm import baseline_classifier
 from agent.llm.intent_classifier import VARIANTS, load_rows, train
-from agent.policy.signals import contains_escalation_signal
-from eval import tracking
+from agent.policy import intent_guard
+from agent.policy.signals import contains_escalation_signal, escalation_categories
+from eval import leakage, tracking
 from eval.stats import fmt, rate, zero_event_upper_bound
 
 TRAIN = "eval/test_cases/intent_dataset.csv"
@@ -44,6 +46,7 @@ REPORT_MD = Path("eval/reports/intent_classifier.md")
 ESC = "requires_escalation"
 MAX_FALSE_ESCALATION = 0.05
 THRESHOLDS = [round(0.05 * i, 2) for i in range(2, 19)]
+TRACE_HELDOUT = "eval/test_cases/trace_requests_heldout.csv"
 
 
 def _h(s: str) -> str:
@@ -84,11 +87,22 @@ def guard_metrics(rows: list[dict], flags: list[bool]) -> dict:
             "missed": missed, "missed_upper_bound_if_zero": zero_event_upper_bound(len(pos)) if missed == 0 else None}
 
 
+def trace_guard() -> dict:
+    """Trace requests are not a class of the classifier (retraining with them cost a fraud report: LIMITATIONS.md), so
+    what is measured is what the pre-LLM guard does with them: a request handed to a person is safe but not self-served."""
+    rows = list(csv.DictReader(open(TRACE_HELDOUT, encoding="utf-8")))
+    handed = [r["utterance"] for r in rows if escalation_categories(r["utterance"]) or intent_guard.read(r["utterance"]).escalate]
+    return {"n": len(rows), "handed_to_a_person": rate(len(handed), len(rows)), "utterances": handed,
+            "source": TRACE_HELDOUT, "authors": "team-written, never used for training"}
+
+
 def main() -> None:
     train_rows, held = load_rows(TRAIN), load_rows(HELDOUT)
-    overlap = {r["utterance"].strip().lower() for r in train_rows} & {r["utterance"].strip().lower() for r in held}
-    assert not overlap, f"held-out leaks into training: {overlap}"
-    dev, test = dev_test_split(held)
+    leak = leakage.report([r["utterance"] for r in train_rows], [r["utterance"] for r in held])
+    dropped, to_review = leakage.excluded_utterances(leak), leakage.review_utterances(leak)
+    dev, test = dev_test_split(held)  # the split is fixed before anything is excluded, so no phrase changes side
+    dev = [r for r in dev if r["utterance"] not in dropped]
+    test = [r for r in test if r["utterance"] not in dropped]
 
     # 1) Model selection on dev only.
     variants = {}
@@ -137,14 +151,24 @@ def main() -> None:
             "guard_misses": [r["utterance"] for r, a, b in zip(rows, lex, clf_only) if r["intent"] == ESC and not (a or b)],
         }
 
+    def without_templated(ev: dict) -> dict:
+        """The test result if every phrase that is a shorter form of a training template is left out: does the number
+        depend on them?"""
+        return {"n": ev["n"], "baseline_accuracy": ev["baseline_keywords"]["accuracy"], "learned_accuracy": ev["learned"]["accuracy"],
+                "baseline_macro_f1": ev["baseline_keywords"]["macro_f1"], "learned_macro_f1": ev["learned"]["macro_f1"],
+                "guard_recall": ev["escalation_guard"]["lexicon_or_classifier (runtime)"]["recall"]}
+
     report = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "protocol": "train=templates; held-out written after freezing train+baseline; dev=selection+threshold; test=scored once",
         "train_n": len(train_rows), "train_class_counts": dict(Counter(r["intent"] for r in train_rows)),
         "heldout_n": len(held), "dev_n": len(dev), "test_n": len(test),
+        "leakage": leak,
         "model_selection_dev": variants, "chosen_variant": chosen,
         "threshold_sweep_dev": sweep, "escalation_threshold": tau, "max_false_escalation_constraint": MAX_FALSE_ESCALATION,
         "dev": evaluate(dev), "test": evaluate(test),
+        "test_without_templated_phrases": without_templated(evaluate([r for r in test if r["utterance"] not in to_review])),
+        "trace_requests_guard": trace_guard(),
         "versions": {"sklearn": sklearn.__version__, "train_sha256": _h(Path(TRAIN).read_text(encoding="utf-8")), "heldout_sha256": _h(Path(HELDOUT).read_text(encoding="utf-8"))},
     }
     MODEL_OUT.parent.mkdir(parents=True, exist_ok=True)
@@ -176,7 +200,8 @@ def track(report: dict) -> None:
         v = report["versions"]
         mlflow.log_params({"chosen_variant": report["chosen_variant"], "escalation_threshold": report["escalation_threshold"],
                            "max_false_escalation": report["max_false_escalation_constraint"], "train_n": report["train_n"],
-                           "dev_n": report["dev_n"], "test_n": report["test_n"], "sklearn": v["sklearn"],
+                           "dev_n": report["dev_n"], "test_n": report["test_n"], "leakage_excluded": len(report["leakage"]["excluded"]),
+                           "sklearn": v["sklearn"],
                            "train_sha256": v["train_sha256"], "heldout_sha256": v["heldout_sha256"], "protocol": report["protocol"]})
         for variant, score in report["model_selection_dev"].items():
             with mlflow.start_run(run_name=f"candidate {variant}", nested=True):
@@ -206,6 +231,7 @@ def to_markdown(r: dict) -> str:
     lang = "\n".join(f"| {k} | {fmt(t['baseline_keywords']['by_language'][k])} | {fmt(v)} |" for k, v in t["learned"]["by_language"].items())
     style = "\n".join(f"| {k} | {fmt(t['baseline_keywords']['by_style'][k])} | {fmt(v)} |" for k, v in t["learned"]["by_style"].items())
     guard = "\n".join(f"| {k} | {fmt(v['recall'])} | {v['missed']} | {fmt(v['false_escalation'])} |" for k, v in t["escalation_guard"].items())
+    lk, sw, tr = r["leakage"], r["test_without_templated_phrases"], r["trace_requests_guard"]
     errs = "\n".join(f"| {e['utterance']} | {e['gold']} | {e['baseline']} | {e['learned']} |" for e in d["errors"][:25])
     return f"""# Intent classifier evaluation (auto-generated)
 
@@ -213,7 +239,7 @@ Generated by `python -m eval.evaluate_intent_classifier` at {r['generated_at']}.
 Protocol: {r['protocol']}. Intervals are Wilson 95%.
 
 - Training set: {r['train_n']} team-authored template utterances ({', '.join(f'{k}={v}' for k, v in r['train_class_counts'].items())}).
-- Held-out set: {r['heldout_n']} utterances (dev {r['dev_n']} / test {r['test_n']}), written after training data and baseline rules were frozen; 2 are real sentences from the dataset's transcripts.
+- Held-out set: {r['heldout_n']} utterances written after training data and baseline rules were frozen (2 are real sentences from the dataset's transcripts); {len(r['leakage']['excluded'])} left out for leakage, so dev {r['dev_n']} / test {r['test_n']} are scored.
 - Representation chosen on dev by macro-F1: **{r['chosen_variant']}** ({', '.join(f"{k}: {v['dev_macro_f1']}" for k, v in r['model_selection_dev'].items())}).
 - Runtime escalation threshold chosen on dev (max recall with false escalations ≤ {int(100 * r['max_false_escalation_constraint'])}%): **τ = {r['escalation_threshold']}**.
 
@@ -243,6 +269,23 @@ Protocol: {r['protocol']}. Intervals are Wilson 95%.
 {guard}
 
 Escalation requests the runtime guard missed on test (reported, not tuned on): {', '.join(repr(u) for u in t['guard_misses']) or 'none'}. A miss here is a real missed escalation: the LLM has no escalate tool, so the request would end as ABSTAIN/CLARIFY. Not added to the lexicon, because that would be tuning on test.
+
+## Leakage control (training vs held-out)
+Similarity is char 3-gram Jaccard on text without case, accents or punctuation. The previous check compared `strip().lower()` and let one identical phrase through. Cut-offs: **≥ {lk['exclude_at']}** = the same phrase, left out of scoring; **≥ {lk['review_at']}** = usually a shorter form of a training template, kept and listed. The dev/test split is fixed before any phrase is left out.
+
+- Highest similarity per held-out phrase: max {lk['max']}, p95 {lk['p95']}, median {lk['median']}. Phrases at ≥ 0.5 / 0.6 / 0.7 / 0.9: {' / '.join(str(v) for v in lk['counts_at_least'].values())} of {lk['n']}.
+- Left out for leakage ({len(lk['excluded'])}): {'; '.join(f"'{p['heldout']}' ~ '{p['train']}' ({p['similarity']})" for p in lk['excluded']) or 'none'}.
+- Kept but listed ({len(lk['review'])}): {'; '.join(f"'{p['heldout']}' ({p['similarity']})" for p in lk['review']) or 'none'}.
+
+| Test result | n | Baseline accuracy | Learned accuracy | Learned macro-F1 | Guard recall |
+|---|---|---|---|---|---|
+| As scored | {t['n']} | {fmt(t['baseline_keywords']['accuracy'])} | {fmt(t['learned']['accuracy'])} | {t['learned']['macro_f1']} | {fmt(t['escalation_guard']['lexicon_or_classifier (runtime)']['recall'])} |
+| Without phrases at ≥ {lk['review_at']} | {sw['n']} | {fmt(sw['baseline_accuracy'])} | {fmt(sw['learned_accuracy'])} | {sw['learned_macro_f1']} | {fmt(sw['guard_recall'])} |
+
+Limits: characters do not see a paraphrase with other words, and the same team wrote the templates and the held-out phrases. Only a set written by people outside the team settles that (docs/human_set.md).
+
+## Trace requests (not a class of the classifier)
+{tr['n']} {tr['authors']} phrases (`{tr['source']}`) through the pre-LLM guard: **{fmt(tr['handed_to_a_person'])}** handed to a person ({', '.join(repr(u) for u in tr['utterances']) or 'none'}). Handing one over is safe but not self-served. Retraining the classifier with trace examples cost a fraud report on its held-out test, so the classifier was kept and the trace action is chosen by the model and confirmed in code (ADR-002).
 
 ## Dev-split error analysis (first 25 disagreements with gold)
 | Utterance | Gold | Baseline | Learned |

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-28T17:19:29.979236+00:00",
+  "generated_at": "2026-09-29T09:44:10.478055+00:00",
   "protocol": "train=templates; held-out written after freezing train+baseline; dev=selection+threshold; test=scored once",
   "train_n": 182,
   "train_class_counts": {
@@ -12,7 +12,65 @@
   },
   "heldout_n": 174,
   "dev_n": 88,
-  "test_n": 86,
+  "test_n": 85,
+  "leakage": {
+    "exclude_at": 0.9,
+    "review_at": 0.6,
+    "n": 174,
+    "max": 1.0,
+    "p95": 0.58,
+    "median": 0.291,
+    "counts_at_least": {
+      "0.5": 22,
+      "0.6": 8,
+      "0.7": 1,
+      "0.9": 1
+    },
+    "excluded": [
+      {
+        "heldout": "quantos pesos vale um dólar",
+        "train": "Quantos pesos vale um dólar?",
+        "similarity": 1.0
+      }
+    ],
+    "review": [
+      {
+        "heldout": "cotação do dólar hoje",
+        "train": "Qual é a cotação do dólar hoje?",
+        "similarity": 0.679
+      },
+      {
+        "heldout": "cuanto me queda en la tarjeta",
+        "train": "¿Cuánto dinero me queda en la tarjeta de débito?",
+        "similarity": 0.659
+      },
+      {
+        "heldout": "necesito saber cuanto dinero hay disponible en mi tarjeta de debito",
+        "train": "¿Cuánto dinero tengo disponible en mi tarjeta de débito?",
+        "similarity": 0.647
+      },
+      {
+        "heldout": "quiero ver los retiros del cajero de este mes",
+        "train": "Quiero ver los retiros y depósitos de este mes",
+        "similarity": 0.647
+      },
+      {
+        "heldout": "Quisiera saber cuál es mi saldo actual en mi cuenta de ahorros.",
+        "train": "¿Cuál es mi saldo en mi cuenta de ahorros?",
+        "similarity": 0.643
+      },
+      {
+        "heldout": "quanto devo no cartão",
+        "train": "Quanto eu devo no cartão de crédito?",
+        "similarity": 0.636
+      },
+      {
+        "heldout": "tipo de cambio peso mexicano dolar",
+        "train": "¿Cuál es el tipo de cambio de peso mexicano a dólares?",
+        "similarity": 0.62
+      }
+    ]
+  },
   "model_selection_dev": {
     "char": {
       "dev_macro_f1": 0.8285
@@ -979,26 +1037,26 @@
     "guard_misses": []
   },
   "test": {
-    "n": 86,
+    "n": 85,
     "class_counts": {
       "balance_inquiry": 16,
       "transaction_lookup": 15,
       "payment_status": 15,
-      "exchange_rate_inquiry": 10,
+      "exchange_rate_inquiry": 9,
       "out_of_scope": 15,
       "requires_escalation": 15
     },
     "baseline_keywords": {
       "accuracy": {
-        "k": 54,
-        "n": 86,
-        "rate": 0.6279,
+        "k": 53,
+        "n": 85,
+        "rate": 0.6235,
         "ci95": [
-          0.5223,
-          0.7225
+          0.5173,
+          0.7191
         ]
       },
-      "macro_f1": 0.6515,
+      "macro_f1": 0.6496,
       "per_class": {
         "balance_inquiry": {
           "precision": 0.9091,
@@ -1015,18 +1073,18 @@
           "support": 16
         },
         "exchange_rate_inquiry": {
-          "precision": 0.9,
+          "precision": 0.8889,
           "recall": {
-            "k": 9,
-            "n": 10,
-            "rate": 0.9,
+            "k": 8,
+            "n": 9,
+            "rate": 0.8889,
             "ci95": [
-              0.5958,
-              0.9821
+              0.565,
+              0.9801
             ]
           },
-          "f1": 0.9,
-          "support": 10
+          "f1": 0.8889,
+          "support": 9
         },
         "out_of_scope": {
           "precision": 0.3182,
@@ -1105,12 +1163,12 @@
           ]
         },
         "pt": {
-          "k": 22,
-          "n": 37,
-          "rate": 0.5946,
+          "k": 21,
+          "n": 36,
+          "rate": 0.5833,
           "ci95": [
-            0.4349,
-            0.7365
+            0.422,
+            0.7286
           ]
         }
       },
@@ -1134,12 +1192,12 @@
           ]
         },
         "colloquial": {
-          "k": 17,
-          "n": 29,
-          "rate": 0.5862,
+          "k": 16,
+          "n": 28,
+          "rate": 0.5714,
           "ci95": [
-            0.4074,
-            0.7449
+            0.3907,
+            0.7349
           ]
         },
         "formal": {
@@ -1217,12 +1275,12 @@
           ]
         },
         "team_heldout": {
-          "k": 52,
-          "n": 84,
-          "rate": 0.619,
+          "k": 51,
+          "n": 83,
+          "rate": 0.6145,
           "ci95": [
-            0.5122,
-            0.7155
+            0.5069,
+            0.7119
           ]
         }
       },
@@ -1246,7 +1304,7 @@
           ],
           [
             0,
-            9,
+            8,
             1,
             0,
             0,
@@ -1289,15 +1347,15 @@
     },
     "learned": {
       "accuracy": {
-        "k": 73,
-        "n": 86,
-        "rate": 0.8488,
+        "k": 72,
+        "n": 85,
+        "rate": 0.8471,
         "ci95": [
-          0.7584,
-          0.9095
+          0.7557,
+          0.9084
         ]
       },
-      "macro_f1": 0.8493,
+      "macro_f1": 0.8485,
       "per_class": {
         "balance_inquiry": {
           "precision": 0.8889,
@@ -1314,18 +1372,18 @@
           "support": 16
         },
         "exchange_rate_inquiry": {
-          "precision": 0.9091,
+          "precision": 0.9,
           "recall": {
-            "k": 10,
-            "n": 10,
+            "k": 9,
+            "n": 9,
             "rate": 1.0,
             "ci95": [
-              0.7225,
+              0.7008,
               1.0
             ]
           },
-          "f1": 0.9524,
-          "support": 10
+          "f1": 0.9474,
+          "support": 9
         },
         "out_of_scope": {
           "precision": 0.6667,
@@ -1404,12 +1462,12 @@
           ]
         },
         "pt": {
-          "k": 30,
-          "n": 37,
-          "rate": 0.8108,
+          "k": 29,
+          "n": 36,
+          "rate": 0.8056,
           "ci95": [
-            0.6579,
-            0.9052
+            0.6497,
+            0.9025
           ]
         }
       },
@@ -1433,12 +1491,12 @@
           ]
         },
         "colloquial": {
-          "k": 24,
-          "n": 29,
-          "rate": 0.8276,
+          "k": 23,
+          "n": 28,
+          "rate": 0.8214,
           "ci95": [
-            0.6545,
-            0.924
+            0.6441,
+            0.9212
           ]
         },
         "formal": {
@@ -1516,12 +1574,12 @@
           ]
         },
         "team_heldout": {
-          "k": 71,
-          "n": 84,
-          "rate": 0.8452,
+          "k": 70,
+          "n": 83,
+          "rate": 0.8434,
           "ci95": [
-            0.753,
-            0.9073
+            0.7502,
+            0.9061
           ]
         }
       },
@@ -1545,7 +1603,7 @@
           ],
           [
             0,
-            10,
+            9,
             0,
             0,
             0,
@@ -1599,11 +1657,11 @@
         },
         "false_escalation": {
           "k": 0,
-          "n": 71,
+          "n": 70,
           "rate": 0.0,
           "ci95": [
             0.0,
-            0.0513
+            0.052
           ]
         },
         "missed": 3,
@@ -1621,11 +1679,11 @@
         },
         "false_escalation": {
           "k": 0,
-          "n": 71,
+          "n": 70,
           "rate": 0.0,
           "ci95": [
             0.0,
-            0.0513
+            0.052
           ]
         },
         "missed": 8,
@@ -1643,11 +1701,11 @@
         },
         "false_escalation": {
           "k": 0,
-          "n": 71,
+          "n": 70,
           "rate": 0.0,
           "ci95": [
             0.0,
-            0.0513
+            0.052
           ]
         },
         "missed": 1,
@@ -1979,6 +2037,55 @@
     "guard_misses": [
       "vou processar o banco"
     ]
+  },
+  "test_without_templated_phrases": {
+    "n": 79,
+    "baseline_accuracy": {
+      "k": 50,
+      "n": 79,
+      "rate": 0.6329,
+      "ci95": [
+        0.5228,
+        0.7307
+      ]
+    },
+    "learned_accuracy": {
+      "k": 66,
+      "n": 79,
+      "rate": 0.8354,
+      "ci95": [
+        0.7385,
+        0.9012
+      ]
+    },
+    "baseline_macro_f1": 0.6582,
+    "learned_macro_f1": 0.8417,
+    "guard_recall": {
+      "k": 14,
+      "n": 15,
+      "rate": 0.9333,
+      "ci95": [
+        0.7018,
+        0.9881
+      ]
+    }
+  },
+  "trace_requests_guard": {
+    "n": 12,
+    "handed_to_a_person": {
+      "k": 1,
+      "n": 12,
+      "rate": 0.0833,
+      "ci95": [
+        0.0149,
+        0.3539
+      ]
+    },
+    "utterances": [
+      "necesito que rastreen un pago que no se acreditó"
+    ],
+    "source": "eval/test_cases/trace_requests_heldout.csv",
+    "authors": "team-written, never used for training"
   },
   "versions": {
     "sklearn": "1.9.1",
