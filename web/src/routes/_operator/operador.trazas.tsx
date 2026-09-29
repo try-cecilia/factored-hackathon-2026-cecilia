@@ -6,6 +6,7 @@ import { loadTraceLog, type TraceRow } from '../../server/operator.functions'
 import { Button, DataTable, StatusIndicator, type Column, type SortState, type StatusTone } from '../../ui'
 import { ageShort, categoryName, dispositionName, ms, usd, short } from '../-operator/format'
 import { isAutomatic } from '../-operator/refresh'
+import { pageSlice } from '../-operator/queue'
 import { Notice } from '../-operator/ui'
 import { sortRows } from '../../ui'
 
@@ -41,6 +42,8 @@ function Traces() {
       })
     : []
 
+  const shown = pageSlice(rows, page, PAGE_SIZE)
+
   const columns: Column<TraceRow>[] = [
     { id: 'trace', header: t('monitor.traces.columns.trace'), width: 84, mono: true, rowHeader: true, sortable: true, cell: (r) => short(r.trace_id) },
     { id: 'result', header: t('monitor.traces.columns.result'), width: 116, sortable: true, cell: (r) => <StatusIndicator tone={tones[r.disposition] ?? 'neutral'}>{dispositionName(t, r.disposition)}</StatusIndicator> },
@@ -68,7 +71,7 @@ function Traces() {
             className="op-table"
             density="compact"
             caption={t('monitor.traces.caption')}
-            rows={rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)}
+            rows={shown.rows}
             columns={columns}
             getRowId={(r) => r.trace_id}
             sort={sort}
@@ -79,7 +82,7 @@ function Traces() {
             onRowClick={(r) => void navigate({ to: '/operador/trazas/$traceId', params: { traceId: r.trace_id } })}
             activeRowId={traceId}
             empty={{ title: t('monitor.traces.emptyTitle'), description: t('monitor.traces.emptyBody') }}
-            pagination={{ page, pageSize: PAGE_SIZE, total: rows.length, onPageChange: setPage }}
+            pagination={{ page: shown.page, pageSize: PAGE_SIZE, total: rows.length, onPageChange: setPage }}
           />
         )}
       </section>

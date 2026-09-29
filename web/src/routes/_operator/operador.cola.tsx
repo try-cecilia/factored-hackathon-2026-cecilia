@@ -8,7 +8,7 @@ import { Button, DataTable, PriorityChip, StatusIndicator, type Column, type Sor
 import type { Priority } from '../../ui'
 import { ageShort, categoryName, statusKey, when } from '../-operator/format'
 import {
-  countryOptions, distinct, filterTickets, filtersOf, hasFilters, inScope, isClosed, localeOf, orderTickets, tabCounts, validateSearch, type QueueSearch, type StatusTab,
+  countryOptions, distinct, filterTickets, filtersOf, hasFilters, inScope, isClosed, localeOf, orderTickets, pageSlice, tabCounts, validateSearch, type QueueSearch, type StatusTab,
 } from '../-operator/queue'
 import { Notice } from '../-operator/ui'
 
@@ -77,7 +77,7 @@ function Queue() {
   // Any change of what is being looked at goes back to the first page.
   const scopeKey = JSON.stringify([filters, sort])
   const [paged, setPaged] = useState({ key: scopeKey, page: 1 })
-  const page = paged.key === scopeKey ? paged.page : 1
+  const shown = pageSlice(rows, paged.key === scopeKey ? paged.page : 1, PAGE_SIZE)
 
   const set = (patch: Partial<QueueSearch>) => void navigate({ search: (prev: QueueSearch) => ({ ...prev, ...patch }) as never, replace: true })
   const clear = () => {
@@ -150,7 +150,7 @@ function Queue() {
               className="op-table"
               density="compact"
               caption={t('operator.queue.caption')}
-              rows={rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)}
+              rows={shown.rows}
               columns={columns}
               getRowId={(r) => r.ticket_id}
               sort={sort}
@@ -158,7 +158,7 @@ function Queue() {
               onRowClick={(r) => void navigate({ to: '/operador/cola/$ticketId', params: { ticketId: r.ticket_id }, search: ((prev: QueueSearch) => prev) as never })}
               activeRowId={ticketId}
               empty={empty}
-              pagination={{ page, pageSize: PAGE_SIZE, total: rows.length, onPageChange: (next) => setPaged({ key: scopeKey, page: next }) }}
+              pagination={{ page: shown.page, pageSize: PAGE_SIZE, total: rows.length, onPageChange: (next) => setPaged({ key: scopeKey, page: next }) }}
             />
           </>
         )}

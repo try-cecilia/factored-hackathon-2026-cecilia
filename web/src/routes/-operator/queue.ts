@@ -1,4 +1,5 @@
 import type { Ticket } from '../../server/operator.functions.ts'
+import { clampPage } from '../../ui/table/paging.ts'
 import { priorityRank } from '../../ui/table/priority.ts'
 import { sortRows, type SortState } from '../../ui/table/sort.ts'
 import { CLOSED } from './format.ts'
@@ -168,6 +169,12 @@ export function countryOptions(tickets: readonly Ticket[]): { value: string; lab
     if (code && t.country && !byCode.has(code)) byCode.set(code, code === t.country ? code : `${code} · ${t.country}`)
   }
   return [...byCode].sort(([a], [b]) => a.localeCompare(b)).map(([value, label]) => ({ value, label }))
+}
+
+/** The rows of a page, and the page they belong to: one past the end (a refresh left fewer cases) is the last one, for the rows and for the pager. */
+export function pageSlice<T>(rows: readonly T[], page: number, pageSize: number): { page: number; rows: T[] } {
+  const current = clampPage(page, rows.length, pageSize)
+  return { page: current, rows: rows.slice((current - 1) * pageSize, current * pageSize) }
 }
 
 export const localeOf = (t: Ticket) => [countryCode(t.country), t.language.toUpperCase()].filter(Boolean).join('·')

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { DeskStatus, Ticket } from '../../server/operator.functions.ts'
-import { countryCode, countryOptions, defaultOrder, filterTickets, filtersOf, inScope, localeOf, orderTickets, sidebarCounts, tabCounts, validateSearch, type QueueFilters } from './queue.ts'
+import { countryCode, countryOptions, defaultOrder, pageSlice, filterTickets, filtersOf, inScope, localeOf, orderTickets, sidebarCounts, tabCounts, validateSearch, type QueueFilters } from './queue.ts'
 
 let n = 0
 function ticket(over: Partial<Ticket> & { status?: DeskStatus; operator?: string | null } = {}): Ticket {
@@ -112,4 +112,16 @@ test('the country filter survives the URL for every country of the dataset and f
 test('the country options are the codes with the name next to them, once each', () => {
   const options = countryOptions([ticket({ country: 'México' }), ticket({ country: 'México' }), ticket({ country: 'Perú' }), ticket({ country: null })])
   assert.deepEqual(options, [{ value: 'MX', label: 'MX · México' }, { value: 'PE', label: 'PE · Perú' }])
+})
+
+test('a page past the end is brought back to the last one, with its rows', () => {
+  const rows = Array.from({ length: 26 }, (_, i) => i)
+  assert.deepEqual(pageSlice(rows, 2, 25), { page: 2, rows: [25] })
+  // The poll leaves 25 cases while the operator is on page 2.
+  const fewer = rows.slice(0, 25)
+  const back = pageSlice(fewer, 2, 25)
+  assert.equal(back.page, 1)
+  assert.equal(back.rows.length, 25)
+  assert.deepEqual(pageSlice([], 3, 25), { page: 1, rows: [] })
+  assert.equal(pageSlice(rows, 0, 25).page, 1)
 })
