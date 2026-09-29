@@ -228,9 +228,48 @@ def test_liveness_needs_nothing_and_readiness_says_which_dependency_is_down(clie
     def down():
         raise RuntimeError("io error /secret/path")
 
-    monkeypatch.setattr(account_tools, "data_as_of", down)
+    import api.observability as observability
+
+    monkeypatch.setattr(observability, "_query_warehouse", down)
     not_ready = client.get("/readyz")
     assert not_ready.status_code == 503
     assert not_ready.json() == {"status": "not_ready", "checks": {"warehouse": False, "state_store": True, "data_dir_writable": True}}
     assert "secret" not in not_ready.text  # the reason stays in the logs: this answer is public
     assert client.get("/livez").status_code == 200  # a broken warehouse is a reason to withhold traffic, not to restart
+
+
+def test_readiness_notices_a_warehouse_that_disappears_or_breaks_after_it_was_first_read(client, monkeypatch, tmp_path):
+    """data_as_of() is cached and a cached connection keeps reading a deleted file, so neither can be the probe."""
+    import shutil
+
+    from agent.tools import db
+    from agent.tools.db import duckdb_path
+
+    copy = tmp_path / "bank.duckdb"
+    shutil.copy(duckdb_path(), copy)
+    monkeypatch.setenv("DUCKDB_PATH", str(copy))
+    db.close_all()
+    try:
+        assert client.get("/readyz").status_code == 200
+        assert client.get("/health").json()["data_as_of"] == "2024-01-16"  # the read that fills the caches
+        copy.unlink()
+        gone = client.get("/readyz")
+        assert gone.status_code == 503 and gone.json()["checks"]["warehouse"] is False
+        copy.write_bytes(b"this is not a duckdb file" * 100)  # present but unreadable
+        assert client.get("/readyz").status_code == 503
+        assert client.get("/livez").status_code == 200
+    finally:
+        db.close_all()
+
+
+def test_readiness_gives_up_on_a_warehouse_that_does_not_answer_in_time(client, monkeypatch):
+    import time as time_module
+
+    import api.observability as observability
+
+    monkeypatch.setattr(observability, "PROBE_TIMEOUT_S", 0.2)
+    monkeypatch.setattr(observability, "_query_warehouse", lambda: time_module.sleep(2))
+    started = time_module.perf_counter()
+    r = client.get("/readyz")
+    assert r.status_code == 503 and r.json()["checks"]["warehouse"] is False
+    assert time_module.perf_counter() - started < 1.5

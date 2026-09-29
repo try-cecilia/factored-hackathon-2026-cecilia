@@ -68,25 +68,51 @@ class ObservabilityMiddleware:
                 pass
 
 
+PROBE_TIMEOUT_S = 2.0
+
+
+def _query_warehouse() -> bool:
+    """A real read of the warehouse file as it is now: the file must exist and a *new* read-only connection must answer a query.
+    Not data_as_of() (cached) and not the cached connection (on Linux it keeps reading a file that was deleted)."""
+    import duckdb
+
+    from agent.tools.db import duckdb_path
+
+    path = duckdb_path()
+    if not os.path.isfile(path):
+        return False
+    con = duckdb.connect(path, read_only=True)
+    try:
+        return con.execute("SELECT 1 FROM transactions LIMIT 1").fetchone() is not None
+    finally:
+        con.close()
+
+
+def _within(seconds: float, probe) -> bool:
+    """probe() answered True in time. A probe that hangs is abandoned (its thread finishes on its own), not waited for."""
+    from concurrent.futures import ThreadPoolExecutor, TimeoutError
+
+    pool = ThreadPoolExecutor(max_workers=1)
+    try:
+        return bool(pool.submit(probe).result(timeout=seconds))
+    except (TimeoutError, Exception):  # noqa: BLE001 - any failure means not ready; the reason stays in the logs
+        return False
+    finally:
+        pool.shutdown(wait=False)
+
+
 def readiness() -> dict[str, bool]:
-    """Each dependency a request needs, as a yes or no. The reasons stay in the logs: this answer is public."""
+    """Each dependency a request needs, as a yes or no, read fresh every time. The reasons stay in the logs: this answer is public."""
     from agent.session.auth import default_store
-    from agent.tools import account_tools
     from agent.tools.audit import default_audit_log
 
-    def warehouse() -> bool:
-        return account_tools.data_as_of() is not None
-
     def state_store() -> bool:
-        return len(default_store) >= 0
+        path = os.environ.get("STATE_DB_PATH")
+        return (not path or os.path.isfile(path)) and len(default_store) >= 0  # len() runs a COUNT on the database
 
     def data_dir_writable() -> bool:
         return os.access(default_audit_log.path.parent, os.W_OK)
 
-    checks = {}
-    for name, probe in (("warehouse", warehouse), ("state_store", state_store), ("data_dir_writable", data_dir_writable)):
-        try:
-            checks[name] = bool(probe())
-        except Exception:  # noqa: BLE001
-            checks[name] = False
-    return checks
+    return {"warehouse": _within(PROBE_TIMEOUT_S, _query_warehouse),
+            "state_store": _within(PROBE_TIMEOUT_S, state_store),
+            "data_dir_writable": _within(PROBE_TIMEOUT_S, data_dir_writable)}
