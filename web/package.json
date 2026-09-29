@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "vite dev --strictPort",
     "build": "vite build",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --test \"src/**/*.test.ts\""
   },
   "dependencies": {
     "@tanstack/react-router": "1.170.40",

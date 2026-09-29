@@ -9,7 +9,7 @@ WEB_PORT ?= 3000
 AGENT_API_URL ?= http://127.0.0.1:$(API_PORT)
 
 .PHONY: gate operator-labels retention loadtest setup ingest ingest-demo analysis train-eval workload eval eval-adversarial eval-live live-smoke test serve docker-build all mlflow-ui
-.PHONY: web-setup serve-web web-build web-typecheck serve-all
+.PHONY: web-setup serve-web web-build web-typecheck web-test serve-all
 
 web-setup:        ## install the frontend's pinned dependencies (Node 24, pnpm 10.33.2)
 	$(PNPM) --dir web install --frozen-lockfile
@@ -22,6 +22,9 @@ web-build:        ## build the TanStack Start client and server
 
 web-typecheck:    ## check frontend TypeScript
 	$(PNPM) --dir web typecheck
+
+web-test:         ## frontend unit tests (node:test): operator login form and keys staying on the server
+	$(PNPM) --dir web test
 
 serve-all:       ## run serve and serve-web; stop both when either exits
 	AGENT_API_URL="$(AGENT_API_URL)" $(PNPM) --dir web exec concurrently --kill-others --kill-timeout 5000 --names api,web \

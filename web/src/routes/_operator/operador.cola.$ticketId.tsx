@@ -124,7 +124,7 @@ function TicketView({ ticket }: { ticket: Ticket }) {
         {!view.canAct && !closed && (
           <div className="op-needkey">
             <p>Tu sesión es de solo lectura. Para actuar sobre el caso ingresá tu clave de operador.</p>
-            <OperatorKeyForm />
+            <OperatorKeyForm flash={view.flash} />
           </div>
         )}
         {view.canAct && !closed && desk.status === 'claimed' && !mine && <p className="op-muted">Este caso lo tomó {desk.operator}. Solo esa persona puede decidirlo.</p>}

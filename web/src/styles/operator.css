@@ -77,6 +77,10 @@
 .op-form label, .op-field, .op-inline-form label { display: grid; gap: 6px; color: var(--op-ink); font-weight: 600; }
 .op-form input, .op-field textarea, .op-inline-form input { width: 100%; padding: 10px 12px; border: 1px solid var(--op-line-strong); border-radius: var(--radius-lg, 8px); background: var(--op-paper); color: var(--op-ink); font: inherit; font-weight: 400; }
 .op-field textarea { resize: vertical; }
+.op-who form { margin: 0; }
+.op-key-toggle > summary { cursor: pointer; list-style: none; }
+.op-key-toggle > summary::-webkit-details-marker { display: none; }
+.op-key-toggle[open] > summary { margin-bottom: 6px; }
 .op-inline-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
 .op-inline-form label { flex: 1 1 180px; }
 .op-inline-form .op-error { flex-basis: 100%; }

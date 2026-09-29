@@ -98,11 +98,20 @@ lectura y trazas. Cómo se configuran las claves:
   operador sin volver a ingresar. La clave de operador se comprueba con `GET /admin/operator/me`, que devuelve el nombre
   al que pertenece sin tocar ningún ticket; ese nombre es el que la consola muestra y el que queda en
   `ticket_events.jsonl`. El ingreso exige la clave de lectura porque un operador sin ella no podría ver ni la cola.
+- *Cómo viaja la clave.* Se **tipea en un formulario HTML nativo** (`<form method="post">`, campos `type="password"` sin
+  estado de React), va **una sola vez** al BFF por POST (`/operador/sesion` para ingresar, `/operador/clave` para sumar
+  la de operador, `/operador/salir`) y **nunca se guarda ni se devuelve al navegador**: el BFF la comprueba contra la API,
+  la guarda en su memoria y responde con una redirección 303 (post/redirect/get) que solo lleva un destino y, a lo
+  sumo, un código fijo como `operator_401` en una cookie de un solo uso. Como es un formulario nativo, funciona sin
+  JavaScript, y ningún estado, store, log ni respuesta del cliente contiene la clave. Un chequeo lo sostiene:
+  `pnpm --dir web test` (o `make web-test`) prueba la lógica del formulario con claves de mentira, comprueba que ni el
+  destino ni el código de error las contienen, y falla si un componente de la consola guarda una clave en estado,
+  controla un campo de contraseña o pasa una clave a una función de servidor.
 - *Dónde viven las claves.* Nunca en el JavaScript del navegador, en `localStorage` ni en una cookie. El servidor de la web
   (BFF) las guarda **en memoria**, atadas a un identificador aleatorio de 256 bits que viaja en una cookie
-  `httpOnly` + `SameSite=Strict` (y `Secure` con prefijo `__Host-` en producción). Las claves pasan una sola vez del
-  formulario al BFF, por TLS; las respuestas a la página no las incluyen. La sesión vence a los 30 minutos sin uso o a las 8
-  horas, y se descarta si la API rechaza la clave (rotada o revocada).
+  `httpOnly` + `SameSite=Strict` (y `Secure` con prefijo `__Host-` en producción). La sesión vence a los 30 minutos sin
+  actividad de la persona (el refresco automático de la cola y del monitoreo **no** cuenta como actividad) o a las 8
+  horas, y se descarta si la API rechaza la clave (rotada o revocada). Al vencer, la consola vuelve al ingreso con un aviso.
 - *Alternativa descartada y por qué.* Una cookie sellada con las claves adentro evita el estado en el servidor, pero
   pone las claves (cifradas) en el navegador, exige un secreto de sellado que rotar y no permite cerrar una sesión robada
   desde el servidor. **Costo de la elección:** las sesiones viven en la memoria de un solo proceso, así que un reinicio
@@ -122,8 +131,8 @@ lectura y trazas. Cómo se configuran las claves:
   deja `operator-demo.env` para cargar antes de `uvicorn`. Las capturas del recorrido están en `docs/demo/operador-*.png`.
 
 **Cómo se verifica.** `tests/test_operators.py`, `tests/test_operator_auth.py` (incluye `/admin/operator/me`) y, para la consola,
-`make web-typecheck web-build` más el recorrido con capturas de `docs/demo/operador-*.png`. La web no tiene tests automáticos
-(`LIMITATIONS.md`).
+`make web-test web-typecheck web-build` más el recorrido con capturas de `docs/demo/operador-*.png` (`LIMITATIONS.md` dice qué
+no cubre).
 
 ---
 

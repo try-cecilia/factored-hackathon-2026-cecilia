@@ -1,6 +1,6 @@
 import { createServerFn } from '@tanstack/react-start'
-import { adminRead, operatorAct, probeAdminKey, probeOperatorKey, type Result } from './operator-api'
-import { endOperatorSession, getOperatorSession, startOperatorSession } from './operator-session'
+import { adminRead, operatorAct, type Result } from './operator-api'
+import { getOperatorSession, takeFlash } from './operator-session'
 
 export type { Result }
 
@@ -53,62 +53,17 @@ export type Ticket = {
   desk: DeskState
 }
 
-export type OperatorView = { operator: string | null; canAct: boolean }
-
-export type LoginResult = { ok: true } | { ok: false; status: number; key: 'admin' | 'operator' }
+export type OperatorView = { operator: string | null; canAct: boolean; flash: string | null }
 
 const clean = (value: unknown) => (typeof value === 'string' ? value.trim() : '')
 
-function parseKey(value: unknown, label: string) {
-  const key = clean(value)
-  if (key.length > 200) throw new Error(`${label} is too long`)
-  return key
-}
-
-export const operatorLogin = createServerFn({ method: 'POST' })
-  .validator((input: unknown) => {
-    const { admin_key, operator_key } = (input ?? {}) as Record<string, unknown>
-    const admin = parseKey(admin_key, 'admin_key')
-    if (!admin) throw new Error('admin_key is required')
-    return { admin_key: admin, operator_key: parseKey(operator_key, 'operator_key') }
-  })
-  .handler(async ({ data }): Promise<LoginResult> => {
-    const admin = await probeAdminKey(data.admin_key)
-    if (!admin.ok) return { ok: false, status: admin.status, key: 'admin' }
-    if (!data.operator_key) {
-      startOperatorSession(data.admin_key)
-      return { ok: true }
-    }
-    const operator = await probeOperatorKey(data.operator_key)
-    if (!operator.ok) return { ok: false, status: operator.status, key: 'operator' }
-    startOperatorSession(data.admin_key, data.operator_key, operator.data.operator)
-    return { ok: true }
-  })
-
-export const addOperatorKey = createServerFn({ method: 'POST' })
-  .validator((input: unknown) => {
-    const key = parseKey((input as Record<string, unknown> | null)?.operator_key, 'operator_key')
-    if (!key) throw new Error('operator_key is required')
-    return { operator_key: key }
-  })
-  .handler(async ({ data }): Promise<LoginResult> => {
-    const session = getOperatorSession()
-    if (!session) return { ok: false, status: 0, key: 'operator' }
-    const operator = await probeOperatorKey(data.operator_key)
-    if (!operator.ok) return { ok: false, status: operator.status, key: 'operator' }
-    session.operatorKey = data.operator_key
-    session.operator = operator.data.operator
-    return { ok: true }
-  })
-
-export const operatorLogout = createServerFn({ method: 'POST' }).handler(async () => {
-  endOperatorSession()
-})
-
 export const getOperatorView = createServerFn({ method: 'GET' }).handler(async (): Promise<OperatorView | null> => {
   const session = getOperatorSession()
-  return session ? { operator: session.operator ?? null, canAct: Boolean(session.operatorKey) } : null
+  return session ? { operator: session.operator ?? null, canAct: Boolean(session.operatorKey), flash: takeFlash() } : null
 })
+
+/** The one-shot message a form post left for the login page. */
+export const getFlash = createServerFn({ method: 'GET' }).handler(async () => takeFlash())
 
 const idOf = (input: unknown, label: string) => {
   const value = clean((input as Record<string, unknown> | null)?.[label])

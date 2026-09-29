@@ -63,10 +63,11 @@ service, and as our own roadmap.
   camino a producción es SSO corporativo (OIDC) con los roles del banco.
 - **Consola web de operador.** Las claves las guarda el servidor de la web en memoria (cookie `httpOnly` +
   `SameSite=Strict` con un identificador opaco): un reinicio o una segunda réplica cierra las sesiones, y una clave
-  filtrada sigue valiendo hasta rotarla. Cada persona teclea sus claves en el formulario, así que dependen de que el
-  canal sea TLS. Sin `CLIENT_IP_HEADER=X-Client-IP` detrás del BFF, el límite de intentos fallidos cuenta por la IP del
+  filtrada sigue valiendo hasta rotarla. Cada persona teclea sus claves en un formulario nativo que las envía una vez al BFF (nunca pasan por el
+  JavaScript de la página ni vuelven al navegador), así que dependen de que el canal sea TLS. Sin `CLIENT_IP_HEADER=X-Client-IP` detrás del BFF, el límite de intentos fallidos cuenta por la IP del
   BFF. La cola se lee entera (las últimas 200 entradas del archivo) y se refresca por sondeo cada 30 s, sin
-  notificaciones ni paginación. La web **no tiene tests automáticos**: se verificó con `typecheck`, `build` y un
+  notificaciones ni paginación. La web tiene pocos tests (`pnpm --dir web test`: el formulario de ingreso y que las claves no pasen por el cliente; no hay tests de
+  componentes ni de extremo a extremo, y el CI no los corre): el resto se verificó con `typecheck`, `build` y un
   recorrido en navegador (`docs/demo/operador-*.png`, con datos sintéticos de `ops.seed_operator_demo`); con el modelo
   de clientes y un banco real quedaría por probar la carga y la accesibilidad con lector de pantalla.
 - `/demo/customers` publishes test PINs for a few sandbox accounts, like any

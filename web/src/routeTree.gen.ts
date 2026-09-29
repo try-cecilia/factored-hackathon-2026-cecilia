@@ -14,7 +14,10 @@ import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as OperatorRouteImport } from './routes/_operator'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthedChatRouteImport } from './routes/_authed/chat'
+import { Route as OperadorClaveRouteImport } from './routes/operador.clave'
 import { Route as OperadorLoginRouteImport } from './routes/operador.login'
+import { Route as OperadorSalirRouteImport } from './routes/operador.salir'
+import { Route as OperadorSesionRouteImport } from './routes/operador.sesion'
 import { Route as OperatorOperadorIndexRouteImport } from './routes/_operator/operador.index'
 import { Route as OperatorOperadorColaRouteImport } from './routes/_operator/operador.cola'
 import { Route as OperatorOperadorMonitoreoRouteImport } from './routes/_operator/operador.monitoreo'
@@ -48,9 +51,24 @@ const AuthedChatRoute = AuthedChatRouteImport.update({
   path: '/chat',
   getParentRoute: () => AuthedRoute,
 } as any)
+const OperadorClaveRoute = OperadorClaveRouteImport.update({
+  id: '/operador/clave',
+  path: '/operador/clave',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const OperadorLoginRoute = OperadorLoginRouteImport.update({
   id: '/operador/login',
   path: '/operador/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OperadorSalirRoute = OperadorSalirRouteImport.update({
+  id: '/operador/salir',
+  path: '/operador/salir',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OperadorSesionRoute = OperadorSesionRouteImport.update({
+  id: '/operador/sesion',
+  path: '/operador/sesion',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OperatorOperadorIndexRoute = OperatorOperadorIndexRouteImport.update({
@@ -108,7 +126,10 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/chat': typeof AuthedChatRoute
+  '/operador/clave': typeof OperadorClaveRoute
   '/operador/login': typeof OperadorLoginRoute
+  '/operador/salir': typeof OperadorSalirRoute
+  '/operador/sesion': typeof OperadorSesionRoute
   '/operador/cola': typeof OperatorOperadorColaRouteWithChildren
   '/operador/monitoreo': typeof OperatorOperadorMonitoreoRoute
   '/operador/trazas': typeof OperatorOperadorTrazasRouteWithChildren
@@ -123,7 +144,10 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/chat': typeof AuthedChatRoute
+  '/operador/clave': typeof OperadorClaveRoute
   '/operador/login': typeof OperadorLoginRoute
+  '/operador/salir': typeof OperadorSalirRoute
+  '/operador/sesion': typeof OperadorSesionRoute
   '/operador/monitoreo': typeof OperatorOperadorMonitoreoRoute
   '/api/agent/health': typeof ApiAgentHealthRoute
   '/operador': typeof OperatorOperadorIndexRoute
@@ -139,7 +163,10 @@ export interface FileRoutesById {
   '/_operator': typeof OperatorRouteWithChildren
   '/login': typeof LoginRoute
   '/_authed/chat': typeof AuthedChatRoute
+  '/operador/clave': typeof OperadorClaveRoute
   '/operador/login': typeof OperadorLoginRoute
+  '/operador/salir': typeof OperadorSalirRoute
+  '/operador/sesion': typeof OperadorSesionRoute
   '/_operator/operador/cola': typeof OperatorOperadorColaRouteWithChildren
   '/_operator/operador/monitoreo': typeof OperatorOperadorMonitoreoRoute
   '/_operator/operador/trazas': typeof OperatorOperadorTrazasRouteWithChildren
@@ -156,7 +183,10 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/chat'
+    | '/operador/clave'
     | '/operador/login'
+    | '/operador/salir'
+    | '/operador/sesion'
     | '/operador/cola'
     | '/operador/monitoreo'
     | '/operador/trazas'
@@ -171,7 +201,10 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/chat'
+    | '/operador/clave'
     | '/operador/login'
+    | '/operador/salir'
+    | '/operador/sesion'
     | '/operador/monitoreo'
     | '/api/agent/health'
     | '/operador'
@@ -186,7 +219,10 @@ export interface FileRouteTypes {
     | '/_operator'
     | '/login'
     | '/_authed/chat'
+    | '/operador/clave'
     | '/operador/login'
+    | '/operador/salir'
+    | '/operador/sesion'
     | '/_operator/operador/cola'
     | '/_operator/operador/monitoreo'
     | '/_operator/operador/trazas'
@@ -203,7 +239,10 @@ export interface RootRouteChildren {
   AuthedRoute: typeof AuthedRouteWithChildren
   OperatorRoute: typeof OperatorRouteWithChildren
   LoginRoute: typeof LoginRoute
+  OperadorClaveRoute: typeof OperadorClaveRoute
   OperadorLoginRoute: typeof OperadorLoginRoute
+  OperadorSalirRoute: typeof OperadorSalirRoute
+  OperadorSesionRoute: typeof OperadorSesionRoute
   ApiAgentHealthRoute: typeof ApiAgentHealthRoute
 }
 
@@ -244,11 +283,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedChatRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/operador/clave': {
+      id: '/operador/clave'
+      path: '/operador/clave'
+      fullPath: '/operador/clave'
+      preLoaderRoute: typeof OperadorClaveRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/operador/login': {
       id: '/operador/login'
       path: '/operador/login'
       fullPath: '/operador/login'
       preLoaderRoute: typeof OperadorLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/operador/salir': {
+      id: '/operador/salir'
+      path: '/operador/salir'
+      fullPath: '/operador/salir'
+      preLoaderRoute: typeof OperadorSalirRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/operador/sesion': {
+      id: '/operador/sesion'
+      path: '/operador/sesion'
+      fullPath: '/operador/sesion'
+      preLoaderRoute: typeof OperadorSesionRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_operator/operador/': {
@@ -380,7 +440,10 @@ const rootRouteChildren: RootRouteChildren = {
   AuthedRoute: AuthedRouteWithChildren,
   OperatorRoute: OperatorRouteWithChildren,
   LoginRoute: LoginRoute,
+  OperadorClaveRoute: OperadorClaveRoute,
   OperadorLoginRoute: OperadorLoginRoute,
+  OperadorSalirRoute: OperadorSalirRoute,
+  OperadorSesionRoute: OperadorSesionRoute,
   ApiAgentHealthRoute: ApiAgentHealthRoute,
 }
 export const routeTree = rootRouteImport

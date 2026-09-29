@@ -56,3 +56,16 @@ export function endOperatorSession() {
   if (id) store.delete(id)
   deleteCookie(name, options)
 }
+
+// A one-shot message for the page a form post redirects to ("that key is not valid"). It is a fixed code such as
+// `operator_401`, never anything the operator typed.
+const flashName = secure ? '__Host-cecilai_operator_flash' : 'cecilai_operator_flash'
+const flashOptions = { httpOnly: true, secure, sameSite: 'strict', path: '/', maxAge: 60 } as const
+
+export const setFlash = (code: string) => setCookie(flashName, code, flashOptions)
+
+export function takeFlash() {
+  const code = getCookie(flashName)
+  if (code) deleteCookie(flashName, flashOptions)
+  return code && /^[a-z]+_[a-z0-9]+$/.test(code) ? code : null
+}

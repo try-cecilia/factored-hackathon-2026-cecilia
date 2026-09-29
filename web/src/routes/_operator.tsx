@@ -1,6 +1,5 @@
-import { createFileRoute, Link, Outlet, redirect, useNavigate } from '@tanstack/react-router'
-import { useState } from 'react'
-import { getOperatorView, operatorLogout } from '../server/operator.functions'
+import { createFileRoute, Link, Outlet, redirect } from '@tanstack/react-router'
+import { getOperatorView } from '../server/operator.functions'
 import operatorStylesheet from '../styles/operator.css?url'
 import { OperatorKeyForm } from './-operator/OperatorKeyForm'
 
@@ -26,23 +25,6 @@ export const Route = createFileRoute('/_operator')({
 
 function OperatorLayout() {
   const { view } = Route.useRouteContext()
-  const navigate = useNavigate()
-  const [leaving, setLeaving] = useState(false)
-  const [leaveError, setLeaveError] = useState(false)
-
-  async function onLogout() {
-    setLeaving(true)
-    setLeaveError(false)
-    try {
-      await operatorLogout()
-      await navigate({ to: '/operador/login' })
-    } catch {
-      setLeaveError(true)
-    } finally {
-      setLeaving(false)
-    }
-  }
-
   return (
     <div className="op">
       <a className="op-skip" href="#contenido">Ir al contenido</a>
@@ -55,11 +37,10 @@ function OperatorLayout() {
         </nav>
         <div className="op-who">
           {view.canAct ? <span>Operador <strong>{view.operator}</strong></span> : <span className="op-chip">Solo lectura</span>}
-          {!view.canAct && <OperatorKeyForm compact />}
-          <button type="button" className="op-link" onClick={onLogout} disabled={leaving}>{leaving ? 'Saliendo…' : 'Salir'}</button>
+          {!view.canAct && <OperatorKeyForm compact flash={view.flash} />}
+          <form method="post" action="/operador/salir"><button type="submit" className="op-link">Salir</button></form>
         </div>
       </header>
-      {leaveError && <p className="op-error op-page-note" role="alert">No se pudo cerrar la sesión. Probá de nuevo.</p>}
       <main className="op-main" id="contenido" tabIndex={-1}>
         <Outlet />
       </main>
