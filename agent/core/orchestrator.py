@@ -305,7 +305,10 @@ class Orchestrator:
                     result = self._handle(session_token, text, trace_id, trace)
                 except Exception as exc:  # noqa: BLE001 - whatever broke, the customer gets a handoff, never a crash
                     result = self._unexpected_failure(session_token, text, trace_id, trace, exc)
-                result = self._with_case_news(session_token, result)
+                try:
+                    result = self._with_case_news(session_token, result)
+                except Exception as exc:  # noqa: BLE001 - the news are a courtesy: the answer, and what it already did, go out without them
+                    self._record_failed("case_news", trace_id, exc)
                 trace["stages"] = recorder.spans
                 trace["turn_budget_left_ms"] = round(deadline.remaining() * 1000)
         finally:
