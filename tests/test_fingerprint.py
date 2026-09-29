@@ -6,6 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from eval import fingerprint
 
 FILES = ("agent/policy/router.py", "agent/tools/account_tools.py", "agent/core/orchestrator.py")
@@ -191,3 +193,34 @@ def test_the_static_check_catches_a_lazy_import_of_a_module_outside_the_fingerpr
     assert uncovered_imports(root) == {"eval/run_system_eval.py": {"eval/helper.py"}}
     (root / "eval/run_system_eval.py").write_text("def judge():\n    return True\n", encoding="utf-8")
     assert uncovered_imports(root) == {}
+
+
+def make_env(root: Path, rel: str, with_cfg: bool) -> None:
+    env = root / rel
+    (env / "bin").mkdir(parents=True, exist_ok=True)
+    (env / "bin/activate_this.py").write_bytes(b"LOCAL = True\n")
+    if with_cfg:
+        (env / "pyvenv.cfg").write_bytes(b"home = /usr/bin\n")
+
+
+def test_a_virtual_environment_never_changes_the_fingerprint_whatever_it_is_called(tmp_path):
+    root = tree(tmp_path, b"x = 1\n")
+    before = fingerprint.policy_fingerprint(root)
+    make_env(root, "agent/venv", with_cfg=False)   # a name .gitignore lists
+    make_env(root, "agent/myenv", with_cfg=True)   # any name: pyvenv.cfg is the marker
+    make_env(root, "eval/tooling/py311", with_cfg=True)
+    assert fingerprint.policy_fingerprint(root) == before
+
+
+def test_the_files_the_fingerprint_hashes_are_the_files_git_would_version():
+    """In a checkout, what the rule lets through must be exactly the project's files that fall under the same globs (tracked, or new
+    and not ignored): a local or ignored file it lets in, or a versioned one it drops, fails here."""
+    listed = subprocess.run(["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"], cwd=fingerprint.ROOT,
+                            capture_output=True)
+    if listed.returncode != 0:
+        pytest.skip("no .git here")
+    versioned = {name.decode() for name in listed.stdout.split(b"\0") if name}
+    under_globs = {p.relative_to(fingerprint.ROOT).as_posix() for pattern in fingerprint.POLICY_GLOBS
+                   for p in fingerprint.ROOT.glob(pattern)} & versioned
+    hashed = {p.relative_to(fingerprint.ROOT).as_posix() for p in fingerprint.policy_files()}
+    assert hashed == under_globs - set(fingerprint.NOT_MEASURED)

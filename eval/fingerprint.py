@@ -59,13 +59,17 @@ NOT_MEASURED = ("agent/session/identity.py", "agent/session/operators.py", "agen
 TEXT_SUFFIXES = {".py", ".json", ".jsonl", ".csv"}
 
 
-LOCAL_PARTS = {"__pycache__", "site-packages", "node_modules"}
+LOCAL_PARTS = {"__pycache__", "site-packages", "node_modules", "venv"}  # los que .gitignore lista; ni env, build ni dist: no los ignora y podrían ser código
 
 
 def _is_local(path: Path, root: Path) -> bool:
-    """Lo que vive en la máquina de quien desarrolla y git ignora (un venv, cachés, dependencias): no es el sistema medido.
-    Se decide por la ruta y no con `git ls-files`, para que dé lo mismo con y sin `.git` (CI, `git archive`)."""
-    return any(part.startswith(".") or part in LOCAL_PARTS for part in path.relative_to(root).parts)
+    """Lo que vive en la máquina de quien desarrolla y git ignora (un entorno virtual, cachés, dependencias): no es el sistema
+    medido. Se decide por la ruta y por `pyvenv.cfg` (el marcador de todo entorno virtual, se llame como se llame) y no con
+    `git ls-files`, para que dé lo mismo con y sin `.git` (CI, `git archive`)."""
+    parts = path.relative_to(root).parts
+    if any(part.startswith(".") or part in LOCAL_PARTS for part in parts):
+        return True
+    return any((root.joinpath(*parts[:depth]) / "pyvenv.cfg").exists() for depth in range(1, len(parts)))
 
 
 def policy_files(root: Path = ROOT) -> list[Path]:
