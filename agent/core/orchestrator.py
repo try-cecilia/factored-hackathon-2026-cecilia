@@ -124,6 +124,16 @@ class _Conversation:
     transcript: list[dict] = field(default_factory=list)  # what the customer saw, as rendered: card numbers masked, no model data
     case_index: list[dict] = field(default_factory=list)  # the session's handoffs (ticket_id, category, at), not bounded by the transcript
 
+    @classmethod
+    def from_saved(cls, data: dict) -> "_Conversation":
+        """A conversation saved before `language_set` existed keeps the language it had: with turns, or with a language other than the
+        default, it was learned from the customer (the safest reading: it changes nothing for those rows, and the only cost is that a
+        session whose every turn was without a language signal keeps the default instead of falling back to its ticket's)."""
+        if "language_set" not in data:
+            data = {**data, "language_set": bool(data.get("messages") or data.get("requests") or data.get("transcript")
+                                                 or data.get("language", "es") != "es")}
+        return cls(**data)
+
 
 class ConversationStore:
     """Bounded LRU of per-session histories: for the model, the customer's
@@ -182,7 +192,7 @@ class ConversationStore:
                                    (key, now - self.RETENTION_SECONDS)).fetchone()
         if row:
             self._checked[key] = now
-        return _Conversation(**json.loads(row[0])) if row else None
+        return _Conversation.from_saved(json.loads(row[0])) if row else None
 
     def save(self, key: str) -> None:
         """Write the conversation as the turn left it (a no-op for a key this store has not handed out)."""

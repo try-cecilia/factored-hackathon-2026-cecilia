@@ -244,3 +244,26 @@ def test_the_case_index_is_the_sessions_own_and_never_carries_anything_else(clie
 
 def test_a_conversation_saved_before_the_index_existed_still_loads():
     assert _Conversation(**{"messages": [], "requests": [], "language": "es", "transcript": []}).case_index == []
+
+
+def test_a_conversation_saved_before_language_set_keeps_the_language_it_had_learned(tmp_path):
+    """The flag is new: a row without it must not forget a language the session already had, or the case panel would read the
+    ticket's language while the chat (which reads `language`) keeps the session's. A row with no turns and the default language
+    has nothing to preserve and stays unset."""
+    import json
+    import sqlite3
+
+    db = str(tmp_path / "state.db")
+    store = ConversationStore(db_path=db)
+    spoke_pt, spoke_es, silent = store.get("pt"), store.get("es"), store.get("silent")
+    spoke_pt.language = "pt"                            # a language other than the default can only have come from the customer
+    spoke_es.requests.append("hola")                    # turns, in the default language: it was heard, not assumed
+    for key in ("pt", "es", "silent"):
+        store.save(key)
+    with sqlite3.connect(db) as conn:
+        for key, data in conn.execute("SELECT key, data FROM conversations").fetchall():
+            saved = json.loads(data)
+            del saved["language_set"]
+            conn.execute("UPDATE conversations SET data = ? WHERE key = ?", (json.dumps(saved), key))
+    reloaded = ConversationStore(db_path=db)
+    assert (reloaded.get("pt").language_set, reloaded.get("es").language_set, reloaded.get("silent").language_set) == (True, True, False)
