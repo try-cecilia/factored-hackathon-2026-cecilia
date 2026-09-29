@@ -5,7 +5,7 @@ export type Disposition = 'AUTO_RESOLVE' | 'CLARIFY' | 'ABSTAIN' | 'ESCALATE'
 // DEMO_MODE only: what api/demo.py explains about one reply.
 export type Why = {
   rule: string
-  because: { en: string; es: string }
+  because: { en: string; es: string; pt?: string }
   model: {
     called: boolean
     provider: string | null
@@ -67,8 +67,8 @@ export type DemoScenario = {
   fault: string | null
   turns: string[]
   expect: (string | null)[]
-  title: { en: string; es: string }
-  look_for: { en: string; es: string }
+  title: { en: string; es: string; pt?: string }
+  look_for: { en: string; es: string; pt?: string }
 }
 
 export type DemoTicket = {

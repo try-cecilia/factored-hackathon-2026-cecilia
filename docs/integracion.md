@@ -440,8 +440,8 @@ modo limitado.
   lugar, con una nota, el compositor deshabilitado y el mensaje "Ingresar de nuevo", que lleva a
   `/login?redirect=/chat&motivo=expired`. Otro inicio de sesión es otra conversación (empieza de cero).
 - *Demo.* Con `DEMO_MODE=1` el panel de demo es una columna aparte (cajón deslizante bajo los 1180 px), con la etiqueta
-  Demo; sin la variable no existe ni en el HTML. Los títulos de los escenarios los manda la API en español e inglés: en
-  portugués se ven en español.
+  Demo; sin la variable no existe ni en el HTML. Los títulos y las pistas de los escenarios y los motivos de "¿Por qué?" los
+  manda la API en español, inglés y portugués (`title`, `look_for` y `because`, con `pt`); un API sin `pt` se ve en español.
 - *Idioma.* Todo texto de la interfaz está en ES y PT (`web/src/i18n/dict/*/{shell,cases,conversation,demo}.ts`); las
   respuestas de la asistente llegan de la API en el idioma del cliente y no se traducen. El español no usa imperativo de
   tuteo (un test lo comprueba).

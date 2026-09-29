@@ -133,10 +133,42 @@ CURRENCY_NAME = {"COP": "pesos colombianos", "ARS": "pesos argentinos"}
 
 
 def _scenario(sid: str, path: str, role: dict, turns: list[str], expect: list[str | None], title: tuple[str, str],
-              look_for: tuple[str, str], language: str = "es", fault: str | None = None) -> dict:
+              look_for: tuple[str, str], language: str = "es", fault: str | None = None, title_pt: str | None = None) -> dict:
+    pt_title, pt_hint = _SCENARIOS_PT[sid]
     return {"id": sid, "path": path, "customer_id": role["customer_id"], "language": language, "fault": fault,
-            "turns": turns, "expect": expect, "title": dict(zip(("en", "es"), title)),
-            "look_for": dict(zip(("en", "es"), look_for))}
+            "turns": turns, "expect": expect, "title": {**dict(zip(("en", "es"), title)), "pt": title_pt or pt_title},
+            "look_for": {**dict(zip(("en", "es"), look_for)), "pt": pt_hint}}
+
+
+_SCENARIOS_PT = {  # scenario id -> (title, hint) in Portuguese; the trace scenario's title depends on the movement, see _scenarios()
+    'normal_balance': ('Consulta de saldo',
+        'Respondida com dados verificados. Abra "Por quê?": o modelo só escolheu a consulta; nunca viu os saldos mostrados aqui.'),
+    'ambiguous_multiturn': ('Qual conta? (dois turnos)',
+        'Duas contas poupança correspondem, então pergunta qual em vez de adivinhar; depois entende "a segunda" pela conversa.'),
+    'out_of_scope': ('Fora do escopo: um novo empréstimo',
+        'Pedir um crédito não faz parte deste fluxo: ela diz isso e indica o canal certo, sem tentar resolver.'),
+    'human_fraud': ('Cobrança não reconhecida',
+        'A fraude vai para uma pessoa antes de qualquer chamada ao modelo. Na visão do banco, o ticket traz como evidência as movimentações sinalizadas, as perguntas em aberto e o próximo passo, não a transcrição.'),
+    'attack_injection': ('Tentativa de jailbreak',
+        'Faça o que fizer o modelo, cada consulta fica presa ao cliente autenticado e cada resposta vem de dados verificados ou de um modelo de texto: nada de outro cliente pode voltar.'),
+    'failure_llm_outage': ('O modelo de linguagem cai',
+        'Modo degradado: uma consulta simples de saldo continua sendo respondida com dados verificados; o que exige entender o pedido vai para uma pessoa.'),
+    'failure_expired': ('Sessão expirada',
+        'Nada é consultado até o cliente entrar de novo.'),
+    'attack_foreign_product': ('Injeção citando o produto de outro cliente',
+        'Detectada no código antes de qualquer chamada ao modelo: nada sobre esse produto é revelado e a segurança recebe um ticket.'),
+    'normal_pt_arrears': ('Atrasos, em português',
+        'Entra em português e sai em português. O produto é encontrado pelo tipo sem perguntar, porque é o único do cliente.'),
+    'normal_fx': ('Taxa de câmbio',
+        'A taxa vem da tabela diária do banco, com a sua data; uma taxa inventada pelo modelo nunca poderia ser mostrada.'),
+    'human_missing_data': ('Dado ausente',
+        'Os registros do banco não têm o atraso deste produto, então ela não adivinha: uma pessoa responde, com o motivo no ticket.'),
+    'human_compliance': ('Conta suspensa',
+        'Retenção de compliance: nem um saldo simples é mostrado; o ticket vai para o compliance, antes de qualquer chamada ao modelo.'),
+    'action_trace': (None,
+        'A única ação que este assistente realiza. Encontra a movimentação pendente, a mostra e pede um sim; o sim é avaliado pelo código, não pelo modelo. O pedido é aberto, relido e só então anunciado com o seu número. A visão do banco o mostra como a área de operações o recebe. O cenário começa apagando os rastreamentos anteriores deste cliente de teste, que todos os visitantes compartilham.'),
+}
+PT_MOVEMENT = {"Transfer": "uma transferência", "Payment": "um pagamento", "Deposit": "um depósito"}
 
 
 @cache
@@ -223,7 +255,8 @@ def _scenarios() -> tuple[dict, ...]:
              "La única acción que toma este asistente. Encuentra el movimiento pendiente, lo muestra y pide un sí; el sí lo evalúa "
              "el código, no el modelo. El pedido se abre, se relee y recién ahí se anuncia con su número. La vista del banco lo "
              "muestra como lo recibe operaciones. El escenario empieza borrando los pedidos anteriores de este cliente de prueba, "
-             "que comparten todos los visitantes."), fault="clear_traces"))
+             "que comparten todos los visitantes."), fault="clear_traces",
+            title_pt=f"Rastrear {PT_MOVEMENT[pending['transaction_type']]} pendente (dois turnos)"))
     order = ("normal", "ambiguous", "out_of_scope", "action", "human", "attack", "failure")
     return tuple(sorted(out, key=lambda s: order.index(s["path"])))
 
@@ -354,6 +387,59 @@ _BECAUSE = [  # (policy rule prefix, English, Spanish); first match wins
      "The session expired or is not valid: nothing is looked up until the customer signs in again.",
      "La sesión venció o no es válida: no se consulta nada hasta que el cliente vuelva a iniciar sesión."),
 ]
+_BECAUSE_PT = {  # the Portuguese of each rule above, by its prefix
+    'action:trace_proposed':
+        'Um movimento pendente corresponde. O código o mostra e pede um sim ou um não. Nada foi aberto ainda, e a resposta será avaliada pelo código, não pelo modelo.',
+    'action:trace_opened':
+        'O cliente disse sim. O código abriu o pedido no serviço de rastreamento e o releu antes de informar o número: só se comunica uma ação verificada. O modelo não foi consultado.',
+    'action:trace_already_open':
+        'Já existe um pedido para esta movimentação, então o mesmo número é informado em vez de abrir outro.',
+    'action:trace_cancelled':
+        'O cliente disse não: nada foi aberto.',
+    'action:trace_choose':
+        'Várias movimentações pendentes correspondem, então pergunta qual em vez de adivinhar.',
+    'action:trace_unmatched':
+        'O cliente não tem nada pendente, então uma pessoa confere com a área de operações ou com o banco de origem.',
+    'action:trace_unverified':
+        'O pedido não pôde ser relido, então o cliente não é informado de que ele existe; uma pessoa o abre.',
+    'verified_tool_results':
+        'Resposta com resultados verificados. O modelo só escolheu qual consulta fazer; o código conferiu que o produto é do cliente, fez a consulta e escreveu a resposta com um modelo de texto.',
+    'customer_status == Suspended':
+        'Retenção de compliance: a conta está suspensa, então nenhum dado é mostrado até que uma pessoa a analise. Verificado no código antes de qualquer chamada ao modelo.',
+    'lexicon:':
+        'Um sinal de risco no que o cliente escreveu, detectado por um léxico fixo antes de qualquer chamada ao modelo. Fraude, roubo e relatos semelhantes sempre vão para uma pessoa, com evidências.',
+    'intent_classifier:requires_escalation':
+        'O classificador de intenção treinado apontou uma possível fraude ou contestação antes de qualquer chamada ao modelo; uma pessoa confirma com o cliente.',
+    'reference_to_foreign_product':
+        'A mensagem cita um produto de outro cliente. Detectado no código antes de qualquer chamada ao modelo: nada sobre esse produto é mostrado, e a segurança revisa o rastro.',
+    'tool_error:PermissionDenied':
+        'O modelo pediu um produto que não é do cliente; a verificação de titularidade da camada de ferramentas o recusou.',
+    'tool_error:ResourceNotFound':
+        'O que o cliente citou não corresponde a nenhum de seus produtos, então pergunta qual em vez de adivinhar.',
+    'tool_error:DataUnavailable':
+        'Os registros do banco não têm o dado necessário para uma resposta verificada, então uma pessoa responde em vez de o assistente adivinhar.',
+    'tool_error:MissingSlot':
+        'Falta informação para consultar (qual produto, quais datas, quais moedas), então pergunta em vez de adivinhar.',
+    'tool_error:InvalidArgument':
+        'Falta informação para consultar (qual produto, quais datas, quais moedas), então pergunta em vez de adivinhar.',
+    'tool_error:':
+        'Uma consulta falhou. O assistente não improvisa: uma pessoa assume o caso.',
+    'intent_classifier:out_of_scope':
+        'Fora das consultas de conta e pagamentos, o único fluxo que este assistente atende: indica o canal certo em vez de tentar resolver.',
+    'intent_classifier:':
+        'Dentro do escopo, mas o modelo não encontrou nada para consultar, então pede detalhes com uma mensagem fixa.',
+    'fallback:punctuation':
+        'Nada para consultar e nenhum classificador disponível, então pergunta ou recusa com uma mensagem fixa.',
+    'degraded:deterministic_balance':
+        'O modelo de linguagem estava indisponível. Uma consulta simples de saldo não exige entender o pedido, então o código a respondeu com dados verificados (modo degradado).',
+    'degraded:classifier_out_of_scope':
+        'O modelo de linguagem estava indisponível; o classificador local tem certeza de que o pedido está fora do escopo, então indica o canal certo (modo degradado).',
+    'llm_unavailable':
+        'O modelo de linguagem estava indisponível e este pedido precisa dele, então uma pessoa assume o caso.',
+    'session:':
+        'A sessão expirou ou não é válida: nada é consultado até o cliente entrar de novo.',
+}
+_UNFILED_PT = "O ticket não pôde ser gravado e relido, então o cliente não é informado de que foi encaminhado: recebe um código para citar."
 _UNFILED = ("The ticket could not be written and read back, so the customer is not told they were transferred: they get a code to quote instead.",
             "El ticket no se pudo escribir y releer, así que no se le dice al cliente que fue derivado: recibe un código para citar.")
 
@@ -375,15 +461,16 @@ def _label(product_id: str, customer_id: str | None) -> str | None:
 def explain(result: TurnResult, token: str) -> dict:
     """The "Why?" of one reply: the rule that decided it, what the model received and chose, and what the code verified."""
     rule = result.policy_rule or ""
-    en, es = next(((en, es) for prefix, en, es in _BECAUSE if rule.split("|")[0].startswith(prefix)),
-                  ("Decided by the policy layer.", "Lo decidió la capa de políticas."))
+    prefix, en, es = next(((prefix, en, es) for prefix, en, es in _BECAUSE if rule.split("|")[0].startswith(prefix)),
+                          ("", "Decided by the policy layer.", "Lo decidió la capa de políticas."))
+    pt = _BECAUSE_PT.get(prefix, "Decidido pela camada de políticas.")
     if rule.endswith("|handoff_unverified"):
-        en, es = f"{en} {_UNFILED[0]}", f"{es} {_UNFILED[1]}"
+        en, es, pt = f"{en} {_UNFILED[0]}", f"{es} {_UNFILED[1]}", f"{pt} {_UNFILED_PT}"
     customer = _customer_of(token) if result.tool_calls else None
     called = result.model_input is not None
     return {
         "rule": rule,
-        "because": {"en": en, "es": es},
+        "because": {"en": en, "es": es, "pt": pt},
         "model": {"called": called, "provider": result.provider, "model": result.model, "saw": result.model_input,
                   "chose": [{"tool": a["tool"], "args": a["raw_args"]} for a in result.tool_calls if "raw_args" in a] if called else []},
         "checks": [{"tool": a["tool"],

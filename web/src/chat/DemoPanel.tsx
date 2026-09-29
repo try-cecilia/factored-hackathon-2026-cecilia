@@ -35,8 +35,8 @@ export function DemoPanel({ scenarios, sessionRef, pending, escalations, send, o
   const [note, setNote] = useState<MessageKey | null>(null)
   const [tickets, setTickets] = useState<DemoTicket[]>([])
 
-  // The scenarios' own texts come from the API in Spanish and English: Portuguese readers get the Spanish.
-  const text = (pair: { en: string; es: string }) => pair.es
+  // The scenarios' own texts come from the API in Spanish, English and Portuguese; an API without Portuguese gives the Spanish.
+  const text = (pair: { en: string; es: string; pt?: string }) => (locale === 'pt' ? pair.pt : undefined) ?? pair.es
   const disposition = (value: string) => (known(DISPOSITIONS, value) ? t(`demo.dispositions.${value}`) : value)
 
   const refreshTickets = useCallback(async () => {

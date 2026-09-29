@@ -289,3 +289,20 @@ def test_the_data_quality_page_shows_no_customer_data_and_no_source_location(cli
     assert not re.search(r"\b(?:CLI|PRD|TXN|SUC)-", r.text)
     assert "s3://" not in r.text and "file:" not in r.text and "fixtures" not in r.text
     assert not {"source_root", "source_uri", "error", "_source_file"} & _keys(r.json())
+
+
+def test_every_scenario_is_written_in_portuguese_too(client):
+    """The guided scenarios' title and hint reach the Portuguese interface in Portuguese, not in Spanish."""
+    for s in client.get("/demo/scenarios").json():
+        assert s["title"]["pt"] and s["look_for"]["pt"], s["id"]
+        assert s["title"]["pt"] != s["title"]["en"] and s["look_for"]["pt"] != s["look_for"]["es"], s["id"]  # a title can coincide with the Spanish
+
+
+def test_every_reason_of_the_why_panel_is_written_in_portuguese_too(client, monkeypatch):
+    from api import demo
+
+    assert all(demo._BECAUSE_PT.get(prefix) for prefix, *_ in demo._BECAUSE)
+    assert demo._UNFILED_PT
+    model(monkeypatch, tool("get_payment_status", {"product_id": "0004"}))
+    why = chat(client, login(client), "¿estoy al día con la tarjeta 5000000004?")["why"]
+    assert why["because"]["pt"] and why["because"]["pt"] != why["because"]["es"]

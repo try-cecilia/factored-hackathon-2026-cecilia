@@ -13,12 +13,12 @@ const reply = (over: Partial<Reply> = {}): Reply => ({
 const user = (text: string, over: Partial<Extract<Entry, { role: 'user' }>> = {}): Entry => ({ id: ++id, role: 'user', text, at: 1, key: 'k', delivery: 'sent', ...over })
 const assistant = (r: Reply): Entry => ({ id: ++id, role: 'assistant', reply: r, at: 2 })
 
-function setup(entries: Entry[], over: Partial<ChatLogProps> = {}) {
+function setup(entries: Entry[], over: Partial<ChatLogProps> = {}, locale: 'es' | 'pt' = 'es') {
   const props: ChatLogProps = {
     entries, cases: [], sending: false, live: true, ended: false,
     onSend: vi.fn(), onRetry: vi.fn(), onReload: vi.fn(), onViewCase: vi.fn(), onSignIn: vi.fn(), ...over,
   }
-  renderWithI18n(<ChatLog {...props} />, 'es')
+  renderWithI18n(<ChatLog {...props} />, locale)
   return props
 }
 
@@ -44,6 +44,26 @@ describe('ChatLog', () => {
     expect(toggle.getAttribute('aria-expanded')).toBe('true')
     expect(screen.getByText('Datos verificados')).toBeTruthy()
     expect(screen.getByText('verified_tool_results')).toBeTruthy()
+  })
+
+  it('"¿Por qué?" gives the reason in the language of the interface, and falls back to Spanish for an API that has no Portuguese', async () => {
+    const why = {
+      rule: 'verified_tool_results', because: { en: 'x', es: 'Datos verificados', pt: 'Dados verificados' },
+      model: { called: false, provider: null, model: null, saw: null, chose: [] }, checks: [], llm_calls: 0, cost_usd: 0, latency_ms: 1,
+    }
+    setup([assistant(reply({ why }))], {}, 'pt')
+    await userEvent.setup().click(screen.getByRole('button', { name: /Por quê\?/ }))
+    expect(screen.getByText('Dados verificados')).toBeTruthy()
+  })
+
+  it('an explanation without Portuguese shows the Spanish', async () => {
+    const why = {
+      rule: 'r', because: { en: 'x', es: 'Solo en español' },
+      model: { called: false, provider: null, model: null, saw: null, chose: [] }, checks: [], llm_calls: 0, cost_usd: 0, latency_ms: 1,
+    }
+    setup([assistant(reply({ why }))], {}, 'pt')
+    await userEvent.setup().click(screen.getByRole('button', { name: /Por quê\?/ }))
+    expect(screen.getByText('Solo en español')).toBeTruthy()
   })
 
   it('a clarification offers its options; choosing one sends that answer and then locks the rest', async () => {

@@ -211,8 +211,7 @@ service, and as our own roadmap.
   one open. Their status refreshes every 45 s while the page is visible, not by push. The "action result" message is
   recognised by its position (it follows the customer's yes to a proposal) because the API gives every resolved reply
   `category=resolved`; a trace the tracing service did not confirm is drawn as a handoff with its case number, not as a
-  red "could not open the trace" card. The demo scenarios' titles come from the API in Spanish and English, so the
-  Portuguese interface shows them in Spanish. The keyboard and focus order were checked in a browser and in DOM tests;
+  red "could not open the trace" card. The keyboard and focus order were checked in a browser and in DOM tests;
   it was not tried with a screen reader. Changing language reloads the route's data (session, history), so with the API down
   it shows the "service unavailable" page with a retry instead of switching.
 - **Web UI: the Portuguese was written by the team, not reviewed by a native speaker**, and the interface has only Spanish
