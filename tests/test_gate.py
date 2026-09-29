@@ -62,3 +62,12 @@ def test_evidence_made_with_another_prompt_version_is_stale(reports):
     stale = copy.deepcopy(reports["offline"])
     stale["prompt_version"] = "0.0.1"
     assert any("volver a medir" in f for f in gate.check_fresh({"system_eval.json": stale}))
+
+
+def test_evidence_measured_with_other_policies_is_stale(reports):
+    ok = {**reports["offline"], "policy_sha256": "abc"}
+    old = {**reports["offline"], "policy_sha256": "zzz"}
+    missing = {k: v for k, v in reports["offline"].items() if k != "policy_sha256"}
+    assert gate.check_policy_fresh({"system_eval.json": ok}, current="abc") == []
+    assert any("volver a correr" in f for f in gate.check_policy_fresh({"system_eval.json": old}, current="abc"))
+    assert any("volver a correr" in f for f in gate.check_policy_fresh({"system_eval.json": missing}, current="abc"))

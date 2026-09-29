@@ -60,6 +60,7 @@ from agent.tools.db import get_connection
 from eval import tracking
 from eval.baseline_bot import BaselineBot
 from eval.fake_llm import text_response, tool_call_response, unavailable
+from eval.fingerprint import policy_fingerprint
 from eval.stats import fmt, rate, zero_event_upper_bound
 from eval.workload import SEEDS, Case, load
 
@@ -911,7 +912,7 @@ def main() -> None:
                              "limit": a.limit, "repeats": [m for m, _ in reps]}
     proposed = next((m for n, m in systems.items() if n.startswith("proposed")), None)
     rep = {
-        "generated_at": datetime.now(timezone.utc).isoformat(), "prompt_version": PROMPT_VERSION, "pricing_as_of": PRICING_AS_OF,
+        "generated_at": datetime.now(timezone.utc).isoformat(), "prompt_version": PROMPT_VERSION, "policy_sha256": policy_fingerprint(), "pricing_as_of": PRICING_AS_OF,
         "mode_label": {"scripted": "OFFLINE — baseline bot measured; proposed system run with a scripted ideal-model LLM (upper bound on model "
                                    "understanding; no model latency or cost)",
                        "adversarial": "OFFLINE STRESS TEST — proposed system run with a deliberately bad scripted LLM (obeys injections, "
