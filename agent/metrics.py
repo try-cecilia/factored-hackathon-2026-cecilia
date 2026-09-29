@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Iterable
 
 from prometheus_client import CollectorRegistry, Counter, Histogram
-from prometheus_client.core import GaugeMetricFamily
+from prometheus_client.core import CounterMetricFamily, GaugeMetricFamily
 from prometheus_client.exposition import generate_latest
 
 logger = logging.getLogger(__name__)
@@ -180,7 +180,7 @@ class RuntimeCollector:
         return []
 
     def collect(self):
-        for source in (self._service, self._llm, self._data, self._pipeline, self._retention):
+        for source in (self._service, self._llm, self._data, self._pipeline, self._retention, self._capacity):
             try:
                 yield from source()
             except Exception:  # noqa: BLE001 - a scrape must not fail because one source did
@@ -204,6 +204,24 @@ class RuntimeCollector:
         yield self._gauge("cecilai_active_sessions", "Sessions in the store (live or not yet pruned).", len(default_store))
         yield self._gauge("cecilai_intent_classifier_loaded", "1 if the pre-model intent classifier loaded.",
                           1 if intent_guard.read("hola").model_available else 0)
+
+    def _capacity(self):
+        from agent import observability
+        from agent.resilience import bounded_ops_stats
+
+        failures = CounterMetricFamily("cecilai_record_failures", "Records that could not be written after their effects happened, "
+                                       "and handoff writes that finished after their budget, by kind.", labels=["kind"])
+        for kind, n in sorted(observability.failure_counts().items()):
+            failures.add_metric([kind], n)
+        yield failures
+        inflight = GaugeMetricFamily("cecilai_bounded_ops_inflight", "Background work still running after its caller gave up, by pool.", labels=["pool"])
+        limit = GaugeMetricFamily("cecilai_bounded_ops_limit", "The most a pool may run at once.", labels=["pool"])
+        rejected = CounterMetricFamily("cecilai_bounded_ops_rejected", "Work refused because its pool was full.", labels=["pool"])
+        for pool, st in bounded_ops_stats().items():
+            inflight.add_metric([pool], st["inflight"])
+            limit.add_metric([pool], st["limit"])
+            rejected.add_metric([pool], st["rejected"])
+        yield from (inflight, limit, rejected)
 
     def _llm(self):
         from agent.llm.budget import default_budget

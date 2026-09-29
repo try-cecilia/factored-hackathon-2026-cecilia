@@ -168,10 +168,56 @@ def handoff_deadline() -> Iterator[Deadline]:
         current_handoff.reset(token)
 
 
-def run_bounded(fn: Callable[[], T], seconds: float) -> T:
-    """Run `fn` and return its result, or raise TimeoutError if it has not finished after `seconds`. For work that is safe to
-    leave running (a read): it finishes on its own daemon thread and its result is dropped. The context (the trace id) is
-    carried over. Never use it for a write, whose outcome the caller must know: see HumanQueue.enqueue."""
+class Saturated(TimeoutError):
+    """No slot for one more piece of bounded work: it was refused at the door, not queued."""
+
+
+class BoundedOps:
+    """A limit on the work that is left running in the background, counted until the work really ends. A worker that its
+    caller gave up on keeps its slot until it finishes, so a stuck dependency can hold at most `limit` workers however many
+    turns meet it; the turns past that are refused at once (nothing is queued). Read at /admin/capacity and /metrics."""
+
+    def __init__(self, name: str, env: str, default: int):
+        self.name, self._env, self._default = name, env, default
+        self._lock = threading.Lock()
+        self._inflight = self._rejected = 0
+
+    @property
+    def limit(self) -> int:
+        return int(os.environ.get(self._env) or self._default)
+
+    def try_acquire(self) -> bool:
+        with self._lock:
+            if self._inflight >= self.limit:
+                self._rejected += 1
+                return False
+            self._inflight += 1
+            return True
+
+    def release(self) -> None:
+        with self._lock:
+            self._inflight -= 1
+
+    def stats(self) -> dict[str, int]:
+        with self._lock:
+            return {"inflight": self._inflight, "limit": self.limit, "rejected": self._rejected}
+
+
+reads = BoundedOps("reads", "BOUNDED_OPS_LIMIT", 16)  # evidence and read-backs: safe to leave running, results dropped
+writes = BoundedOps("writes", "HANDOFF_WRITE_LIMIT", 32)  # ticket writes: never dropped, so they get their own, larger room
+
+
+def bounded_ops_stats() -> dict[str, dict[str, int]]:
+    return {"reads": reads.stats(), "writes": writes.stats()}
+
+
+def run_bounded(fn: Callable[[], T], seconds: float, pool: BoundedOps = reads) -> T:
+    """Run `fn` and return its result, or raise TimeoutError if it has not finished after `seconds`, or Saturated at once if
+    the pool has no slot. For work that is safe to leave running (a read): it finishes on its own daemon thread, keeps its
+    slot until then, and its result is dropped. The context (the trace id) is carried over. Never use it for a write,
+    whose outcome the caller must know: see HumanQueue.enqueue."""
+    if not pool.try_acquire():
+        raise Saturated(f"{pool.name}: {pool.limit} bounded operations already running")
     box: dict[str, Any] = {}
     ctx = contextvars.copy_context()
 
@@ -180,9 +226,15 @@ def run_bounded(fn: Callable[[], T], seconds: float) -> T:
             box["result"] = ctx.run(fn)
         except BaseException as exc:  # noqa: BLE001 - handed to the caller's thread as it was
             box["error"] = exc
+        finally:
+            pool.release()
 
     worker = threading.Thread(target=run, daemon=True, name="bounded")
-    worker.start()
+    try:
+        worker.start()
+    except BaseException:
+        pool.release()
+        raise
     worker.join(max(0.0, seconds))
     if worker.is_alive():
         raise TimeoutError(f"did not finish within {seconds:.2f}s")

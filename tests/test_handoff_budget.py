@@ -65,20 +65,21 @@ def test_a_held_lock_cannot_hold_the_handoff_past_its_budget_and_nothing_is_writ
     assert tickets() == []
 
 
-def test_the_evidence_is_skipped_when_the_budget_is_gone_and_no_ticket_is_written_after_it(monkeypatch):
-    monkeypatch.setenv("HANDOFF_BUDGET_SECONDS", "0.04")
+def test_slow_evidence_costs_at_most_half_the_budget_and_the_ticket_is_still_filed_without_it(monkeypatch):
+    monkeypatch.setenv("HANDOFF_BUDGET_SECONDS", "0.1")
     real = account_tools.recent_activity_for_review
 
     def slow(*a, **kw):
-        time.sleep(0.1)
+        time.sleep(0.3)
         return real(*a, **kw)
 
     monkeypatch.setattr(account_tools, "recent_activity_for_review", slow)
     orch, tok = orchestrator()
     t0 = time.perf_counter()
     r = orch.handle_message(tok, "no reconozco un cargo en mi tarjeta")  # fraud: evidence is gathered
-    assert time.perf_counter() - t0 < 0.3
-    assert r.ticket_id is None and r.policy_rule.endswith("|handoff_unverified") and tickets() == []
+    assert time.perf_counter() - t0 < 0.1 + 0.12
+    (ticket,) = tickets()  # the write still had its half of the budget
+    assert any("Evidence was not gathered" in q for q in ticket["open_questions"]) and r.policy_rule.split("|")[0] == "lexicon:fraud"
 
 
 def test_within_its_budget_the_handoff_is_filed_and_read_back(monkeypatch):
@@ -157,24 +158,6 @@ class SlowOpen:
                 f.flush()
 
         return Slow()
-
-
-def test_slow_evidence_cannot_take_more_than_the_budget(monkeypatch):
-    monkeypatch.setenv("HANDOFF_BUDGET_SECONDS", str(BUDGET))
-    real = account_tools.recent_activity_for_review
-
-    def slow(*a, **kw):
-        time.sleep(0.2)
-        return real(*a, **kw)
-
-    monkeypatch.setattr(account_tools, "recent_activity_for_review", slow)
-    orch, tok = orchestrator()
-    t0 = time.perf_counter()
-    r = orch.handle_message(tok, "no reconozco un cargo en mi tarjeta")
-    assert time.perf_counter() - t0 < BUDGET + MARGIN
-    assert r.ticket_id is None and r.policy_rule.endswith("|handoff_unverified")
-    time.sleep(0.35)
-    assert tickets() == []  # the slow evidence finished in the background and nothing was written because of it
 
 
 def test_a_slow_read_back_is_bounded_and_the_ticket_written_in_time_is_still_reported_with_its_id(monkeypatch):

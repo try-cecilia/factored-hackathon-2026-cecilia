@@ -200,9 +200,9 @@ def escalate(
             evidence, notes = [], ["Evidence was not gathered: the handoff's time budget was spent."]
         else:
             try:  # a read: bounded, and left to finish in the background if it runs over
-                evidence, notes = run_bounded(lambda: _evidence_for(decision, customer_id, actions), budget.remaining())
+                evidence, notes = run_bounded(lambda: _evidence_for(decision, customer_id, actions), budget.remaining() / 2)  # never more than half: the write comes next
             except TimeoutError:
-                evidence, notes = [], ["Evidence was not gathered: it did not finish inside the handoff's time budget."]
+                evidence, notes = [], ["Evidence was not gathered: it did not finish inside the handoff's time budget, or too many earlier ones are still running."]
         return _file(decision, customer_id, session_ref, request, language, actions, verified_facts, prior_requests, attributes,
                      trace_id, pending_action, evidence, notes)
 
