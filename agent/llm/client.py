@@ -16,6 +16,7 @@ Each response carries token usage and the attempt log for tracing and cost.
 """
 from __future__ import annotations
 
+import contextvars
 import dataclasses
 import json
 import logging
@@ -26,9 +27,70 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
 
+import httpx
+
 from agent.resilience import backoff_delay, current_deadline
 
 logger = logging.getLogger(__name__)
+
+# The wall-clock instant (time.perf_counter) by which the model call in this context must be over, or None.
+call_limit: contextvars.ContextVar[float | None] = contextvars.ContextVar("call_limit", default=None)
+
+
+class DeadlineTransport:
+    """Marks an httpx transport that puts a limit on a whole model call, not only on each read (the SDKs' timeouts are per
+    read, so a server that keeps sending pieces never trips them). The limit comes from `call_limit`; each phase's timeout
+    is capped to what is left, and the body is cut, and its connection closed, when the limit passes. The call runs on the
+    caller's own thread, so cancelling it needs no extra thread and leaves nothing behind. Built by `deadline_transport`
+    for whichever httpx the client uses: the SDKs ship their own (`httpx2`), the local provider uses `httpx`."""
+
+
+def deadline_transport(mod: Any) -> Any:
+    class Stream(mod.SyncByteStream):
+        def __init__(self, inner, limit: float):
+            self._inner, self._limit = inner, limit
+
+        def __iter__(self):
+            for chunk in self._inner:
+                yield chunk
+                if time.perf_counter() > self._limit:
+                    raise mod.ReadTimeout("the call's time limit passed while its answer was still arriving")
+
+        def close(self) -> None:
+            self._inner.close()
+
+    class Transport(DeadlineTransport, mod.BaseTransport):
+        def __init__(self) -> None:
+            self._inner = mod.HTTPTransport(limits=mod.Limits(max_connections=200, max_keepalive_connections=50))
+
+        def handle_request(self, request):
+            limit = call_limit.get()
+            if limit is None:
+                return self._inner.handle_request(request)
+            left = limit - time.perf_counter()
+            if left <= 0:
+                raise mod.ConnectTimeout("the call's time limit had passed before it started")
+            timeout = request.extensions.get("timeout") or {}
+            request.extensions["timeout"] = {k: min(timeout.get(k) or left, left) for k in ("connect", "read", "write", "pool")}
+            response = self._inner.handle_request(request)
+            return mod.Response(response.status_code, headers=response.headers, stream=Stream(response.stream, limit),
+                                extensions=response.extensions)
+
+        def close(self) -> None:
+            self._inner.close()
+
+    return Transport()
+
+
+def _sdk_http_client(sdk: Any) -> Any:
+    """An HTTP client for `sdk` (its module) over the deadline transport. Each SDK refuses a client from any httpx but
+    its own (anthropic ships `httpx2`, groq and together use `httpx`), so the one to build on is read off the SDK's
+    own default client class."""
+    import importlib
+
+    root = next(c.__module__.partition(".")[0] for c in sdk.DefaultHttpxClient.__mro__ if c.__module__.partition(".")[0].startswith("httpx"))
+    mod = importlib.import_module(root)
+    return mod.Client(transport=deadline_transport(mod), follow_redirects=True)
 
 
 @dataclass
@@ -184,14 +246,18 @@ def anthropic_call(sdk, p: Provider, messages, tools, temperature: float, timeou
 def _groq_factory(api_key: str, timeout: float):
     from groq import Groq
 
-    return Groq(api_key=api_key, timeout=timeout, max_retries=0)
+    import groq
+
+    return Groq(api_key=api_key, timeout=timeout, max_retries=0, http_client=_sdk_http_client(groq))
 
 
 def _together_factory(api_key: str, timeout: float):
     from together import Together
 
     try:
-        return Together(api_key=api_key, timeout=timeout, max_retries=0)
+        import together
+
+        return Together(api_key=api_key, timeout=timeout, max_retries=0, http_client=_sdk_http_client(together))
     except TypeError:  # older SDKs don't take these kwargs
         return Together(api_key=api_key)
 
@@ -204,7 +270,7 @@ class _LocalCompletions:
     def __init__(self, base_url: str, timeout: float):
         import httpx
 
-        self._http = httpx.Client(base_url=base_url.rstrip("/") + "/", timeout=timeout)
+        self._http = httpx.Client(base_url=base_url.rstrip("/") + "/", timeout=timeout, transport=deadline_transport(httpx))
 
     def create(self, **kwargs):
         from types import SimpleNamespace
@@ -228,7 +294,7 @@ def _local_factory(api_key: str, timeout: float):
 def _anthropic_factory(api_key: str, timeout: float):
     import anthropic
 
-    return anthropic.Anthropic(api_key=api_key, timeout=timeout, max_retries=0)
+    return anthropic.Anthropic(api_key=api_key, timeout=timeout, max_retries=0, http_client=_sdk_http_client(anthropic))
 
 
 def _known_providers() -> dict[str, Provider]:
@@ -274,28 +340,6 @@ def retry_after_hint(exc: Exception) -> float | None:
         return float(headers.get("retry-after")) if headers is not None else None
     except (TypeError, ValueError):
         return None
-
-
-def call_within(fn: Callable[[], Any], seconds: float) -> Any:
-    """Run a blocking provider call and give up after `seconds` in total. An SDK's timeout is per read, so a server that
-    keeps sending pieces never trips it; this is the limit on the whole call. The abandoned call finishes (or fails) on
-    its own daemon thread and its answer is dropped."""
-    box: dict[str, Any] = {}
-
-    def run() -> None:
-        try:
-            box["result"] = fn()
-        except BaseException as exc:  # noqa: BLE001 - handed to the caller's thread as it was
-            box["error"] = exc
-
-    worker = threading.Thread(target=run, daemon=True, name="llm-call")
-    worker.start()
-    worker.join(max(0.0, seconds))
-    if worker.is_alive():
-        raise TimeoutError(f"no complete answer within {seconds:.1f}s")
-    if "error" in box:
-        raise box["error"]
-    return box["result"]
 
 
 # Error codes providers send that say what went wrong without saying anything of what we sent.
@@ -412,9 +456,13 @@ class LLMClient:
                 t0 = time.perf_counter()
                 try:
                     request_s = min(self.timeout_s, remaining)
-                    sdk = self._client(p, api_key)
-                    content, tool_calls, usage, served_model, raw = call_within(
-                        lambda: (p.call or openai_compatible_call)(sdk, p, messages, tools, temperature, request_s), request_s)
+                    sdk = self._client(p, api_key)  # built (and its SDK imported) before the call's clock starts
+                    limit = call_limit.set(time.perf_counter() + request_s)  # the transport enforces it on the wall clock
+                    try:
+                        content, tool_calls, usage, served_model, raw = (p.call or openai_compatible_call)(
+                            sdk, p, messages, tools, temperature, request_s)
+                    finally:
+                        call_limit.reset(limit)
                     attempts.append({"provider": p.name, "outcome": "ok", "ms": round((time.perf_counter() - t0) * 1000, 1)})
                     self._record_success(p.name)
                     return LLMResponse(content, tool_calls, p.name, (time.perf_counter() - start) * 1000, served_model, usage, attempts, raw)
