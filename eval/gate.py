@@ -14,7 +14,8 @@ lo que faltaba, sobre los reportes de evaluación que se versionan en `eval/repo
    idioma, cero inseguros y cero caídas, con modelo ideal y adversarial; y un piso para la tasa de casos manejados (ideal)
    y de casos seguros (adversarial), de modo que una categoría que retrocede rompe el build aunque el promedio no se mueva.
 5. **Evidencia vigente.** Los reportes deben estar hechos con la versión actual del prompt **y con las políticas
-   actuales** (la huella de eval/fingerprint.py, que cubre `agent/policy`, las herramientas y el orquestador): si
+   actuales** (la huella de eval/fingerprint.py, que cubre `agent/policy`, las herramientas, el orquestador, las plantillas de
+   `agent/core/render.py` y lo que hay debajo; la lista está en ese archivo): si
    cualquiera cambió sin volver a medir, la evidencia no habla del sistema que se va a desplegar.
 
 Las evaluaciones del sistema leen el warehouse completo, así que no se vuelven a correr en CI (que solo tiene el de

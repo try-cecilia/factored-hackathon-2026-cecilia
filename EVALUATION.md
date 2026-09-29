@@ -175,8 +175,10 @@ For this component it fails if:
 >   `make eval-adversarial` se volvieron a correr con el warehouse completo (`--profile all`, fuente local, mismos
 >   conteos que el reporte de calidad commiteado): **los 548 casos de test dieron el mismo resultado que antes, en
 >   ambos modos** (cambian solo la fecha y las latencias); el workload regenerado con `make workload` es idéntico al commiteado.
-> - **Para que no vuelva a pasar:** cada reporte guarda una huella de los archivos de políticas, y la compuerta del CI
->   (`eval/gate.py`) falla si esos archivos cambian sin volver a medir.
+> - **Para que no vuelva a pasar:** cada reporte guarda una huella de los archivos que deciden (políticas, herramientas,
+>   orquestador) y de los que el juez compara (las plantillas de `agent/core/render.py`), más errores, sesión, privacidad,
+>   reintentos, prompt y el clasificador de la guarda; la lista completa y lo que queda fuera están en
+>   `eval/fingerprint.py`. La compuerta del CI (`eval/gate.py`) falla si esos archivos cambian sin volver a medir.
 
 `make workload eval eval-adversarial` → `eval/reports/SYSTEM_EVAL*.md`.
 
