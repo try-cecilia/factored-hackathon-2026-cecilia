@@ -271,7 +271,7 @@ describe('a scenario of the demo panel sends its first message through the chat'
       await load(user, 'Dos turnos')
 
       expect(await screen.findByText('¿Cuál es mi saldo?')).toBeTruthy()
-      expect(drawer.hasAttribute('inert')).toBe(true)
+      await waitFor(() => expect(drawer.hasAttribute('inert')).toBe(true))
       expect((container.querySelector('.shell__main') as HTMLElement).hasAttribute('inert')).toBe(false)
       await waitFor(() => expect(document.activeElement).toBe(input()))
       // The chat shows the message and, when it comes, the reply.
@@ -297,7 +297,7 @@ describe('a scenario of the demo panel sends its first message through the chat'
 
       expect(await screen.findByText('Te paso con una persona.')).toBeTruthy()
       expect(sendMessage.mock.calls[1][0].data.message).toBe('Me clonaron la tarjeta')
-      expect(drawer.hasAttribute('inert')).toBe(true)
+      await waitFor(() => expect(drawer.hasAttribute('inert')).toBe(true))
       await waitFor(() => expect(document.activeElement).toBe(input()))
     })
     it('reopening the drawer with a scenario in course puts the focus on its card, not on the top of the panel', async () => {
