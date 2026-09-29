@@ -113,3 +113,28 @@ def test_every_module_the_evaluation_imports_is_in_the_fingerprint_unless_it_is_
     infrastructure = {"eval/__init__.py", "data/__init__.py", "eval/fingerprint.py", "eval/gate.py", "eval/tracking.py", "data/lineage.py"}
     assert sorted(m for m in loaded if m.endswith(".py") and m not in covered and m not in infrastructure) == []
     assert not (loaded & set(fingerprint.NOT_MEASURED))
+
+
+def test_local_files_git_ignores_do_not_change_the_fingerprint(tmp_path):
+    # a virtualenv, a cache or node_modules inside agent/ or eval/ is the developer's machine, not the system that was measured
+    root = tree(tmp_path, b"x = 1\n")
+    before = fingerprint.policy_fingerprint(root)
+    for rel in ("agent/.venv/lib/python3.11/site-packages/local_package.py", "agent/__pycache__/junk.py",
+                "agent/vendor/site-packages/pkg.py", "agent/node_modules/pkg/index.py", "eval/.cache/other.py",
+                "tests/fixtures/raw/.hidden/customers.csv"):
+        stray = root / rel
+        stray.parent.mkdir(parents=True, exist_ok=True)
+        stray.write_bytes(b"LOCAL = True\n")
+    assert fingerprint.policy_fingerprint(root) == before
+
+
+def test_the_fingerprint_is_the_same_with_and_without_git(tmp_path):
+    # CI and the tests that run on `git archive` have no .git: the rule cannot depend on it
+    tracked = subprocess.run(["git", "ls-files", "-z"], cwd=fingerprint.ROOT, capture_output=True, check=True).stdout.split(b"\0")
+    for rel in filter(None, (name.decode() for name in tracked)):
+        source = fingerprint.ROOT / rel
+        if source.is_file():
+            (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+            (tmp_path / rel).write_bytes(source.read_bytes())
+    assert not (tmp_path / ".git").exists()
+    assert fingerprint.policy_fingerprint(tmp_path) == fingerprint.policy_fingerprint()

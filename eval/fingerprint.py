@@ -59,9 +59,18 @@ NOT_MEASURED = ("agent/session/identity.py", "agent/session/operators.py", "agen
 TEXT_SUFFIXES = {".py", ".json", ".jsonl", ".csv"}
 
 
+LOCAL_PARTS = {"__pycache__", "site-packages", "node_modules"}
+
+
+def _is_local(path: Path, root: Path) -> bool:
+    """Lo que vive en la máquina de quien desarrolla y git ignora (un venv, cachés, dependencias): no es el sistema medido.
+    Se decide por la ruta y no con `git ls-files`, para que dé lo mismo con y sin `.git` (CI, `git archive`)."""
+    return any(part.startswith(".") or part in LOCAL_PARTS for part in path.relative_to(root).parts)
+
+
 def policy_files(root: Path = ROOT) -> list[Path]:
     skipped = {root / rel for rel in NOT_MEASURED}
-    return sorted({path for pattern in POLICY_GLOBS for path in root.glob(pattern)} - skipped)
+    return sorted({path for pattern in POLICY_GLOBS for path in root.glob(pattern) if not _is_local(path, root)} - skipped)
 
 
 def policy_fingerprint(root: Path = ROOT) -> str:
