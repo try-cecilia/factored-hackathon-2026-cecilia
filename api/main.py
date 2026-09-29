@@ -37,6 +37,7 @@ from agent.tools.audit import default_audit_log, default_trace_log
 from agent.policy.desk import Conflict, DeskError, NotFound, default_desk
 from agent.policy.escalation import default_queue
 from api import demo
+from ops.drift import recent_rows, report as drift_report, save_baseline as save_drift_baseline
 
 app = FastAPI(title="LATAM Bank — Account/Payment Inquiries Agent", version="2.0.0")
 app.include_router(demo.router)
@@ -261,6 +262,19 @@ def ops(limit: int = 1000) -> dict:
         "models": dict(Counter(f"{r.get('provider')}/{r.get('model')}" for r in rows if r.get("llm_calls"))),
         "llm_budget": llm_budget(),
     }
+
+
+@app.get("/admin/drift", dependencies=[Depends(require_admin)])
+def drift(limit: int = 500) -> dict:
+    """The recent traffic against the frozen reference (ops/drift.py): language, intents, confidence, dispositions."""
+    return drift_report(min(max(limit, 1), 5000))
+
+
+@app.post("/admin/drift/snapshot", dependencies=[Depends(require_admin)])
+def drift_snapshot(limit: int = 500) -> dict:
+    """Freeze the last turns as the reference. Only counts are kept: no traces, no customer data."""
+    snap = save_drift_baseline(recent_rows(min(max(limit, 1), 5000)))
+    return {"n": snap["n"], "created_at": snap["created_at"]}
 
 
 @app.get("/admin/llm_budget", dependencies=[Depends(require_admin)])
