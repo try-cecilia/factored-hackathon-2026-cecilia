@@ -14,12 +14,13 @@ service, and as our own roadmap.
    the small sample of item 3; more needs a key. Its default is the open-weights
    `openai/gpt-oss-120b`, because Llama 3.3 70B left Groq's self-serve tiers
    on 2026-08-16.
-2. **Deployment.** Not yet deployed: it needs the hosting account. The Render
-   Blueprint (`render.yaml`) is ready, and CI builds the Docker image on every
-   push and boots it the way Render does (a disk mounted owned by root, its
-   own port), then smoke-tests it, checks the disk survives a restart, and
-   checks that a first load that fails or is killed leaves nothing a later
-   boot would serve.
+2. **Deployment.** Deployed on Render since 2026-09-29 (`render.yaml`): the web at
+   https://cecil-ai.onrender.com and the API at https://x-payments-agent.onrender.com, one small instance
+   each (512 MB). What that leaves out: no replicas, the API loads a 5,000-customer sample rather than the
+   whole dataset, and the web calls the API at its public URL, so the API's per-client limits (sign-ins,
+   failed keys) count the web's users as one client. CI builds the Docker image and boots it the way Render
+   does (a disk mounted owned by root, its own port), then smoke-tests it, checks the disk survives a
+   restart, and checks that a first load that fails or is killed leaves nothing a later boot would serve.
 
 3. **Failure handling with a live model.** The reserved failure set (`eval/heldout/`, 226 cases) ran in full with the scripted
    ideal model and the deliberately bad one. With a live model only a small sample ran (Groq's `gpt-oss-120b`, 42 of the
