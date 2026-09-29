@@ -9,9 +9,8 @@ export const getLocale = createServerFn({ method: 'GET' }).handler(
 )
 
 function parseLocale(input: unknown): Locale {
-  const { locale } = (input ?? {}) as Record<string, unknown>
-  if (!isLocale(locale)) throw new Error('unsupported locale')
-  return locale
+  if (!isLocale(input)) throw new Error('unsupported locale')
+  return input
 }
 
 /** The preference is not a secret nor a session: readable by the browser, one year, same site. */

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { defaultLocale, htmlLang } from './locales.ts'
+import { defaultLocale, htmlLang, isLocale } from './locales.ts'
 import { localeFromAcceptLanguage, resolveLocale } from './resolve.ts'
 
 test('the preference cookie wins over Accept-Language', () => {
@@ -46,4 +46,10 @@ test('junk in the header does not throw', () => {
 test('the html lang of Portuguese is the Brazilian variant', () => {
   assert.equal(htmlLang.es, 'es')
   assert.equal(htmlLang.pt, 'pt-BR')
+})
+
+test('isLocale accepts only the supported languages, as written', () => {
+  assert.equal(isLocale('es'), true)
+  assert.equal(isLocale('pt'), true)
+  for (const value of ['pt-BR', 'PT', 'en', '', null, undefined, 3]) assert.equal(isLocale(value), false)
 })
