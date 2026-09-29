@@ -1,7 +1,7 @@
 // After a login the browser lands on /operador/ingreso, which sees the cookie the browser kept (or did not) and says so.
 import assert from 'node:assert/strict'
 import { after, before, describe, test } from 'node:test'
-import { ADMIN, SAME_ORIGIN, sessionCookie, startConsole } from './harness.ts'
+import { ADMIN, alertOf, SAME_ORIGIN, sessionCookie, startConsole } from './harness.ts'
 
 let app: Awaited<ReturnType<typeof startConsole>>
 before(async () => { app = await startConsole() })
@@ -45,9 +45,9 @@ describe('the login lands on the arrival check', () => {
 
   test('the login page shows the message in Spanish, and in Portuguese with the language cookie', async () => {
     const es = await (await app.send('/operador/login?motivo=sin-cookie')).text()
-    assert.match(es, /Tu navegador no guardó la sesión/)
+    assert.match(alertOf(es) ?? '', /^Tu navegador no guardó la sesión/)
     const pt = await (await app.send('/operador/login?motivo=sin-cookie', { headers: { Cookie: 'cecilai_lang=pt' } })).text()
-    assert.match(pt, /Seu navegador não guardou a sessão/)
-    assert.doesNotMatch(await (await app.send('/operador/login')).text(), /no guardó la sesión/)
+    assert.match(alertOf(pt) ?? '', /^Seu navegador não guardou a sessão/)
+    assert.equal(alertOf(await (await app.send('/operador/login')).text()), null)
   })
 })

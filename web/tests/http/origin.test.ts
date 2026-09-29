@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { after, before, beforeEach, describe, test } from 'node:test'
-import { ADMIN, assertRefused, ORIGIN, sessionCookie, startConsole } from './harness.ts'
+import { ADMIN, alertOf, assertRefused, ORIGIN, sessionCookie, startConsole } from './harness.ts'
 
 let app: Awaited<ReturnType<typeof startConsole>>
 before(async () => { app = await startConsole() })
@@ -108,8 +108,8 @@ describe('a refused post explains itself on the login page instead of leaving a 
     for (const path of ['/operador/sesion', '/operador/clave', '/operador/salir']) {
       const refused = await app.send(path, { method: 'POST', fields: { admin_key: ADMIN, operator_key: 'k' }, headers: { Origin: 'http://192.168.1.20:3000' }, base })
       assertRefused(refused, 'origen', path)
-      assert.match(await follow(refused, base), /No pudimos verificar el origen del formulario\. Ingresar desde http:\/\/127\.0\.0\.1:3000, http:\/\/localhost:3000\./, path)
-      assert.match(await follow(refused, base, { Cookie: 'cecilai_lang=pt' }), /Não conseguimos verificar a origem do formulário\. Entrar por http:\/\/127\.0\.0\.1:3000, http:\/\/localhost:3000\./, path)
+      assert.match(alertOf(await follow(refused, base)) ?? '', /^No pudimos verificar el origen del formulario\. Ingresar desde http:\/\/127\.0\.0\.1:3000, http:\/\/localhost:3000\./, path)
+      assert.match(alertOf(await follow(refused, base, { Cookie: 'cecilai_lang=pt' })) ?? '', /^Não conseguimos verificar a origem do formulário\. Entrar por http:\/\/127\.0\.0\.1:3000, http:\/\/localhost:3000\./, path)
     }
   })
 
@@ -119,14 +119,14 @@ describe('a refused post explains itself on the login page instead of leaving a 
     assertRefused(res, 'origen')
     const page = await follow(res, PUBLIC)
     assert.ok(!page.includes(ADMIN) && !page.includes('attacker.invalid'))
-    assert.match(page, /Ingresar desde https:\/\/console\.bank\.example\./)
+    assert.match(alertOf(page) ?? '', /Ingresar desde https:\/\/console\.bank\.example\./)
   })
 
   test('the reason is a closed list: anything else in the URL shows nothing, and is not echoed', async () => {
     process.env.WEB_PUBLIC_ORIGIN = PUBLIC
     for (const motivo of ['<script>alert(1)</script>', 'origen%00', 'ORIGEN', 'admin_key=' + ADMIN]) {
       const page = await (await app.send(`/operador/login?motivo=${encodeURIComponent(motivo)}`, { base: PUBLIC })).text()
-      assert.doesNotMatch(page, /No pudimos verificar el origen/, motivo)
+      assert.equal(alertOf(page), null, motivo)
       assert.ok(!page.includes(ADMIN) && !page.includes('<script>alert'), motivo)
     }
   })
@@ -138,7 +138,7 @@ describe('a refused post explains itself on the login page instead of leaving a 
     try {
       const res = await login({ Origin: PUBLIC, 'Sec-Fetch-Site': 'same-origin' })
       assertRefused(res, 'origen-config')
-      assert.match(await follow(res, PUBLIC), /no tiene configurado su origen público \(WEB_PUBLIC_ORIGIN\)/)
+      assert.match(alertOf(await follow(res, PUBLIC)) ?? '', /no tiene configurado su origen público \(WEB_PUBLIC_ORIGIN\)/)
     } finally { console.error = original }
   })
 
@@ -199,9 +199,9 @@ describe('a refusal is shown even when the operator already has a session', () =
       // The login page of a signed-in operator used to bounce to the queue, swallowing the notice
       const es = await app.send(refused.headers.get('location')!, { headers: { Cookie: cookie }, base: HOME })
       assert.equal(es.status, 200, `${path} landed on ${es.headers.get('location')}`)
-      assert.match(await es.text(), /No pudimos verificar el origen del formulario\. Ingresar desde http:\/\/127\.0\.0\.1:3000, http:\/\/localhost:3000\./)
+      assert.match(alertOf(await es.text()) ?? '', /^No pudimos verificar el origen del formulario\. Ingresar desde http:\/\/127\.0\.0\.1:3000, http:\/\/localhost:3000\./)
       const pt = await app.send(refused.headers.get('location')!, { headers: { Cookie: `${cookie}; cecilai_lang=pt` }, base: HOME })
-      assert.match(await pt.text(), /Não conseguimos verificar a origem do formulário\. Entrar por http:\/\/127\.0\.0\.1:3000, http:\/\/localhost:3000\./)
+      assert.match(alertOf(await pt.text()) ?? '', /^Não conseguimos verificar a origem do formulário\. Entrar por http:\/\/127\.0\.0\.1:3000, http:\/\/localhost:3000\./)
       assert.equal((await app.send('/operador/cola', { headers: { Cookie: cookie }, base: HOME })).status, 200, 'the refusal did not end the session')
     })
   }

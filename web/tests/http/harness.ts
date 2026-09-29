@@ -82,6 +82,9 @@ export function assertRefused(response: Response, motivo: 'origen' | 'origen-con
   assert.deepEqual(response.headers.getSetCookie(), [], note)
 }
 
+/** The text of the alert a rendered page shows, or null. The page also carries its dictionaries as data, so a text being anywhere in the HTML proves nothing. */
+export const alertOf = (html: string) => /role="alert">([^<]*)</.exec(html)?.[1] ?? null
+
 export const setCookies = (response: Response) => response.headers.getSetCookie()
 
 /** Whether this cookie still opens the console: a page behind the login answers 200, not a redirect. */
