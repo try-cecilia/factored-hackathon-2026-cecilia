@@ -9,7 +9,7 @@ export type ButtonSize = 'lg' | 'md' | 'sm' | 'xs'
 type Common = {
   variant?: ButtonVariant
   size?: ButtonSize
-  /** Shows the spinner and blocks clicks. The label stays, in progressive form ("Confirming"). */
+  /** Shows the spinner and disables the button for real (no click, no Enter or Space, no submit). It keeps its resting look and the label, in progressive form ("Confirming"). */
   loading?: boolean
   /** Only for the dev gallery: draws a state without needing the pointer or the keyboard. */
   forceState?: 'hover' | 'pressed' | 'focus'
@@ -67,9 +67,10 @@ export function Button({
       type={type}
       className={classes({ variant, size, loading, className, muted, tinted })}
       data-state={forceState}
-      disabled={disabled}
+      disabled={disabled || loading}
       aria-busy={loading || undefined}
-      onClick={loading ? undefined : onClick}
+      aria-disabled={loading || undefined}
+      onClick={onClick}
       data-leading={leadingIcon ? '' : undefined}
       data-trailing={trailingIcon ? '' : undefined}
     >
@@ -88,7 +89,7 @@ type IconButtonProps = Common &
     icon: ReactNode
   }
 
-export function IconButton({ variant, size, loading, forceState, label, icon, className, type = 'button', onClick, ...rest }: IconButtonProps) {
+export function IconButton({ variant, size, loading, forceState, label, icon, className, type = 'button', disabled, onClick, ...rest }: IconButtonProps) {
   return (
     <button
       {...rest}
@@ -96,8 +97,10 @@ export function IconButton({ variant, size, loading, forceState, label, icon, cl
       className={classes({ variant, size, loading, className, iconOnly: true })}
       data-state={forceState}
       aria-label={label}
+      disabled={disabled || loading}
       aria-busy={loading || undefined}
-      onClick={loading ? undefined : onClick}
+      aria-disabled={loading || undefined}
+      onClick={onClick}
     >
       {loading ? <Spinner /> : icon}
     </button>
