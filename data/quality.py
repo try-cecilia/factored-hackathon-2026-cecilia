@@ -79,8 +79,8 @@ def schema_drift(con, raw: str, table: str) -> list[CheckResult]:
 def _cast_fails(col: str, typ: str) -> str:
     """A non-null raw value that does not become `typ` without loss. TRY_CAST alone rounds "700.5" to 701 in an
     INTEGER column and "200000.005" to 200000.01 in a DECIMAL(15,2) one; "700.0" and "10.500" are fine because the
-    value is unchanged. The comparison is made at 9 decimals, so digits beyond the 9th are not seen (and a raw value
-    read as a double carries noise at that depth anyway)."""
+    value is unchanged. The raw DECIMAL columns are read as text (data/pipeline.py), so the comparison is on the value
+    as delivered, not on a double; it is made at 9 decimals, so digits beyond the 9th are not seen."""
     q = _q(col)
     bad = f"TRY_CAST({q} AS {typ}) IS NULL"
     if typ == "INTEGER" or typ.startswith("DECIMAL("):

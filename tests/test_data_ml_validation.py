@@ -213,6 +213,52 @@ def test_contracts_a_value_that_would_be_rounded_to_fit_its_type_is_quarantined_
     record_property("evidence", "amount='200000.005' en un CSV real: error type_cast:amount, fila en cuarentena y no se guarda como 200000.01; '54.500' se acepta")
 
 
+def test_contracts_valid_amounts_of_any_magnitude_are_stored_exactly_and_only_a_rounding_one_is_rejected(fresh_db, own_raw, record_property):
+    """DuckDB reads a bare 8995304.28 as a DOUBLE, which cannot hold it exactly: the check has to judge the text."""
+    import random
+    from decimal import Decimal
+
+    build_fixture_warehouse(raw_dir=own_raw)
+    template = next((own_raw / "transactions").glob("year=2024/month=01/day=16/*.csv"))
+    rows = list(csv.reader(open(template, encoding="utf-8")))
+    header, base = rows[0], rows[1]
+    rng = random.Random(20260929)
+    amounts = ["8995304.28", "9999999999999.99", "0.01", "0.10", "1234567.80", "100", "54.5", "3.00"]
+    amounts += [f"{rng.randrange(1, 10 ** rng.randrange(3, 16))}.{rng.randrange(100):02d}" for _ in range(600)]
+    amounts = sorted({a for a in amounts if len(a.split(".")[0]) <= 13})
+    ids = {f"TXN-SWP{i:04d}": a for i, a in enumerate(amounts)}
+    ids["TXN-SWPBAD"] = "200000.005"
+    part = own_raw / "transactions" / "year=2024" / "month=01" / "day=18"
+    part.mkdir(parents=True)
+    out = []
+    for txn, amount in ids.items():
+        row = list(base)
+        row[header.index("transaction_id")], row[header.index("amount")] = txn, amount
+        row[header.index("transaction_date")], row[header.index("process_date")] = "2024-01-18 10:00:00", "2024-01-18"
+        row[header.index("currency")] = "USD"
+        row[header.index("amount_usd")] = ""
+        out.append(row)
+    with open(part / "transactions_20240118.csv", "w", newline="", encoding="utf-8") as f:
+        csv.writer(f).writerows([header, *out])
+    _, [result] = run_pipeline(["transactions"], RunConfig(source="local", raw_dir=own_raw, only_date=datetime(2024, 1, 18).date(),
+                                                          max_quarantine_rate=0.5))
+    assert result.rows_quarantined == 1
+    assert dict(q(fresh_db, "SELECT transaction_id, _row_errors FROM _quarantine_transactions")) == {"TXN-SWPBAD": "cast:amount"}
+    served = {t: a for t, a in q(fresh_db, "SELECT transaction_id, amount::VARCHAR FROM transactions WHERE transaction_id LIKE 'TXN-SWP%'")}
+    assert set(served) == set(ids) - {"TXN-SWPBAD"}
+    assert all(Decimal(served[t]) == Decimal(ids[t]) for t in served)  # stored as delivered, to the cent
+    assert [c.failed for c in result.checks if c.check == "type_cast:amount"] == [1]
+    record_property("evidence", f"{len(served)} importes válidos de 0.01 a 9999999999999.99 (incluido 8995304.28) cargados exactos; "
+                                "200000.005 rechazado con cast:amount; una sola fila en cuarentena")
+
+
+def test_contracts_the_fixture_warehouse_loads_without_a_single_cast_error(fresh_db, record_property):
+    _, results = build_fixture_warehouse()
+    assert not [(r.table, c.check) for r in results for c in r.checks if c.check.startswith("type_cast:") or c.check.startswith("cast:")]
+    assert sum(r.rows_quarantined for r in results) == 0
+    record_property("evidence", f"la carga del fixture sin ningún type_cast ni fila en cuarentena ({sum(r.rows_staged for r in results)} filas leídas)")
+
+
 def test_contracts_a_truncated_file_cannot_replace_the_rows_it_cuts_off(fresh_db, own_raw, record_property):
     build_fixture_warehouse(raw_dir=own_raw)
     served = q(fresh_db, "SELECT transaction_id, amount FROM transactions ORDER BY transaction_id")

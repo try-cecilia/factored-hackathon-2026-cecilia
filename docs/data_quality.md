@@ -13,7 +13,9 @@ tests use with hand-made fixtures.
 
 Per table, inside one transaction:
 
-1. **Raw staging.** CSVs are read as-is, with lineage columns added:
+1. **Raw staging.** CSVs are read as-is (the reader picks each column's type,
+   except the contract's DECIMAL columns, which are read as text so that
+   exactness can be judged on the delivered value), with lineage columns added:
    `_source_file`, `_run_id`, `_ingested_at`.
 2. **Schema drift** (`quality.schema_drift`):
    - a missing required column fails the load;

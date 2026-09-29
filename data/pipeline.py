@@ -35,7 +35,7 @@ from pathlib import Path
 import duckdb
 from dotenv import load_dotenv
 
-from data.contracts import CONTRACT_DEVIATIONS, CONTRACT_VERSION, DEDUP_ORDER, PRIMARY_KEYS
+from data.contracts import COLUMN_TYPES, CONTRACT_DEVIATIONS, CONTRACT_VERSION, DEDUP_ORDER, PRIMARY_KEYS
 from data.quality import (
     CheckResult,
     DataQualityError,
@@ -260,11 +260,17 @@ def load_table(con, spec: TableSpec, cfg: RunConfig, run_id: str, source, sample
     con.execute("BEGIN TRANSACTION")
     try:
         paths = ", ".join("'" + str(f.local_path.resolve()).replace("'", "''") + "'" for f in files)
+        # DECIMAL columns are read as text: left to the reader they become DOUBLE, and 8995304.28 is not exactly
+        # representable, so "the cast loses nothing" could not be judged on the value that was delivered.
+        header = {r[0] for r in con.execute(
+            f"DESCRIBE SELECT * FROM read_csv_auto([{paths}], union_by_name=true, hive_partitioning=false)").fetchall()}
+        as_text = {c: "VARCHAR" for c, t in COLUMN_TYPES[spec.name].items() if t.startswith("DECIMAL(") and c in header}
+        types = f", types={as_text!r}" if as_text else ""
         con.execute(f"""
             CREATE OR REPLACE TEMP TABLE {raw} AS
             SELECT * EXCLUDE (filename), replace(filename, '{root}', '') AS _source_file,
                    '{run_id}' AS _run_id, now()::TIMESTAMP AS _ingested_at
-            FROM read_csv_auto([{paths}], union_by_name=true, filename=true, hive_partitioning=false)
+            FROM read_csv_auto([{paths}], union_by_name=true, filename=true, hive_partitioning=false{types})
         """)
         checks = schema_drift(con, raw, spec.name)
         if checks[0].failed:
