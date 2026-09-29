@@ -1,0 +1,20 @@
+.ui-thinking { position: relative; display: inline-flex; align-items: center; gap: 12px; }
+.ui-thinking__dots { display: inline-flex; flex-shrink: 0; align-items: center; gap: 4px; height: 20px; }
+.ui-thinking--avatar .ui-thinking__dots { height: 32px; padding-inline: 14px; border-radius: var(--radius-pill); background: var(--color-fill-subtle); }
+.ui-thinking__dot { flex-shrink: 0; width: 6px; height: 6px; border-radius: var(--radius-pill); background: var(--color-ink-app); }
+
+/* Frame 1 of Paper is the resting state, so reduced motion still shows a lit dot. The pulse travels left to right. */
+.ui-thinking__dot:nth-child(1) { opacity: 0.9; }
+.ui-thinking__dot:nth-child(2) { opacity: 0.45; }
+.ui-thinking__dot:nth-child(3) { opacity: 0.2; }
+.ui-thinking:not([data-frame]) .ui-thinking__dot { animation: ui-thinking-pulse 1.2s ease-in-out infinite; }
+.ui-thinking:not([data-frame]) .ui-thinking__dot:nth-child(2) { animation-delay: -0.8s; }
+.ui-thinking:not([data-frame]) .ui-thinking__dot:nth-child(3) { animation-delay: -0.4s; }
+@keyframes ui-thinking-pulse { 0%, 100% { opacity: 0.9; } 33.3% { opacity: 0.2; } 66.6% { opacity: 0.45; } }
+
+.ui-thinking[data-frame='2'] .ui-thinking__dot:nth-child(1) { opacity: 0.2; }
+.ui-thinking[data-frame='2'] .ui-thinking__dot:nth-child(2) { opacity: 0.9; }
+.ui-thinking[data-frame='2'] .ui-thinking__dot:nth-child(3) { opacity: 0.45; }
+.ui-thinking[data-frame='3'] .ui-thinking__dot:nth-child(1) { opacity: 0.45; }
+.ui-thinking[data-frame='3'] .ui-thinking__dot:nth-child(2) { opacity: 0.2; }
+.ui-thinking[data-frame='3'] .ui-thinking__dot:nth-child(3) { opacity: 0.9; }

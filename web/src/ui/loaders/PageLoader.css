@@ -1,0 +1,12 @@
+.ui-page {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+  box-sizing: border-box; min-height: 200px; padding: 24px; border-radius: 14px; background: var(--color-fill-subtle);
+}
+.ui-page--fullscreen { min-height: 100dvh; border-radius: 0; background: var(--color-paper); }
+.ui-page__halo { position: relative; display: grid; flex-shrink: 0; place-items: center; width: 84px; height: 84px; }
+.ui-page__halo > .ui-mascot { position: relative; }
+.ui-page__ring { position: absolute; border-radius: var(--radius-pill); animation: ui-page-breathe 2.4s ease-in-out infinite; }
+.ui-page__ring--outer { width: 84px; height: 84px; background: color-mix(in srgb, var(--color-cecil-blue) 8%, transparent); }
+.ui-page__ring--inner { width: 64px; height: 64px; background: color-mix(in srgb, var(--color-cecil-blue) 12%, transparent); animation-delay: -0.4s; }
+.ui-page__label { color: var(--color-ink-app); font-size: var(--text-compact-md); font-weight: var(--font-weight-medium); line-height: 16px; text-align: center; }
+@keyframes ui-page-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(0.92); } }
