@@ -128,7 +128,7 @@ export function defaultOrder(tickets: readonly QueueRow[]): QueueRow[] {
   })
 }
 
-const STATUS_ORDER = ['open', 'claimed', 'approved', 'rejected', 'handed_back', 'stale']
+const STATUS_ORDER = ['open', 'claimed', 'approved', 'resolved', 'rejected', 'handed_back', 'stale']
 
 /** Column order chosen in the header. `age` ascending is the youngest first, so its value is the creation time upside down. */
 export function orderTickets(tickets: readonly QueueRow[], sort: SortState): QueueRow[] {

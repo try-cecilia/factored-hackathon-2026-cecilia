@@ -11,7 +11,7 @@ export type { QueueRow, Result }
 export type Json = string | number | boolean | null | Json[] | { [key: string]: Json }
 
 export type DeskAction = 'claim' | 'approve' | 'reject' | 'release' | 'resolve'
-export type DeskStatus = 'open' | 'claimed' | 'approved' | 'rejected' | 'handed_back' | 'stale'
+export type DeskStatus = 'open' | 'claimed' | 'approved' | 'rejected' | 'handed_back' | 'stale' | 'resolved'
 
 export type DeskState = {
   ticket_id: string
@@ -20,6 +20,8 @@ export type DeskState = {
   trace_id: string | null
   version: number
   history: { action: string; status: string; operator: string; ts: number; detail: Record<string, Json> }[]
+  /** What the customer was told when the case was resolved; null otherwise. An older API leaves it out. */
+  message?: string | null
 }
 
 export type PendingAction = {

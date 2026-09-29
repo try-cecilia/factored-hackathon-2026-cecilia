@@ -6,7 +6,7 @@ import { Button, IconButton, PriorityChip, priorityOf, StatusIndicator, type Sta
 import { AlertCircleIcon, AlertTriangleIcon, CheckIcon, InfoCircleIcon } from '../../ui/messages/icons'
 import { CloseIcon } from '../../ui/table/icons'
 import { ago, clock, CLOSED, explainKey, money, shortStamp, when } from './format'
-import { FRAUD_SCORE_FLAG, isFlagged, scoreLabel, ticketSummary } from './summary'
+import { FRAUD_SCORE_FLAG, isFlagged, resolutionMessage, scoreLabel, ticketSummary } from './summary'
 import { conflictOf, holdConflict, type Conflict } from './conflicts'
 import { evidenceTypeName, keyName, nextStepText, questionTexts, reasonText, reviewReasonName, ruleName } from './notes'
 import { KeyValues } from './ui'
@@ -31,7 +31,7 @@ export type TicketPanelProps = {
 
 type Flash = { tone: 'ok' | 'error'; title?: string; text: string; detail?: string }
 
-const tones: Record<DeskState['status'], StatusTone> = { open: 'open', claimed: 'info', approved: 'success', rejected: 'danger', handed_back: 'neutral', stale: 'caution' }
+const tones: Record<DeskState['status'], StatusTone> = { open: 'open', claimed: 'info', approved: 'success', rejected: 'danger', handed_back: 'neutral', stale: 'caution', resolved: 'success' }
 
 /** The ticket desk of the operator console: what the case is, what the assistant did, and what the operator can do next. */
 export function TicketPanel({ ticket, view, act, reload, loadError, onClose, keyForm, traceLink }: TicketPanelProps) {
@@ -104,7 +104,7 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
   const state =
     desk.status === 'open' ? t('operator.ticket.state.unassigned')
     : desk.status === 'claimed' ? (mine ? t('operator.ticket.state.claimedByYou') : t('operator.ticket.state.claimedBy', { name: who }))
-    : t(`operator.ticket.state.${{ approved: 'approvedBy', rejected: 'rejectedBy', handed_back: 'handedBackBy', stale: 'staleBy' }[desk.status]}` as MessageKey, { name: last?.operator ?? who })
+    : t(`operator.ticket.state.${{ approved: 'approvedBy', rejected: 'rejectedBy', handed_back: 'handedBackBy', stale: 'staleBy', resolved: 'resolvedBy' }[desk.status]}` as MessageKey, { name: last?.operator ?? who })
 
   const pendingAction = ticket.pending_action
   const canApprove = mine && !locked && pendingAction !== null
@@ -280,12 +280,15 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
                 : h.status === 'rejected' ? t('operator.ticket.historyItem.reject', { name })
                 : h.status === 'handed_back' ? t('operator.ticket.historyItem.release', { name })
                 : h.status === 'stale' ? t('operator.ticket.state.staleBy', { name })
+                : h.status === 'resolved' ? t('operator.ticket.historyItem.resolve', { name })
                 : t('operator.ticket.historyItem.other', { action: h.action, name })
-              const reasonText = typeof h.detail.reason === 'string' && h.detail.reason ? h.detail.reason : null
+              // A rejection carries the operator's internal reason; a resolution, the message the customer got.
+              const said = h.detail.reason || h.detail.message
+              const quoted = typeof said === 'string' && said ? said : null
               return (
                 <li key={i}>
                   <StatusIndicator tone={tones[h.status as DeskState['status']] ?? 'neutral'}>
-                    <span>{text}{reasonText && <em className="op-muted"> — “{reasonText}”</em>}</span>
+                    <span>{text}{quoted && <em className="op-muted"> — “{quoted}”</em>}</span>
                   </StatusIndicator>
                   <span className={conflict && version === desk.version && version !== conflict.seen ? 'op-mono op-danger' : 'op-mono op-muted'} title={when(h.ts, locale)}>
                     {t('operator.ticket.versionAge', { n: version, age: ago(h.ts, locale) })}
@@ -376,7 +379,7 @@ function ConflictBanner({ conflict, ticket }: { conflict: Conflict; ticket: Tick
   const { desk } = ticket
   const last = desk.history.at(-1)
   const moved = desk.version !== conflict.seen && last
-  const what = last ? t(`operator.ticket.banner.conflictWhat.${(['claim', 'approve', 'reject', 'release'] as const).includes(last.action as never) ? last.action : 'other'}` as MessageKey) : ''
+  const what = last ? t(`operator.ticket.banner.conflictWhat.${(['claim', 'approve', 'reject', 'release', 'resolve'] as const).includes(last.action as never) ? last.action : 'other'}` as MessageKey) : ''
   return (
     <Banner tone="danger" title={t('operator.ticket.banner.conflictTitle')}>
       {moved ? t('operator.ticket.banner.conflictBody', { seen: conflict.seen, now: desk.version, who: last.operator, what, time: clock(last.ts, locale) }) : t('operator.ticket.banner.conflictGeneric')}
@@ -388,7 +391,9 @@ function ConflictBanner({ conflict, ticket }: { conflict: Conflict; ticket: Tick
 function OutcomeBanner({ ticket }: { ticket: Ticket }) {
   const t = useT()
   const { status, trace_id } = ticket.desk
+  const message = resolutionMessage(ticket.desk)
   if (status === 'approved') return <Banner tone="success" title={t('operator.ticket.banner.traceOpened')}>{trace_id ? t('operator.ticket.banner.traceOpenedBody', { id: trace_id }) : undefined}</Banner>
+  if (status === 'resolved') return <Banner tone="success" title={t('operator.ticket.banner.resolvedTitle')}>{message ? t('operator.ticket.banner.resolvedBody', { message }) : undefined}</Banner>
   if (status === 'stale') return <Banner tone="caution" title={t('operator.ticket.banner.staleTitle')}>{t('operator.ticket.banner.staleBody')}</Banner>
   if (status === 'rejected') return <Banner tone="neutral" title={t('operator.ticket.banner.rejectedTitle')}>{t('operator.ticket.banner.rejectedBody')}</Banner>
   return <Banner tone="neutral" title={t('operator.ticket.banner.handedBackTitle')}>{t('operator.ticket.banner.handedBackBody')}</Banner>

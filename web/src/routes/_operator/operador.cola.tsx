@@ -30,6 +30,7 @@ const tones: Record<DeskStatus, StatusTone> = {
   rejected: 'danger',
   handed_back: 'neutral',
   stale: 'caution',
+  resolved: 'success',
 }
 
 const TABS: { key: StatusTab; search: QueueSearch['estado']; label: MessageKey }[] = [

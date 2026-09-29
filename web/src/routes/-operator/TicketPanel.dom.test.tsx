@@ -104,6 +104,20 @@ describe('version conflict (409)', () => {
     expect(disabled(button(/Tomar caso/))).toBe(false)
   })
 
+  it('names a resolution as what changed the case', async () => {
+    const view = { canAct: true, operator: 'ana.ruiz' }
+    const act = vi.fn<TicketPanelProps['act']>(async () => ({ ok: false, status: 409, message: 'ticket is already resolved' }))
+    const reload = vi.fn(async () => true)
+    const { rerender } = renderWithI18n(<TicketPanel ticket={ticket('open', { pending_action: null })} view={view} act={act} reload={reload} />)
+    await userEvent.setup().click(button(/Tomar caso/)!)
+    const history: DeskState['history'] = [
+      { action: 'claim', status: 'claimed', operator: 'diego.m', ts: NOW - 300, detail: {} },
+      { action: 'resolve', status: 'resolved', operator: 'diego.m', ts: NOW - 60, detail: { message: 'Listo.' } },
+    ]
+    rerender(<I18nProvider locale="es" messages={dictionaries.es}><TicketPanel ticket={ticket('resolved', { pending_action: null }, { operator: 'diego.m', version: 2, message: 'Listo.', history })} view={view} act={act} reload={reload} /></I18nProvider>)
+    expect((await screen.findByRole('alert')).textContent).toMatch(/v0.*v2.*diego\.m lo resolvió/)
+  })
+
   it('any other failure is explained without locking the screen', async () => {
     const act = vi.fn<TicketPanelProps['act']>(async () => ({ ok: false, status: 503 }))
     setup(ticket('open'), undefined, { act })
@@ -167,6 +181,32 @@ describe('decided', () => {
   it('a stale approval says nothing was opened', () => {
     setup(ticket('stale', {}, { version: 2, history: [{ action: 'approve', status: 'stale', operator: 'ana.ruiz', ts: NOW - 30, detail: {} }] }))
     expect(screen.getByText('El movimiento ya no estaba pendiente')).toBeTruthy()
+  })
+})
+
+describe('resolved', () => {
+  const said = 'Revisamos el cargo: era una suscripción y ya no se repite.'
+  const history: DeskState['history'] = [
+    { action: 'claim', status: 'claimed', operator: 'lucia.g', ts: NOW - 600, detail: {} },
+    { action: 'resolve', status: 'resolved', operator: 'lucia.g', ts: NOW - 120, detail: { message: said } },
+  ]
+  const banner = () => screen.getByText('Caso resuelto').closest('[role="status"]') as HTMLElement
+
+  it('says how it ended and quotes what the customer was told, in the banner and in the history', () => {
+    setup(ticket('resolved', { pending_action: null }, { operator: 'lucia.g', version: 2, message: said, history }))
+    expect(banner().textContent).toContain(`El cliente ve este mensaje en su caso y en su próximo mensaje: “${said}”`)
+    expect(banner().className).toContain('op-banner--success')
+    expect(screen.getAllByText(/Resuelto por lucia\.g/).length).toBeGreaterThan(0)
+    const item = screen.getAllByRole('listitem').find((li) => li.textContent?.startsWith('Resuelto por lucia.g'))
+    expect(item?.textContent).toContain(`“${said}”`)
+    expect(screen.getByText('Cerrado · sin más acciones')).toBeTruthy()
+    expect(button(/Resolver|^Rechazar|Devolver a la asistente/)).toBeNull()
+    expect(screen.queryByRole('textbox')).toBeNull()
+  })
+
+  it('an API that does not send the message still has it in the history', () => {
+    setup(ticket('resolved', { pending_action: null }, { operator: 'lucia.g', version: 2, history }))
+    expect(banner().textContent).toContain(`“${said}”`)
   })
 })
 

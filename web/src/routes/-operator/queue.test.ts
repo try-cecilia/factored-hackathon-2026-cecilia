@@ -126,6 +126,16 @@ test('a page past the end is brought back to the last one, with its rows', () =>
   assert.equal(pageSlice(rows, 0, 25).page, 1)
 })
 
+test('a resolved case is decided work: in the decided tab, out of the pending counts, and sorted with the closed ones', () => {
+  const resolved = ticket({ priority: 'Critical', status: 'resolved', operator: 'ana.ruiz', created_at: 990 })
+  const queue = [...rows, resolved]
+  assert.deepEqual(tabCounts(queue), { all: 7, open: 3, claimed: 1, decided: 3 })
+  assert.equal(sidebarCounts(queue, 'ana.ruiz').allOpen, 4)
+  // Closed work goes last, latest first: resolved (990), stale (950), approved (900).
+  assert.deepEqual(defaultOrder(queue).slice(-3), [resolved, stale, done])
+  assert.deepEqual(orderTickets([resolved, crit, done], { key: 'status', direction: 'asc' }).map((t) => t.desk.status), ['claimed', 'approved', 'resolved'])
+})
+
 test('an old open case among many newer closed ones still counts as pending work and stays in the unassigned view', () => {
   const oldOpen = ticket({ created_at: 1, priority: 'Low' })
   const history = Array.from({ length: 250 }, () => ticket({ status: 'approved', operator: 'ana.ruiz' }))

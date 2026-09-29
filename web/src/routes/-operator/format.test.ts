@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { es } from '../../i18n/es.ts'
 import { pt } from '../../i18n/pt.ts'
 import { translator } from '../../i18n/translate.ts'
-import { ageShort, ago, categoryName, dispositionName, explainKey, money, shortStamp } from './format.ts'
+import { ageShort, ago, categoryName, CLOSED, dispositionName, explainKey, money, shortStamp, statusKey } from './format.ts'
 
 const now = Date.UTC(2026, 8, 29, 12, 0, 0)
 const at = (secondsAgo: number) => now / 1000 - secondsAgo
@@ -46,6 +46,12 @@ test('each failure status maps to a key, and a failed action reads differently f
   assert.equal(explainKey(404, true), 'operator.errors.notFoundActing')
   assert.equal(explainKey(409), 'operator.errors.conflict')
   assert.equal(explainKey(500), 'operator.errors.generic')
+})
+
+test('a resolved case is closed, and named in both languages', () => {
+  assert.ok(CLOSED.includes('resolved'))
+  assert.equal(translator(es)(statusKey.resolved), 'Resuelto')
+  assert.equal(translator(pt)(statusKey.resolved), 'Resolvido')
 })
 
 test('every disposition a turn can end with has a name in both languages, never the raw code', () => {

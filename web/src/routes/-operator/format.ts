@@ -2,7 +2,7 @@ import { htmlLang, type Locale } from '../../i18n/locales.ts'
 import type { MessageKey, Translate } from '../../i18n/translate.ts'
 import type { DeskStatus } from '../../server/operator.functions.ts'
 
-export const CLOSED: readonly DeskStatus[] = ['approved', 'rejected', 'handed_back', 'stale']
+export const CLOSED: readonly DeskStatus[] = ['approved', 'rejected', 'handed_back', 'stale', 'resolved']
 
 export const statusKey: Record<DeskStatus, MessageKey> = {
   open: 'operator.status.open',
@@ -11,6 +11,7 @@ export const statusKey: Record<DeskStatus, MessageKey> = {
   rejected: 'operator.status.rejected',
   handed_back: 'operator.status.handed_back',
   stale: 'operator.status.stale',
+  resolved: 'operator.status.resolved',
 }
 
 const categoryKeys = {
