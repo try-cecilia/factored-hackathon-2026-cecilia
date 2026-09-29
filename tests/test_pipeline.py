@@ -230,6 +230,26 @@ def test_complaints_customer_sample_uses_loaded_customers(fresh_db):
                        "WHERE u.customer_id IS NULL") == [(0,)]
 
 
+def test_a_sample_reads_only_its_own_customers_rows(fresh_db, tmp_path):
+    """A sample keeps its customers' rows from the moment the files are read. Another customer's bad row never reaches the
+    checks (it used to be counted against the sample's total), and the window is not copied whole three times: on the
+    Render instance those copies spilled 1.4 GB past its 1 GB disk (2026-09-29)."""
+    build_fixture_warehouse(sample_customers=2)
+    insider = q(fresh_db, "SELECT customer_id, product_id FROM products ORDER BY customer_id, product_id LIMIT 1")[0]
+    sampled = {r[0] for r in q(fresh_db, "SELECT customer_id FROM customers")}
+    outsider = next(c for c in ("CLI-FIX0001", "CLI-FIX0002", "CLI-FIX0003", "CLI-FIX0005") if c not in sampled)
+    src = FIXTURES / "raw_bad" / "transactions" / "year=2024" / "month=01" / "day=17" / "transactions_20240117.csv"
+    header, good, _, bad = src.read_text(encoding="utf-8").splitlines()[:4]  # TXN-FIX0101 is clean, TXN-FIX0103 has amount "abc"
+    part = tmp_path / "raw" / "transactions" / "year=2024" / "month=01" / "day=17"
+    part.mkdir(parents=True)
+    rows = [good.replace("PRD-FIX0001,CLI-FIX0001", ",".join(insider[::-1])), bad.replace("CLI-FIX0001", outsider)]
+    (part / "transactions_20240117.csv").write_text("\n".join([header, *rows]) + "\n", encoding="utf-8")
+
+    _, [r] = run_pipeline(["transactions"], RunConfig(source="local", raw_dir=tmp_path / "raw", sample_customers=2))
+    assert r.rows_staged == 1
+    assert not [c for c in r.checks if c.check.startswith("type_cast") and c.failed], "a row outside the sample was measured"
+
+
 def test_complaints_quality_gate_and_missing_schema_roll_back(fresh_db, tmp_path):
     build_fixture_warehouse()
     run_pipeline(["complaints"], RunConfig(source="local", raw_dir=FIXTURES / "raw"))

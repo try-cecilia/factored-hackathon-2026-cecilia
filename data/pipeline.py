@@ -270,11 +270,15 @@ def load_table(con, spec: TableSpec, cfg: RunConfig, run_id: str, source, sample
             f"DESCRIBE SELECT * FROM read_csv_auto([{paths}], union_by_name=true, hive_partitioning=false)").fetchall()}
         as_text = {c: "VARCHAR" for c, t in COLUMN_TYPES[spec.name].items() if t.startswith("DECIMAL(") and c in header}
         types = f", types={as_text!r}" if as_text else ""
+        # A sample keeps its customers' rows as the files are read: filtered afterwards, the whole window was staged three
+        # times (raw, the typing step, typed) and measured against the sample's total.
+        in_sample = (" WHERE customer_id IN (SELECT customer_id FROM customers)"
+                     if sample_mode and spec.customer_scoped and "customer_id" in header and _table_exists(con, "customers") else "")
         con.execute(f"""
             CREATE OR REPLACE TEMP TABLE {raw} AS
             SELECT * EXCLUDE (filename), replace(filename, '{root}', '') AS _source_file,
                    '{run_id}' AS _run_id, now()::TIMESTAMP AS _ingested_at
-            FROM read_csv_auto([{paths}], union_by_name=true, filename=true, hive_partitioning=false{types})
+            FROM read_csv_auto([{paths}], union_by_name=true, filename=true, hive_partitioning=false{types}){in_sample}
         """)
         checks = schema_drift(con, raw, spec.name)
         if checks[0].failed:
