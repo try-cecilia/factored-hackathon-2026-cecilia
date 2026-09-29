@@ -18,9 +18,10 @@ What is versioned now, so that the next run is reproducible:
   files; a test checks that the file is what `python -m eval.live_sample select` writes). The rule is stricter than the one above, so
   the next sample is 20 reserved and 23 generated cases, not 42 and 23: it is a new sample, not a replay of this one;
 - the runner: `python -m eval.live_sample run --part reserved` (fixture warehouse) and `--part generated` (full warehouse) run the selected
-  cases with the live model, paced (20 s between cases), and append one row per case to `eval/reports/live_sample_groq_rows.jsonl`
-  (this file does not exist yet: it is written by the first run);
-- the table: `python -m eval.live_sample report` rebuilds the tables from those rows and nothing else (handled as `eval/categories.py`
+  cases with the live model, paced (20 s between cases), and append one row per case to `eval/reports/live_sample_groq_rows.jsonl`,
+  tagged with the `run_id` of the run (this file does not exist yet: it is written by the first run; an interrupted run resumes, and repeating the
+  sample is a new run in the same file);
+- the table: `python -m eval.live_sample report` rebuilds the tables from the rows of one run (`RUN_ID=...`, by default the latest; the report names it and refuses a run with a case twice) and nothing else (handled as `eval/categories.py`
   defines it, which is also stricter than when this run was made: an answer to another question is no longer counted as handled).
 
 The smoke run is `python -m ops.live_smoke --models groq:openai/gpt-oss-120b`.

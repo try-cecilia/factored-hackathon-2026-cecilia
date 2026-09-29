@@ -8,13 +8,16 @@
 `select` needs no warehouse and no key: it reads the committed case files and applies a fixed rule, so the selection is a
 function of the case files and the file it writes is checked against it (tests/test_live_sample.py). `run` needs the API
 key of the model, paces the calls (a free tier limits tokens per minute) and appends one row per case to
-`eval/reports/live_sample_groq_rows.jsonl`, the rows `eval.run_system_eval.judge` produces. `report` reads only those rows,
-so every number of a sample's table comes from a file in the repository.
+`eval/reports/live_sample_groq_rows.jsonl`, the rows `eval.run_system_eval.judge` produces, each tagged with the `run_id` of its run
+(`--run-id`, by default the UTC time; use the same one for both parts of a run). Repeating the sample is a new run in the same file: `report`
+uses one run (`--run-id`, by default the latest), names it, and refuses a run that holds a case twice. `run` skips the cases its run already has,
+so an interrupted run resumes. `report` reads only those rows, so every number of a sample's table comes from a file in the repository.
 """
 from __future__ import annotations
 
 import argparse
 import json
+from datetime import datetime, timezone
 import os
 import sys
 import tempfile
@@ -69,8 +72,24 @@ def cases_of(part: str, selection: dict) -> list[Case]:
     return [by_id[i] for i in selection[part]]
 
 
-def run_part(part: str, out: Path = ROWS, pace_s: float = 20.0, selection: dict | None = None) -> int:
-    """The selected cases of one part, one at a time with a pause between them, each row appended as it is judged."""
+def new_run_id() -> str:
+    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+
+def _entries(path: Path) -> list[dict]:
+    entries = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()] if path.exists() else []
+    if missing := [e["row"].get("case_id") for e in entries if not e.get("run_id")]:
+        raise ValueError(f"{path}: rows without a run_id (case {missing[0]}): every row must belong to a run")
+    return entries
+
+
+def done_in_run(path: Path, run_id: str, part: str) -> set[str]:
+    return {e["row"]["case_id"] for e in _entries(path) if e["run_id"] == run_id and e["part"] == part}
+
+
+def run_part(part: str, out: Path = ROWS, pace_s: float = 20.0, selection: dict | None = None, run_id: str | None = None) -> int:
+    """The selected cases of one part, one at a time with a pause between them, each row appended as it is judged, tagged with the run.
+    The cases the run already has are skipped."""
     from agent.llm.client import LLMClient
 
     selection = selection or json.loads(SELECTION.read_text(encoding="utf-8"))
@@ -81,31 +100,45 @@ def run_part(part: str, out: Path = ROWS, pace_s: float = 20.0, selection: dict 
     if part == "reserved":  # the fixture warehouse, as `make eval-failures` builds it
         os.environ["DUCKDB_PATH"] = str(Path(tempfile.mkdtemp(prefix="live_sample_")) / "fixture.duckdb")
         heldout.build_warehouse(Path(os.environ["DUCKDB_PATH"]))
-    cases, client, n = cases_of(part, selection), LLMClient(), 0
+    run_id = run_id or new_run_id()
+    done = done_in_run(out, run_id, part)
+    cases, client, n = [c for c in cases_of(part, selection) if c.case_id not in done], LLMClient(), 0
     for case in cases:
         _, (row,) = rse.run("proposed", "live", [case], client)
         with out.open("a", encoding="utf-8") as f:
-            f.write(json.dumps({"part": part, "model": MODEL, "row": row}, default=str, ensure_ascii=False) + "\n")
+            f.write(json.dumps({"run_id": run_id, "part": part, "model": MODEL, "row": row}, default=str, ensure_ascii=False) + "\n")
         n += 1
         time.sleep(pace_s)
     return n
 
 
-def load_rows(path: Path = ROWS) -> dict[str, list[dict]]:
+def load_rows(path: Path = ROWS, run_id: str | None = None) -> tuple[str, dict[str, list[dict]]]:
+    """(the run used, its rows by part): `run_id`, or the latest run in the file. A case may appear once per part in a run."""
+    entries = _entries(path)
+    runs = sorted({e["run_id"] for e in entries})
+    if run_id is not None and run_id not in runs:
+        sys.exit(f"{path} has no run {run_id} (runs: {', '.join(runs) or 'none'})")
+    run_id = run_id or (runs[-1] if runs else None)
+    if run_id is None:
+        sys.exit(f"{path} has no rows")
     parts: dict[str, list[dict]] = {"reserved": [], "generated": []}
-    for line in path.read_text(encoding="utf-8").splitlines():
-        entry = json.loads(line)
-        parts[entry["part"]].append(entry["row"])
-    return parts
+    for e in entries:
+        if e["run_id"] == run_id:
+            parts[e["part"]].append(e["row"])
+    for part, rows in parts.items():
+        ids = [r["case_id"] for r in rows]
+        if len(set(ids)) != len(ids):
+            raise ValueError(f"run {run_id}, {part}: a case appears more than once ({sorted({i for i in ids if ids.count(i) > 1})[0]})")
+    return run_id, parts
 
 
 def _pct(r: dict) -> str:
     return f"{fmt(r).rsplit(' (n=', 1)[0]} ({r['k']}/{r['n']})" if r["n"] else "n/a"
 
 
-def report(rows: dict[str, list[dict]]) -> str:
-    """The sample's tables, from its rows alone (handled as eval/categories.py defines it)."""
-    md = []
+def report(rows: dict[str, list[dict]], run_id: str) -> str:
+    """The sample's tables, from the rows of one run alone (handled as eval/categories.py defines it)."""
+    md = [f"Run `{run_id}`: {len(rows['reserved'])} reserved and {len(rows['generated'])} generated cases (the rows of that run only).\n"]
     if rows["reserved"]:
         t = table(rows["reserved"])
         md += [f"## Failure categories: reserved set, {len(rows['reserved'])} cases\n", "| Category | ES | PT | Unsafe |", "|---|---|---|---|"]
@@ -131,6 +164,7 @@ def main() -> None:
     ap.add_argument("action", choices=["select", "run", "report"])
     ap.add_argument("--part", choices=["reserved", "generated"])
     ap.add_argument("--rows", default=str(ROWS))
+    ap.add_argument("--run-id", help="run: the id to tag the rows with (the same for both parts; default the UTC time); report: the run to use (default the latest)")
     ap.add_argument("--pace", type=float, default=20.0, help="seconds between cases (free tiers limit tokens per minute)")
     a = ap.parse_args()
     sys.stdout.reconfigure(encoding="utf-8")
@@ -140,11 +174,13 @@ def main() -> None:
     elif a.action == "run":
         if not a.part:
             sys.exit("--part reserved|generated is required")
-        print(f"{run_part(a.part, Path(a.rows), a.pace)} rows appended to {a.rows}")
+        run_id = a.run_id or new_run_id()
+        print(f"{run_part(a.part, Path(a.rows), a.pace, run_id=run_id)} rows appended to {a.rows} (run {run_id})")
     else:
         if not Path(a.rows).exists():
             sys.exit(f"{a.rows} does not exist: no live sample has been run with per-case rows yet (python -m eval.live_sample run)")
-        print(report(load_rows(Path(a.rows))))
+        run_id, parts = load_rows(Path(a.rows), a.run_id)
+        print(report(parts, run_id))
 
 
 if __name__ == "__main__":

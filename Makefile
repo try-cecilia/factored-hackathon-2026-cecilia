@@ -134,11 +134,12 @@ eval-failures-live: ## el set reservado con modelos en vivo, sobre el warehouse 
 	DUCKDB_PATH=$(HELDOUT_DB) $(PY) -m eval.run_system_eval --cases eval/heldout/cases_failures_2.jsonl --system proposed --llm live --repeats 3 --models $(EVAL_MODELS)
 
 eval-live-sample: ## la muestra chica con Groq (ids en eval/reports/live_sample_selection.json; necesita GROQ_API_KEY; ritmo de 20 s por caso)
-	$(PY) -m eval.live_sample run --part reserved
-	$(PY) -m eval.live_sample run --part generated
+	run=$${RUN_ID:-$$(date -u +%Y%m%dT%H%M%SZ)}; \
+	$(PY) -m eval.live_sample run --part reserved --run-id $$run && \
+	$(PY) -m eval.live_sample run --part generated --run-id $$run
 
-eval-live-sample-report: ## rearma las tablas de la muestra desde sus filas por caso (eval/reports/live_sample_groq_rows.jsonl)
-	$(PY) -m eval.live_sample report
+eval-live-sample-report: ## rearma las tablas de una corrida de la muestra desde sus filas por caso (eval/reports/live_sample_groq_rows.jsonl; RUN_ID=... para elegirla, por defecto la última)
+	$(PY) -m eval.live_sample report $(if $(RUN_ID),--run-id $(RUN_ID))
 
 eval-failures-local: ## el set reservado con un modelo local (Ollama; ver docker compose --profile llm-local), sin cuentas ni claves
 	$(MAKE) eval-failures-live EVAL_MODELS=local:$${LOCAL_LLM_MODEL:-gpt-oss:20b}
