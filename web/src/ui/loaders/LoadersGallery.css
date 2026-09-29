@@ -20,3 +20,4 @@
 }
 .gal-loaders__bubble--failed { background: color-mix(in srgb, var(--color-danger) 8%, transparent); }
 .gal-loaders__page { width: 260px; min-height: 200px; flex-shrink: 0; }
+.gal-loaders__bubble--uncertain { background: color-mix(in srgb, var(--color-caution) 18%, transparent); }

@@ -1,8 +1,10 @@
-.ui-delivery {
-  display: inline-flex; align-items: center; gap: 5px;
-  color: var(--color-ink-70); font-size: var(--text-compact-xs); line-height: 14px;
-}
-.ui-delivery--danger { gap: 8px; color: var(--color-danger); font-weight: var(--font-weight-medium); }
+.ui-delivery { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; color: var(--color-ink-70); font-size: var(--text-compact-xs); line-height: 14px; }
+.ui-delivery__line { display: inline-flex; align-items: center; gap: 5px; }
+.ui-delivery--danger .ui-delivery__line, .ui-delivery--caution .ui-delivery__line, .ui-delivery[data-status='processed'] .ui-delivery__line { gap: 8px; }
+.ui-delivery--danger { color: var(--color-danger); font-weight: var(--font-weight-medium); }
+/* Caution amber is too light for text on paper: the caution text is the warning brown, and only the state is amber. */
+.ui-delivery--caution { color: var(--color-warning); font-weight: var(--font-weight-medium); }
+.ui-delivery__detail { max-width: 320px; margin: 0; color: var(--color-ink-70); font-weight: var(--font-weight-normal); text-align: right; }
 /* Paper: the check is ink at 55%, quieter than the text. */
 .ui-delivery__check { flex-shrink: 0; color: color-mix(in srgb, var(--color-ink) 55%, transparent); }
 .ui-delivery__retry {

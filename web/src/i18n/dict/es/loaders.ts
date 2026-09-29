@@ -19,6 +19,9 @@ export const loaders = {
     sentAt: 'Enviado · {time}',
     failed: 'No se envió',
     retry: 'Reintentar',
+    uncertain: 'Sin confirmar',
+    processed: 'Recibido',
+    reload: 'Cargar la conversación',
   },
   toast: {
     close: 'Cerrar',
@@ -64,6 +67,8 @@ export const loaders = {
       lead: 'La burbuja del cliente lleva su estado debajo.',
       message: 'Muéstrame mis últimos cinco movimientos',
       time: '8:52 a. m.',
+      uncertainDetail: 'No pude confirmar si el servicio recibió tu mensaje. Reintentar es seguro: si ya lo recibió, no se repite.',
+      processedDetail: 'El servicio ya recibió este mensaje. Cargar la conversación muestra su respuesta.',
     },
     page: {
       title: '7 · Página y aviso',

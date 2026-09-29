@@ -26,6 +26,7 @@ export const chat: Like<typeof es> = {
     action: 'Entrar novamente',
   },
   confirm: {
+    group: 'Confirmar o rastreamento',
     yes: 'Sim, rastrear',
     yesLoading: 'Rastreando',
     no: 'Agora não',

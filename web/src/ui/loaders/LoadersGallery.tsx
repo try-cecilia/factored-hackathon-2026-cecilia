@@ -92,6 +92,8 @@ export function LoadersGallery() {
           <Message><DeliveryStatus status="sending" /></Message>
           <Message><DeliveryStatus status="sent" time={t('loaders.sample.delivery.time')} /></Message>
           <Message failed><DeliveryStatus status="failed" onRetry={() => {}} /></Message>
+          <Message tone="uncertain"><DeliveryStatus status="uncertain" onRetry={() => {}} detail={t('loaders.sample.delivery.uncertainDetail')} /></Message>
+          <Message><DeliveryStatus status="processed" onReload={() => {}} detail={t('loaders.sample.delivery.processedDetail')} /></Message>
         </div>
       </Block>
 
@@ -130,11 +132,11 @@ function Item({ caption, start, children }: { caption: string; start?: boolean; 
 }
 
 /** The customer's bubble, drawn here only to give the delivery line its context. */
-function Message({ failed, children }: { failed?: boolean; children: ReactNode }) {
+function Message({ failed, tone, children }: { failed?: boolean; tone?: 'uncertain'; children: ReactNode }) {
   const t = useT()
   return (
     <div className="gal-loaders__message">
-      <p className={failed ? 'gal-loaders__bubble gal-loaders__bubble--failed' : 'gal-loaders__bubble'}>{t('loaders.sample.delivery.message')}</p>
+      <p className={failed ? 'gal-loaders__bubble gal-loaders__bubble--failed' : tone ? 'gal-loaders__bubble gal-loaders__bubble--uncertain' : 'gal-loaders__bubble'}>{t('loaders.sample.delivery.message')}</p>
       {children}
     </div>
   )

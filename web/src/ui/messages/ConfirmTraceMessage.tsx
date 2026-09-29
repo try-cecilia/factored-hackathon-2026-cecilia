@@ -16,7 +16,8 @@ export type ConfirmTraceMessageProps = {
   children: ReactNode
   time?: string
   dateTime?: string
-  item: TraceItem
+  /** The movement, when the data is at hand. The API sends the proposal as text, so the chat may pass none: the text is then the whole proposal. */
+  item?: TraceItem
   state?: ConfirmTraceState
   /** The customer's yes. Tracing never happens without it (ADR-002). */
   onConfirm?: () => void
@@ -32,12 +33,22 @@ export function ConfirmTraceMessage({ children, time, dateTime, item, state = 'i
   return (
     <AssistantFrame time={time} dateTime={dateTime} className={className}>
       <AssistantText>{children}</AssistantText>
-      <div className="ui-confirm" role="group" aria-labelledby={titleId} aria-busy={state === 'loading' || undefined}>
-        <div className="ui-confirm__row">
-          <span className="ui-confirm__title" id={titleId}>{item.title}</span>
-          {item.amount && <span className="ui-confirm__amount">{item.amount}</span>}
-        </div>
-        {item.detail && <p className="ui-confirm__detail">{item.detail}</p>}
+      <div
+        className={item ? 'ui-confirm' : 'ui-confirm ui-confirm--bare'}
+        role="group"
+        aria-labelledby={item ? titleId : undefined}
+        aria-label={item ? undefined : t('chat.confirm.group')}
+        aria-busy={state === 'loading' || undefined}
+      >
+        {item && (
+          <>
+            <div className="ui-confirm__row">
+              <span className="ui-confirm__title" id={titleId}>{item.title}</span>
+              {item.amount && <span className="ui-confirm__amount">{item.amount}</span>}
+            </div>
+            {item.detail && <p className="ui-confirm__detail">{item.detail}</p>}
+          </>
+        )}
         <div className="ui-confirm__actions">
           {answering && (
             <>
