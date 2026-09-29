@@ -45,7 +45,7 @@ export const login = createServerFn({ method: 'POST' })
 
 export const logout = createServerFn({ method: 'POST' }).handler(async () => {
   const token = getSessionToken()
-  if (token) await agentApi('/auth/session', { method: 'DELETE', token }).catch(() => undefined)
+  if (token) await agentApi('/auth/session', { method: 'DELETE', token })
   clearSessionToken()
 })
 

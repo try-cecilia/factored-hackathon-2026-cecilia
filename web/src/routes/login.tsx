@@ -5,8 +5,12 @@ import { getDemoCustomers, getSession, login } from '../server/auth.functions'
 function sameOriginPath(value: unknown) {
   if (typeof value !== 'string' || !value.startsWith('/')) return undefined
   const base = 'http://cecilai.invalid'
-  const url = new URL(value, base)
-  return url.origin === base ? url.pathname + url.search + url.hash : undefined
+  try {
+    const url = new URL(value, base)
+    return url.origin === base ? url.pathname + url.search + url.hash : undefined
+  } catch {
+    return undefined
+  }
 }
 
 export const Route = createFileRoute('/login')({

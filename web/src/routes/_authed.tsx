@@ -1,4 +1,5 @@
 import { createFileRoute, Outlet, redirect, useNavigate } from '@tanstack/react-router'
+import { useState } from 'react'
 import { getSession, logout } from '../server/auth.functions'
 
 export const Route = createFileRoute('/_authed')({
@@ -19,10 +20,20 @@ export const Route = createFileRoute('/_authed')({
 function AuthedLayout() {
   const { session } = Route.useRouteContext()
   const navigate = useNavigate()
+  const [loggingOut, setLoggingOut] = useState(false)
+  const [logoutError, setLogoutError] = useState(false)
 
   async function onLogout() {
-    await logout()
-    await navigate({ to: '/login' })
+    setLoggingOut(true)
+    setLogoutError(false)
+    try {
+      await logout()
+      await navigate({ to: '/login' })
+    } catch {
+      setLogoutError(true)
+    } finally {
+      setLoggingOut(false)
+    }
   }
 
   return (
@@ -31,9 +42,12 @@ function AuthedLayout() {
         <a className="brand" href="/" aria-label="Cecilai, inicio">cecilai<span>.</span></a>
         <div className="account">
           <span>Cliente {session.customer_id}</span>
-          <button type="button" className="link" onClick={onLogout}>Salir</button>
+          <button type="button" className="link" onClick={onLogout} disabled={loggingOut}>
+            {loggingOut ? 'Saliendo…' : 'Salir'}
+          </button>
         </div>
       </header>
+      {logoutError && <p className="error" role="alert">No se pudo cerrar la sesión. Probá de nuevo.</p>}
       <Outlet />
     </main>
   )
