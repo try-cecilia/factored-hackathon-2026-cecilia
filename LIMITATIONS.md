@@ -305,7 +305,7 @@ service, and as our own roadmap.
   Checked on 2026-09-29 with Playwright 1.63 (WebKit 26.6 and Chromium 153) against a throwaway compose project
   (`ops/browser_cookies_check.mjs`; screenshots in `docs/demo/cookies-*.png`): customer and operator login through both hosts, in both
   engines. **Not tried:** Safari itself (WebKit under Playwright is its engine, not the same build) and Firefox. **Known edge:** a
-  `WEB_PUBLIC_ORIGIN` that says https while the browser is on http (a mistake) gets Secure cookies WebKit drops; the customer login
+  `WEB_PUBLIC_ORIGIN` that says https while the browser is on http (a mistake) gets Secure cookies WebKit drops (checked: `origen-rechazado-https-config-webkit-operador.png`); the customer login
   says the session was not kept, and the operator's refusal notice names the origin to use (it travels in the URL, not in a cookie).
   A list that mixes http and https origins is invalid as a whole.
 - **The local model is wired, not measured.** The compose stack can start Ollama and pass the API `LLM_PROVIDERS=local`, and the

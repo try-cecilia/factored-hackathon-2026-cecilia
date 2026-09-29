@@ -59,7 +59,7 @@ async function operator(engine, host, { strip = false, foreignOrigin = false, sh
   if (foreignOrigin) await ctx.route('**/operador/sesion', async (route) => {
     const req = route.request()
     const res = await fetch(req.url(), { method: 'POST', headers: { ...(await req.allHeaders()), origin: 'http://192.168.1.20:3000', referer: 'http://192.168.1.20:3000/operador/login' }, body: req.postDataBuffer() ?? undefined, redirect: 'manual' })
-    await route.fulfill({ status: 200, contentType: 'text/html', headers: { 'set-cookie': res.headers.get('set-cookie') ?? '' }, body: `<meta http-equiv="refresh" content="0;url=${res.headers.get('location')}">` })
+    await route.fulfill({ status: 200, contentType: 'text/html', body: `<meta http-equiv="refresh" content="0;url=${res.headers.get('location')}">` })
   })
   const base = `http://${host}:${webPort}`
   await page.goto(`${base}/operador/login`)
@@ -98,6 +98,9 @@ if (mode === 'http') {
   // The web declares an https origin but the browser is on plain http (the old behavior of the image): Secure __Host- cookies
   for (const engine of ['webkit', 'chromium']) {
     const c = await customer(engine, '127.0.0.1', { shot: `cookies-https-config-http-${engine}-cliente` })
+    // The refusal's notice rides in the URL: WebKit, which dropped the Secure cookie above, still shows it
+    const o = await operator(engine, '127.0.0.1', { shot: `origen-rechazado-https-config-${engine}-operador` })
+    log(!o.landed && /No pudimos verificar el origen del formulario\. Ingresar desde https:\/\/console\.verify\.example\./.test(o.alert ?? ''), `${engine} operador con origen configurado https, visto por http: ${o.alert}`)
     log(engine === 'chromium' ? true : !c.landed && c.btn === 'Ingresar' && /no guardó la sesión/.test(c.alert ?? ''), `${engine} cliente con cookie Secure por http: landed=${c.landed} botón="${c.btn}" aviso=${c.alert} cookies=${c.cookies}`)
   }
 }
