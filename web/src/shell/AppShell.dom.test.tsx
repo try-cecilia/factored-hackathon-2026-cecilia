@@ -28,6 +28,7 @@ const session: Session = { customer_id: 'CLI-FIX0001', session_ref: 's1', segmen
 const ticket = '55d09c14-2235-4c3c-8967-ccac61db9c50'
 const withCase: HistoryResult = {
   ok: true,
+  cases: [],
   turns: [
     { role: 'user', text: 'Me clonaron la tarjeta', at: 1 },
     { role: 'assistant', at: 2, reply: { trace_id: 'abc12345', disposition: 'ESCALATE', response_text: 'Voy a transferir tu caso.', language: 'es', category: 'theft', ticket_id: ticket, latency_ms: 0 } },
@@ -37,16 +38,16 @@ const scenarios = [
   { id: 'a', path: 'normal', customer_id: 'CLI-FIX0001', language: 'es', fault: null, turns: ['hola'], expect: [null], title: { en: 'Balance', es: 'Consulta de saldo' }, look_for: { en: 'x', es: 'Se responde con datos.' } },
 ]
 
-function phone(matches: boolean) {
+function phone(matches: boolean, narrow = matches) {
   window.matchMedia = ((query: string) => ({
-    matches: matches && query.includes('759px'), media: query, addEventListener: () => {}, removeEventListener: () => {},
+    matches: (matches && query.includes('759px')) || (narrow && query.includes('1179px')), media: query, addEventListener: () => {}, removeEventListener: () => {},
     addListener: () => {}, removeListener: () => {}, dispatchEvent: () => false, onchange: null,
   })) as unknown as typeof window.matchMedia
 }
 
 function shell(props: { history?: HistoryResult; scenarios?: typeof scenarios | null; locale?: 'es' | 'pt' } = {}): ReactElement {
   return (
-    <ConversationProvider sessionRef="s1" initial={props.history ?? { ok: true, turns: [] }}>
+    <ConversationProvider sessionRef="s1" initial={props.history ?? { ok: true, cases: [], turns: [] }}>
       <AppShell session={session} scenarios={props.scenarios ?? null}><p>La página</p></AppShell>
     </ConversationProvider>
   )
@@ -129,6 +130,54 @@ describe('AppShell', () => {
     draw({ scenarios: null })
     expect(screen.queryByRole('complementary', { name: 'Ayudas de demostración' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Demo' })).toBeNull()
+  })
+
+  describe('modal panels keep the keyboard inside', () => {
+    const inside = (root: HTMLElement | null) => root !== null && root.contains(document.activeElement)
+
+    it('the phone drawer: Tab and Shift+Tab wrap inside it, and the page behind is inert while it is open', async () => {
+      phone(true)
+      const user = userEvent.setup()
+      const { container } = draw({ history: withCase, scenarios })
+      const side = container.querySelector('#shell-side') as HTMLElement
+      const main = container.querySelector('.shell__main') as HTMLElement
+      expect(main.hasAttribute('inert')).toBe(false)
+      await user.click(screen.getByRole('button', { name: 'Abrir el menú' }))
+      expect(main.hasAttribute('inert')).toBe(true)
+      for (let i = 0; i < 12; i++) {
+        await user.tab()
+        expect(inside(side), `Tab #${i + 1}: focus on ${document.activeElement?.tagName}`).toBe(true)
+      }
+      for (let i = 0; i < 12; i++) {
+        await user.tab({ shift: true })
+        expect(inside(side), `Shift+Tab #${i + 1}`).toBe(true)
+      }
+      await user.keyboard('{Escape}')
+      expect(main.hasAttribute('inert')).toBe(false)
+    })
+
+    it('the demo panel on a narrow screen: same containment, and neither the sidebar nor the page can be reached', async () => {
+      phone(false, true)
+      const user = userEvent.setup()
+      const { container } = draw({ scenarios })
+      const demo = container.querySelector('#shell-demo') as HTMLElement
+      await user.click(screen.getByRole('button', { name: 'Demo' }))
+      expect(demo.hasAttribute('inert')).toBe(false)
+      expect((container.querySelector('.shell__main') as HTMLElement).hasAttribute('inert')).toBe(true)
+      expect((container.querySelector('#shell-side') as HTMLElement).hasAttribute('inert')).toBe(true)
+      for (let i = 0; i < 40; i++) {
+        await user.tab()
+        expect(inside(demo), `Tab #${i + 1}`).toBe(true)
+      }
+      await user.tab({ shift: true })
+      expect(inside(demo)).toBe(true)
+    })
+
+    it('with the panel closed nothing is inert', () => {
+      phone(true)
+      const { container } = draw({ scenarios })
+      expect((container.querySelector('.shell__main') as HTMLElement).hasAttribute('inert')).toBe(false)
+    })
   })
 
   describe('on a phone', () => {

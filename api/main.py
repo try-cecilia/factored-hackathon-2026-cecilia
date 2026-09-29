@@ -424,15 +424,29 @@ class HistoryTurn(BaseModel):
     degraded: bool = False
 
 
-@app.get("/chat/history", response_model=list[HistoryTurn], response_model_exclude_none=True)
-def chat_history(x_session_token: str | None = Header(default=None)) -> list[HistoryTurn]:
+class HistoryCase(BaseModel):
+    ticket_id: str
+    category: str
+    at: float
+
+
+class History(BaseModel):
+    turns: list[HistoryTurn]
+    cases: list[HistoryCase]  # the session's handoffs; they outlive the bounded turns that opened them
+
+
+@app.get("/chat/history", response_model=History, response_model_exclude_none=True)
+def chat_history(x_session_token: str | None = Header(default=None)) -> History:
     """The live session's conversation as the customer saw it: their words (card numbers masked) and the rendered replies,
-    oldest first. Read only; no model data, no rule, no `why`. Another session's is never reachable: the key is the token's."""
+    oldest first, and the cases the session opened. Read only; no model data, no rule, no `why`. Another session's is never
+    reachable: the key is the token's."""
+    orchestrator = demo.orchestrator_for(x_session_token or "")
     try:
-        turns = demo.orchestrator_for(x_session_token or "").history(x_session_token or "")
+        turns = orchestrator.history(x_session_token or "")
+        cases = orchestrator.case_index(x_session_token or "")
     except (InvalidSession, ExpiredSession):
         raise HTTPException(401, "invalid or expired session") from None
-    return [HistoryTurn(**turn) for turn in turns]
+    return History(turns=[HistoryTurn(**turn) for turn in turns], cases=[HistoryCase(**case) for case in cases])
 
 
 @app.get("/case/{ticket_id}")

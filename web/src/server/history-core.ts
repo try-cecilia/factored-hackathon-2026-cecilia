@@ -1,4 +1,4 @@
-import type { HistoryEntry, HistoryResult, Reply } from '../chat/types'
+import type { HistoryCase, HistoryEntry, HistoryResult, Reply } from '../chat/types'
 import { parseReply, type ChatSession } from './chat-core.ts'
 
 // The read path of the conversation without the framework, like chat-core.ts: the server function wires it to the
@@ -20,10 +20,22 @@ function parseTurn(raw: unknown): HistoryEntry | null {
   return reply ? { role: 'assistant', reply, at } : null
 }
 
-/** A turn that does not fit the contract is left out; the rest of the conversation still shows. */
-export function parseHistory(body: unknown): HistoryEntry[] | null {
-  if (!Array.isArray(body)) return null
-  return body.flatMap((raw) => parseTurn(raw) ?? [])
+function parseCase(raw: unknown): HistoryCase | null {
+  if (typeof raw !== 'object' || raw === null) return null
+  const c = raw as Record<string, unknown>
+  if (typeof c.ticket_id !== 'string' || typeof c.category !== 'string' || typeof c.at !== 'number' || !Number.isFinite(c.at)) return null
+  return { ticketId: c.ticket_id, category: c.category, at: Math.round(c.at * 1000) }
+}
+
+/** A turn or a case that does not fit the contract is left out; the rest of the conversation still shows. */
+export function parseHistory(body: unknown): { turns: HistoryEntry[]; cases: HistoryCase[] } | null {
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) return null
+  const { turns, cases } = body as Record<string, unknown>
+  if (!Array.isArray(turns)) return null
+  return {
+    turns: turns.flatMap((raw) => parseTurn(raw) ?? []),
+    cases: Array.isArray(cases) ? cases.flatMap((raw) => parseCase(raw) ?? []) : [],
+  }
 }
 
 export async function loadHistory(session: ChatSession, transport: HistoryTransport): Promise<HistoryResult> {
@@ -36,8 +48,8 @@ export async function loadHistory(session: ChatSession, transport: HistoryTransp
       return { ok: false, failure: 'session_expired' }
     }
     if (response.status < 200 || response.status >= 300) return { ok: false, failure: 'unavailable' }
-    const turns = parseHistory(await response.json().catch(() => null))
-    return turns ? { ok: true, turns } : { ok: false, failure: 'unavailable' }
+    const history = parseHistory(await response.json().catch(() => null))
+    return history ? { ok: true, ...history } : { ok: false, failure: 'unavailable' }
   } catch {
     return { ok: false, failure: 'unavailable' }
   }

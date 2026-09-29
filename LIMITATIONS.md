@@ -201,7 +201,8 @@ service, and as our own roadmap.
 - **Chat history keeps figures.** `GET /chat/history` returns the session's last 40 turns as the customer saw them, rendered
   reply included (balances, movements). They live in the conversation state, which the API keeps for 24 hours after a
   session ends (`ConversationStore.RETENTION_SECONDS`) so a restart or a refresh resumes it. Only the live session's token
-  reads it, and logging out clears it; a session that only expires leaves the text in the state until that purge. The
+  reads it, and logging out clears it (the copy in the API's memory expires with the same window and is dropped when the retention job
+  purges its row, and a turn of a session that is over writes nothing back); a session that only expires leaves the text in the state until that purge. The
   customer's words are stored with card numbers masked, as in the ticket. Production needs encryption at rest and a
   retention period the bank chooses (or expiry with the session). The demo's "Why?" is not stored: after a reload the
   earlier answers have no explanation.
@@ -210,8 +211,7 @@ service, and as our own roadmap.
   one open. Their status refreshes every 45 s while the page is visible, not by push. The "action result" message is
   recognised by its position (it follows the customer's yes to a proposal) because the API gives every resolved reply
   `category=resolved`; a trace the tracing service did not confirm is drawn as a handoff with its case number, not as a
-  red "could not open the trace" card. The demo scenarios' titles come from the API in Spanish and English, so the
-  Portuguese interface shows them in Spanish. The keyboard and focus order were checked in a browser and in DOM tests;
+  red "could not open the trace" card. The keyboard and focus order were checked in a browser and in DOM tests;
   it was not tried with a screen reader. Changing language reloads the route's data (session, history), so with the API down
   it shows the "service unavailable" page with a retry instead of switching.
 - **Web UI: the Portuguese was written by the team, not reviewed by a native speaker**, and the interface has only Spanish

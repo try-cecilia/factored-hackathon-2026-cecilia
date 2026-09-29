@@ -87,12 +87,16 @@ export function AppShell({ session, scenarios, children }: { session: Session; s
   }
 
   const rail = collapsed && !phone
+  // While a panel slides over the page it is modal: everything behind it is inert, and the focus stays inside it.
+  const menuModal = phone && menuOpen
+  const demoModal = narrow && demoOpen
+  const behind = menuModal || demoModal
   const escalations = entries.filter((e) => e.role === 'assistant' && e.reply.disposition === 'ESCALATE').length
   const detail = [session.segment, session.country].filter(Boolean).join(' · ')
 
   return (
     <ShellProvider value={{ showCase }}>
-      <a className="skip" href="#main">{t('common.skipToContent')}</a>
+      <a className="skip" href="#main" inert={behind ? true : undefined}>{t('common.skipToContent')}</a>
       <div className="shell" data-menu={menuOpen ? 'open' : undefined} data-demo={demoOpen ? 'open' : undefined}>
         <div
           id="shell-side"
@@ -101,7 +105,7 @@ export function AppShell({ session, scenarios, children }: { session: Session; s
           role={phone && menuOpen ? 'dialog' : undefined}
           aria-modal={phone && menuOpen ? true : undefined}
           aria-label={phone && menuOpen ? t('shell.mainNav') : undefined}
-          inert={phone && !menuOpen ? true : undefined}
+          inert={(phone && !menuOpen) || demoModal ? true : undefined}
         >
           {phone && (
             <IconButton
@@ -138,9 +142,9 @@ export function AppShell({ session, scenarios, children }: { session: Session; s
             <CasesSection cases={cases} collapsed={rail} onOpen={openCase} onExpand={() => setCollapsed(false)} />
           </Sidebar>
         </div>
-        {phone && menuOpen && <button type="button" className="shell__scrim" aria-label={t('shell.menu.scrim')} onClick={() => setMenuOpen(false)} />}
+        {phone && menuOpen && <button type="button" tabIndex={-1} className="shell__scrim" aria-label={t('shell.menu.scrim')} onClick={() => setMenuOpen(false)} />}
 
-        <div className="shell__main">
+        <div className="shell__main" inert={behind ? true : undefined}>
           <header className="shell__bar">
             <IconButton
               className="shell__menu"
@@ -175,7 +179,7 @@ export function AppShell({ session, scenarios, children }: { session: Session; s
 
         {scenarios && (
           <>
-            {narrow && demoOpen && <button type="button" className="shell__scrim shell__scrim--demo" aria-label={t('shell.demo.hide')} onClick={() => setDemoOpen(false)} />}
+            {narrow && demoOpen && <button type="button" tabIndex={-1} className="shell__scrim shell__scrim--demo" aria-label={t('shell.demo.hide')} onClick={() => setDemoOpen(false)} />}
             <div
               id="shell-demo"
               ref={demo}
@@ -183,7 +187,7 @@ export function AppShell({ session, scenarios, children }: { session: Session; s
               role={narrow && demoOpen ? 'dialog' : undefined}
               aria-modal={narrow && demoOpen ? true : undefined}
               aria-label={narrow && demoOpen ? t('demo.panel') : undefined}
-              inert={!demoOpen ? true : undefined}
+              inert={!demoOpen || menuModal ? true : undefined}
             >
               <DemoPanel
                 scenarios={scenarios}

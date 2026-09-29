@@ -1,8 +1,8 @@
 import { createContext, use, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { getCase, getHistory, sendMessage } from '../server/chat.functions'
-import { casesOf, deliveryOf, fromHistory, isOpenCase, splitCaseNews, type CaseRef, type Entry, type UserEntry } from './conversation'
+import { casesOf, deliveryOf, fromHistory, isOpenCase, mergeCases, splitCaseNews, type CaseRef, type Entry, type UserEntry } from './conversation'
 import { newMessageKey } from './key'
-import type { HistoryResult, Reply } from './types'
+import type { HistoryCase, HistoryResult, Reply } from './types'
 
 /** How far a case is known: asked, failed to ask, or answered. */
 export type CaseState = { state: 'loading' } | { state: 'error' } | { state: 'ready'; status: string; message: string | null }
@@ -43,8 +43,12 @@ const CASE_POLL_MS = 45_000
  */
 export function ConversationProvider({ sessionRef, initial, children }: { sessionRef: string; initial: HistoryResult; children: ReactNode }) {
   const [entries, setEntries] = useState<Entry[]>(() => (initial.ok ? fromHistory(initial.turns, 1, 0) : []))
+  const [kept, setKept] = useState<HistoryCase[]>(() => (initial.ok ? initial.cases : []))
   const nextId = useRef(entries.length + 1)
+  // Which session an answer was asked in, and how many times this conversation changed by hand since: an answer that comes back
+  // for another session, or for a conversation that has moved on, is dropped instead of written over the present.
   const epoch = useRef(0)
+  const edits = useRef(0)
   const [sending, setSending] = useState(false)
   const sendingRef = useRef(false)
   const [ended, setEnded] = useState(!initial.ok && initial.failure === 'session_expired')
@@ -58,6 +62,7 @@ export function ConversationProvider({ sessionRef, initial, children }: { sessio
   if (current !== sessionRef) {
     setCurrent(sessionRef)
     setEntries(initial.ok ? fromHistory(initial.turns, 1, 0) : [])
+    setKept(initial.ok ? initial.cases : [])
     setSending(false)
     setEnded(!initial.ok && initial.failure === 'session_expired')
     setHistoryFailed(!initial.ok && initial.failure === 'unavailable')
@@ -66,6 +71,7 @@ export function ConversationProvider({ sessionRef, initial, children }: { sessio
   // The bookkeeping that is not state follows in an effect: an answer that arrives for the session that was left is ignored.
   useEffect(() => {
     epoch.current += 1
+    edits.current += 1
     nextId.current = (initial.ok ? fromHistory(initial.turns, 1, 0).length : 0) + 1
     sendingRef.current = false
     asked.current.clear()
@@ -77,20 +83,24 @@ export function ConversationProvider({ sessionRef, initial, children }: { sessio
 
   const loadCase = useCallback(async (ticketId: string) => {
     // The first look shows "loading"; the ones after keep the last answer on screen until the new one arrives.
+    const mine = epoch.current
     if (!(ticketId in statesRef.current)) setStates((s) => ({ ...s, [ticketId]: { state: 'loading' } }))
     try {
       const result = await getCase({ data: { ticket_id: ticketId } })
+      if (mine !== epoch.current) return
       if (result.ok) setStates((s) => ({ ...s, [ticketId]: { state: 'ready', status: result.case.status, message: result.case.message } }))
       else if (result.failure === 'session_expired') setEnded(true)
       else setStates((s) => (s[ticketId]?.state === 'ready' ? s : { ...s, [ticketId]: { state: 'error' } }))
     } catch {
-      setStates((s) => (s[ticketId]?.state === 'ready' ? s : { ...s, [ticketId]: { state: 'error' } }))
+      if (mine === epoch.current) setStates((s) => (s[ticketId]?.state === 'ready' ? s : { ...s, [ticketId]: { state: 'error' } }))
     }
   }, [])
 
   const entriesRef = useRef(entries)
   entriesRef.current = entries
-  const refs = useMemo(() => casesOf(entries), [entries])
+  const keptRef = useRef(kept)
+  keptRef.current = kept
+  const refs = useMemo(() => mergeCases(kept, casesOf(entries)), [kept, entries])
 
   useEffect(() => {
     for (const { ticketId } of refs) {
@@ -101,7 +111,7 @@ export function ConversationProvider({ sessionRef, initial, children }: { sessio
   }, [refs, loadCase])
 
   const refreshCases = useCallback(() => {
-    for (const { ticketId } of casesOf(entriesRef.current)) void loadCase(ticketId)
+    for (const { ticketId } of mergeCases(keptRef.current, casesOf(entriesRef.current))) void loadCase(ticketId)
   }, [loadCase])
 
   // A case a person is working on changes without the customer doing anything: look again while the page is visible.
@@ -109,7 +119,7 @@ export function ConversationProvider({ sessionRef, initial, children }: { sessio
     if (ended) return
     const timer = setInterval(() => {
       if (document.visibilityState !== 'visible') return
-      for (const { ticketId } of casesOf(entriesRef.current)) {
+      for (const { ticketId } of mergeCases(keptRef.current, casesOf(entriesRef.current))) {
         const known = statesRef.current[ticketId]
         if (!known || known.state === 'error' || (known.state === 'ready' && isOpenCase(known.status))) void loadCase(ticketId)
       }
@@ -123,12 +133,14 @@ export function ConversationProvider({ sessionRef, initial, children }: { sessio
     sendingRef.current = true
     setSending(true)
     const mine = epoch.current
+    edits.current += 1 // any send, a retry included, outdates the reloads already asked for
     patch(id, { delivery: 'sending', failure: undefined })
     try {
       const result = await sendMessage({ data: { message: text, key } })
       if (mine !== epoch.current) return null
       if (result.ok) {
         patch(id, { delivery: 'sent', failure: undefined })
+        edits.current += 1
         setEntries((all) => [...all, { id: nextId.current++, role: 'assistant', reply: result.reply, at: Date.now() }])
         if (splitCaseNews(result.reply.response_text).news.length > 0) refreshCases()
         return result.reply
@@ -166,17 +178,26 @@ export function ConversationProvider({ sessionRef, initial, children }: { sessio
 
   const reload = useCallback(async () => {
     if (sendingRef.current) return
+    const mine = { session: epoch.current, edits: edits.current }
     try {
       const result = await getHistory()
+      if (mine.session !== epoch.current || mine.edits !== edits.current) return
       if (result.ok) {
-        const next = fromHistory(result.turns, nextId.current, Date.now())
-        nextId.current += next.length
+        // A message the API said it already has but whose reply is not in what it kept stays, told so: reloading cannot show it.
+        const said = new Set(result.turns.flatMap((t) => (t.role === 'user' ? [t.text] : [])))
+        const gone = entriesRef.current.flatMap((e): Entry[] =>
+          e.role === 'user' && e.failure === 'already_processed' && !said.has(e.text) ? [{ ...e, failure: 'answer_gone' }] : [],
+        )
+        const next = [...fromHistory(result.turns, nextId.current, Date.now()), ...gone]
+        nextId.current += next.length + 1
+        setKept(result.cases)
+        edits.current += 1
         setEntries(next)
         setHistoryFailed(false)
       } else if (result.failure === 'session_expired') setEnded(true)
       else setHistoryFailed(true)
     } catch {
-      setHistoryFailed(true)
+      if (mine.session === epoch.current && mine.edits === edits.current) setHistoryFailed(true)
     }
   }, [])
 

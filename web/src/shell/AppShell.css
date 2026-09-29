@@ -20,18 +20,19 @@
   .shell__demo, .shell__demo[inert] {
     position: fixed; top: 0; right: 0; bottom: 0; z-index: 30; display: block; width: min(380px, 100vw); background: var(--color-paper);
     box-shadow: 0 1px 1px #0F0A1414, 0 24px 50px -24px #0F0A148C; transform: translateX(100%); visibility: hidden;
-    transition: transform 0.18s ease, visibility 0.18s;
+    transition: transform 0.18s ease, visibility 0s linear 0.18s;
   }
-  .shell[data-demo='open'] .shell__demo { transform: none; visibility: visible; }
+  /* Visible from the first frame (0s), so the first control can take the focus as the panel opens; it hides only after sliding out. */
+  .shell[data-demo='open'] .shell__demo { transform: none; visibility: visible; transition: transform 0.18s ease, visibility 0s; }
 }
 
 /* Phone: the sidebar is a drawer, the bar carries the menu button, and the trust note leaves. */
 @media (max-width: 759px) {
   .shell__side {
     position: fixed; top: 0; bottom: 0; left: 0; z-index: 30; width: min(288px, 86vw); box-shadow: 0 1px 1px #0F0A1414, 0 24px 50px -24px #0F0A148C;
-    background: var(--color-paper); transform: translateX(-100%); visibility: hidden; transition: transform 0.18s ease, visibility 0.18s;
+    background: var(--color-paper); transform: translateX(-100%); visibility: hidden; transition: transform 0.18s ease, visibility 0s linear 0.18s;
   }
-  .shell[data-menu='open'] .shell__side { transform: none; visibility: visible; }
+  .shell[data-menu='open'] .shell__side { transform: none; visibility: visible; transition: transform 0.18s ease, visibility 0s; }
   .shell__side .ui-sidebar { width: 100%; }
   .shell__close { position: absolute; top: 12px; right: 10px; z-index: 1; }
   .shell__menu { display: inline-flex; }

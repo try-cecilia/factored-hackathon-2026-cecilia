@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { useT } from '../i18n/context'
+import { useI18n, useT } from '../i18n/context'
 import {
   ActionResultMessage,
   AnswerMessage,
@@ -112,7 +112,7 @@ function UserView({ entry, time, canRetry, onRetry, onReload }: {
         status={entry.delivery}
         detail={detail}
         onRetry={canRetry ? () => onRetry(entry.id) : undefined}
-        onReload={onReload}
+        onReload={entry.failure === 'answer_gone' ? undefined : onReload}
       />
     ) : undefined
   const tone = entry.delivery === 'failed' ? 'failed' : entry.delivery === 'uncertain' ? 'uncertain' : undefined
@@ -135,6 +135,7 @@ function AssistantView({ entry, entries, index, cases, time, active, sending, on
   onViewCase: (ticketId: string) => void
 }) {
   const t = useT()
+  const { locale } = useI18n()
   const { reply } = entry
   const lang = reply.language === 'pt' ? 'pt' : 'es'
   const kind = classifyReply(reply, entries.slice(0, index))
@@ -225,7 +226,7 @@ function AssistantView({ entry, entries, index, cases, time, active, sending, on
     }
     default:
       message = (
-        <AnswerMessage {...frame} explanation={reply.why ? whyRows(reply.why, t) : undefined}>
+        <AnswerMessage {...frame} explanation={reply.why ? whyRows(reply.why, t, locale) : undefined}>
           {text}
         </AnswerMessage>
       )
@@ -251,10 +252,10 @@ function caseStatusText(t: Translate, row: CaseRow | undefined): string {
 const STATUS = { open: 1, claimed: 1, approved: 1, rejected: 1, handed_back: 1, stale: 1 }
 
 /** DEMO_MODE only: what the API says about how this reply was made. The demo texts come in Spanish and English. */
-function whyRows(why: Why, t: Translate): ExplanationRow[] {
+function whyRows(why: Why, t: Translate, locale: 'es' | 'pt'): ExplanationRow[] {
   const none = t('conversation.why.noLookups')
   return [
-    { label: t('conversation.why.reason'), value: why.because.es },
+    { label: t('conversation.why.reason'), value: (locale === 'pt' ? why.because.pt : undefined) ?? why.because.es },
     { label: t('conversation.why.rule'), value: why.rule },
     { label: t('conversation.why.modelSaw'), value: why.model.called ? (why.model.saw ?? '') : t('conversation.why.noModel') },
     { label: t('conversation.why.modelChose'), value: why.model.chose.length ? why.model.chose.map((c) => `${c.tool}(${JSON.stringify(c.args)})`).join('\n') : none },

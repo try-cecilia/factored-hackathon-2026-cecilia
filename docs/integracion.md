@@ -404,7 +404,7 @@ que el código de la API evalúa (nunca el modelo). Una aclaración se dibuja co
 **Historial (`GET /chat/history`).** Devuelve, con el token de la sesión viva (cabecera `X-Session-Token`, como `/case`), los turnos
 que la API guardó tal como el cliente los vio: sus palabras con los números de tarjeta enmascarados, la respuesta ya
 armada por las plantillas y, por turno de la asistente, `trace_id`, `disposition`, `category`, `language`, `ticket_id` y
-`degraded`. Nada interno: ni la regla que decidió, ni `why`, ni lo que recibió el modelo, ni los resultados de las
+`degraded`, y aparte el índice de casos de la sesión (`cases`: `ticket_id`, `category`, `at`), que no se acota con los turnos. Nada interno: ni la regla que decidió, ni `why`, ni lo que recibió el modelo, ni los resultados de las
 herramientas. Es de solo lectura, el rol es CUSTOMER en la matriz de `api/access.py`, y la conversación es la de esa sesión:
 otra sesión, aunque sea del mismo cliente, recibe la suya (vacía si es nueva); sin sesión viva, 401. Se guardan hasta 40
 turnos (`MAX_TRANSCRIPT`) en el estado de la conversación (`agent/core/orchestrator.py`), que ya sobrevive a un reinicio, y se
@@ -417,9 +417,11 @@ modo limitado.
 
 - *Shell.* Sidebar de cliente (expandido de 260 px, o rail de 56 px con el botón de la marca), barra con el título, el
   selector de idioma y, solo en la demo, el botón "Demo". Bajo los 760 px el sidebar es un cajón (botón de menú, cierre con
-  Escape, con la barra de fondo o con su botón; el foco entra y vuelve al botón). Texto e íconos del sidebar van en tinta:
+  Escape, con la barra de fondo o con su botón; el foco entra y vuelve al botón). El panel abierto es visible desde el primer cuadro (`visibility` con transición de 0 s al abrir y con demora al cerrar): con `visibility: hidden` durante la
+  animación, Chromium deja el foco en `<body>`. `web/src/shell/drawer-css.test.ts` lo protege; en el navegador se comprueba con animaciones normales
+  (abrir el menú móvil y el panel Demo: el foco cae en "Cerrar", Tab sigue dentro y Escape lo devuelve al botón; capturas `docs/demo/cliente-27-*` y `cliente-28-*`). Texto e íconos del sidebar van en tinta:
   el azul queda para el anillo de foco y los puntos de "no leído".
-- *Casos.* La sección lista los casos de la conversación (las derivaciones que llegaron con número) y el estado de cada
+- *Casos.* La sección lista los casos de la sesión (las derivaciones que llegaron con número, del índice `cases` del historial más los de esta página) y el estado de cada
   uno, consultado con `GET /case/{id}` (otra vez cada 45 s mientras un caso siga abierto y la página esté visible, y
   cuando una respuesta trae una novedad). El título sale de la categoría de la derivación (`cases.category.*`).
 - *Mensajes.* Cada respuesta se dibuja con el componente del kit que pide su disposición (`resolveMessage`): AUTO_RESOLVE,
@@ -434,13 +436,14 @@ modo limitado.
   envío, y el que está en curso); nada de texto que aparezca de a poco. Cada mensaje del cliente lleva su estado: enviando;
   **sin confirmar** (se perdió la respuesta: "Reintentar" es seguro porque viaja con la misma clave); no enviado (429 o turno
   en curso; también con la misma clave); y **recibido** (409, ver arriba): el mensaje que la API ya tiene no se reenvía, se
-  ofrece "Cargar la conversación", que vuelve a leer `/chat/history` y ahora sí muestra su respuesta.
+  ofrece "Cargar la conversación", que vuelve a leer `/chat/history`. Si la respuesta no está entre lo que la API guardó (sus últimos
+  40 turnos), el mensaje queda "Recibido" con un texto que lo dice —"su respuesta ya no está guardada y no se puede mostrar"— y sin botón.
 - *Sesión.* Ya no se redirige sola: al terminar (respuesta `REAUTH_REQUIRED`, 401 o cuenta regresiva) el chat queda en su
   lugar, con una nota, el compositor deshabilitado y el mensaje "Ingresar de nuevo", que lleva a
   `/login?redirect=/chat&motivo=expired`. Otro inicio de sesión es otra conversación (empieza de cero).
 - *Demo.* Con `DEMO_MODE=1` el panel de demo es una columna aparte (cajón deslizante bajo los 1180 px), con la etiqueta
-  Demo; sin la variable no existe ni en el HTML. Los títulos de los escenarios los manda la API en español e inglés: en
-  portugués se ven en español.
+  Demo; sin la variable no existe ni en el HTML. Los títulos y las pistas de los escenarios y los motivos de "¿Por qué?" los
+  manda la API en español, inglés y portugués (`title`, `look_for` y `because`, con `pt`); un API sin `pt` se ve en español.
 - *Idioma.* Todo texto de la interfaz está en ES y PT (`web/src/i18n/dict/*/{shell,cases,conversation,demo}.ts`); las
   respuestas de la asistente llegan de la API en el idioma del cliente y no se traducen. El español no usa imperativo de
   tuteo (un test lo comprueba).
@@ -467,8 +470,9 @@ ya se creó y falla el log de trazas) deja la clave marcada: el reintento recibe
 se devuelve si el turno se rechazó antes de empezar (429, sesión terminada).
 Pasadas 50 000 respuestas guardadas, las más viejas pierden la respuesta pero conservan una marca (hash de la clave):
 un reintento de esa clave recibe un 409 "already processed" en vez de volver a ejecutarse, y la UI marca el mensaje
-como "Recibido" y dice "El servicio ya recibió este mensaje. Cargar la conversación muestra su respuesta": el turno sí
-quedó en el historial de la sesión (`GET /chat/history`), aunque la respuesta ya no esté en la tabla de idempotencia. Las marcas de sesiones vivas no se expulsan nunca: con 500 000 claves
+como "Recibido" y dice "El servicio ya recibió este mensaje. Cargar la conversación muestra su respuesta si todavía está guardada":
+el turno quedó en el historial de la sesión (`GET /chat/history`), aunque la respuesta ya no esté en la tabla de idempotencia,
+mientras siga entre los últimos 40 turnos; si ya salió de ahí, tras recargar la UI dice que la respuesta no se puede mostrar. Las marcas de sesiones vivas no se expulsan nunca: con 500 000 claves
 retenidas, un turno nuevo se rechaza antes de ejecutarse (503 con `Retry-After`, sin efectos), y cada turno toma su lugar
 en la misma transacción que comprueba el tope. Sin la cabecera, el comportamiento es el de siempre. Con
 `DEMO_MODE=1` la respuesta guardada incluye `why` y `policy_rule`, y un replay los filtra según el modo vigente.

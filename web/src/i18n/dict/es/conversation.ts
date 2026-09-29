@@ -35,7 +35,8 @@ export const conversation = {
     rateLimited: 'Se están enviando mensajes muy rápido. Esperar un minuto e intentar de nuevo.',
     busy: 'Todavía estoy respondiendo tu mensaje anterior. Esperar un momento e intentar de nuevo.',
     unexpected: 'Recibí una respuesta que no pude mostrar. Reintentar es seguro: si ya la procesé, no se repite.',
-    processed: 'El servicio ya recibió este mensaje. Cargar la conversación muestra su respuesta.',
+    processed: 'El servicio ya recibió este mensaje. Cargar la conversación muestra su respuesta si todavía está guardada.',
+    processedGone: 'El servicio recibió este mensaje, pero su respuesta ya no está guardada y no se puede mostrar. Preguntar de nuevo.',
     ended: 'La sesión terminó antes de enviar el mensaje.',
   },
   history: {

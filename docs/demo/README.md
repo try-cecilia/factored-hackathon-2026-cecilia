@@ -35,5 +35,5 @@ handling are in `docs/integracion.md` (frontier 2).
 with `make serve-all-fixture` (the API on the tests' warehouse, a keyword stand-in for the model, `DEMO_MODE=1`), driven with Playwright.
 They show each kind of message the chat draws, the sidebar with its cases and its rail, the drawer on a phone, and the
 delivery states; `cliente-*-sin-demo-*` are the same chat with `DEMO_MODE=0`, where the demo panel does not exist. The
-design they follow is the Paper file "Cecil.ai" (`UI · Chat messages`, `UI · Sidebars`, `UI · Loaders`). `ui-kit-*.png` are the
+design they follow is the Paper file "Cecil.ai" (`UI · Chat messages`, `UI · Sidebars`, `UI · Loaders`). `cliente-27-*` and `cliente-28-*` show the phone drawer and the demo panel with the focus already inside (Chromium, normal animations). `ui-kit-*.png` are the
 component gallery (`/dev/ui`). The figures and ids on screen are the fixture's.
