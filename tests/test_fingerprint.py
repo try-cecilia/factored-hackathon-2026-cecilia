@@ -1,6 +1,10 @@
 """La huella de las políticas: igual con otros saltos de línea, distinta si el código cambia."""
 from __future__ import annotations
 
+import subprocess
+import sys
+from pathlib import Path
+
 from eval import fingerprint
 
 FILES = ("agent/policy/router.py", "agent/tools/account_tools.py", "agent/core/orchestrator.py")
@@ -84,3 +88,28 @@ def test_a_binary_file_is_hashed_as_it_is_and_only_text_gets_its_line_endings_no
         model.parent.mkdir(parents=True, exist_ok=True)
         model.write_bytes(blob)
     assert fingerprint.policy_fingerprint(a) != fingerprint.policy_fingerprint(b)
+
+
+def test_editing_a_module_the_offline_evaluation_runs_changes_the_fingerprint(tmp_path):
+    # Experiments.chat makes the orchestrator's primary model call, offline too; SessionBudget can degrade a session
+    for rel in ("agent/core/experiments.py", "agent/llm/budget.py", "agent/tools/state.py", "data/pipeline.py"):
+        root = tree(tmp_path / rel.replace("/", "_"), b"x = 1\n")
+        target = root / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(b"KEEP = True\n")
+        before = fingerprint.policy_fingerprint(root)
+        target.write_bytes(b"KEEP = False\n")
+        assert fingerprint.policy_fingerprint(root) != before, rel
+
+
+def test_every_module_the_evaluation_imports_is_in_the_fingerprint_unless_it_is_declared_not_measured():
+    script = ("import sys; import eval.run_system_eval, eval.failure_eval, eval.baseline_bot, eval.heldout; "
+              "from data.pipeline import run_pipeline; "
+              "print('\\n'.join(getattr(m, '__file__', '') or '' for m in list(sys.modules.values())))")
+    out = subprocess.run([sys.executable, "-c", script], cwd=fingerprint.ROOT, capture_output=True, text=True, check=True).stdout
+    loaded = {Path(f).resolve().relative_to(fingerprint.ROOT).as_posix() for f in out.split("\n")
+              if f and Path(f).resolve().is_relative_to(fingerprint.ROOT) and ".venv" not in f}
+    covered = {p.relative_to(fingerprint.ROOT).as_posix() for p in fingerprint.policy_files()}
+    infrastructure = {"eval/__init__.py", "data/__init__.py", "eval/fingerprint.py", "eval/gate.py", "eval/tracking.py", "data/lineage.py"}
+    assert sorted(m for m in loaded if m.endswith(".py") and m not in covered and m not in infrastructure) == []
+    assert not (loaded & set(fingerprint.NOT_MEASURED))

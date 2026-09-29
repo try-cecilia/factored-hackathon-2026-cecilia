@@ -7,7 +7,9 @@ las políticas, las herramientas (que aplican propiedad y elegibilidad), el orqu
 lo que hay debajo (errores, sesión, privacidad, reintentos, prompt y clasificador de la guarda). También cubre lo que
 decide qué cuenta como acierto: el juez, los modelos simulados (ideal y adversarial), la línea base, los casos con su
 resultado esperado y el warehouse de prueba del set reservado. Cambiar el criterio del juez o el gold sin volver a medir
-dejaba la compuerta en verde con reportes que ya no describían esta evaluación.
+dejaba la compuerta en verde con reportes que ya no describían esta evaluación. El criterio es todo lo que la evaluación
+offline importa y ejecuta (un test lo comprueba), no lo que parece importante: un módulo de "infraestructura" que hace la
+llamada al modelo o tope el gasto de una sesión cambia resultados igual.
 
 Se normalizan los saltos de línea (`\\r\\n` a `\\n`) solo en los archivos de texto; los binarios, como el .joblib, se
 hashean tal cual. En Windows Git puede dejar el árbol de trabajo en CRLF, y el mismo código tiene que dar la misma huella
@@ -20,24 +22,23 @@ import hashlib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-# Qué entra, y por qué. Lo que queda fuera no cambia un resultado medido: agent/llm/client.py (la evaluación usa un modelo
-# simulado), audit.py, state.py y db.py (persistencia), identity.py y operators.py (credenciales de la demo), budget.py y
-# experiments.py (apagados por defecto), pricing.py (solo costos). En eval/: gate.py (los pisos juzgan el reporte, no lo
-# producen), tracking.py (registro en MLflow), keyword_llm.py (modelo del servidor de pruebas, ops/serve_fixture.py),
-# live_sample.py, leakage.py, operator_labels.py, evaluate_intent_classifier.py y validate_data_ml.py (otras evaluaciones),
-# reports/ (es la salida), test_cases/ (datos del clasificador, que entra ya entrenado como .joblib) y
-# workload/cases_dev.jsonl (solo alimenta el reporte de desarrollo, que la compuerta no compara).
+# Qué entra, y por qué. Criterio: todo lo que la evaluación offline importa y ejecuta, porque cualquiera de esos módulos puede
+# cambiar un resultado (un test lo comprueba importando la evaluación). Por eso entra todo `agent/`: las decisiones
+# (policy/, orchestrator), las plantillas que el juez compara (core/render.py), la llamada primaria al modelo simulado
+# (core/experiments.py, llm/client.py), el tope de gasto por sesión que degrada un turno (llm/budget.py, llm/pricing.py), las
+# herramientas y sus errores, la sesión, la privacidad, el prompt, los reintentos y plazos, y la persistencia (tools/state.py,
+# audit.py, db.py) de la que dependen las novedades de un caso. Del resto del árbol:
+#   eval/     el juez, los modelos simulados, la línea base, los casos con su resultado esperado y el clasificador de la guarda
+#   data/     la ingesta que arma el warehouse de prueba del set reservado
+#   tests/fixtures/raw   los CSV de ese warehouse
+# Quedan fuera, en NOT_MEASURED, los módulos de agent/ que la evaluación no importa (credenciales de la demo, entrenamiento
+# del clasificador), y en eval/ y data/: gate.py (los pisos juzgan el reporte, no lo producen), tracking.py (registro en
+# MLflow), keyword_llm.py (modelo del servidor de pruebas), live_sample.py, leakage.py, operator_labels.py,
+# evaluate_intent_classifier.py y validate_data_ml.py (otras evaluaciones), data/lineage.py (metadatos), reports/ (es la
+# salida), test_cases/ (datos del clasificador, que entra ya entrenado como .joblib) y workload/cases_dev.jsonl (solo
+# alimenta el reporte de desarrollo, que la compuerta no compara).
 POLICY_GLOBS = (
-    "agent/policy/*.py",                  # router, guarda, escalación, mesa: las decisiones
-    "agent/core/orchestrator.py",         # aplica las decisiones, el modo degradado y los traspasos
-    "agent/core/render.py",               # plantillas (render.MSG): el juez compara las respuestas contra ellas
-    "agent/tools/account_tools.py",       # propiedad y elegibilidad de cada consulta
-    "agent/tools/traces.py",              # pedidos de rastreo: alta, duplicados, SLA
-    "agent/tools/errors.py",              # qué excepción de herramienta significa qué desenlace
-    "agent/session/auth.py",              # vencimiento y validez de la sesión
-    "agent/llm/privacy.py",               # qué se enmascara antes de salir hacia el modelo
-    "agent/llm/prompts.py",               # lo que ve el modelo, aunque no suba PROMPT_VERSION
-    "agent/resilience.py",                # plazos y reintentos: definen cuándo falla una herramienta o el turno
+    "agent/**/*.py",
     "eval/models/intent_clf.joblib",      # el clasificador que alimenta la guarda de escalación en ejecución
     "eval/models/intent_clf_meta.json",   # ...y su umbral
     "eval/run_system_eval.py",            # el juez (disposition_ok, seguridad, traspaso), los fallos simulados y el modelo ideal y adversarial
@@ -50,13 +51,17 @@ POLICY_GLOBS = (
     "eval/fake_llm.py",                   # modelo simulado: las respuestas del modelo ideal
     "eval/workload/cases_test.jsonl",     # los casos del split de test con su resultado esperado
     "eval/heldout/*.jsonl",               # los casos reservados con su resultado esperado
+    "data/contracts.py", "data/pipeline.py", "data/quality.py", "data/sources.py",  # la ingesta del warehouse de prueba
     "tests/fixtures/raw/**/*.csv",        # el warehouse de prueba sobre el que corre el set reservado
 )
+NOT_MEASURED = ("agent/session/identity.py", "agent/session/operators.py", "agent/session/secure_compare.py",
+                "agent/llm/intent_classifier.py")
 TEXT_SUFFIXES = {".py", ".json", ".jsonl", ".csv"}
 
 
 def policy_files(root: Path = ROOT) -> list[Path]:
-    return sorted({path for pattern in POLICY_GLOBS for path in root.glob(pattern)})
+    skipped = {root / rel for rel in NOT_MEASURED}
+    return sorted({path for pattern in POLICY_GLOBS for path in root.glob(pattern)} - skipped)
 
 
 def policy_fingerprint(root: Path = ROOT) -> str:
