@@ -207,3 +207,13 @@ def test_a_movement_that_settled_after_the_proposal_is_not_traced(monkeypatch):
     r = orch.handle_message(tok, "sí")
     assert (r.disposition, r.policy_rule) == ("ESCALATE", "action:trace_unmatched")
     assert stored() == []
+
+
+def test_a_movement_pushed_past_the_candidate_cap_is_still_traced_on_confirmation(monkeypatch):
+    """Found by amount/date, then five newer pendings crowd it out of a top-N list: the re-check asks for it by id."""
+    from agent.tools import account_tools
+    orch, tok, _ = make(tool_call_response("request_trace", {}))
+    assert orch.handle_message(tok, "hice una transferencia que todavía no llega").policy_rule == "action:trace_proposed"
+    monkeypatch.setattr(account_tools, "MAX_TRACE_CANDIDATES", 0)  # a list query would now return nothing
+    r = orch.handle_message(tok, "sí")
+    assert r.policy_rule == "action:trace_opened" and len(stored()) == 1

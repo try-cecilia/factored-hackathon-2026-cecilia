@@ -286,7 +286,8 @@ class Orchestrator:
         still_pending = True
         try:
             # The proposal is one turn old: the movement may have settled since, so eligibility is checked again.
-            pending = TOOL_FUNCTIONS["request_trace"](session.customer_id, product_id=proposal["product_id"])["items"]
+            pending = TOOL_FUNCTIONS["request_trace"](session.customer_id, product_id=proposal["product_id"],
+                                                      transaction_id=proposal["transaction_id"])["items"]
             still_pending = any(m["transaction_id"] == proposal["transaction_id"] for m in pending)
             verified = None
             if still_pending:
