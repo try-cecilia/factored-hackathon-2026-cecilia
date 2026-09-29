@@ -276,6 +276,28 @@ def retry_after_hint(exc: Exception) -> float | None:
         return None
 
 
+def call_within(fn: Callable[[], Any], seconds: float) -> Any:
+    """Run a blocking provider call and give up after `seconds` in total. An SDK's timeout is per read, so a server that
+    keeps sending pieces never trips it; this is the limit on the whole call. The abandoned call finishes (or fails) on
+    its own daemon thread and its answer is dropped."""
+    box: dict[str, Any] = {}
+
+    def run() -> None:
+        try:
+            box["result"] = fn()
+        except BaseException as exc:  # noqa: BLE001 - handed to the caller's thread as it was
+            box["error"] = exc
+
+    worker = threading.Thread(target=run, daemon=True, name="llm-call")
+    worker.start()
+    worker.join(max(0.0, seconds))
+    if worker.is_alive():
+        raise TimeoutError(f"no complete answer within {seconds:.1f}s")
+    if "error" in box:
+        raise box["error"]
+    return box["result"]
+
+
 def classify_error(exc: Exception) -> str:
     if isinstance(exc, (TypeError, ValueError, AttributeError, KeyError)):
         return "permanent"  # our bug or an SDK contract mismatch; retrying can't help
@@ -360,8 +382,10 @@ class LLMClient:
                     break
                 t0 = time.perf_counter()
                 try:
-                    content, tool_calls, usage, served_model, raw = (p.call or openai_compatible_call)(
-                        self._client(p, api_key), p, messages, tools, temperature, min(self.timeout_s, remaining))
+                    request_s = min(self.timeout_s, remaining)
+                    sdk = self._client(p, api_key)
+                    content, tool_calls, usage, served_model, raw = call_within(
+                        lambda: (p.call or openai_compatible_call)(sdk, p, messages, tools, temperature, request_s), request_s)
                     attempts.append({"provider": p.name, "outcome": "ok", "ms": round((time.perf_counter() - t0) * 1000, 1)})
                     self._record_success(p.name)
                     return LLMResponse(content, tool_calls, p.name, (time.perf_counter() - start) * 1000, served_model, usage, attempts, raw)

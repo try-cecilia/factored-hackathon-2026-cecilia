@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from agent.policy.router import Decision
-from agent.resilience import RetryPolicy, retry_call
+from agent.resilience import Deadline, RetryPolicy, retry_call
 from agent.policy.signals import PRIORITY_BY_CATEGORY
 from agent.tools import account_tools
 
@@ -55,6 +55,7 @@ class EscalationTicket:
 
 
 ENQUEUE_RETRY = RetryPolicy(max_attempts=3, base_s=0.1, cap_s=0.5)
+HANDOFF_BUDGET_S = float(os.environ.get("HANDOFF_BUDGET_SECONDS") or 3)  # its own clock: a turn out of time still files its handoff
 
 
 class HumanQueue:
@@ -80,7 +81,7 @@ class HumanQueue:
             with self._write_lock, open(self.path, "a", encoding="utf-8") as f:
                 f.write(json.dumps(asdict(ticket), default=str, ensure_ascii=False) + "\n")
 
-        retry_call(write, policy=ENQUEUE_RETRY, idempotency_key=ticket.ticket_id)
+        retry_call(write, policy=ENQUEUE_RETRY, idempotency_key=ticket.ticket_id, deadline=Deadline(HANDOFF_BUDGET_S))
 
     def get(self, ticket_id: str) -> dict | None:
         # ponytail: linear scan of a local JSONL file; the bank's case system answers this by id

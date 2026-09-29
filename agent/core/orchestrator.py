@@ -232,6 +232,12 @@ def sanitize_args(tool: str, raw: dict, catalog: list[dict]) -> tuple[dict, list
     return args, dropped
 
 
+def out_of_time() -> bool:
+    """Whether the turn's budget is spent. Checked before every lookup and every action, and after each lookup."""
+    d = current_deadline.get()
+    return d is not None and d.expired
+
+
 def run_tool(name: str, customer_id: str, **args: Any) -> Any:
     """A tool call with a bounded retry for a transient failure of what it reads (a busy disk, a database connection).
     Every tool here is a read, so repeating one is harmless; a ToolError (bad argument, not yours, no data) is a
@@ -439,7 +445,17 @@ class Orchestrator:
     def _open_trace(self, proposal, session, lang, trace_id, done, escalate) -> TurnResult:
         """The customer said yes: open the trace, read it back, and only then say it exists."""
         action = {"tool": "request_trace", "args": {"product_id": proposal["product_id"]}, "confirmed_by_customer": True}
-        still_pending, review, age_days = True, None, None
+
+        def out_of_time_handoff() -> TurnResult:
+            # Nothing was written: the customer's yes is recorded and a person decides, with the proposal intact.
+            return escalate(router.turn_timeout(), [{**action, "success": False, "error_type": "TurnTimeout"}], [],
+                            {"tool": "request_trace", "transaction_id": proposal["transaction_id"],
+                             "product_id": proposal["product_id"], "review_reason": "turn_timeout", "age_days": None,
+                             "movement": proposal["movement"]})
+
+        if out_of_time():
+            return out_of_time_handoff()
+        still_pending, review, age_days, timed_out = True, None, None, False
         try:
             # The proposal is one turn old: the movement may have settled since, so eligibility is checked again.
             with stage("tool:request_trace"):
@@ -450,7 +466,8 @@ class Orchestrator:
             review = found.get("review_reason") if found else None
             age_days = found.get("age_days") if found else None
             verified = None
-            if still_pending and not review:
+            timed_out = still_pending and not review and out_of_time()  # the lookup ate the budget: write nothing now
+            if still_pending and not review and not timed_out:
                 # Opened and read back (this customer's, this movement's), retrying a busy service a bounded number of times.
                 with stage("trace_service") as info:
                     log: list[dict] = []
@@ -461,6 +478,8 @@ class Orchestrator:
                         info["attempts"] = len(log)
         except Exception:  # noqa: BLE001 - an unwritable service is an unverified action, never a crash
             verified = None
+        if timed_out:
+            return out_of_time_handoff()
         if review:  # old or self-contradicting: the customer's yes is recorded, a person decides
             return escalate(router.trace_review(review), [{**action, "success": False, "error_type": "NeedsHumanApproval"}], [],
                             {"tool": "request_trace", "transaction_id": proposal["transaction_id"],
@@ -646,6 +665,9 @@ class Orchestrator:
             action.update({"success": error is None, "error_type": type(error).__name__ if error else None,
                            "error": str(error) if error else None})
             actions.append(action)
+            if out_of_time():  # a slow lookup finished after the budget: its result is not used, a person answers
+                trace["rule"] = "turn_timeout"
+                return escalate(router.turn_timeout(), actions, facts)
 
             decision = router.after_tool(error)
             if decision is not None:
