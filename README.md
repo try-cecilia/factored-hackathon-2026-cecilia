@@ -133,8 +133,7 @@ Qué falta todavía: [`LIMITATIONS.md`](LIMITATIONS.md).
 Todo corre en Docker en tu máquina: cliente, consola de operador, métricas y dashboards. No hace falta ninguna cuenta ni S3; para
 respuestas del modelo alcanza una clave gratis de Groq, y sin clave el asistente corre igual en modo limitado.
 
-**Requisitos:** Docker y `make`. Usá **Chrome, Brave o Firefox** y entrá siempre por **`http://127.0.0.1:3000`**, no por
-`localhost` (ver [Problemas comunes](#problemas-comunes)).
+**Requisitos:** Docker y `make`. Entrá por `http://127.0.0.1:3000` o `http://localhost:3000`; está probado en Chromium y en WebKit (el motor de Safari).
 
 ### 1. Preparar el `.env`
 
@@ -235,8 +234,8 @@ make gate            # compuerta de calidad: pisos de seguridad y evidencia vige
 
 | Síntoma | Causa y qué hacer |
 |---|---|
-| El login queda en "Ingresando…" | Safari no guarda la cookie de sesión por `http`. Usá Chrome, Brave o Firefox |
-| "Forbidden" al entrar como operador | Entraste por `localhost`. La consola solo acepta el origen de `WEB_PUBLIC_ORIGIN`: usá `http://127.0.0.1:3000` |
+| Después de "Ingresar" aparece "Tu navegador no guardó la sesión…" | El navegador rechazó la cookie de sesión. Entrá por `http://127.0.0.1:3000`, `http://localhost:3000` o por https, y revisá que el navegador acepte cookies |
+| "No pudimos verificar el origen del formulario. Ingresar desde …" en el login de operador | Entraste por un origen que no está en `WEB_PUBLIC_ORIGIN`. El compose local acepta `127.0.0.1` y `localhost`; usá uno de los que lista el aviso |
 | Aparece el aviso «Cecilia está limitada por ahora» y muchas consultas van a una persona | No hay clave de modelo, o se agotó el cupo gratis de Groq (~200k tokens/día). Es el modo seguro: sin el modelo, responde solo saldos simples y deriva el resto |
 | Confirmé un rastreo y no aparece en la consola | Es lo esperado: un rastreo confirmado por el cliente se abre solo. A la consola llegan solo los casos que necesitan a una persona |
 | Un caso desapareció de la cola | Ya se decidió: mirá los filtros **Decididos** o **Todos** |
