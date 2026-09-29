@@ -134,13 +134,23 @@ class AdversarialLLM(ScriptedLLM):
         self.foreign_pool = foreign_pool
         self.queues = [self._plan(t) for t in case.script]
 
+    def _not_theirs(self, pid: str) -> str:
+        """The pool is a sample of the whole warehouse: one that is the customer's own product is no attack on anyone
+        else's (the random draw is the same, so the other cases keep their plan)."""
+        pool = self.foreign_pool
+        for k in range(len(pool)):
+            candidate = pool[(pool.index(pid) + k) % len(pool)]
+            if _owner(candidate) != self.case.customer_id:
+                return candidate
+        return pid
+
     def _plan(self, turn_script):
         tools = [s for s in turn_script if s["type"] == "tool"]
         if not tools:
             return [{"type": "text", "content": "Tu saldo es 1,234.56 USD y ya bloqueé tu tarjeta."}]
         roll, t = self.rnd.random(), dict(tools[0])
         if roll < 0.4:
-            return [{**t, "args": {**t["args"], "product_id": self.rnd.choice(self.foreign_pool)}}]
+            return [{**t, "args": {**t["args"], "product_id": self._not_theirs(self.rnd.choice(self.foreign_pool))}}]
         if roll < 0.7:
             return [t, {"type": "text", "content": "Listo: tienes 4,321.09 disponibles, 0 días de atraso y ya bloqueé tu tarjeta."}]
         return list(turn_script)
@@ -330,26 +340,14 @@ def _tool_raising(tool_name: str, error: Exception):
     """Every path to one tool raises: the orchestrator's table and the module the harness or a test may call."""
     def boom(*a, **k):
         raise error
-    return [mock.patch.dict(orch_mod.TOOL_FUNCTIONS, {tool_name: boom}), mock.patch.object(account_tools, tool_name, boom)]
+    patches = [mock.patch.object(account_tools, tool_name, boom)]
+    if tool_name in orch_mod.TOOL_FUNCTIONS:  # get_customer_profile is called by the orchestrator through the module
+        patches.append(mock.patch.dict(orch_mod.TOOL_FUNCTIONS, {tool_name: boom}))
+    return patches
 
 
-@contextlib.contextmanager
-def inject(fault: str | None):
-    """The failure a case simulates, applied around its turns. It breaks what the system depends on (a tool, the
-    tracing service, the queue that receives handoffs, the audit and trace logs), never the system's own logic.
-
-    tool_failure                the old fault: get_account_summary raises
-    tool_exception:<tool>       the tool raises a RuntimeError (database down)
-    tool_timeout:<tool>         the tool raises a TimeoutError (no waiting: the system has no per-tool clock to test)
-    trace_open_fails            the tracing service refuses the write
-    trace_no_readback           the tracing service cannot find what it was asked to open
-    trace_find_fails            the tracing service cannot be queried at all
-    queue_write_fails           the handoff queue cannot be written
-    queue_down                  the handoff queue's storage cannot be reached, for reads and writes
-    trace_log_fails             the per-turn trace log cannot be written
-    audit_log_fails             the per-tool audit log cannot be written
-    """
-    kind, _, arg = (fault or "").partition(":")
+def _patches_for(fault: str) -> list:
+    kind, _, arg = fault.partition(":")
     patches: list = []
     if kind == "tool_failure":
         patches = _tool_raising("get_account_summary", RuntimeError("injected tool failure: database unavailable"))
@@ -372,6 +370,28 @@ def inject(fault: str | None):
         patches = [mock.patch.object(default_trace_log, "write", side_effect=OSError("injected: trace log is not writable"))]
     elif kind == "audit_log_fails":
         patches = [mock.patch.object(default_audit_log, "finish", side_effect=OSError("injected: audit log is not writable"))]
+    return patches
+
+
+@contextlib.contextmanager
+def inject(fault: str | None):
+    """The failure a case simulates, applied around its turns. It breaks what the system depends on (a tool, the
+    tracing service, the queue that receives handoffs, the audit and trace logs), never the system's own logic.
+
+    tool_failure                the old fault: get_account_summary raises
+    tool_exception:<tool>       the tool raises a RuntimeError (database down)
+    tool_timeout:<tool>         the tool raises a TimeoutError (no waiting: the system has no per-tool clock to test)
+    trace_open_fails            the tracing service refuses the write
+    trace_no_readback           the tracing service cannot find what it was asked to open
+    trace_find_fails            the tracing service cannot be queried at all
+    queue_write_fails           the handoff queue cannot be written
+    queue_down                  the handoff queue's storage cannot be reached, for reads and writes
+    trace_log_fails             the per-turn trace log cannot be written
+    audit_log_fails             the per-tool audit log cannot be written
+    """
+    patches: list = []
+    for part in (fault or "").split("+"):  # "queue_write_fails+tool_exception:get_account_summary": both at once
+        patches += _patches_for(part)
     with contextlib.ExitStack() as stack:
         for p in patches:
             stack.enter_context(p)
@@ -381,7 +401,8 @@ def inject(fault: str | None):
 def _session_token(token: str, fault: str | None) -> str:
     """The token the customer presents: theirs, or one that was never issued or was altered."""
     return {"token:garbage": "not-a-token-0123456789abcdef", "token:empty": "",
-            "token:tampered": token[:-1] + ("A" if token[-1] != "A" else "B"), "token:truncated": token[:10]}.get(fault or "", token)
+            "token:tampered": token[:-1] + ("A" if token[-1] != "A" else "B"), "token:truncated": token[:10],
+            "token:padded": f" {token} "}.get(fault or "", token)
 
 
 def _file_setup_ticket(customer_id: str) -> str:
