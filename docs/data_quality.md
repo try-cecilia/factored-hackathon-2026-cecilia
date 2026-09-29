@@ -9,7 +9,7 @@ tests use with hand-made fixtures.
 | Profile | Tables | Used by |
 |---|---|---|
 | serving | branches, daily_exchange_rates, customers, products, transactions | the agent's tools |
-| analysis | call_center_interactions, call_transcripts, satisfaction_surveys | problem evidence and baseline only |
+| analysis | call_center_interactions, complaints, call_transcripts, satisfaction_surveys | problem evidence and offline analysis only |
 
 Per table, inside one transaction:
 
@@ -40,9 +40,13 @@ Per table, inside one transaction:
    source file, i.e. the later partition), then upsert by primary key.
    Replays are idempotent.
 7. **Cross-table checks.** FK orphans, transaction/product ownership
-   agreement, currency vs country, keys the dictionary declares unique besides
-   the primary key, dates before the product's opening or the customer's
-   registration, and dimension rows updated after the data's as-of date.
+   agreement, complaint/product ownership, currency vs country, keys the
+   dictionary declares unique besides the primary key, dates before the
+   product's opening or the customer's registration, and dimension rows
+   updated after the data's as-of date. If a required parent table is absent,
+   the report records an info result in the `dependency` category with the
+   missing table name. It counts executed and not-run checks separately and
+   does not report the skipped check as passed.
 8. **Lineage.**
    - `_ingestion_log`: one row per table per run (mode, files, bytes,
      partition range, row counts, contract version, code version, parameters).
@@ -61,7 +65,44 @@ Per table, inside one transaction:
    with its deviations. Aggregates only: no rows, no source locations (on a
    deploy they name the organizer's bucket) and no error text.
 
-Contracts live in `data/contracts.py`, contract version 2.0.0.
+Contracts live in `data/contracts.py`, contract version 2.1.0.
+
+## Complaints ingestion
+
+`complaints` is a customer-scoped daily table in the `analysis` profile. The
+source adapter resolves the same layout used by the other daily facts:
+`data/complaints/year=YYYY/month=MM/day=DD/*.csv`. It does not depend on a
+particular CSV basename. The dictionary defines the table on pages 12 and 13
+and its foreign keys on pages 15 and 16.
+
+The primary key is `complaint_id`. The source has no update timestamp, so a
+duplicate uses the pipeline's existing fallback: the row from the later source
+path wins. Incremental loads still apply the configured lookback and upsert by
+primary key. `tests/fixtures/raw_complaints_late/` covers a corrected row, a
+new row, and an idempotent replay.
+
+This local command loads only the synthetic fixture and writes both the
+warehouse and report outside the repository:
+
+```bash
+DUCKDB_PATH=/tmp/cecilai-complaints.duckdb python -m data.pipeline \
+  --tables complaints --source local --raw-dir tests/fixtures/raw \
+  --report /tmp/cecilai-complaints-quality.json
+```
+
+For S3, `--tables complaints` works against an existing warehouse. Load
+`branches`, `customers`, `products`, and `call_center_interactions` first if
+the run must execute every available relationship check. The repository does
+not ingest `service_agents`, so the assigned-agent check is recorded as not run
+unless that table already exists. A complaint-only load with no parents is
+valid, but its report names the checks it could not run.
+
+The ownership check is a warning, not a quarantine rule. It keeps the complaint
+and counts cases where `affected_product_id` belongs to another customer. Code
+must not use that relationship for serving, authorization, or labels. Null
+`origin_interaction_id` values are allowed and included in the column's null
+coverage. Non-null values are checked only when interactions are present.
+`compensation_granted` has no documented currency. Ingestion does not infer one.
 
 ## Update and freshness policy
 
@@ -84,6 +125,10 @@ Contracts live in `data/contracts.py`, contract version 2.0.0.
   `tests/test_tools_and_grounding.py`).
 
 ## Findings on the supplied data
+
+The checked-in full-run report predates complaints support. It remains an
+eight-table historical result and was not regenerated from the audit's 67,095
+complaint rows.
 
 Full run 20260928T204248Z (`data/reports/quality_report.json`, also shown in the demo's Data quality view):
 8 tables, 6.06M rows, 246 checks, **0 errors, 12 warnings**, 0 rows quarantined. Its first 238 checks give the

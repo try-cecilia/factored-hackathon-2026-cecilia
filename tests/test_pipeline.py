@@ -13,7 +13,7 @@ from datetime import date
 import duckdb
 import pytest
 
-from data.pipeline import PipelineError, RunConfig, run_pipeline
+from data.pipeline import TABLES, PipelineError, RunConfig, lineage_summary, run_pipeline, write_report
 from data.quality import DataQualityError
 from tests.conftest import FIXTURES, SERVING, build_fixture_warehouse
 
@@ -134,6 +134,124 @@ def test_schema_evolution_adds_new_column(fresh_db, tmp_path):
     drift = [c for c in r.checks if c.check == "schema_new_columns"][0]
     assert drift.failed == 1 and drift.detail == "loyalty_points"
     assert q(fresh_db, "SELECT count(*) FROM transactions WHERE loyalty_points = 7") == [(3,)]
+
+
+def test_complaints_contract_dedup_lineage_and_report(fresh_db, tmp_path):
+    build_fixture_warehouse()
+
+    run_id, [result] = run_pipeline(["complaints"], RunConfig(source="local", raw_dir=FIXTURES / "raw"))
+
+    complaint_spec = next(t for t in TABLES if t.name == "complaints")
+    assert (complaint_spec.kind, complaint_spec.location, complaint_spec.profile, complaint_spec.customer_scoped) == (
+        "partitioned", "complaints", "analysis", True,
+    )
+    assert (result.partitions, result.rows_staged, result.rows_deduplicated, result.rows_new) == (2, 8, 1, 7)
+    assert q(fresh_db, "SELECT status, process_date FROM complaints WHERE complaint_id='CPL-FIX0005'") == [
+        ("In Process", date(2024, 1, 15))
+    ]
+    assert q(fresh_db, "SELECT data_type FROM information_schema.columns "
+                       "WHERE table_name='complaints' AND column_name='claimed_amount'") == [("DECIMAL(15,2)",)]
+    assert q(fresh_db, "SELECT count(*) FROM complaints WHERE origin_interaction_id IS NULL") == [(6,)]
+
+    checks = {c.check: c for c in result.checks}
+    assert checks["pydantic_row_contract_sample"].failed == 0
+    assert (checks["rule:claimed_amount_has_currency"].failed,
+            checks["rule:resolved_has_evidence"].failed) == (1, 1)
+    assert (checks["cross:fk_affected_product"].failed, checks["cross:fk_affected_product"].total) == (1, 3)
+    assert (checks["cross:customer_owns_affected_product"].failed,
+            checks["cross:customer_owns_affected_product"].total) == (1, 2)
+    assert checks["cross:fk_origin_interaction"].severity == "info"
+    assert checks["cross:fk_origin_interaction"].detail == "not run; missing parent tables: call_center_interactions"
+
+    report_path = tmp_path / "complaints-quality.json"
+    report = write_report(run_id, [result], str(report_path))
+    assert report_path.exists() and report["tables"]["complaints"]["rows_new"] == 7
+    assert report["summary"]["checks_not_run"] == 2
+    assert report["summary"]["checks_run"] == len(result.checks) - 2
+    assert any(c["check"] == "cross:customer_owns_affected_product" and c["failed"] == 1
+               for c in report["checks"])
+    assert q(fresh_db, "SELECT count(*) FROM _partition_log WHERE table_name='complaints'") == [(2,)]
+    assert q(fresh_db, "SELECT count(*) FROM _dq_results WHERE table_name='complaints'")[0][0] == len(result.checks)
+    con = duckdb.connect(str(fresh_db), read_only=True)
+    try:
+        lineage = lineage_summary(con)
+    finally:
+        con.close()
+    assert lineage["checks"]["not_run"] == 2
+    assert lineage["checks"]["run"] > len(result.checks) - lineage["checks"]["not_run"]
+
+
+def test_complaints_re_delivered_partition_updates_and_replays(fresh_db):
+    build_fixture_warehouse()
+    run_pipeline(["complaints"], RunConfig(source="local", raw_dir=FIXTURES / "raw"))
+
+    cfg = RunConfig(source="local", raw_dir=FIXTURES / "raw_complaints_late", only_date=date(2024, 1, 15))
+    _, [late] = run_pipeline(["complaints"], cfg)
+    assert (late.rows_new, late.rows_updated) == (1, 1)
+    assert q(fresh_db, "SELECT status, resolution_satisfaction FROM complaints "
+                       "WHERE complaint_id='CPL-FIX0005'") == [("Resolved", 4)]
+
+    _, [replay] = run_pipeline(["complaints"], cfg)
+    assert (replay.rows_new, replay.rows_updated) == (0, 2)
+    assert q(fresh_db, "SELECT count(*) FROM complaints") == [(8,)]
+
+
+def test_complaints_date_filter(fresh_db):
+    _, [one_day] = run_pipeline(
+        ["complaints"],
+        RunConfig(source="local", raw_dir=FIXTURES / "raw", only_date=date(2024, 1, 14)),
+    )
+    assert (one_day.partitions, one_day.rows_staged, one_day.rows_new) == (1, 7, 7)
+    assert all(c.category == "dependency" and c.severity == "info"
+               and c.detail.startswith("not run; missing parent tables:")
+               for c in one_day.checks if c.check.startswith("cross:"))
+
+
+def test_complaints_customer_sample_uses_loaded_customers(fresh_db):
+    build_fixture_warehouse(sample_customers=2)
+    _, [complaints] = run_pipeline(
+        ["complaints"], RunConfig(source="local", raw_dir=FIXTURES / "raw", sample_customers=2)
+    )
+    assert complaints.rows_staged > 0
+    assert q(fresh_db, "SELECT count(DISTINCT customer_id) FROM complaints") == [(2,)]
+    assert q(fresh_db, "SELECT count(*) FROM complaints c LEFT JOIN customers u USING (customer_id) "
+                       "WHERE u.customer_id IS NULL") == [(0,)]
+
+
+def test_complaints_quality_gate_and_missing_schema_roll_back(fresh_db, tmp_path):
+    build_fixture_warehouse()
+    run_pipeline(["complaints"], RunConfig(source="local", raw_dir=FIXTURES / "raw"))
+    before = q(fresh_db, "SELECT count(*) FROM complaints")[0][0]
+    cfg = RunConfig(source="local", raw_dir=FIXTURES / "raw_complaints_bad")
+
+    with pytest.raises(PipelineError) as exc:
+        run_pipeline(["complaints"], cfg)
+    assert isinstance(exc.value.cause, DataQualityError)
+    assert q(fresh_db, "SELECT count(*) FROM complaints") == [(before,)]
+
+    cfg.max_quarantine_rate = 0.5
+    _, [result] = run_pipeline(["complaints"], cfg)
+    assert (result.rows_quarantined, result.rows_new) == (1, 1)
+    errors = q(fresh_db, "SELECT _row_errors FROM _quarantine_complaints WHERE complaint_id='CPL-BAD0001'")[0][0]
+    assert "not_null:description" in errors
+    assert "rule:priority_enum" in errors
+    assert "cast:sla_breached" in errors
+    assert "cast:resolution_days" in errors
+    assert "cast:resolution_satisfaction" in errors
+
+    raw_missing = tmp_path / "raw_missing"
+    part = raw_missing / "complaints" / "year=2024" / "month=01" / "day=15"
+    part.mkdir(parents=True)
+    src = FIXTURES / "raw" / "complaints" / "year=2024" / "month=01" / "day=15" / "complaints_20240115.csv"
+    rows = [line.split(",") for line in src.read_text(encoding="utf-8").splitlines()]
+    description = rows[0].index("description")
+    (part / src.name).write_text("\n".join(",".join(row[:description] + row[description + 1:]) for row in rows) + "\n",
+                                 encoding="utf-8")
+    after_quarantine = q(fresh_db, "SELECT count(*) FROM complaints")[0][0]
+    with pytest.raises(PipelineError) as exc:
+        run_pipeline(["complaints"], RunConfig(source="local", raw_dir=raw_missing))
+    assert isinstance(exc.value.cause, DataQualityError) and "missing required columns description" in str(exc.value.cause)
+    assert q(fresh_db, "SELECT count(*) FROM complaints") == [(after_quarantine,)]
 
 
 def test_s3_daily_files_download_in_parallel_once_each_skipping_the_cache(tmp_path, monkeypatch):

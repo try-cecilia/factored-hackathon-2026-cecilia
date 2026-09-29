@@ -31,6 +31,15 @@ def _warehouse():
     con.execute("CREATE TABLE call_center_interactions (interaction_id VARCHAR, interaction_date TIMESTAMP, customer_id VARCHAR)")
     con.execute("""INSERT INTO call_center_interactions VALUES
         ('I1', '2024-02-28 10:00', 'C1'), ('I2', '2024-03-01 08:00', 'C1'), ('I3', '2025-01-01 00:00', 'C2')""")
+    con.execute("CREATE TABLE service_agents (agent_id VARCHAR)")
+    con.execute("INSERT INTO service_agents VALUES ('A1')")
+    con.execute("CREATE TABLE complaints (complaint_id VARCHAR, customer_id VARCHAR, affected_product_id VARCHAR, "
+                "related_branch_id VARCHAR, origin_interaction_id VARCHAR, assigned_agent_id VARCHAR)")
+    con.execute("""INSERT INTO complaints VALUES
+        ('Q1', 'C1', 'P1', 'B1', 'I1', 'A1'),
+        ('Q2', 'C1', 'P2', NULL, NULL, NULL),
+        ('Q3', 'C1', 'P404', 'B404', 'I404', 'A404'),
+        ('Q4', 'C2', NULL, NULL, NULL, NULL)""")
     return con
 
 
@@ -62,11 +71,29 @@ def test_rows_updated_after_the_as_of_date_are_counted():
     assert got["cross:customers_not_updated_after_as_of"] == (1, 2, "warn")
 
 
-def test_a_check_waits_for_the_tables_it_reads():
+def test_complaint_relationships_exclude_nulls_and_measure_ownership():
+    got = _results(_warehouse(), "complaints")
+    assert got["cross:fk_customer"] == (0, 4, "warn")
+    assert got["cross:fk_affected_product"] == (1, 3, "warn")
+    assert got["cross:customer_owns_affected_product"] == (1, 2, "warn")
+    assert got["cross:fk_related_branch"] == (1, 2, "warn")
+    assert got["cross:fk_origin_interaction"] == (1, 2, "warn")
+    assert got["cross:fk_assigned_agent"] == (1, 2, "warn")
+
+
+def test_missing_parent_tables_are_reported_as_not_run():
     con = duckdb.connect()
-    con.execute("CREATE TABLE transactions (transaction_id VARCHAR, transaction_date TIMESTAMP, process_date DATE, "
-                "product_id VARCHAR, customer_id VARCHAR)")
-    assert _results(con, "transactions") == {}
+    con.execute("CREATE TABLE complaints (complaint_id VARCHAR, customer_id VARCHAR, affected_product_id VARCHAR, "
+                "related_branch_id VARCHAR, origin_interaction_id VARCHAR, assigned_agent_id VARCHAR)")
+    results = cross_table(con, "complaints")
+    assert len(results) == 6
+    assert all(r.category == "dependency" and r.severity == "info" and r.passed is None and r.total == 0
+               for r in results)
+    assert {r.check for r in results} == {
+        "cross:fk_customer", "cross:fk_affected_product", "cross:customer_owns_affected_product",
+        "cross:fk_related_branch", "cross:fk_origin_interaction", "cross:fk_assigned_agent",
+    }
+    assert all(r.detail.startswith("not run; missing parent tables:") for r in results)
 
 
 def test_reason_category_outside_the_dictionary_is_flagged():

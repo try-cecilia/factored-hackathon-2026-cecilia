@@ -190,10 +190,14 @@ def pydantic_sample(con, clean: str, table: str, n: int = 1000) -> CheckResult:
 
 
 def cross_table(con, table: str) -> list[CheckResult]:
+    """Run checks whose parent tables exist and report the others as not run."""
     existing = {r[0] for r in con.execute("SELECT table_name FROM information_schema.tables").fetchall()}
     out = []
     for name, needs, sql in CROSS_TABLE_CHECKS.get(table, []):
-        if not set(needs) <= existing:
+        missing = sorted(set(needs) - existing)
+        if missing:
+            out.append(CheckResult(table, f"cross:{name}", "dependency", "info", 0, 0,
+                                   f"not run; missing parent tables: {','.join(missing)}"))
             continue
         failed, total = con.execute(sql).fetchone()
         out.append(CheckResult(table, f"cross:{name}", "cross_table", "warn", int(failed or 0), int(total or 0)))
