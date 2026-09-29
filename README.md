@@ -14,7 +14,9 @@ movimiento que sigue pendiente, ocurre solo con el "sí" del propio cliente, juz
 
 ## Para quienes evalúan: dónde mirar
 
-1. **Probarlo:** [URL desplegada]. Cada escenario guiado indica qué observar. Presioná **"Why?"** en una
+1. **Probarlo:** la web, **https://cecil-ai.onrender.com** (el cliente en `/login`, con las cuentas de prueba en la
+   misma pantalla; la consola del operador en `/operador/login`), y la demo técnica de la API,
+   **https://x-payments-agent.onrender.com**. Cada escenario guiado indica qué observar. Presioná **"Why?"** en una
    respuesta para ver qué recibió el modelo (enmascarado), qué eligió y qué verificó el código; abrí la
    **vista del banco** después de una derivación o un rastreo; dejá el modelo caído y volvé a preguntar; y
    abrí **Data quality**.
@@ -359,10 +361,11 @@ tests/       346 tests herméticos + fixtures
   - responde de forma determinista las preguntas simples de saldo;
   - se abstiene ante pedidos claramente fuera de alcance;
   - escala el resto.
-- Todavía sin desplegar: necesita la cuenta de hosting. `render.yaml` es el Blueprint de Render (instancia
-  paga de 512 MB, disco de 1 GB, modo demo, presupuesto diario de modelo). El contenedor ingiere una muestra
-  de 5 mil clientes en el primer arranque: esa carga midió 20 s y 14 MB con DuckDB limitado a 400 MB. CI
-  construye la imagen en cada push y la levanta como lo hace Render, y luego le hace un smoke test
+- Desplegado en Render desde el 29/09/2026: la web en https://cecil-ai.onrender.com y la API en
+  https://x-payments-agent.onrender.com. `render.yaml` es el Blueprint (dos instancias pagas de 512 MB, disco de
+  1 GB para la API, modo demo, presupuesto diario de modelo). La API ingiere una muestra de 5 mil clientes en el
+  primer arranque, con DuckDB en un hilo y 192 MB para que entre en la instancia: unos 2 minutos. CI construye la
+  imagen en cada PR y la levanta como lo hace Render, y luego le hace un smoke test
   ([`docs/operations.md`](docs/operations.md#deploy-on-render-the-jury-demo)).
 
 Todos los datos de clientes de este repositorio son sintéticos (dataset del organizador y fixtures hechos a
