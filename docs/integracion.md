@@ -90,7 +90,7 @@ lectura y trazas. Cómo se configuran las claves:
 | Dónde | Qué se configura |
 |---|---|
 | API | `ADMIN_API_KEY` (lee: cola, tickets, monitoreo, trazas) y `OPERATOR_KEYS=ana=…,beto=…` (actúa: tomar, aprobar, rechazar, devolver). Cada clave de operador de 24 caracteres o más. |
-| Web (servidor) | Solo `AGENT_API_URL` (y `TRUSTED_CLIENT_IP_HEADER` si hay un proxy). **Las claves no van en el entorno de la web**: cada persona escribe las suyas en `/operador/login`. |
+| Web (servidor) | `AGENT_API_URL`, **`WEB_PUBLIC_ORIGIN`** (obligatoria en producción) y `TRUSTED_CLIENT_IP_HEADER` si hay un proxy. **Las claves no van en el entorno de la web**: cada persona escribe las suyas en `/operador/login`. |
 | API, detrás del BFF | `CLIENT_IP_HEADER=X-Client-IP`, igual que para el login de clientes. Sin eso, el límite de intentos fallidos (`OPERATOR_AUTH_FAILS_PER_MIN`) cuenta por la IP del BFF y diez claves mal escritas bloquean a todos los operadores. Solo es seguro si nada más que el BFF alcanza la API. |
 
 - *Lectura y acción separadas, como en la API.* El ingreso pide la clave de lectura y, opcionalmente, la de operador. Con
@@ -110,9 +110,13 @@ lectura y trazas. Cómo se configuran las claves:
   build de producción (`web/tests/http/`, con una API falsa): CSRF, destinos de redirección hostiles y rotación de sesión.
 - *Formularios protegidos contra CSRF.* Los tres POST (`/operador/sesion`, `/operador/clave`, `/operador/salir`) se rechazan
   con 403, sin tocar cookies, si no prueban venir de una página de la consola: `Sec-Fetch-Site`, cuando el navegador lo
-  manda, tiene que ser `same-origin`; `Origin` (o `Referer` si falta) tiene que ser el host propio; sin ninguna de las dos
-  cabeceras no hay prueba y se rechaza. `SameSite=Strict` no alcanzaba para el ingreso porque todavía no hay cookie. El host
-  propio es el de la petición, así que **un proxy delante tiene que pasar la cabecera `Host` original**.
+  manda, tiene que ser `same-origin`; `Origin` (o `Referer` si falta) tiene que ser **exactamente el origen público**
+  (esquema, host y puerto); sin ninguna de las dos cabeceras no hay prueba y se rechaza. `SameSite=Strict` no alcanzaba
+  para el ingreso porque todavía no hay cookie. El origen público sale de **`WEB_PUBLIC_ORIGIN`** en el servidor de la web
+  (por ejemplo `https://console.bank.example`, sin ruta), nunca de cabeceras de proxy: una página `http://` del mismo host
+  no puede forzar un ingreso sobre `https://`. **En producción es obligatoria**: sin ella, o con un valor que no sea un
+  origen http(s), todos los POST de la consola dan 403 y el servidor escribe en el log qué falta. En desarrollo, si está
+  vacía, se usa el origen de la URL de la petición (`http://127.0.0.1:<puerto>`). Está en `web/.env.example`.
 - *Sesión nueva en cada ingreso y en cada elevación.* Un ingreso siempre crea un identificador nuevo y termina la sesión
   que ese navegador tuviera; agregar la clave de operador también cambia el identificador y el anterior deja de valer, así
   que una cookie de solo lectura copiada no gana permisos de acción. El tope de 8 horas sigue contando desde el ingreso original.

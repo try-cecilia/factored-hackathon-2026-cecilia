@@ -26,16 +26,17 @@ export async function startConsole() {
   await new Promise<void>((done) => api.listen(0, '127.0.0.1', done))
   process.env.AGENT_API_URL = `http://127.0.0.1:${(api.address() as AddressInfo).port}`
   process.env.NODE_ENV = 'production'
+  process.env.WEB_PUBLIC_ORIGIN = ORIGIN // required in production: the origin the browser sees, never derived from proxy headers
   const built = (await import(pathToFileURL(join(import.meta.dirname, '../../dist/server/server.js')).href)) as { default: Handler }
 
-  const send = (path: string, init: { method?: string; fields?: Record<string, string>; headers?: Record<string, string> } = {}) => {
+  const send = (path: string, init: { method?: string; fields?: Record<string, string>; headers?: Record<string, string>; base?: string } = {}) => {
     const headers = new Headers(init.headers)
     let body: string | undefined
     if (init.fields) {
       body = new URLSearchParams(init.fields).toString()
       headers.set('Content-Type', 'application/x-www-form-urlencoded')
     }
-    return built.default.fetch(new Request(`${ORIGIN}${path}`, { method: init.method ?? (init.fields ? 'POST' : 'GET'), headers, body, redirect: 'manual' }))
+    return built.default.fetch(new Request(`${init.base ?? ORIGIN}${path}`, { method: init.method ?? (init.fields ? 'POST' : 'GET'), headers, body, redirect: 'manual' }))
   }
   return { send, close: () => api.close() }
 }
