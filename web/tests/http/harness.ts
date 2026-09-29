@@ -75,14 +75,11 @@ export function sessionCookie(response: Response) {
   return set ? set.split(';')[0] : null
 }
 
-/** A refused form post: back to the login (never a bare 403), with only the flash cookie that says why and no session. */
-export function assertRefused(response: Response, flash: string, note = '') {
+/** A refused form post: back to the login with a fixed reason in the URL (never a bare 403), and no cookie at all. */
+export function assertRefused(response: Response, motivo: 'origen' | 'origen-config', note = '') {
   assert.equal(response.status, 303, note)
-  assert.equal(response.headers.get('location'), '/operador/login', note)
-  const cookies = response.headers.getSetCookie()
-  assert.equal(cookies.length, 1, `${note} set-cookie: ${cookies.join(' | ')}`)
-  assert.match(cookies[0], new RegExp(`^(__Host-)?cecilai_operator_flash=${flash};`), note)
-  assert.equal(sessionCookie(response), null, note)
+  assert.equal(response.headers.get('location'), `/operador/login?motivo=${motivo}`, note)
+  assert.deepEqual(response.headers.getSetCookie(), [], note)
 }
 
 export const setCookies = (response: Response) => response.headers.getSetCookie()

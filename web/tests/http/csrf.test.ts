@@ -11,7 +11,7 @@ const login = { admin_key: ADMIN }
 describe('the operator forms refuse a post that did not come from this site', () => {
   test('a cross-site login is refused (back to the login with a notice, not a bare 403) and starts no session', async () => {
     const res = await app.send('/operador/sesion', { fields: login, headers: CROSS_SITE })
-    assertRefused(res, 'origin_refused')
+    assertRefused(res, 'origen')
   })
 
   test('each signal alone is enough to refuse', async () => {
@@ -28,7 +28,7 @@ describe('the operator forms refuse a post that did not come from this site', ()
     ]
     for (const headers of refused) {
       const res = await app.send('/operador/sesion', { fields: login, headers })
-      assertRefused(res, 'origin_refused', JSON.stringify(headers))
+      assertRefused(res, 'origen', JSON.stringify(headers))
     }
   })
 
@@ -49,9 +49,9 @@ describe('the operator forms refuse a post that did not come from this site', ()
   test('a cross-site add-key post cannot raise a session, and a cross-site logout cannot end one', async () => {
     const cookie = sessionCookie(await app.send('/operador/sesion', { fields: login, headers: SAME_ORIGIN }))!
     const add = await app.send('/operador/clave', { fields: { operator_key: ANA }, headers: { ...CROSS_SITE, Cookie: cookie } })
-    assertRefused(add, 'origin_refused')
+    assertRefused(add, 'origen')
     const out = await app.send('/operador/salir', { method: 'POST', headers: { ...CROSS_SITE, Cookie: cookie } })
-    assertRefused(out, 'origin_refused')
+    assertRefused(out, 'origen')
     const still = await app.send('/operador/cola', { headers: { Cookie: cookie } })
     assert.equal(still.status, 200, 'the session survived the cross-site logout')
   })

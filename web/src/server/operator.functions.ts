@@ -74,15 +74,11 @@ export const getOperatorView = createServerFn({ method: 'GET' })
     return { status: 'active', operator: state.session.operator ?? null, canAct: Boolean(state.session.operatorKey), flash: takeFlash() }
   })
 
-/**
- * The one-shot message a form post left for the login page. For a refused origin it also carries the origins the console does
- * trust (configuration, not something from the request), so the message can say where to open it from.
- */
-export const getFlash = createServerFn({ method: 'GET' }).handler(async () => {
-  const code = takeFlash()
-  if (code === null) return null
-  return { code, origins: code === 'origin_refused' ? (publicOrigins(process.env.WEB_PUBLIC_ORIGIN) ?? []).join(', ') : '' }
-})
+/** The one-shot message a form post left for the login page. */
+export const getFlash = createServerFn({ method: 'GET' }).handler(async () => takeFlash())
+
+/** The origins the console trusts (configuration, never something from the request), for the notice of a refused origin. */
+export const getPublicOrigins = createServerFn({ method: 'GET' }).handler(async () => (publicOrigins(process.env.WEB_PUBLIC_ORIGIN) ?? []).join(', '))
 
 const idOf = (input: unknown, label: string) => {
   const value = clean((input as Record<string, unknown> | null)?.[label])

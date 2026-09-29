@@ -41,7 +41,7 @@ describe('over plain http (the local Docker stack) the cookies are storable by a
 
   test('the origin check still refuses a cross-site login: no session', async () => {
     const res = await post(HTTP, ADMIN, { Origin: 'https://attacker.invalid', 'Sec-Fetch-Site': 'cross-site' })
-    assertRefused(res, 'origin_refused')
+    assertRefused(res, 'origen')
   })
 })
 
@@ -88,7 +88,7 @@ describe('a list that mixes schemes is refused whole, in either order, and the h
       process.env.WEB_PUBLIC_ORIGIN = value
       for (const base of ['https://console.bank.example', 'http://localhost:34567']) {
         const res = await post(base, ADMIN)
-        assertRefused(res, 'origin_config', base)
+        assertRefused(res, 'origen-config', base)
         assert.equal(cookieNamed(res.headers.getSetCookie(), 'cecilai_operator'), undefined, base)
       }
     })
