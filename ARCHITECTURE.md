@@ -140,6 +140,18 @@ dates ("ayer", "ontem"), and multi-turn context.
 - **Bounded state**: conversation LRU (10k sessions × 8 messages); in-memory
   audit windows; rate limits of 20 msgs/min per session and 10 logins/min per IP;
   1,000-character messages.
+- **Turn clock and safe fallback** (`agent/resilience.py`): one time budget per
+  turn shared by the model, the lookups and the handoff; bounded retries with
+  jittered backoff, only for transient errors, and a write is repeated only when
+  it carries an idempotency key. Any failure, including our own exception,
+  ends in a fixed reply or a handoff, never an invented answer.
+- **One id per turn** (`api/middleware.py`, `agent/observability.py`): the API's
+  trace id is in the response headers, the trace record, the tool audit, the
+  ticket and the logs, with the time and outcome of each stage.
+- **Capacity** (`api/middleware.py`): body-size cap, a concurrency gate on
+  `/chat` with a bounded queue and 503 + `Retry-After`, rate limits per
+  session, customer and address with 429 + `Retry-After`.
+  Details and measurements: docs/operations.md.
 
 ## Data layer
 
