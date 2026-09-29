@@ -226,7 +226,7 @@ service, and as our own roadmap.
   schedule into persistent storage.
 - **Monitoring has metrics, rules and a dashboard, and no production traffic behind them.** `/metrics`, the alert rules
   (`ops/alerts.yml`, checked and unit-tested with promtool) and a Grafana dashboard exist and run in the compose stack.
-  Prometheus only evaluates the alerts: no Alertmanager, pager or webhook is wired. The thresholds are the starting values
+  Prometheus only evaluates the alerts: no Alertmanager or pager is wired. `python -m ops.alerts` checks the stateless signals through the admin endpoints and can post to `ALERT_WEBHOOK_URL`, but nothing schedules it. The thresholds are the starting values
   in docs/operations.md, untuned. The week-over-week drift rules need eight days of series and have no unit test. A
   per-customer security threshold is not expressible (a label per customer is unbounded): the alert counts in total and
   the customer is found in the traces. Counters are per process and reset on restart, so several replicas would need each

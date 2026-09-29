@@ -580,6 +580,12 @@ What is not covered: the week-over-week rules need eight days of series, so they
 unit-tested; alerts go nowhere until an Alertmanager or a webhook is added (Prometheus only evaluates them here); and the
 records still contain customer data, so redaction before exporting them anywhere remains to be done (LIMITATIONS.md).
 
+Besides the Prometheus rules, `python -m ops.alerts` checks the signals that need no history (unverified handoffs,
+`llm_unavailable`, p95 latency, security escalations, exhausted model budget, data-quality errors) against a running
+service through the admin endpoints, with no Prometheus: it prints one `ALERT` line each, posts them to
+`ALERT_WEBHOOK_URL` if set, and exits 1 if any fired (`ALERT_BASE_URL` and `ADMIN_API_KEY` are required;
+`tests/test_ops_alerts_check.py`). Nothing schedules it: run it from a cron job or CI on the cadence you want.
+
 While the demo is live, `GET /admin/ops` (with `X-Admin-Key`) summarizes the
 last 1,000 turns (`?limit=` up to 5,000): dispositions, escalations by
 category, the top rules, degraded-mode turns, `llm_unavailable`,

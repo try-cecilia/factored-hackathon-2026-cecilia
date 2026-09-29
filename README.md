@@ -234,7 +234,7 @@ tests/       346 tests herméticos + fixtures
   código y métricas ([`EVALUATION.md`](EVALUATION.md#5-experiment-tracking-mlflow)).
 - Reproducido desde cero el 2026-09-28: `make all` sobre un clon limpio del repositorio público, en un
   entorno nuevo de Python 3.11, reconstruyó los casos de evaluación y el clasificador byte por byte, los
-  mismos checks de calidad con los mismos resultados (238 entonces; se agregaron 8 después, ver
+  mismos checks de calidad con los mismos resultados (238 entonces; se agregaron 56 después, ver
   [`docs/data_quality.md`](docs/data_quality.md)), y cada métrica offline caso por caso (salvo las latencias,
   que dependen de la máquina).
 - **Modelo en vivo: medido sobre el workload held-out** (arriba). Antes de eso, una corrida smoke sobre los

@@ -344,7 +344,8 @@ La retención la aplica `python -m ops.retention` (una política para todos los 
 `trace_log`, `traces/{id}`, `ops`, `llm_budget`, `data_quality`, `drift` y `experiments`. `GET /metrics` (formato Prometheus,
 con `METRICS_TOKEN` o la clave de admin), `/livez` y `/readyz` completan la observabilidad, y `ops/alerts.yml` trae las reglas de
 alerta. Las reglas y un dashboard de Grafana corren en el compose local (`make monitoring-up`); **no hay un Alertmanager ni un
-canal de notificación conectado**. Detalle y comandos: `docs/operations.md` (Monitoring, Access control, Data retention).
+canal de notificación conectado**. Aparte, `python -m ops.alerts` evalúa por los endpoints de admin las señales que no
+necesitan historial y puede avisar a `ALERT_WEBHOOK_URL`, pero nada lo ejecuta periódicamente. Detalle y comandos: `docs/operations.md` (Monitoring, Access control, Data retention).
 
 **Punto de sustitución.** `_JsonlSink.write(record)` en `audit.py`: es donde un SIEM o una canalización de logs recibiría
 cada registro.

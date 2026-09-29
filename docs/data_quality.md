@@ -153,14 +153,13 @@ coverage. Non-null values are checked only when interactions are present.
 
 ## Findings on the supplied data
 
-The checked-in full-run report predates complaints support. It remains an
-eight-table historical result and was not regenerated from the audit's 67,095
-complaint rows.
-
-Full run 20260928T204248Z (`data/reports/quality_report.json`, also shown in the demo's Data quality view):
-8 tables, 6.06M rows, 246 checks, **0 errors, 12 warnings**, 0 rows quarantined. Its first 238 checks give the
-same results as the runs of 2026-09-28 (20260928T153707Z) and 2026-09-26 (20260926T012329Z), check for check;
-the other 8 came from Matías Enrique's audit of the dataset (the last four rows below).
+Full run 20260929T145046Z (`data/reports/quality_report.json`, also shown in the demo's Data quality view):
+9 tables, 6.13M rows (including the audit's 67,095 complaint rows), 294 checks (295 with one that did not run), **0 errors, 16 warnings**, 0 rows
+quarantined. The 246 checks of the previous full run (20260928T204248Z, 8 tables) give the same results, check for
+check, and so did the runs of 2026-09-28 (20260928T153707Z) and 2026-09-26 (20260926T012329Z) on their first 238.
+The 4 new warnings come from the complaints table and one category rule: `reason_category_in_dictionary` (20,578
+of 686,296 contacts, 3.0%), `claimed_amount_has_currency` (1,040), `resolved_has_evidence` (1,549) and
+`customer_owns_affected_product` (44,570 of 44,570 checked, 100%).
 
 | Finding | Evidence | What the system does about it |
 |---|---|---|

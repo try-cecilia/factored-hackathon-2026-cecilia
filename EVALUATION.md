@@ -47,6 +47,9 @@ projections are labeled as such and never mixed.
   and ≈955 (≈59 agent-hours) at Sonnet 5's live rate. Each automated contact
   skips ≈120 s of waiting.
 
+Which figures we accept as proof of a claim, and the pass/fail rules for the human-written set (fixed before it has
+results), are in [`docs/preregistration.md`](docs/preregistration.md).
+
 ## 1. Problem evidence and human baseline (measured)
 
 `make analysis` → `docs/evidence/baseline_metrics.md`. Account/payment
