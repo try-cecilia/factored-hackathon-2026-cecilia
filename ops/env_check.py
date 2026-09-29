@@ -18,14 +18,46 @@ from pathlib import Path
 
 from ops.bootstrap_env import ROOT, SECRETS, local_values
 
-DECLARED = re.compile(r"^([A-Z][A-Z0-9_]*)=(.*)$", re.M)
+# `[export] NAME [spaces] = value`, as Compose's dotenv reads a line: a comment line or a blank one matches nothing
+ASSIGNMENT = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_.-]*)\s*=\s*(.*)$")
+ESCAPES = {"n": "\n", "r": "\r", "t": "\t", '"': '"', "\\": "\\", "$": "$"}
 # Settings that fail closed when they are empty: worth a warning even when the name is there
 NEEDS_A_VALUE = (*SECRETS, "OPERATOR_KEYS")
 
 
+def _value(rest: str, more: list[str]) -> str:
+    """The value that follows `=`: a quoted one runs to its closing quote (a double-quoted one may span lines, and reads
+    \\n \\" \\\\ escapes) and what follows the quote is dropped; an unquoted one ends at the first ` #` and loses its trailing
+    spaces. `more` holds the lines after this one and is consumed by a quoted value that continues on them."""
+    if rest[:1] in ("'", '"'):
+        quote, out, i, line = rest[0], [], 1, rest
+        while True:
+            while i < len(line):
+                ch = line[i]
+                if ch == quote:
+                    return "".join(out)
+                if quote == '"' and ch == "\\" and i + 1 < len(line):
+                    out.append(ESCAPES.get(line[i + 1], "\\" + line[i + 1]))
+                    i += 2
+                    continue
+                out.append(ch)
+                i += 1
+            if not more:  # never closed: what there is
+                return "".join(out)
+            out.append("\n")
+            line, i = more.pop(0), 0
+    return re.split(r"\s#", rest, maxsplit=1)[0].strip()
+
+
 def parse(text: str) -> dict[str, str]:
-    """The uncommented `NAME=value` lines (the last one wins, as in a dotenv file)."""
-    return {m.group(1): m.group(2).strip() for m in DECLARED.finditer(text)}
+    """NAME -> value of every assignment, read as Compose's dotenv does (the last one wins, as there)."""
+    found: dict[str, str] = {}
+    lines = text.splitlines()
+    while lines:
+        m = ASSIGNMENT.match(lines.pop(0))
+        if m:
+            found[m.group(1)] = _value(m.group(2), lines)
+    return found
 
 
 def missing(example: str, env: str) -> list[str]:
@@ -35,13 +67,22 @@ def missing(example: str, env: str) -> list[str]:
 
 def empty_secrets(env: str) -> list[str]:
     have = parse(env)
-    return [name for name in NEEDS_A_VALUE if name in have and not have[name].strip("'\"")]
+    return [name for name in NEEDS_A_VALUE if name in have and not have[name].strip()]
 
 
 def ingests_from_s3(env: str) -> bool:
     """INGEST_ARGS is set and does not say `--source local`: the loader's default source is the bucket."""
     args = parse(env).get("INGEST_ARGS")
     return bool(args) and not re.search(r"--source(?:\s+|=)local\b", args)
+
+
+def _written(value: str) -> str:
+    """`value` as one dotenv line holds it: bare when that reads back the same, quoted when a ` #`, a quote, a `$` (Compose interpolates it) or an edge space would not."""
+    if not value or not (re.search(r"\s#|['\"$]|^\s|\s$", value) or "\n" in value):
+        return value
+    if "'" not in value and "\n" not in value:
+        return f"'{value}'"
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("$", "\\$") + '"'
 
 
 def fill(example: str, env: str) -> tuple[str, list[str]]:
@@ -51,7 +92,7 @@ def fill(example: str, env: str) -> tuple[str, list[str]]:
     if not names:
         return env, []
     values = {**parse(example), **local_values()}
-    block = "".join(f"{name}={values[name]}\n" for name in names)
+    block = "".join(f"{name}={_written(values[name])}\n" for name in names)
     sep = "" if env.endswith("\n") or not env else "\n"
     return f"{env}{sep}\n# added by `make env-fill`: settings .env.example gained after this file was made\n{block}", names
 

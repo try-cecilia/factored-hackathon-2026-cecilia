@@ -358,3 +358,59 @@ def test_the_web_server_does_not_send_no_referrer_because_a_browser_then_posts_o
     forms' origin check (web/src/server/origin-check.ts, which rightly refuses `null`) turned every login into a 403."""
     serve = (ROOT / "web" / "serve.mjs").read_text(encoding="utf-8")
     assert "'referrer-policy': 'same-origin'" in serve and "'referrer-policy': 'no-referrer'" not in serve
+
+
+# --- .env syntax as Compose reads it (dotenv: export, spaces around =, quotes, comments) -----------------------------------------
+
+DOTENV = """\
+# a comment, then a blank line
+
+export ADMIN_API_KEY=exported-value
+METRICS_TOKEN = spaced-value
+GRAFANA_ADMIN_PASSWORD="double # quoted"
+DEMO_IDP_SECRET='single quoted' # trailing comment
+OPERATOR_KEYS=operator1=abc#not-a-comment
+  export   SESSION_TTL_SECONDS  =  60  # indented, exported, spaced
+"""
+
+
+def test_env_check_parses_the_dotenv_syntax_compose_accepts():
+    got = env_check.parse(DOTENV)
+    assert got["ADMIN_API_KEY"] == "exported-value" and got["METRICS_TOKEN"] == "spaced-value"
+    assert got["GRAFANA_ADMIN_PASSWORD"] == "double # quoted" and got["DEMO_IDP_SECRET"] == "single quoted"
+    assert got["OPERATOR_KEYS"] == "operator1=abc#not-a-comment"  # a # with no space before it is part of the value
+    assert got["SESSION_TTL_SECONDS"] == "60"
+    assert "a" not in got and len(got) == 6
+
+
+def test_env_check_does_not_call_missing_what_export_or_spaces_declare_and_env_fill_never_doubles_a_key(tmp_path):
+    (tmp_path / ".env.example").write_text(EXAMPLE)
+    env = tmp_path / ".env"
+    env.write_text(DOTENV)
+    listed = "\n".join(env_check.report(EXAMPLE, DOTENV))
+    for name in ("ADMIN_API_KEY", "METRICS_TOKEN", "GRAFANA_ADMIN_PASSWORD", "DEMO_IDP_SECRET", "OPERATOR_KEYS", "SESSION_TTL_SECONDS"):
+        assert f"  {name}\n" not in listed + "\n", name
+        assert name not in env_check.missing(EXAMPLE, DOTENV)
+    assert env_check.main(["--env", str(env), "--example", str(tmp_path / ".env.example"), "--fill"]) == 0
+    text = env.read_text()
+    assert text.startswith(DOTENV)  # what was there is untouched
+    for name in ("ADMIN_API_KEY", "METRICS_TOKEN", "GRAFANA_ADMIN_PASSWORD", "DEMO_IDP_SECRET", "OPERATOR_KEYS", "SESSION_TTL_SECONDS"):
+        assert len(re.findall(rf"^\s*(?:export\s+)?{name}\s*=", text, re.M)) == 1, name  # a second assignment would override the first
+    assert env_check.parse(text)["ADMIN_API_KEY"] == "exported-value" and env_check.parse(text)["METRICS_TOKEN"] == "spaced-value"
+
+
+def test_env_fill_keeps_every_existing_value_whatever_the_syntax(tmp_path):
+    (tmp_path / ".env.example").write_text(EXAMPLE)
+    env = tmp_path / ".env"
+    env.write_text(DOTENV + "LOG_LEVEL=DEBUG\n")
+    before = env_check.parse(env.read_text())
+    assert env_check.main(["--env", str(env), "--example", str(tmp_path / ".env.example"), "--fill"]) == 0
+    after = env_check.parse(env.read_text())
+    assert {k: after[k] for k in before} == before
+    assert env_check.main(["--env", str(env), "--example", str(tmp_path / ".env.example"), "--fill"]) == 0
+    assert env_check.parse(env.read_text()) == after  # and a second fill adds nothing
+
+
+def test_env_fill_writes_a_value_that_dotenv_reads_back_as_written():
+    for value in ("plain", "--profile serving --source local", "has # hash", "it's", 'say "hi" # x', " edge", "a\nb", "$HOME", ""):
+        assert env_check.parse(f"K={env_check._written(value)}\n") == {"K": value}, value
