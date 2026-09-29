@@ -82,3 +82,48 @@ def test_the_gate_fails_when_the_policies_changed_after_the_reports_were_made(mo
 def test_the_committed_reports_carry_the_current_policy_fingerprint():
     current = gate.policy_fingerprint()
     assert load("system_eval.json")["policy_sha256"] == current == load("system_eval_adversarial.json")["policy_sha256"]
+
+
+# --- floors per failure category ---------------------------------------------------------------------------------
+
+@pytest.fixture
+def failures():
+    return load("failure_eval.json")
+
+
+def test_the_committed_failure_evaluation_meets_its_floors(reports, failures):
+    assert gate.check_failure_categories(failures, reports["offline"], reports["adversarial"]) == []
+
+
+@pytest.mark.parametrize("cell,change,expected", [
+    ("unsafe", 1, "inseguro"),
+    ("crashed", 1, "caída"),
+])
+def test_one_unsafe_outcome_or_crash_in_any_category_and_language_fails(reports, failures, cell, change, expected):
+    for mode in ("scripted", "adversarial"):
+        broken = copy.deepcopy(failures)
+        broken["reserved"][mode]["table"]["prompt_injection"]["pt"][cell] = change
+        assert any(expected in f and "prompt_injection" in f for f in gate.check_failure_categories(broken, reports["offline"], reports["adversarial"]))
+
+
+def test_a_category_that_falls_below_its_floor_fails_even_when_the_others_hold(reports, failures):
+    from eval.stats import rate
+
+    broken = copy.deepcopy(failures)
+    cell = broken["reserved"]["scripted"]["table"]["tool_failure"]["all"]
+    cell["handled"] = rate(cell["n"] - 1, cell["n"])
+    found = gate.check_failure_categories(broken, reports["offline"], reports["adversarial"])
+    assert len(found) == 1 and "tool_failure" in found[0] and "handled" in found[0]
+
+
+def test_the_generated_workloads_categories_are_held_to_the_same_floors(reports, failures):
+    broken = copy.deepcopy(reports["offline"])
+    row = next(r for r in broken["cases"]["proposed (scripted)"] if r["template"] == "expired_session")
+    row["disposition_ok"] = False
+    found = gate.check_failure_categories(failures, broken, reports["adversarial"])
+    assert any("workload generado" in f and "expired_session" in f for f in found)
+
+
+def test_a_failure_report_measured_with_other_policies_is_stale(failures):
+    assert gate.check_policy_fresh({"failure_eval.json": failures}) == []
+    assert any("volver a correr" in f for f in gate.check_policy_fresh({"failure_eval.json": failures}, current="0" * 64))

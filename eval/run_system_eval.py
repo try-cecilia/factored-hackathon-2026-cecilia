@@ -38,6 +38,7 @@ import dataclasses
 import functools
 import hashlib
 import json
+import logging
 import os
 import re
 import statistics
@@ -392,10 +393,16 @@ def inject(fault: str | None):
     patches: list = []
     for part in (fault or "").split("+"):  # "queue_write_fails+tool_exception:get_account_summary": both at once
         patches += _patches_for(part)
-    with contextlib.ExitStack() as stack:
-        for p in patches:
-            stack.enter_context(p)
-        yield
+    # The system logs each failure it survives with its traceback; the injected ones would only bury the report.
+    system_log = logging.getLogger("agent.core.orchestrator")
+    was_disabled, system_log.disabled = system_log.disabled, system_log.disabled or bool(patches)
+    try:
+        with contextlib.ExitStack() as stack:
+            for p in patches:
+                stack.enter_context(p)
+            yield
+    finally:
+        system_log.disabled = was_disabled
 
 
 def _session_token(token: str, fault: str | None) -> str:
@@ -1049,7 +1056,7 @@ def main() -> None:
     targets: list = [None]
     if a.llm == "live" and a.models:
         targets = [t.split(":", 1) for t in a.models.split(",")]
-        for t in [t for t in targets if not os.environ.get(f"{t[0].upper()}_API_KEY")]:
+        for t in [t for t in targets if t[0] != "local" and not os.environ.get(f"{t[0].upper()}_API_KEY")]:  # a local model needs no key
             # without its key the model would run in degraded mode and be reported as if it were the model
             print(f"skipping {t[0]}:{t[1]}: {t[0].upper()}_API_KEY is not set", file=sys.stderr)
             targets.remove(t)
@@ -1058,7 +1065,8 @@ def main() -> None:
     for system in (["baseline", "proposed"] if a.system == "both" else [a.system]):
         for target in (targets if system == "proposed" else [None]):
             if target:  # the same cases on each model, as ops/live_smoke.py does it
-                os.environ["LLM_PROVIDERS"], os.environ[f"{target[0].upper()}_MODEL"] = target[0], target[1]
+                os.environ["LLM_PROVIDERS"] = target[0]
+                os.environ["LOCAL_LLM_MODEL" if target[0] == "local" else f"{target[0].upper()}_MODEL"] = target[1]
             live = LLMClient() if a.llm == "live" and system == "proposed" else None
             name = system if system == "baseline" else f"proposed ({a.llm}{': ' + target[1] if target else ''})"
             reps = [run(system, a.llm, cases, live) for _ in range(a.repeats if (system == "proposed" and a.llm == "live") else 1)]
