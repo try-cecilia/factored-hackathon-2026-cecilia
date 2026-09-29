@@ -1,11 +1,11 @@
-import { createFileRoute, Link, redirect, useRouter } from '@tanstack/react-router'
+import { createFileRoute, redirect, useRouter } from '@tanstack/react-router'
 import { useState, type FormEvent } from 'react'
-import { ClockIcon } from '../chat/icons'
 import { headTitle } from '../i18n/head'
 import { useT } from '../i18n/context'
 import type { MessageKey } from '../i18n/translate'
 import { getDemoCustomers, getSession, login } from '../server/auth.functions'
-import { LanguageSwitcher } from '../ui/LanguageSwitcher'
+import { PublicShell } from '../shell/PublicShell'
+import { Button, QuickReplies } from '../ui'
 
 function sameOriginPath(value: unknown) {
   if (typeof value !== 'string' || !value.startsWith('/')) return undefined
@@ -64,20 +64,13 @@ function Login() {
   }
 
   return (
-    <div className="stage stage-center">
-      <main className="auth-card" id="main">
-        <Link className="brand" to="/" aria-label={t('common.brandHome')}>
-          <span className="brand-mark"><img src="/cecilia-avatar.png" alt="" width={24} height={24} /></span>cecilai
-        </Link>
+    <PublicShell>
+      <main className="pub__main" id="main">
+        <img className="pub__mascot" src="/cecilia-avatar.png" alt="" width={96} height={96} />
         <h1>{t('login.title')}</h1>
-        <p className="lead">{t('login.lead')}</p>
-        {motivo === 'expired' && (
-          <div className="callout callout-info" role="status">
-            <ClockIcon />
-            <span>{t('login.expired')}</span>
-          </div>
-        )}
-        <form className="form" onSubmit={onSubmit}>
+        <p className="pub__lead">{t('login.lead')}</p>
+        {motivo === 'expired' && <p className="pub__notice" role="status">{t('login.expired')}</p>}
+        <form className="auth-form" onSubmit={onSubmit}>
           <label>
             {t('login.customerId')}
             <input
@@ -105,27 +98,27 @@ function Login() {
               autoComplete="one-time-code"
             />
           </label>
-          {error && <p className="error" role="alert">{t(error)}</p>}
-          <button className="btn btn-primary btn-lg" type="submit" disabled={pending}>
+          {error && <p className="pub__error" role="alert">{t(error)}</p>}
+          <Button type="submit" size="lg" loading={pending}>
             {pending ? t('login.submitting') : t('login.submit')}
-          </button>
+          </Button>
         </form>
         {demoCustomers.length > 0 && (
-          <div className="demo-accounts">
-            <p className="eyebrow"><span className="badge-demo">{t('login.demoBadge')}</span> {t('login.demoAccounts')}</p>
-            <ul>
-              {demoCustomers.map((c) => (
-                <li key={c.customer_id}>
-                  <button type="button" className="chip" onClick={() => { setCustomerId(c.customer_id); setPin(c.test_pin) }}>
-                    {c.customer_id}
-                  </button>
-                </li>
-              ))}
-            </ul>
+          <div className="pub__demo">
+            <p className="pub__demo-title"><span className="badge-demo">{t('login.demoBadge')}</span>{t('login.demoAccounts')}</p>
+            <QuickReplies
+              label={t('login.demoAccounts')}
+              options={demoCustomers.map((c) => ({ value: c.customer_id, label: c.customer_id }))}
+              onSelect={(id) => {
+                const account = demoCustomers.find((c) => c.customer_id === id)
+                if (!account) return
+                setCustomerId(account.customer_id)
+                setPin(account.test_pin)
+              }}
+            />
           </div>
         )}
-        <LanguageSwitcher />
       </main>
-    </div>
+    </PublicShell>
   )
 }
