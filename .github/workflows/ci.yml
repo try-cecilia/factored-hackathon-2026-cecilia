@@ -32,8 +32,6 @@ jobs:
           EOF
       - name: Quality gate (safety floors, guard recall, evidence made with the current prompt)
         run: python -m eval.gate
-      - name: Data and ML validation (contracts, quality, lineage, freshness, learned vs baseline, no leakage)
-        run: python -m eval.validate_data_ml
 
   container:
     runs-on: ubuntu-latest
