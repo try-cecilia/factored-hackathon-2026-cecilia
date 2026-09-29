@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import shlex
 import sys
 from pathlib import Path
 
@@ -71,9 +72,22 @@ def empty_secrets(env: str) -> list[str]:
 
 
 def ingests_from_s3(env: str) -> bool:
-    """INGEST_ARGS is set and does not say `--source local`: the loader's default source is the bucket."""
+    """INGEST_ARGS is set and its last effective `--source` is not `local` (or it has none: the loader's default is the bucket).
+    Read as Compose reads it (a comment after the value is not part of it) and as argparse reads it (the last one wins)."""
     args = parse(env).get("INGEST_ARGS")
-    return bool(args) and not re.search(r"--source(?:\s+|=)local\b", args)
+    if not args:
+        return False
+    try:
+        words = shlex.split(args)
+    except ValueError:
+        words = args.split()
+    source = "s3"
+    for i, word in enumerate(words):
+        if word == "--source" and i + 1 < len(words):
+            source = words[i + 1]
+        elif word.startswith("--source="):
+            source = word.split("=", 1)[1]
+    return source != "local"
 
 
 def _written(value: str) -> str:

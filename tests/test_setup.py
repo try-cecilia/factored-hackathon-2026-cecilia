@@ -414,3 +414,16 @@ def test_env_fill_keeps_every_existing_value_whatever_the_syntax(tmp_path):
 def test_env_fill_writes_a_value_that_dotenv_reads_back_as_written():
     for value in ("plain", "--profile serving --source local", "has # hash", "it's", 'say "hi" # x', " edge", "a\nb", "$HOME", ""):
         assert env_check.parse(f"K={env_check._written(value)}\n") == {"K": value}, value
+
+
+def test_env_check_reads_ingest_args_the_way_dotenv_and_argparse_do():
+    read = lambda value: env_check.ingests_from_s3(f"INGEST_ARGS={value}\n")
+    assert read("--profile serving # --source local")  # the comment is dropped: no source, so S3
+    assert not read("--profile serving --source local # the fixture")
+    assert read("--source local --source s3")  # the last one wins
+    assert not read("--source s3 --source=local")
+    assert read('--profile serving --source local --source=s3')
+    assert not read('"--profile serving --source local"')  # quoted as a whole: still the same arguments
+    assert not env_check.ingests_from_s3("export INGEST_ARGS = --source local\n")
+    assert env_check.ingests_from_s3("export INGEST_ARGS = --profile serving\n")
+    assert not env_check.ingests_from_s3("INGEST_ARGS=\n")  # empty: compose falls back to its fixture default
