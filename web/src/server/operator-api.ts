@@ -1,0 +1,42 @@
+import '@tanstack/react-start/server-only'
+import { agentFetch } from './agent-api'
+import { endOperatorSession, getOperatorSession } from './operator-session'
+
+// What every operator server function returns: the data, or the HTTP status the UI should explain.
+// 0 = no BFF session; 403 = the session has no operator key (reading is allowed, acting is not).
+export type Result<T> = { ok: true; data: T } | { ok: false; status: number; message?: string }
+
+async function call<T>(path: string, headers: Record<string, string>, method: 'GET' | 'POST', body?: unknown): Promise<Result<T>> {
+  const response = await agentFetch(path, { method, body, headers }).catch(() => null)
+  if (!response) return { ok: false, status: 503 }
+  if (!response.ok) {
+    const failure = (await response.json().catch(() => null)) as { detail?: unknown } | null
+    return { ok: false, status: response.status, message: typeof failure?.detail === 'string' ? failure.detail : undefined }
+  }
+  return { ok: true, data: (await response.json()) as T }
+}
+
+/** A read with the session's admin key; `touch` is false for the automatic refresh. A rejected key ends the session. */
+export async function adminRead<T>(path: string, touch: boolean): Promise<Result<T>> {
+  const session = getOperatorSession(touch)
+  if (!session) return { ok: false, status: 0 }
+  const result = await call<T>(path, { 'X-Admin-Key': session.adminKey }, 'GET')
+  if (!result.ok && result.status === 401) endOperatorSession()
+  return result
+}
+
+/** An action with the session's operator key. A rejected key is dropped so the UI asks for it again. */
+export async function operatorAct<T>(path: string, body: unknown): Promise<Result<T>> {
+  const session = getOperatorSession(true) // an action is always the person
+  if (!session) return { ok: false, status: 0 }
+  if (!session.operatorKey) return { ok: false, status: 403 }
+  const result = await call<T>(path, { 'X-Operator-Key': session.operatorKey }, 'POST', body)
+  if (!result.ok && result.status === 401) {
+    session.operatorKey = undefined
+    session.operator = undefined
+  }
+  return result
+}
+
+export const probeAdminKey = (key: string) => call<unknown>('/admin/llm_budget', { 'X-Admin-Key': key }, 'GET')
+export const probeOperatorKey = (key: string) => call<{ operator: string }>('/admin/operator/me', { 'X-Operator-Key': key }, 'GET')

@@ -94,6 +94,15 @@ service, and as our own roadmap.
   separado de actuar (clave de operador). Sigue sin haber MFA, las claves viven en variables de entorno
   y se rotan a mano, y el límite de intentos fallidos está en memoria y se reinicia con el proceso. El
   camino a producción es SSO corporativo (OIDC) con los roles del banco.
+- **Consola web de operador.** Las claves las guarda el servidor de la web en memoria (cookie `httpOnly` +
+  `SameSite=Strict` con un identificador opaco): un reinicio o una segunda réplica cierra las sesiones, y una clave
+  filtrada sigue valiendo hasta rotarla. Cada persona teclea sus claves en un formulario nativo que las envía una vez al BFF (nunca pasan por el
+  JavaScript de la página ni vuelven al navegador), así que dependen de que el canal sea TLS. Sin `CLIENT_IP_HEADER=X-Client-IP` detrás del BFF, el límite de intentos fallidos cuenta por la IP del
+  BFF. La cola se lee entera (las últimas 200 entradas del archivo) y se refresca por sondeo cada 30 s, sin
+  notificaciones ni paginación. La web tiene pocos tests (`make web-test`: el formulario de ingreso, el plazo de la sesión, y pruebas HTTP contra el build de
+  producción de CSRF, redirecciones y rotación de sesión; no hay tests de componentes, y el CI no los corre): el resto se verificó con `typecheck`, `build` y un
+  recorrido en navegador (`docs/demo/operador-*.png`, con datos sintéticos de `ops.seed_operator_demo`); con el modelo
+  de clientes y un banco real quedaría por probar la carga y la accesibilidad con lector de pantalla.
 - `/demo/customers` publishes test PINs for a few sandbox accounts, like any
   sandbox's test login. It must be empty (`DEMO_PUBLIC_CUSTOMERS=`) anywhere real.
 - `DEMO_MODE=1` turns on the jury sandbox: scenarios with those test PINs, a

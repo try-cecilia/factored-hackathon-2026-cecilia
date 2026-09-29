@@ -318,6 +318,12 @@ class DeskAction(BaseModel):
     reason: str | None = Field(default=None, max_length=300)
 
 
+@app.get("/admin/operator/me")
+def operator_me(operator: str = Depends(require_operator)) -> dict:
+    """Who the presented operator key belongs to, without touching any ticket: how the web BFF checks a key at login."""
+    return {"operator": operator}
+
+
 @app.get("/admin/tickets/{ticket_id}", dependencies=[Depends(require_admin)])
 def ticket(ticket_id: str) -> dict:
     found = default_queue.get(ticket_id)

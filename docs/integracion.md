@@ -84,7 +84,67 @@ proveedor de identidad y devolvería el mismo nombre.
 **En producción.** SSO corporativo (OIDC) con los roles del banco y MFA. Las claves con nombre son un puente honesto,
 no el destino: viven en variables de entorno y se rotan a mano.
 
-**Cómo se verifica.** `tests/test_operators.py`, `tests/test_operator_auth.py`.
+**Consola web de operador** (`web/`, rutas `/operador/*`). Cola humana, detalle con evidencia y acciones, monitoreo de solo
+lectura y trazas. Cómo se configuran las claves:
+
+| Dónde | Qué se configura |
+|---|---|
+| API | `ADMIN_API_KEY` (lee: cola, tickets, monitoreo, trazas) y `OPERATOR_KEYS=ana=…,beto=…` (actúa: tomar, aprobar, rechazar, devolver). Cada clave de operador de 24 caracteres o más. |
+| Web (servidor) | Solo `AGENT_API_URL` (y `TRUSTED_CLIENT_IP_HEADER` si hay un proxy). **Las claves no van en el entorno de la web**: cada persona escribe las suyas en `/operador/login`. |
+| API, detrás del BFF | `CLIENT_IP_HEADER=X-Client-IP`, igual que para el login de clientes. Sin eso, el límite de intentos fallidos (`OPERATOR_AUTH_FAILS_PER_MIN`) cuenta por la IP del BFF y diez claves mal escritas bloquean a todos los operadores. Solo es seguro si nada más que el BFF alcanza la API. |
+
+- *Lectura y acción separadas, como en la API.* El ingreso pide la clave de lectura y, opcionalmente, la de operador. Con
+  solo la de lectura la sesión es de **solo lectura**: ve todo y no puede actuar; la consola ofrece agregar la clave de
+  operador sin volver a ingresar. La clave de operador se comprueba con `GET /admin/operator/me`, que devuelve el nombre
+  al que pertenece sin tocar ningún ticket; ese nombre es el que la consola muestra y el que queda en
+  `ticket_events.jsonl`. El ingreso exige la clave de lectura porque un operador sin ella no podría ver ni la cola.
+- *Cómo viaja la clave.* Se **tipea en un formulario HTML nativo** (`<form method="post">`, campos `type="password"` sin
+  estado de React), va **una sola vez** al BFF por POST (`/operador/sesion` para ingresar, `/operador/clave` para sumar
+  la de operador, `/operador/salir`) y **nunca se guarda ni se devuelve al navegador**: el BFF la comprueba contra la API,
+  la guarda en su memoria y responde con una redirección 303 (post/redirect/get) que solo lleva un destino y, a lo
+  sumo, un código fijo como `operator_401` en una cookie de un solo uso. Como es un formulario nativo, funciona sin
+  JavaScript, y ningún estado, store, log ni respuesta del cliente contiene la clave. Un chequeo lo sostiene:
+  `make web-test` (`pnpm --dir web test:all`) prueba la lógica del formulario con claves de mentira, comprueba que ni el
+  destino ni el código de error las contienen, y falla si un componente de la consola guarda una clave en estado,
+  controla un campo de contraseña o pasa una clave a una función de servidor. Además hay pruebas HTTP contra el handler del
+  build de producción (`web/tests/http/`, con una API falsa): CSRF, destinos de redirección hostiles y rotación de sesión.
+- *Formularios protegidos contra CSRF.* Los tres POST (`/operador/sesion`, `/operador/clave`, `/operador/salir`) se rechazan
+  con 403, sin tocar cookies, si no prueban venir de una página de la consola: `Sec-Fetch-Site`, cuando el navegador lo
+  manda, tiene que ser `same-origin`; `Origin` (o `Referer` si falta) tiene que ser el host propio; sin ninguna de las dos
+  cabeceras no hay prueba y se rechaza. `SameSite=Strict` no alcanzaba para el ingreso porque todavía no hay cookie. El host
+  propio es el de la petición, así que **un proxy delante tiene que pasar la cabecera `Host` original**.
+- *Sesión nueva en cada ingreso y en cada elevación.* Un ingreso siempre crea un identificador nuevo y termina la sesión
+  que ese navegador tuviera; agregar la clave de operador también cambia el identificador y el anterior deja de valer, así
+  que una cookie de solo lectura copiada no gana permisos de acción. El tope de 8 horas sigue contando desde el ingreso original.
+- *Destino tras el ingreso.* Se decodifica y normaliza como lo haría un navegador (puntos, `%2f`, `%5c`, tabuladores,
+  barras invertidas) y solo se acepta una ruta propia que no empiece con `//`; ante la duda va a `/operador/cola`.
+- *Dónde viven las claves.* Nunca en el JavaScript del navegador, en `localStorage` ni en una cookie. El servidor de la web
+  (BFF) las guarda **en memoria**, atadas a un identificador aleatorio de 256 bits que viaja en una cookie
+  `httpOnly` + `SameSite=Strict` (y `Secure` con prefijo `__Host-` en producción). La sesión vence a los 30 minutos sin
+  actividad de la persona (el refresco automático de la cola y del monitoreo **no** cuenta como actividad) o a las 8
+  horas, y se descarta si la API rechaza la clave (rotada o revocada). Al vencer, la consola vuelve al ingreso con un aviso.
+  `OPERATOR_IDLE_SECONDS` (en el servidor de la web, por defecto 1800, mínimo 10) acorta esa ventana para probar el vencimiento.
+- *Alternativa descartada y por qué.* Una cookie sellada con las claves adentro evita el estado en el servidor, pero
+  pone las claves (cifradas) en el navegador, exige un secreto de sellado que rotar y no permite cerrar una sesión robada
+  desde el servidor. **Costo de la elección:** las sesiones viven en la memoria de un solo proceso, así que un reinicio
+  o una segunda réplica sin afinidad de sesión obliga a volver a ingresar. Para un puñado de operadores es aceptable; con
+  varias réplicas hace falta un almacén compartido (Redis) o pasar al SSO.
+- *`SameSite=Strict`.* Frena el envío de la cookie desde otro sitio, que es la defensa contra CSRF de las acciones; el
+  costo es que un enlace a la consola desde otra app (un chat, un correo) abre primero el ingreso.
+- *Errores.* 401 (clave rotada) cierra la sesión o pide de nuevo la clave de operador; 403 en la web significa "sesión
+  de solo lectura"; 409 (otra persona movió el caso, o la pantalla estaba vieja: cada acción envía la `version` que se
+  vio) recarga el estado y muestra el motivo; 429 y 503 se explican en pantalla. Las acciones piden confirmación.
+- *Datos del cliente.* La consola muestra lo que la API ya devuelve a la clave de lectura: el ticket (con su
+  `customer_id`, el pedido recortado y la evidencia). De las trazas **no** muestra el texto de la respuesta, lo que vio el
+  modelo ni los argumentos de las herramientas: el BFF deja pasar solo un conjunto fijo de campos (`loadTraceLog` y
+  `loadTrace` en `web/src/server/operator.functions.ts`).
+- *Probarlo sin datos reales ni claves de modelo:* `python -m ops.seed_operator_demo --dir /tmp/cecilai-operator-demo`
+  arma un warehouse mínimo, genera claves nuevas y llena la cola y las trazas con turnos de verdad; imprime las claves y
+  deja `operator-demo.env` para cargar antes de `uvicorn`. Las capturas del recorrido están en `docs/demo/operador-*.png`.
+
+**Cómo se verifica.** `tests/test_operators.py`, `tests/test_operator_auth.py` (incluye `/admin/operator/me`) y, para la consola,
+`make web-test web-typecheck web-build` más el recorrido con capturas de `docs/demo/operador-*.png` (`LIMITATIONS.md` dice qué
+no cubre).
 
 ---
 

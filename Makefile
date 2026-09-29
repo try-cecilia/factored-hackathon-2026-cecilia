@@ -23,8 +23,8 @@ web-build:        ## build the TanStack Start client and server
 web-typecheck:    ## check frontend TypeScript
 	$(PNPM) --dir web typecheck
 
-web-test:         ## frontend unit tests (hermetic: no API, no browser)
-	$(PNPM) --dir web test
+web-test:         ## frontend tests (node:test): unit tests, then HTTP tests against the production build
+	$(PNPM) --dir web test:all
 
 serve-fixture:    ## API on the tests' fixture warehouse with a keyword stand-in for the model (no S3, no keys); DEMO_MODE=1
 	$(PY) -m ops.serve_fixture $(API_PORT)
