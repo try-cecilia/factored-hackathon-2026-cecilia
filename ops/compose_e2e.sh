@@ -159,7 +159,9 @@ check(status == 303 and response["Location"] == "/operador/cola" and cookie, "op
 check(all(a in line for a in ("HttpOnly", "Secure", "SameSite=Strict")), "operator session cookie: __Host-, httpOnly, Secure and SameSite=Strict")
 check(call("GET", "/operador/cola")[0] == 307, "the queue without a session redirects to the login")
 status, _, page = call("GET", "/operador/cola", headers={"Cookie": cookie})
-check(status == 200 and "Cola humana" in page and re.search(r"pendientes? de [1-9]", page), "operator queue: opens with the session and lists the tickets the stack filed")
+empty = ("No hay casos pendientes", "Todavía no hay casos", "Ningún caso coincide")
+check(status == 200 and "Cola de casos" in page and not any(text in page for text in empty),
+      "operator queue: opens with the session and lists the tickets the stack filed")
 check("No se pudo cargar" not in page and operator_key not in page and admin_key not in page, "operator queue: loaded from the API, and no key in the page")
 
 # the UI kit gallery is a development tool: a production build answers 404 unless UI_GALLERY=1
