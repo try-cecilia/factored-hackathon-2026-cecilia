@@ -6,21 +6,24 @@ import { Button, SystemNote } from '../ui'
 import { ChatLog } from './ChatLog'
 import { Composer, type ComposerHandle } from './Composer'
 import { useConversation } from './ConversationProvider'
+import { sessionNotice } from './conversation'
 import { useShell } from '../shell/ShellContext'
 import './chat.css'
 
-const WARN_SECONDS = 120
-
-function useSessionClock(session: Session) {
-  const [left, setLeft] = useState(session.expires_in)
+/**
+ * What the session's countdown shows (`sessionNotice`): no notice, the minutes of the notice, or over. It ticks every five
+ * seconds but holds that, not the seconds, so the page renders again only when what it shows changes.
+ */
+function useSessionNotice(session: Session) {
+  const [notice, setNotice] = useState(() => sessionNotice(session.expires_in))
   useEffect(() => {
     const deadline = Date.now() + session.expires_in * 1000
-    const tick = () => setLeft(Math.max(0, Math.round((deadline - Date.now()) / 1000)))
+    const tick = () => setNotice(sessionNotice(Math.round((deadline - Date.now()) / 1000)))
     tick()
     const timer = setInterval(tick, 5_000)
     return () => clearInterval(timer)
   }, [session.session_ref, session.expires_in])
-  return left
+  return notice
 }
 
 function useOnline() {
@@ -47,9 +50,9 @@ export function ChatView({ session }: { session: Session }) {
   const end = useRef<HTMLDivElement>(null)
   const content = useRef<HTMLDivElement>(null)
   const scroller = useRef<HTMLDivElement>(null)
-  const left = useSessionClock(session)
+  const notice = useSessionNotice(session)
   const online = useOnline()
-  const over = ended || left === 0
+  const over = ended || notice === 0
   const live = online && !over
   const [reloading, setReloading] = useState(false)
 
@@ -90,7 +93,10 @@ export function ChatView({ session }: { session: Session }) {
     setReloading(false)
   }, [reload])
 
-  const minutes = Math.max(1, Math.ceil(left / 60))
+  // Stable, so the memoized log renders only when the conversation or its state changes.
+  const sendText = useCallback((text: string) => void send(text), [send])
+  const reloadLog = useCallback(() => void reloadHistory(), [reloadHistory])
+
   const empty = entries.length === 0 && !sending
 
   return (
@@ -116,9 +122,9 @@ export function ChatView({ session }: { session: Session }) {
             sending={sending}
             live={live}
             ended={over}
-            onSend={(text) => void send(text)}
+            onSend={sendText}
             onRetry={retry}
-            onReload={() => void reloadHistory()}
+            onReload={reloadLog}
             onViewCase={showCase}
             onSignIn={signIn}
           />
@@ -131,8 +137,8 @@ export function ChatView({ session }: { session: Session }) {
           {over ? (
             <SystemNote tone="neutral">{t('conversation.session.expired')}</SystemNote>
           ) : (
-            left <= WARN_SECONDS && (
-              <SystemNote tone="neutral">{t(minutes === 1 ? 'conversation.session.endsOne' : 'conversation.session.endsMany', { n: minutes })}</SystemNote>
+            notice !== null && (
+              <SystemNote tone="neutral">{t(notice === 1 ? 'conversation.session.endsOne' : 'conversation.session.endsMany', { n: notice })}</SystemNote>
             )
           )}
         </div>
@@ -143,7 +149,7 @@ export function ChatView({ session }: { session: Session }) {
           pending={sending}
           hint={over ? t('conversation.composer.sessionEnded') : t('conversation.composer.offline')}
           showSuggestions={entries.length === 0}
-          onSend={(text) => void send(text)}
+          onSend={sendText}
         />
       </div>
     </div>

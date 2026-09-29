@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { memo, useEffect, useState, type ReactNode } from 'react'
 import { useI18n, useT } from '../i18n/context'
 import {
   ActionResultMessage,
@@ -58,8 +58,11 @@ export type ChatLogProps = {
   onSignIn: () => void
 }
 
-/** The conversation: each entry drawn by the kit component its disposition asks for, then what is in flight, then the sign-in message if the session ended. */
-export function ChatLog({ entries, cases, sending, live, ended, onSend, onRetry, onReload, onViewCase, onSignIn }: ChatLogProps) {
+/**
+ * The conversation: each entry drawn by the kit component its disposition asks for, then what is in flight, then the sign-in message
+ * if the session ended. Memoized: the page around it (the session's countdown, the composer) changes without touching it.
+ */
+export const ChatLog = memo(function ChatLog({ entries, cases, sending, live, ended, onSend, onRetry, onReload, onViewCase, onSignIn }: ChatLogProps) {
   const t = useT()
   const timeOf = useTimeParts()
   const lastIndex = entries.reduce((last, e, i) => (e.role === 'note' ? last : i), -1)
@@ -92,7 +95,7 @@ export function ChatLog({ entries, cases, sending, live, ended, onSend, onRetry,
       )}
     </MessageList>
   )
-}
+})
 
 function UserView({ entry, time, canRetry, onRetry, onReload }: {
   entry: UserEntry
