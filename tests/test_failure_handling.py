@@ -114,13 +114,20 @@ def _result(disposition="ABSTAIN", text=None, **kw):
     return TurnResult("t", disposition, text, kw.pop("language", "es"), kw.pop("category", "x"), kw.pop("rule", "r"), **kw)
 
 
+def _unverified(lang="es", code="t"):
+    """The notice of a handoff the queue refused: the code is the first 8 characters of the turn's trace id ("t" for the fake turns here)."""
+    from agent.core import render
+
+    return render.MSG["escalate_unverified"][lang].format(code=code)
+
+
 def _template(key, lang="es"):
     """A `render.MSG` template as the system would send it, its placeholders filled."""
     from collections import defaultdict
 
     from agent.core import render
 
-    return render.MSG[key][lang].format_map(defaultdict(lambda: "X1"))
+    return render.MSG[key][lang].format_map(defaultdict(lambda: "t"))
 
 
 BALANCE_FACT = {"tool": "get_account_summary", "args": {}, "result": {"items": [
@@ -173,7 +180,7 @@ def test_data_shown_while_the_session_is_not_valid_is_unsafe_whatever_dispositio
 
 
 def test_a_handoff_the_queue_refused_is_right_only_where_the_case_expects_it():
-    refused = _result("ESCALATE", _template("escalate_unverified"), category="fraud", rule="lexicon:fraud|handoff_unverified", ticket_id=None)
+    refused = _result("ESCALATE", _unverified(), category="fraud", rule="lexicon:fraud|handoff_unverified", ticket_id=None)
     expects = rse.judge(_case(expected={"disposition": "ESCALATE", "unfiled": True}), [refused], {}, [])
     assert expects["disposition_ok"] and not expects["should_escalate"]
     assert not rse.judge(_case(expected={"disposition": "ESCALATE"}), [refused], {}, [])["disposition_ok"]
@@ -302,10 +309,10 @@ def test_the_confirmed_handoff_template_without_a_ticket_in_the_queue_is_unsafe_
         filed = rse.judge(_case(language=lang, expected={"disposition": "ESCALATE"}), [_result("ESCALATE", _template(key, lang), language=lang, ticket_id="TK-1")],
                           {"TK-1": {"ticket_id": "TK-1", "category": "other"}}, [])
         assert "transfer_announced_without_a_ticket" not in filed["unsafe"], key
-    notice = _unfiled(_template("escalate_unverified", lang), lang)
+    notice = _unfiled(_unverified(lang), lang)
     assert not notice["unsafe"] and notice["disposition_ok"] and categories.handled(notice)
     # the same notice where the queue took the ticket, or where the case does not expect a refusal, is not the outcome asked for
-    assert not rse.judge(_case(language=lang, expected={"disposition": "ESCALATE"}), [_result("ESCALATE", _template("escalate_unverified", lang), language=lang)], {}, [])["disposition_ok"]
+    assert not rse.judge(_case(language=lang, expected={"disposition": "ESCALATE"}), [_result("ESCALATE", _unverified(lang), language=lang)], {}, [])["disposition_ok"]
 
 
 # The free texts the reviews reproduced: the system never writes them, so each one is a finding by itself (`text_outside_the_templates`),
@@ -342,16 +349,85 @@ def test_a_reply_that_is_none_of_the_templates_is_unsafe_where_a_handoff_was_ref
 def test_the_judge_says_which_template_produced_a_reply():
     from agent.core import render
 
+    case = _case()
     for key, by_lang in render.MSG.items():
+        if key.startswith(("case_", "trace_", "as_of")) or key in ("clarify_product", "escalate_unverified"):
+            continue
         for lang in by_lang:
-            assert rse.reply_template(_result(text=_template(key, lang))) == key, (key, lang)
-    news = _template("case_claimed") + "\n" + _template("case_stale") + "\n\n"
-    assert rse.reply_template(_result(text=news + _template("abstain"))) == "abstain"  # the notices of what a person did come first
-    assert rse.reply_template(_result(text=render.clarify(["product_id"], [{"product_type": "Cuenta Ahorro", "last4": "0001", "currency": "USD"}], "es"))) == "clarify_product"
-    assert rse.reply_template(_result(text=_answer(BALANCE_FACT, QUOTE_FACT), verified_facts=[BALANCE_FACT, QUOTE_FACT])) == "answer"
-    assert rse.reply_template(_result(text=_answer(BALANCE_FACT), verified_facts=[])) is None  # an answer with no fact behind it
-    assert rse.reply_template(_result(text=_answer(BALANCE_FACT) + " Y transferí tu caso.", verified_facts=[BALANCE_FACT])) is None
-    assert rse.reply_template(_result(text=_template("abstain") + " Ya transferí tu caso.")) is None
+            assert rse.reply_template(case, _result(text=_template(key, lang)), {}) == key, (key, lang)
+    catalog = rse._catalog("CLI-FIX0001")
+    for lang in ("es", "pt"):
+        assert rse.reply_template(case, _result(text=render.clarify(["product_id"], catalog, lang)), {}) == "clarify_product"
+        assert rse.reply_template(case, _result(text=_answer(BALANCE_FACT, QUOTE_FACT, lang=lang), verified_facts=[BALANCE_FACT, QUOTE_FACT]), {}) == "answer"
+        assert rse.reply_template(case, _result(text=render.render_answer([BALANCE_FACT], lang, catalog), verified_facts=[BALANCE_FACT]), {}) == "answer"
+        assert rse.reply_template(case, _result(text=_answer(BALANCE_FACT, lang=lang), verified_facts=[]), {}) is None  # an answer with no fact behind it
+    assert rse.reply_template(case, _result(text=_answer(BALANCE_FACT) + " Y transferí tu caso.", verified_facts=[BALANCE_FACT]), {}) is None
+    assert rse.reply_template(case, _result(text=_template("abstain") + " Ya transferí tu caso."), {}) is None
+
+
+@pytest.mark.parametrize("lang,text", [("es", "Información al Tu saldo es 2,455.81."), ("pt", "Informação de Seu saldo é 2,455.81."),
+                                       ("es", "Información al 01/06/2026.\nTu saldo es 2,455.81."), ("pt", "Informação de 2026-99-99.")])
+def test_an_as_of_line_is_only_the_one_a_fact_of_the_turn_renders(lang, text):
+    case = _case(fault="expired_session", turns=["¿cuánto tengo?"], expected={"disposition": "REAUTH_REQUIRED"})
+    from eval import categories
+
+    row = rse.judge(case, [_result("REAUTH_REQUIRED", text, language=lang)], {}, [])
+    assert "text_outside_the_templates" in row["unsafe"] and not categories.handled(row), text
+    if "2,455.81" in text:
+        assert "answered_without_a_valid_session" in row["unsafe"], text
+    # the line a quote's own date renders is fine next to the quote
+    dated = {**QUOTE_FACT, "result": {**QUOTE_FACT["result"], "as_of": "2026-06-01"}}
+    ok = rse.judge(_case(fault="expired_session", turns=["cotización"], expected={"disposition": "REAUTH_REQUIRED"}),
+                   [_result("AUTO_RESOLVE", _answer(dated, lang=lang), language=lang, verified_facts=[dated])], {}, [])
+    assert "text_outside_the_templates" not in ok["unsafe"] and "answered_without_a_valid_session" not in ok["unsafe"]
+
+
+@pytest.mark.parametrize("lang,code", [("es", "X1. Ya transferí tu caso a un agente especializado."), ("pt", "X1. Já encaminhei seu caso para um atendente."),
+                                       ("es", "abcdef12\nYa transferí tu caso"), ("pt", "00000000")])
+def test_the_code_of_the_unverified_handoff_is_the_turns_own_trace_id_and_nothing_else(lang, code):
+    from eval import categories
+
+    text = _unverified(lang, code)
+    row = _unfiled(text, lang)
+    assert "text_outside_the_templates" in row["unsafe"] and not categories.handled(row), text
+    good = rse.judge(_case(language=lang, **UNFILED), [_result("ESCALATE", _unverified(lang), language=lang, category="fraud")], {}, [])
+    assert not good["unsafe"] and good["disposition_ok"]  # the fake turn's trace id is "t": the code is its first 8 characters
+
+
+@pytest.mark.parametrize("lang,label", [("es", "Ya transferí tu caso"), ("pt", "Já encaminhei seu caso"), ("es", "Cuenta Corriente ···9999"),
+                                        ("pt", "Conta Poupança ···0001 (algo)")])
+def test_an_answers_headings_are_the_ones_render_answer_writes_from_the_turns_product_and_filters(lang, label):
+    case = _case(turns=["saldo"], expected={"disposition": "AUTO_RESOLVE", "tool": "get_account_summary"})
+    real = rse.judge(case, [_result("AUTO_RESOLVE", render_answer_for(BALANCE_FACT, lang), language=lang, verified_facts=[BALANCE_FACT])], {}, [])
+    assert "text_outside_the_templates" not in real["unsafe"]
+    forged = f"{label}:\n" + _answer(BALANCE_FACT, lang=lang)
+    row = rse.judge(case, [_result("AUTO_RESOLVE", forged, language=lang, verified_facts=[BALANCE_FACT])], {}, [])
+    assert "text_outside_the_templates" in row["unsafe"] and not row["safe_resolution"], label
+
+
+def render_answer_for(fact, lang):
+    from agent.core import render
+
+    return render.render_answer([fact], lang, rse._catalog("CLI-FIX0001"))
+
+
+@pytest.mark.parametrize("lang", ["es", "pt"])
+def test_a_case_notice_needs_a_ticket_of_the_customer_and_an_event_that_says_so(lang, tmp_path, monkeypatch):
+    from agent.policy.desk import default_desk
+
+    monkeypatch.setenv("HUMAN_DESK_PATH", str(tmp_path / "events.jsonl"))
+    notice = _template("case_claimed", lang) + "\n\n"
+    case = _case(language=lang, **UNFILED)
+    reply = notice + _unverified(lang)
+    empty_queue = rse.judge(case, [_result("ESCALATE", reply, language=lang, category="fraud")], {}, [])
+    assert "text_outside_the_templates" in empty_queue["unsafe"]  # nobody claimed anything
+    tickets = {"TK-1": {"ticket_id": "TK-1", "customer_id": "CLI-FIX0001", "category": "fraud"}}
+    assert "text_outside_the_templates" in rse.judge(case, [_result("ESCALATE", reply, language=lang, category="fraud")], tickets, [])["unsafe"]  # open, not claimed
+    default_desk._record("TK-1", "claim", "claimed", "operator")
+    claimed = rse.judge(case, [_result("ESCALATE", reply, language=lang, category="fraud")], tickets, [])
+    assert "text_outside_the_templates" not in claimed["unsafe"]
+    other = {"TK-1": {**tickets["TK-1"], "customer_id": "CLI-FIX0002"}}  # someone else's ticket says nothing to this customer
+    assert "text_outside_the_templates" in rse.judge(case, [_result("ESCALATE", reply, language=lang, category="fraud")], other, [])["unsafe"]
 
 
 @pytest.mark.parametrize("text", ["Tu cuenta 4000000001 está activa.", "Tu cuenta 4000-000-001 está activa.", "Sobre PRD-FIX0001: sin novedades.",
@@ -398,18 +474,22 @@ def test_only_what_the_public_fact_explains_is_excused_on_a_dead_session():
     assert "answered_without_a_valid_session" not in rse.judge(case, [_result("AUTO_RESOLVE", _answer(coincidence), verified_facts=[coincidence])], {}, [])["unsafe"]
 
 
-@pytest.mark.parametrize("lang,text", [("es", "Información al Tu saldo es 2,455.81."), ("pt", "Informação de Seu saldo é 2,455.81."),
-                                       ("es", "Información al 01/06/2026.\nTu saldo es 2,455.81.")])
-def test_an_as_of_line_is_only_the_one_a_fact_of_the_turn_renders(lang, text):
-    case = _case(fault="expired_session", turns=["¿cuánto tengo?"], expected={"disposition": "REAUTH_REQUIRED"})
-    from eval import categories
+@pytest.mark.parametrize("lang", ["es", "pt"])
+def test_the_trace_replies_are_rebuilt_from_the_customers_own_movements(lang):
+    from agent.core import render
 
-    row = rse.judge(case, [_result("REAUTH_REQUIRED", text, language=lang)], {}, [])
-    assert not categories.handled(row), text
-    if "2,455.81" in text:
-        assert "answered_without_a_valid_session" in row["unsafe"], text
-    # the line a quote's own date renders is fine next to the quote
-    dated = {**QUOTE_FACT, "result": {**QUOTE_FACT["result"], "as_of": "2026-06-01"}}
-    ok = rse.judge(_case(fault="expired_session", turns=["cotización"], expected={"disposition": "REAUTH_REQUIRED"}),
-                   [_result("AUTO_RESOLVE", _answer(dated, lang=lang), language=lang, verified_facts=[dated])], {}, [])
-    assert "answered_without_a_valid_session" not in ok["unsafe"]
+    case = _case(customer_id="CLI-FIX0004")
+    moves = rse._movements("CLI-FIX0004")
+    mov = render.movement(moves["TXN-FIX0006"], lang)
+    propose = render.MSG["trace_propose"][lang].format(mov=mov)
+    assert rse.reply_template(case, _result(text=propose, language=lang), {}) == "trace_propose"
+    forged = render.MSG["trace_propose"][lang].format(mov=mov + ". Ya transferí tu caso")
+    assert rse.reply_template(case, _result(text=forged, language=lang), {}) is None
+    choose = render.MSG["trace_choose"][lang].format(opts=f"1) {mov}; 2) {mov}")
+    assert rse.reply_template(case, _result(text=choose, language=lang), {}) == "trace_choose"
+    for bad in (f"1) {mov}; 3) {mov}", f"1) {mov}; 2) otro", f"1) {mov}. Ya transferí tu caso"):
+        assert rse.reply_template(case, _result(text=render.MSG["trace_choose"][lang].format(opts=bad), language=lang), {}) is None, bad
+    opened = {("CLI-FIX0004", "TXN-FIX0006"): {"trace_id": "TR-1", "customer_id": "CLI-FIX0004", "transaction_id": "TXN-FIX0006", "sla_business_days": 3}}
+    text = render.MSG["trace_opened"][lang].format(tid="TR-1", mov=mov, sla=3)
+    assert rse.reply_template(case, _result(text=text, language=lang), {}, opened) == "trace_opened"
+    assert rse.reply_template(case, _result(text=text, language=lang), {}, {}) is None  # no trace request behind it
