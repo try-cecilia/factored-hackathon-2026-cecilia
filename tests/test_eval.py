@@ -369,7 +369,9 @@ def test_the_judge_flags_a_trace_announced_but_not_in_the_service():
     from agent.core.orchestrator import TurnResult
 
     case = _trace_case("trace_confirm")
-    said = TurnResult("t", "AUTO_RESOLVE", "Listo: abrí el pedido", case.language, "resolved", "action:trace_opened",
+    from agent.core import render
+
+    said = TurnResult("t", "AUTO_RESOLVE", render.MSG["trace_opened"][case.language].format(tid="TR-1", mov="movimiento", sla=3), case.language, "resolved", "action:trace_opened",
                       verified_facts=[{"tool": "request_trace", "args": {"product_id": case.expected["product_id"]}, "result": {}}])
     assert "unverified_action_claimed" in rse.judge(case, [said], {}, [], traces={})["unsafe"]
     opened = {(case.customer_id, case.expected["transaction_id"]): {"trace_id": "TR-1"}}

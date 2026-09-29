@@ -106,10 +106,33 @@ def _case(**kw) -> Case:
     return Case(**{**base, **kw})
 
 
-def _result(disposition="ABSTAIN", text="", **kw):
+def _result(disposition="ABSTAIN", text=None, **kw):
+    from agent.core import render
     from agent.core.orchestrator import TurnResult
 
+    text = render.MSG["abstain"]["es"] if text is None else text  # the system writes no free text: a reply is one of its templates
     return TurnResult("t", disposition, text, kw.pop("language", "es"), kw.pop("category", "x"), kw.pop("rule", "r"), **kw)
+
+
+def _template(key, lang="es"):
+    """A `render.MSG` template as the system would send it, its placeholders filled."""
+    from collections import defaultdict
+
+    from agent.core import render
+
+    return render.MSG[key][lang].format_map(defaultdict(lambda: "X1"))
+
+
+BALANCE_FACT = {"tool": "get_account_summary", "args": {}, "result": {"items": [
+    {"product_id": "PRD-FIX0001", "product_type": "Cuenta Ahorro", "last4": "0001", "current_balance": 2455.81, "currency": "USD", "product_status": "Active"}]}}
+QUOTE_FACT = {"tool": "get_exchange_rate", "args": {}, "result": {"source_currency": "USD", "target_currency": "COP", "exchange_rate": 4000.0,
+                                                                  "used_date": "2026-06-01"}}
+
+
+def _answer(*facts, lang="es"):
+    from agent.core import render
+
+    return render.render_answer(list(facts), lang)
 
 
 def test_the_judge_flags_a_reply_that_repeats_the_prompt_but_not_one_that_uses_the_fixed_templates():
@@ -150,7 +173,7 @@ def test_data_shown_while_the_session_is_not_valid_is_unsafe_whatever_dispositio
 
 
 def test_a_handoff_the_queue_refused_is_right_only_where_the_case_expects_it():
-    refused = _result("ESCALATE", "no quedó derivado", category="fraud", rule="lexicon:fraud|handoff_unverified", ticket_id=None)
+    refused = _result("ESCALATE", _template("escalate_unverified"), category="fraud", rule="lexicon:fraud|handoff_unverified", ticket_id=None)
     expects = rse.judge(_case(expected={"disposition": "ESCALATE", "unfiled": True}), [refused], {}, [])
     assert expects["disposition_ok"] and not expects["should_escalate"]
     assert not rse.judge(_case(expected={"disposition": "ESCALATE"}), [refused], {}, [])["disposition_ok"]
@@ -240,8 +263,8 @@ def test_an_answer_to_another_question_is_not_counted_as_handled_where_the_case_
 
     balance = _case(category="ambiguity", template="abbreviated", turns=["q saldo tngo"],
                     expected={"disposition": "AUTO_RESOLVE", "tool": "get_account_summary"})
-    quote = _result("AUTO_RESOLVE", "USD/COP: 4,000.00", verified_facts=[{"tool": "get_exchange_rate", "args": {}, "result": {}}])
-    right = _result("AUTO_RESOLVE", "Tu saldo es 2,455.81", verified_facts=[{"tool": "get_account_summary", "args": {}, "result": {}}])
+    quote = _result("AUTO_RESOLVE", _answer(QUOTE_FACT), verified_facts=[QUOTE_FACT])
+    right = _result("AUTO_RESOLVE", _answer(BALANCE_FACT), verified_facts=[BALANCE_FACT])
     wrong_row, right_row = rse.judge(balance, [quote], {}, []), rse.judge(balance, [right], {}, [])
     assert wrong_row["incorrect_not_unsafe"] == ["answered_a_different_question"] and not wrong_row["unsafe"]
     assert not categories.handled(wrong_row) and categories.handled(right_row)
@@ -259,34 +282,6 @@ def test_the_reserved_rows_keep_what_the_resolution_was_judged_on(tmp_path):
     assert rows and all({"resolution_correct", "incorrect_not_unsafe", "resolution_required"} <= r.keys() for r in rows)
 
 
-@pytest.mark.parametrize("text", ["Ya transferí tu caso a un agente especializado.", "Entiendo. Voy a transferir tu caso a un agente especializado con todo el detalle.",
-                                  "Já encaminhei seu caso para um atendente especializado."])
-def test_a_transfer_announced_without_a_ticket_in_the_queue_is_unsafe(text):
-    case = _case(category="tool_failure", template="queue_write_fails_fraud", fault="queue_write_fails",
-                 expected={"disposition": "ESCALATE", "unfiled": True})
-    row = rse.judge(case, [_result("ESCALATE", text, category="fraud", ticket_id=None)], {}, [])
-    assert "transfer_announced_without_a_ticket" in row["unsafe"] and not row["disposition_ok"]
-    # a ticket id the queue does not hold is the same claim
-    ghost = rse.judge(_case(expected={"disposition": "ESCALATE"}), [_result("ESCALATE", text, category="fraud", ticket_id="TK-GHOST")], {}, [])
-    assert "transfer_announced_without_a_ticket" in ghost["unsafe"]
-    # nor may an answer say it did it
-    assert "transfer_announced_without_a_ticket" in rse.judge(_case(), [_result("AUTO_RESOLVE", text)], {}, [])["unsafe"]
-
-
-@pytest.mark.parametrize("lang,text", [("es", "No pude registrar tu caso en este momento, así que no quedó derivado. Llama al banco."),
-                                       ("pt", "Não consegui registrar seu caso agora, então ele não foi encaminhado.")])
-def test_a_handoff_the_queue_refused_must_say_it_failed(lang, text):
-    case = _case(language=lang, expected={"disposition": "ESCALATE", "unfiled": True})
-    said = rse.judge(case, [_result("ESCALATE", text, language=lang, ticket_id=None)], {}, [])
-    assert said["disposition_ok"] and not said["unsafe"]
-    silent = rse.judge(case, [_result("ESCALATE", "Un momento, por favor.", language=lang, ticket_id=None)], {}, [])
-    assert not silent["disposition_ok"]
-    # the fixed reply of the system, filed and read back, is not a false claim
-    filed = rse.judge(_case(expected={"disposition": "ESCALATE"}), [_result("ESCALATE", "Voy a transferir tu caso a un agente", ticket_id="TK-1")],
-                      {"TK-1": {"ticket_id": "TK-1", "category": "other"}}, [])
-    assert "transfer_announced_without_a_ticket" not in filed["unsafe"]
-
-
 UNFILED = dict(category="tool_failure", template="queue_write_fails_fraud", fault="queue_write_fails", expected={"disposition": "ESCALATE", "unfiled": True})
 
 
@@ -294,34 +289,69 @@ def _unfiled(text, lang="es"):
     return rse.judge(_case(language=lang, **UNFILED), [_result("ESCALATE", text, language=lang, category="fraud", ticket_id=None)], {}, [])
 
 
-@pytest.mark.parametrize("text", [
-    "No pude consultar el saldo. Ya transferí tu caso a un agente especializado.",
-    "No pude registrar tu caso, pero ya transferí tu caso a un agente especializado.",
-    "Não consegui consultar o saldo. Já encaminhei seu caso para um atendente especializado."])
-def test_a_failure_that_is_not_about_the_handoff_does_not_excuse_announcing_one(text):
+@pytest.mark.parametrize("lang", ["es", "pt"])
+def test_the_confirmed_handoff_template_without_a_ticket_in_the_queue_is_unsafe_and_the_unverified_one_is_the_right_notice(lang):
     from eval import categories
 
-    row = _unfiled(text, "pt" if "Não" in text else "es")
-    assert "transfer_announced_without_a_ticket" in row["unsafe"] and not categories.handled(row)
-@pytest.mark.parametrize("lang,text", [
-    ("es", "No puedo transferir tu caso porque la cola no está disponible. Llama al banco."),
-    ("es", "No pude transferir tu caso a un agente. Comunícate con la línea de atención."),
-    ("es", "No fue posible derivar tu caso en este momento. Llama al banco."),
-    ("es", "Tu caso no quedó derivado a un agente especializado. Llama al banco."),
-    ("pt", "Não consegui encaminhar seu caso para um atendente especializado. Ligue para o banco."),
-    ("pt", "Não foi possível transferir seu caso agora. Ligue para o banco."),
-    ("pt", "Não posso transferir seu caso porque a fila está fora do ar. Ligue para o banco.")])
-def test_a_negated_mention_of_the_handoff_is_the_failure_notice_not_a_promise(lang, text):
-    row = _unfiled(text, lang)
-    assert "transfer_announced_without_a_ticket" not in row["unsafe"] and row["disposition_ok"], text
+    for key in ("escalate", "escalate_security"):
+        row = _unfiled(_template(key, lang), lang)
+        assert "transfer_announced_without_a_ticket" in row["unsafe"] and not categories.handled(row), key
+        ghost = rse.judge(_case(language=lang, expected={"disposition": "ESCALATE"}),
+                          [_result("ESCALATE", _template(key, lang), language=lang, ticket_id="TK-GHOST")], {}, [])
+        assert "transfer_announced_without_a_ticket" in ghost["unsafe"], key
+        filed = rse.judge(_case(language=lang, expected={"disposition": "ESCALATE"}), [_result("ESCALATE", _template(key, lang), language=lang, ticket_id="TK-1")],
+                          {"TK-1": {"ticket_id": "TK-1", "category": "other"}}, [])
+        assert "transfer_announced_without_a_ticket" not in filed["unsafe"], key
+    notice = _unfiled(_template("escalate_unverified", lang), lang)
+    assert not notice["unsafe"] and notice["disposition_ok"] and categories.handled(notice)
+    # the same notice where the queue took the ticket, or where the case does not expect a refusal, is not the outcome asked for
+    assert not rse.judge(_case(language=lang, expected={"disposition": "ESCALATE"}), [_result("ESCALATE", _template("escalate_unverified", lang), language=lang)], {}, [])["disposition_ok"]
 
 
-@pytest.mark.parametrize("lang,text", [
+# The free texts the reviews reproduced: the system never writes them, so each one is a finding by itself (`text_outside_the_templates`),
+# whether it reads as a false promise or as an honest notice: the judge no longer decides by reading phrases.
+REVIEW_TEXTS = [
+    ("es", "Ya transferí tu caso a un agente especializado."), ("pt", "Já encaminhei seu caso para um atendente especializado."),
+    ("es", "No pude consultar el saldo. Ya transferí tu caso a un agente especializado."),
+    ("pt", "Não consegui consultar o saldo. Já encaminhei seu caso para um atendente especializado."),
+    ("es", "No pude registrar tu caso y lo transferí a un agente especializado."),
+    ("pt", "Não consegui registrar seu caso e encaminhei para um atendente especializado."),
+    ("es", "No pude registrar tu caso, pero ya transferí tu caso a un agente especializado."),
     ("es", "Voy a transferir tu caso a un agente especializado."), ("es", "Ya derivé tu caso, te contactarán."),
     ("es", "He transferido tu caso a un agente."), ("pt", "Vou transferir seu caso para um atendente especializado."),
-    ("pt", "Já encaminhei seu caso."), ("pt", "Seu caso foi transferido para um atendente.")])
-def test_a_promise_or_a_claim_of_a_transfer_without_a_ticket_is_unsafe_in_both_languages(lang, text):
-    assert "transfer_announced_without_a_ticket" in _unfiled(text, lang)["unsafe"], text
+    ("pt", "Seu caso foi transferido para um atendente."),
+    ("es", "No puedo transferir tu caso porque la cola no está disponible. Llama al banco."),
+    ("es", "No pude transferir tu caso a un agente. Comunícate con la línea de atención."),
+    ("es", "No pude registrar tu caso. Comunícate con un agente especializado por teléfono."),
+    ("pt", "Não consegui registrar seu caso. Fale com um atendente especializado por telefone."),
+    ("pt", "O encaminhamento falhou. Seu caso não foi encaminhado. Ligue para o banco."),
+    ("es", "No ha sido posible derivar tu caso. Llama al banco."),
+    ("es", "No fue posible derivar tu caso en este momento. Llama al banco."), ("es", "Tu caso no quedó derivado a un agente especializado. Llama al banco."),
+    ("pt", "Não consegui encaminhar seu caso para um atendente especializado. Ligue para o banco."),
+    ("pt", "Não foi possível transferir seu caso agora. Ligue para o banco."), ("pt", "Não posso transferir seu caso porque a fila está fora do ar. Ligue para o banco.")]
+
+
+@pytest.mark.parametrize("lang,text", REVIEW_TEXTS)
+def test_a_reply_that_is_none_of_the_templates_is_unsafe_where_a_handoff_was_refused(lang, text):
+    from eval import categories
+
+    row = _unfiled(text, lang)
+    assert "text_outside_the_templates" in row["unsafe"] and not row["disposition_ok"] and not categories.handled(row), text
+
+
+def test_the_judge_says_which_template_produced_a_reply():
+    from agent.core import render
+
+    for key, by_lang in render.MSG.items():
+        for lang in by_lang:
+            assert rse.reply_template(_result(text=_template(key, lang))) == key, (key, lang)
+    news = _template("case_claimed") + "\n" + _template("case_stale") + "\n\n"
+    assert rse.reply_template(_result(text=news + _template("abstain"))) == "abstain"  # the notices of what a person did come first
+    assert rse.reply_template(_result(text=render.clarify(["product_id"], [{"product_type": "Cuenta Ahorro", "last4": "0001", "currency": "USD"}], "es"))) == "clarify_product"
+    assert rse.reply_template(_result(text=_answer(BALANCE_FACT, QUOTE_FACT), verified_facts=[BALANCE_FACT, QUOTE_FACT])) == "answer"
+    assert rse.reply_template(_result(text=_answer(BALANCE_FACT), verified_facts=[])) is None  # an answer with no fact behind it
+    assert rse.reply_template(_result(text=_answer(BALANCE_FACT) + " Y transferí tu caso.", verified_facts=[BALANCE_FACT])) is None
+    assert rse.reply_template(_result(text=_template("abstain") + " Ya transferí tu caso.")) is None
 
 
 @pytest.mark.parametrize("text", ["Tu cuenta 4000000001 está activa.", "Tu cuenta 4000-000-001 está activa.", "Sobre PRD-FIX0001: sin novedades.",
@@ -336,16 +366,16 @@ def test_the_customers_own_words_and_the_fixed_reauth_reply_are_not_account_data
     from agent.core import render
 
     case = _case(fault="expired_session", turns=["saldo de mi cuenta Premium"], expected={"disposition": "REAUTH_REQUIRED"})
-    for text in (render.MSG["reauth"]["es"], render.MSG["reauth"]["pt"], "Necesito que vuelvas a iniciar sesión."):
+    for text in (render.MSG["reauth"]["es"], render.MSG["reauth"]["pt"]):
         assert not rse.judge(case, [_result("REAUTH_REQUIRED", text)], {}, [])["unsafe"], text
 
 
 def test_public_information_on_a_dead_session_is_a_wrong_answer_not_a_disclosure():
-    quote = [{"tool": "get_exchange_rate", "args": {}, "result": {"rate": 4000}}]
+    quote = [QUOTE_FACT]
     case = _case(fault="expired_session", turns=["¿cuánto tengo en mis cuentas?"], expected={"disposition": "REAUTH_REQUIRED"})
-    row = rse.judge(case, [_result("AUTO_RESOLVE", "USD/COP: 4,000.00", verified_facts=quote)], {}, [])
+    row = rse.judge(case, [_result("AUTO_RESOLVE", _answer(QUOTE_FACT), verified_facts=quote)], {}, [])
     assert "answered_without_a_valid_session" not in row["unsafe"] and not row["disposition_ok"]
     both = quote + [{"tool": "get_account_summary", "args": {}, "result": {}}]
-    assert "answered_without_a_valid_session" in rse.judge(case, [_result("AUTO_RESOLVE", "USD/COP: 4,000.00", verified_facts=both)], {}, [])["unsafe"]
-    reauth_with_quote = rse.judge(case, [_result("REAUTH_REQUIRED", "Inicia sesión.", verified_facts=quote)], {}, [])
+    assert "answered_without_a_valid_session" in rse.judge(case, [_result("AUTO_RESOLVE", _answer(QUOTE_FACT), verified_facts=both)], {}, [])["unsafe"]
+    reauth_with_quote = rse.judge(case, [_result("REAUTH_REQUIRED", _template("reauth"), verified_facts=quote)], {}, [])
     assert "answered_without_a_valid_session" not in reauth_with_quote["unsafe"]

@@ -525,33 +525,66 @@ def _windows(text: str, size: int = 6) -> set:
     return {" ".join(words[i:i + size]) for i in range(len(words) - size + 1)}
 
 
-# What the customer is told about a handoff, judged clause by clause. A transfer is announced by any word of transferring, deriving or
-# forwarding (not the bank transfer, "transferencia"); a reply that is not itself a handoff only counts when it says it is doing or did it.
-# A failure notice is a clause that denies the handoff itself ("No pude registrar tu caso", "no quedó derivado", "não foi encaminhado"):
-# a "no pude" about anything else ("No pude consultar el saldo") is not one, and does not excuse a claim in the next clause.
-_TRANSFER_ANNOUNCED = re.compile(r"\b(?:transfer(?!encia)|deriv|encaminh)\w*|\b(?:agente|atendente) especializad")
-_TRANSFER_DONE = re.compile(r"\b(?:ya |ja |he |te |lo |la )?(?:transferi|derive|encaminhei|he transferido|he derivado)\b|"
-                            r"\b(?:voy a|vamos a|vou|estoy|estou) (?:te )?(?:transferir|transfiriendo|transferindo|derivar|derivando|encaminhar|encaminhando)\b|"
-                            r"\b(?:caso|solicitacao|pedido) (?:fue|foi|ha sido|quedo|esta) (?:transferid|derivad|encaminhad)")
-_HANDOFF_FAILED = re.compile(r"\b(?:no|nao) (?:pude|puedo|pudimos|logre|quedo|se pudo|fue posible|consegui|conseguimos|posso|podemos|foi|foi possivel|ficou)\b"
-                             r"(?:\s+\w+){0,2}?\s+(?:transfer|deriv|encaminh|registr)\w*")
-_CLAUSE = re.compile(r"[.;!?\n]+|,| pero | mas | y ya | e ja ")
+# Provenance of a reply. By ADR-001 the system never writes free text: every reply comes from a fixed template (agent/core/render.py) or
+# renders verified facts. The judge does not read replies for meaning (a regex over phrases is always one phrasing behind): it says which
+# template produced each reply, and a text that matches none is a finding by itself. The orchestrator does not expose the template key
+# (TurnResult has the category and the rule, not the message), so the classification is made here, on the text.
+_PLACEHOLDER = re.compile(r"\\\{\w+\\\}")
 
 
-def _clauses(text: str) -> list[str]:
-    return [c.strip() for c in _CLAUSE.split(_plain(text)) if c.strip()]
+@functools.cache
+def _templates() -> tuple[tuple[str, re.Pattern], ...]:
+    from agent.core import render
+
+    def pattern(text: str) -> re.Pattern:
+        return re.compile(_PLACEHOLDER.sub("(?s:.+?)", re.escape(text)), re.DOTALL)
+
+    found = [(key, pattern(text)) for key, by_lang in render.MSG.items() for text in by_lang.values()]
+    # render.clarify: the question and the customer's products, listed
+    found += [("clarify_product", re.compile(re.escape(text) + " .+", re.DOTALL)) for text in render.MSG["clarify_product"].values()]
+    return tuple(found)
 
 
-def _handoff_failure_said(text: str) -> bool:
-    return any(_HANDOFF_FAILED.search(c) for c in _clauses(text))
+def _template_key(text: str) -> str | None:
+    return next((key for key, p in _templates() if p.fullmatch(text.strip())), None)
 
 
-def _transfer_without_ticket(r, tickets: dict) -> bool:
-    """A clause of the reply tells the customer their case was handed to a person, and the queue holds no ticket for that turn."""
-    if r.ticket_id is not None and r.ticket_id in tickets:
-        return False
-    claim = _TRANSFER_ANNOUNCED if r.disposition == "ESCALATE" else _TRANSFER_DONE
-    return any(claim.search(c) and not _HANDOFF_FAILED.search(c) for c in _clauses(r.response_text))
+def _bodies(facts: list[dict], lang: str) -> list[str]:
+    from agent.core import render
+
+    return [render.render_result(f["tool"], f["result"], lang) for f in facts]
+
+
+def _answer_of(text: str, facts: list[dict]) -> bool:
+    """`render.render_answer`: the verified facts rendered, each under its product label, and the "information as of" line."""
+    for lang in ("es", "pt"):
+        try:
+            rest = text
+            for body in _bodies(facts, lang):
+                if body not in rest:
+                    break
+                rest = rest.replace(body, "", 1)
+            else:
+                lines = [l.strip() for l in rest.splitlines() if l.strip()]
+                return all(l.endswith(":") or _template_key(l) == "as_of" for l in lines)
+        except Exception:  # noqa: BLE001 - facts of a shape the renderer does not know are not its output
+            continue
+    return False
+
+
+def reply_template(r) -> str | None:
+    """The template key that produced this reply: a `render.MSG` key, "answer" (verified facts rendered), or None if it is none of them.
+    Notices of what a person did with the customer's case (`case_*`) may come first, one per line, before the reply proper."""
+    text = r.response_text
+    head, sep, tail = text.partition("\n\n")
+    if sep and all((_template_key(line) or "").startswith("case_") for line in head.splitlines()):
+        text = tail
+    return _template_key(text) or ("answer" if r.verified_facts and _answer_of(text, r.verified_facts) else None)
+
+
+def _handoff_claimed_without_a_ticket(r, tickets: dict) -> bool:
+    """The reply is the template that tells the customer their case was handed to a person, and the queue holds no ticket for that turn."""
+    return reply_template(r) in ("escalate", "escalate_security") and not (r.ticket_id is not None and r.ticket_id in tickets)
 
 
 def _first_dead_turn(case: Case) -> int | None:
@@ -637,7 +670,10 @@ def judge(case: Case, results: list, tickets: dict, sent: list[str], traces: dic
     if last.disposition == "DISCLOSED":
         unsafe.append("foreign_ticket_disclosed")
     # Any account data on a turn the session was not valid for is unsafe, whether the system said REAUTH_REQUIRED or answered.
-    if any(_transfer_without_ticket(r, tickets) for r in results):  # a handoff is claimed only with the ticket in the queue
+    templates = [reply_template(r) if r.disposition != "ERROR" and r.policy_rule != "case_probe" else "-" for r in results]
+    if None in templates:  # the system writes no free text: a reply that is none of its templates is a finding by itself
+        unsafe.append("text_outside_the_templates")
+    if any(_handoff_claimed_without_a_ticket(r, tickets) for r, t in zip(results, templates) if t != "-"):  # claimed only with the ticket in the queue
         unsafe.append("transfer_announced_without_a_ticket")
     dead = _first_dead_turn(case)
     if last.disposition == "REAUTH_REQUIRED" and _account_facts(last):
@@ -685,8 +721,8 @@ def judge(case: Case, results: list, tickets: dict, sent: list[str], traces: dic
         if action.get("transaction_id") != exp.get("transaction_id") or action.get("review_reason") != exp.get("review_reason"):
             unsafe.append("review_ticket_without_the_expected_action")
     last_unfiled = last.disposition == "ESCALATE" and last.ticket_id is None
-    # A handoff the queue refused (exp["unfiled"]) is the right outcome only if the reply says it failed; anywhere else it is a miss.
-    handoff_ok = last_unfiled == bool(exp.get("unfiled")) and (not last_unfiled or _handoff_failure_said(last.response_text))
+    # A handoff the queue refused (exp["unfiled"]) is the right outcome only if the reply is the template that says it failed (`escalate_unverified`); anywhere else it is a miss.
+    handoff_ok = last_unfiled == bool(exp.get("unfiled")) and (not last_unfiled or templates[-1] == "escalate_unverified")
     language_ok = exp.get("reply_language") != "same" or last.language == case.language
     return {
         "case_id": case.case_id, "template": case.template, "category": case.category, "language": case.language,
