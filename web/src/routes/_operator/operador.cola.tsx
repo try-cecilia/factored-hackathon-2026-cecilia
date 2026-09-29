@@ -1,103 +1,184 @@
-import { createFileRoute, Link, Outlet, useRouter } from '@tanstack/react-router'
-import { useEffect, useMemo } from 'react'
-import { loadQueue, type Ticket } from '../../server/operator.functions'
-import { ago, CLOSED, categoryLabel, label, PRIORITY_ORDER, priorityLabel, statusLabel } from '../-operator/format'
-import { isAutomatic, refreshQuietly } from '../-operator/refresh'
-import { Empty, Notice } from '../-operator/ui'
+import { createFileRoute, getRouteApi, Link, Outlet, useNavigate, useParams, useRouter } from '@tanstack/react-router'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useI18n, useT } from '../../i18n/context'
+import { headTitle } from '../../i18n/head'
+import type { MessageKey } from '../../i18n/translate'
+import type { Ticket } from '../../server/operator.functions'
+import { Button, DataTable, PriorityChip, StatusIndicator, type Column, type SortState, type StatusTone } from '../../ui'
+import type { Priority } from '../../ui'
+import { ageShort, categoryName, statusKey, when } from '../-operator/format'
+import {
+  distinct, filterTickets, filtersOf, hasFilters, inScope, isClosed, localeOf, orderTickets, tabCounts, validateSearch, type QueueSearch, type StatusTab,
+} from '../-operator/queue'
+import { Notice } from '../-operator/ui'
 
-type Filter = 'abiertos' | 'cerrados' | 'todos'
-const FILTERS: { key: Filter; name: string }[] = [
-  { key: 'abiertos', name: 'Pendientes' },
-  { key: 'cerrados', name: 'Cerrados' },
-  { key: 'todos', name: 'Todos' },
-]
-const REFRESH_MS = 30_000
+const PAGE_SIZE = 25
 
 export const Route = createFileRoute('/_operator/operador/cola')({
-  validateSearch: (search: Record<string, unknown>): { estado?: Filter } => ({
-    estado: search.estado === 'cerrados' || search.estado === 'todos' ? search.estado : undefined,
-  }),
-  loader: () => loadQueue({ data: { auto: isAutomatic() } }),
-  head: () => ({ meta: [{ title: 'Cola · Cecilai' }] }),
+  validateSearch,
+  head: ({ matches }) => headTitle(matches, 'operator.pageTitle.queue'),
   component: Queue,
 })
 
-const rank = (t: Ticket) => {
-  const i = PRIORITY_ORDER.indexOf(t.priority)
-  return i === -1 ? PRIORITY_ORDER.length : i
+const layout = getRouteApi('/_operator')
+
+const tones: Record<Ticket['desk']['status'], StatusTone> = {
+  open: 'open',
+  claimed: 'info',
+  approved: 'success',
+  rejected: 'danger',
+  handed_back: 'neutral',
+  stale: 'caution',
 }
 
-/** Pending work: most urgent first, then the one that has waited longest. Closed work: latest first. */
-function arrange(tickets: Ticket[], filter: Filter) {
-  const closed = (t: Ticket) => CLOSED.includes(t.desk.status)
-  const shown = tickets.filter((t) => (filter === 'todos' ? true : filter === 'cerrados' ? closed(t) : !closed(t)))
-  return shown.sort((a, b) =>
-    filter === 'cerrados' ? b.created_at - a.created_at : Number(closed(a)) - Number(closed(b)) || rank(a) - rank(b) || a.created_at - b.created_at,
+const TABS: { key: StatusTab; search: QueueSearch['estado']; label: MessageKey }[] = [
+  { key: 'all', search: undefined, label: 'operator.queue.tabs.all' },
+  { key: 'open', search: 'abiertos', label: 'operator.queue.tabs.open' },
+  { key: 'claimed', search: 'tomados', label: 'operator.queue.tabs.claimed' },
+  { key: 'decided', search: 'decididos', label: 'operator.queue.tabs.decided' },
+]
+const PRIORITIES = ['Critical', 'High', 'Medium', 'Low'] as const
+
+function Queue() {
+  const t = useT()
+  const { locale } = useI18n()
+  const result = layout.useLoaderData()
+  const { view } = Route.useRouteContext()
+  const search = Route.useSearch()
+  const navigate = useNavigate()
+  const router = useRouter()
+  const { ticketId } = useParams({ strict: false }) as { ticketId?: string }
+  const searchBox = useRef<HTMLInputElement>(null)
+  const [q, setQ] = useState('')
+  const [sort, setSort] = useState<SortState>(null)
+
+  // Ctrl or Cmd+K jumps to the search box, as the hint in it says.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault()
+        searchBox.current?.focus()
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [])
+
+  const tickets = useMemo(() => (result.ok ? result.data : []), [result])
+  const filters = filtersOf(search, q)
+  const me = view.operator
+  const scope = useMemo(() => inScope(tickets, filters, me), [tickets, filters.view, filters.queue, filters.priority, filters.country, filters.language, filters.q, me]) // eslint-disable-line react-hooks/exhaustive-deps
+  const counts = tabCounts(scope)
+  const rows = useMemo(() => orderTickets(filterTickets(scope, filters, me), sort), [scope, filters.tab, sort, me]) // eslint-disable-line react-hooks/exhaustive-deps
+  const pending = scope.filter((ticket) => !isClosed(ticket)).length
+  const countries = useMemo(() => distinct(tickets, (ticket) => ticket.country), [tickets])
+  const languages = useMemo(() => distinct(tickets, (ticket) => ticket.language), [tickets])
+
+  // Any change of what is being looked at goes back to the first page.
+  const scopeKey = JSON.stringify([filters, sort])
+  const [paged, setPaged] = useState({ key: scopeKey, page: 1 })
+  const page = paged.key === scopeKey ? paged.page : 1
+
+  const set = (patch: Partial<QueueSearch>) => void navigate({ search: (prev: QueueSearch) => ({ ...prev, ...patch }) as never, replace: true })
+  const clear = () => {
+    setQ('')
+    void navigate({ search: {} as never, replace: true })
+  }
+
+  const title = search.cola ?? t(search.vista === 'mias' ? 'operator.queue.title.mine' : search.vista === 'sin-asignar' ? 'operator.queue.title.unassigned' : 'operator.queue.title.all')
+
+  const columns: Column<Ticket>[] = [
+    { id: 'priority', header: t('operator.queue.columns.priority'), width: 68, sortable: true, cell: (r) => <PriorityChip priority={r.priority.toLowerCase() as Priority} /> },
+    { id: 'ticket', header: t('operator.queue.columns.ticket'), width: 76, mono: true, rowHeader: true, sortable: true, cell: (r) => r.ticket_id.slice(0, 8) },
+    { id: 'queue', header: t('operator.queue.columns.queue'), width: 132, mono: true, muted: true, truncate: true, sortable: true, cell: (r) => r.queue },
+    { id: 'request', header: t('operator.queue.columns.request'), truncate: true, sortable: true, cell: (r) => <span title={categoryName(t, r.category)}>{r.request}</span> },
+    { id: 'locale', header: t('operator.queue.columns.locale'), width: 64, mono: true, muted: true, sortable: true, cell: (r) => localeOf(r) },
+    { id: 'age', header: t('operator.queue.columns.age'), width: 52, align: 'end', mono: true, muted: true, sortable: true, cell: (r) => <span title={t('operator.queue.ageTitle', { date: when(r.created_at, locale) })}>{ageShort(r.created_at)}</span> },
+    { id: 'status', header: t('operator.queue.columns.status'), width: 108, sortable: true, cell: (r) => <StatusIndicator tone={tones[r.desk.status]}>{t(statusKey[r.desk.status])}</StatusIndicator> },
+    { id: 'operator', header: t('operator.queue.columns.operator'), width: 92, mono: true, truncate: true, sortable: true, cell: (r) => r.desk.operator ?? '—' },
+  ]
+
+  const orderLabel = sort
+    ? t('operator.queue.order.by', { column: `${columns.find((c) => c.id === sort.key)?.header ?? ''} ${t(sort.direction === 'asc' ? 'operator.queue.order.asc' : 'operator.queue.order.desc')}` })
+    : t('operator.queue.order.urgent')
+
+  const emptyKey = !hasFilters(filters) ? (tickets.length === 0 ? 'None' : 'Open') : 'Filtered'
+  const empty = {
+    title: t(`operator.queue.empty.title${emptyKey}` as MessageKey),
+    description: t(`operator.queue.empty.description${emptyKey}` as MessageKey),
+    action: hasFilters(filters) ? <Button variant="ghost" tinted size="sm" onClick={clear}>{t('operator.queue.filter.clear')}</Button> : undefined,
+  }
+
+  return (
+    <div className="op-split" data-detail={ticketId ? 'open' : undefined}>
+      <section className="op-list" aria-label={t('operator.queue.caption')}>
+        <div className="op-head">
+          <h1 className={search.cola ? 'op-mono' : undefined}>{title}</h1>
+          <span className="op-count" aria-label={String(pending)}>{result.ok ? pending : ''}</span>
+          <div className="op-head__spacer" />
+          <label className="op-search">
+            <svg viewBox="0 0 20 20" width="12" height="12" aria-hidden="true" focusable="false"><circle cx="9" cy="9" r="5.5" fill="none" stroke="currentColor" strokeWidth="1.7" /><path d="M13.2 13.2 17 17" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" /></svg>
+            <span className="sr-only">{t('operator.queue.search')}</span>
+            <input ref={searchBox} type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('operator.queue.searchPlaceholder')} autoComplete="off" spellCheck={false} />
+            <kbd aria-hidden="true">{t('operator.queue.searchHint')}</kbd>
+          </label>
+          <Button variant="ghost" size="sm" onClick={() => router.invalidate()}>{t('operator.refresh')}</Button>
+        </div>
+
+        {!result.ok ? (
+          <Notice status={result.status} />
+        ) : (
+          <>
+            <div className="op-filters" role="group" aria-label={t('operator.queue.filters')}>
+              <div className="op-seg">
+                {TABS.map((tab) => (
+                  <Link key={tab.key} to="." search={((prev: QueueSearch) => ({ ...prev, estado: tab.search })) as never} replace aria-current={filters.tab === tab.key ? 'true' : undefined}>
+                    {t(tab.label)}
+                    <span className="op-mono">{counts[tab.key]}</span>
+                  </Link>
+                ))}
+              </div>
+              <FilterSelect name={t('operator.queue.filter.priority')} value={search.prioridad} onChange={(v) => set({ prioridad: v })}
+                options={PRIORITIES.map((p) => ({ value: p, label: t(`table.priority.${p.toLowerCase() as Lowercase<typeof p>}`) }))} />
+              <FilterSelect name={t('operator.queue.filter.country')} value={search.pais} onChange={(v) => set({ pais: v })} options={countries.map((c) => ({ value: c, label: c }))} />
+              <FilterSelect name={t('operator.queue.filter.language')} value={search.idioma} onChange={(v) => set({ idioma: v })} options={languages.map((l) => ({ value: l, label: l.toUpperCase() }))} />
+              {hasFilters(filters) && <Button variant="ghost" size="xs" onClick={clear}>{t('operator.queue.filter.clear')}</Button>}
+              <div className="op-head__spacer" />
+              <span className="op-order" aria-live="polite">{orderLabel}</span>
+            </div>
+            <DataTable
+              className="op-table"
+              density="compact"
+              caption={t('operator.queue.caption')}
+              rows={rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)}
+              columns={columns}
+              getRowId={(r) => r.ticket_id}
+              sort={sort}
+              onSortChange={setSort}
+              onRowClick={(r) => void navigate({ to: '/operador/cola/$ticketId', params: { ticketId: r.ticket_id }, search: ((prev: QueueSearch) => prev) as never })}
+              activeRowId={ticketId}
+              empty={empty}
+              pagination={{ page, pageSize: PAGE_SIZE, total: rows.length, onPageChange: (next) => setPaged({ key: scopeKey, page: next }) }}
+            />
+          </>
+        )}
+      </section>
+      <aside className="op-detail" aria-label={t('operator.ticket.panelLabel')}>
+        <Outlet />
+      </aside>
+    </div>
   )
 }
 
-function Queue() {
-  const result = Route.useLoaderData()
-  const { estado = 'abiertos' } = Route.useSearch()
-  const router = useRouter()
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      if (document.visibilityState === 'visible') void refreshQuietly(router)
-    }, REFRESH_MS)
-    return () => clearInterval(timer)
-  }, [router])
-
-  const tickets = useMemo(() => (result.ok ? arrange(result.data, estado) : []), [result, estado])
-  const pending = result.ok ? result.data.filter((t) => !CLOSED.includes(t.desk.status)).length : 0
-
+/** A filter that looks like the pills of the design and is a native select underneath: keyboard and screen readers get it for free. */
+function FilterSelect({ name, value, onChange, options }: { name: string; value: string | undefined; onChange: (value: string | undefined) => void; options: { value: string; label: string }[] }) {
   return (
-    <div className="op-split">
-      <div className="op-list-pane">
-        <div className="op-pane-head">
-          <div>
-            <h1>Cola humana</h1>
-            <p className="op-muted">{result.ok ? `${pending} pendiente${pending === 1 ? '' : 's'} de ${result.data.length}` : 'No se pudo cargar'}</p>
-          </div>
-          <button type="button" className="op-link" onClick={() => router.invalidate()}>Actualizar</button>
-        </div>
-        <nav className="op-tabs" aria-label="Filtrar casos">
-          {FILTERS.map((f) => (
-            <Link key={f.key} to="/operador/cola" search={{ estado: f.key === 'abiertos' ? undefined : f.key }} data-on={estado === f.key ? 'true' : undefined}>
-              {f.name}
-            </Link>
-          ))}
-        </nav>
-        {!result.ok ? (
-          <Notice status={result.status} />
-        ) : tickets.length === 0 ? (
-          <Empty title={estado === 'abiertos' ? 'No hay casos pendientes' : 'No hay casos para mostrar'}>
-            {estado === 'abiertos' ? 'Cuando el asistente derive un caso a una persona, aparece acá.' : 'Probá con otro filtro.'}
-          </Empty>
-        ) : (
-          <ul className="op-cases">
-            {tickets.map((t) => (
-              <li key={t.ticket_id}>
-                <Link to="/operador/cola/$ticketId" params={{ ticketId: t.ticket_id }} search={{ estado: estado === 'abiertos' ? undefined : estado }} activeProps={{ 'aria-current': 'true' }}>
-                  <span className="op-case-top">
-                    <span className={`op-priority op-priority-${t.priority.toLowerCase()}`}>{label(priorityLabel, t.priority)}</span>
-                    <span className="op-muted" title={new Date(t.created_at * 1000).toLocaleString('es')}>{ago(t.created_at)}</span>
-                  </span>
-                  <span className="op-case-title">{label(categoryLabel, t.category)}</span>
-                  <span className="op-case-request">{t.request}</span>
-                  <span className="op-case-meta">
-                    <span className={`op-status op-status-${t.desk.status}`}>{statusLabel[t.desk.status]}{t.desk.status === 'claimed' && t.desk.operator ? ` · ${t.desk.operator}` : ''}</span>
-                    <span className="op-mono">{t.queue}</span>
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-      <div className="op-detail-pane">
-        <Outlet />
-      </div>
-    </div>
+    <label className="op-select" data-set={value ? '' : undefined}>
+      <select aria-label={name} value={value ?? ''} onChange={(e) => onChange(e.target.value || undefined)}>
+        <option value="">{name}</option>
+        {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+      <svg viewBox="0 0 20 20" width="10" height="10" aria-hidden="true" focusable="false"><path d="M5 8l5 5 5-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+    </label>
   )
 }

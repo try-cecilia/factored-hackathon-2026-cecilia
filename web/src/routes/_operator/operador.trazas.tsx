@@ -1,55 +1,91 @@
-import { createFileRoute, Link, Outlet, useRouter } from '@tanstack/react-router'
-import { loadTraceLog } from '../../server/operator.functions'
-import { ago, categoryLabel, dispositionLabel, label, ms, usd } from '../-operator/format'
+import { createFileRoute, Outlet, useNavigate, useParams, useRouter } from '@tanstack/react-router'
+import { useState } from 'react'
+import { useT } from '../../i18n/context'
+import { headTitle } from '../../i18n/head'
+import { loadTraceLog, type TraceRow } from '../../server/operator.functions'
+import { Button, DataTable, StatusIndicator, type Column, type SortState, type StatusTone } from '../../ui'
+import { ageShort, categoryName, dispositionName, ms, usd, short } from '../-operator/format'
 import { isAutomatic } from '../-operator/refresh'
-import { Empty, Notice } from '../-operator/ui'
+import { Notice } from '../-operator/ui'
+import { sortRows } from '../../ui'
 
 export const Route = createFileRoute('/_operator/operador/trazas')({
   loader: () => loadTraceLog({ data: { auto: isAutomatic() } }),
-  head: () => ({ meta: [{ title: 'Trazas · Cecilai' }] }),
+  head: ({ matches }) => headTitle(matches, 'operator.pageTitle.traces'),
   component: Traces,
 })
 
+const PAGE_SIZE = 25
+const tones: Record<string, StatusTone> = { AUTO_RESOLVE: 'success', ESCALATE: 'info', CLARIFY: 'neutral', ABSTAIN: 'neutral' }
+
 function Traces() {
+  const t = useT()
   const result = Route.useLoaderData()
   const router = useRouter()
+  const navigate = useNavigate()
+  const { traceId } = useParams({ strict: false }) as { traceId?: string }
+  const [sort, setSort] = useState<SortState>(null)
+  const [page, setPage] = useState(1)
+
+  const rows: TraceRow[] = result.ok
+    ? sortRows(result.data, sort, (r, key) => {
+        switch (key) {
+          case 'trace': return r.trace_id
+          case 'result': return r.disposition
+          case 'category': return r.category
+          case 'age': return -r.ts
+          case 'latency': return r.latency_ms
+          case 'cost': return r.cost_usd
+          default: return null
+        }
+      })
+    : []
+
+  const columns: Column<TraceRow>[] = [
+    { id: 'trace', header: t('monitor.traces.columns.trace'), width: 84, mono: true, rowHeader: true, sortable: true, cell: (r) => short(r.trace_id) },
+    { id: 'result', header: t('monitor.traces.columns.result'), width: 116, sortable: true, cell: (r) => <StatusIndicator tone={tones[r.disposition] ?? 'neutral'}>{dispositionName(t, r.disposition)}</StatusIndicator> },
+    { id: 'category', header: t('monitor.traces.columns.category'), truncate: true, sortable: true, cell: (r) => categoryName(t, r.category) },
+    { id: 'age', header: t('monitor.traces.columns.age'), width: 52, align: 'end', mono: true, muted: true, sortable: true, cell: (r) => ageShort(r.ts) },
+    { id: 'latency', header: t('monitor.traces.columns.latency'), width: 76, align: 'end', mono: true, muted: true, sortable: true, cell: (r) => ms(r.latency_ms) },
+    { id: 'cost', header: t('monitor.traces.columns.cost'), width: 100, align: 'end', mono: true, muted: true, sortable: true, cell: (r) => usd(r.cost_usd) },
+  ]
+
   return (
-    <div className="op-split">
-      <div className="op-list-pane">
-        <div className="op-pane-head">
+    <div className="op-split" data-detail={traceId ? 'open' : undefined}>
+      <section className="op-list" aria-label={t('monitor.traces.title')}>
+        <div className="op-head">
           <div>
-            <h1>Trazas</h1>
-            <p className="op-muted">{result.ok ? `Últimos ${result.data.length} turnos, del más reciente al más antiguo` : 'No se pudo cargar'}</p>
+            <h1>{t('monitor.traces.title')}</h1>
+            <p className="op-muted">{result.ok ? t('monitor.traces.subtitle', { count: result.data.length }) : t('monitor.traces.loadFailed')}</p>
           </div>
-          <button type="button" className="op-link" onClick={() => router.invalidate()}>Actualizar</button>
+          <div className="op-head__spacer" />
+          <Button variant="ghost" size="sm" onClick={() => router.invalidate()}>{t('operator.refresh')}</Button>
         </div>
         {!result.ok ? (
           <Notice status={result.status} />
-        ) : result.data.length === 0 ? (
-          <Empty title="No hay trazas">Cada turno del asistente deja una traza.</Empty>
         ) : (
-          <ul className="op-cases">
-            {result.data.map((t) => (
-              <li key={t.trace_id}>
-                <Link to="/operador/trazas/$traceId" params={{ traceId: t.trace_id }} activeProps={{ 'aria-current': 'true' }}>
-                  <span className="op-case-top">
-                    <span className={`op-status op-disp-${t.disposition.toLowerCase()}`}>{label(dispositionLabel, t.disposition)}</span>
-                    <span className="op-muted">{ago(t.ts)}</span>
-                  </span>
-                  <span className="op-case-title">{label(categoryLabel, t.category)}</span>
-                  <span className="op-case-meta">
-                    <span className="op-mono">{t.trace_id.slice(0, 8)}</span>
-                    <span>{ms(t.latency_ms)} · {usd(t.cost_usd)}</span>
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
+          <DataTable
+            className="op-table"
+            density="compact"
+            caption={t('monitor.traces.caption')}
+            rows={rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)}
+            columns={columns}
+            getRowId={(r) => r.trace_id}
+            sort={sort}
+            onSortChange={(next) => {
+              setSort(next)
+              setPage(1)
+            }}
+            onRowClick={(r) => void navigate({ to: '/operador/trazas/$traceId', params: { traceId: r.trace_id } })}
+            activeRowId={traceId}
+            empty={{ title: t('monitor.traces.emptyTitle'), description: t('monitor.traces.emptyBody') }}
+            pagination={{ page, pageSize: PAGE_SIZE, total: rows.length, onPageChange: setPage }}
+          />
         )}
-      </div>
-      <div className="op-detail-pane">
+      </section>
+      <aside className="op-detail" aria-label={t('monitor.traces.title')}>
         <Outlet />
-      </div>
+      </aside>
     </div>
   )
 }

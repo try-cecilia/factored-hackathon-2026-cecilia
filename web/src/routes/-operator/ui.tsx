@@ -1,30 +1,30 @@
 import { useRouter } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
+import { useT } from '../../i18n/context'
 import type { Result } from '../../server/operator.functions'
-import { explain } from './format'
+import { Button, EmptyState } from '../../ui'
+import { explainKey } from './format'
 
+/** The BFF or the API said no: what happened and the one way out (sign in again, or try again). */
 export function Notice({ status, acting, children }: { status?: number; acting?: boolean; children?: ReactNode }) {
+  const t = useT()
   const router = useRouter()
   const expired = status === 0 || status === 401
   return (
     <div className="op-notice" role="alert">
-      <p>{children ?? explain(status ?? 500, acting)}</p>
+      <p>{children ?? t(explainKey(status ?? 500, acting))}</p>
       {expired ? (
-        <a className="op-link" href="/operador/login">Ir al ingreso</a>
+        <a className="ui-btn ui-btn--ghost ui-btn--tinted ui-btn--sm" href="/operador/login"><span>{t('operator.goToLogin')}</span></a>
       ) : (
-        <button type="button" className="op-link" onClick={() => router.invalidate()}>Reintentar</button>
+        <Button variant="ghost" tinted size="sm" onClick={() => router.invalidate()}>{t('operator.retry')}</Button>
       )}
     </div>
   )
 }
 
-export const Empty = ({ title, children }: { title: string; children?: ReactNode }) => (
-  <div className="op-empty">
-    <p className="op-empty-title">{title}</p>
-    {children && <p>{children}</p>}
-  </div>
-)
+export const Empty = ({ title, children }: { title: string; children?: string }) => <EmptyState className="op-empty" title={title} description={children} />
 
+/** A tonal card of the monitoring page: a title, a quiet note and the data. */
 export function Panel({ title, note, children }: { title: string; note?: ReactNode; children: ReactNode }) {
   return (
     <section className="op-panel" aria-label={title}>
@@ -44,9 +44,10 @@ export function Loaded<T>({ title, note, result, children }: {
   result: Result<T>
   children: (data: T) => ReactNode
 }) {
+  const t = useT()
   return (
     <Panel title={title} note={note}>
-      {result.ok ? children(result.data) : <Notice status={result.status}>{result.status === 404 ? 'Todavía no hay datos para este panel.' : undefined}</Notice>}
+      {result.ok ? children(result.data) : <Notice status={result.status}>{result.status === 404 ? t('operator.errors.noPanelData') : undefined}</Notice>}
     </Panel>
   )
 }
@@ -60,9 +61,10 @@ export const Stat = ({ name, value, hint }: { name: string; value: ReactNode; hi
 )
 
 export function Bars({ data, total, names }: { data: Record<string, number>; total?: number; names?: Record<string, string> }) {
+  const t = useT()
   const rows = Object.entries(data).sort((a, b) => b[1] - a[1])
   const max = total ?? Math.max(1, ...rows.map(([, n]) => n))
-  if (!rows.length) return <p className="op-muted">Sin datos.</p>
+  if (!rows.length) return <p className="op-muted">{t('operator.noData')}</p>
   return (
     <ul className="op-bars">
       {rows.map(([name, n]) => (
@@ -80,8 +82,9 @@ const scalar = (value: unknown) =>
   value === null || value === undefined || value === '' ? '—' : typeof value === 'object' ? JSON.stringify(value) : String(value)
 
 export function KeyValues({ data }: { data: Record<string, unknown> }) {
+  const t = useT()
   const entries = Object.entries(data)
-  if (!entries.length) return <p className="op-muted">Sin datos.</p>
+  if (!entries.length) return <p className="op-muted">{t('operator.noData')}</p>
   return (
     <dl className="op-kv">
       {entries.map(([key, value]) => (
@@ -93,3 +96,6 @@ export function KeyValues({ data }: { data: Record<string, unknown> }) {
     </dl>
   )
 }
+
+/** Small mono chip for ids and codes next to a label. */
+export const Code = ({ children }: { children: ReactNode }) => <span className="op-mono">{children}</span>
