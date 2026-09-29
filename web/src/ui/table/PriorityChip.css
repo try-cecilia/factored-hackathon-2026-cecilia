@@ -14,5 +14,6 @@
 .ui-status__dot--info { background: var(--color-cecil-blue); }
 .ui-status__dot--success { background: var(--color-success); }
 .ui-status__dot--caution { background: var(--color-caution); }
+.ui-status__dot--danger { background: var(--color-danger); }
 /* Open: a ring instead of a dot, drawn as an inset shadow so it does not read as a border. */
 .ui-status__dot--open { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--color-ink) 45%, transparent); }

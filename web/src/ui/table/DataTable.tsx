@@ -33,6 +33,8 @@ export type DataTableProps<Row> = {
   bulkActions?: readonly BulkAction[]
   /** Makes rows interactive: focusable, with Enter and Space. Leave it out when the row does nothing. */
   onRowClick?: (row: Row) => void
+  /** The row whose detail is open next to the table: drawn with the selected fill and marked `aria-current`. It is not a selection. */
+  activeRowId?: string
   loading?: boolean
   /** Placeholder rows while loading. */
   skeletonRows?: number
@@ -61,6 +63,7 @@ export function DataTable<Row>({
   getRowLabel,
   bulkActions = [],
   onRowClick,
+  activeRowId,
   loading = false,
   skeletonRows = 4,
   empty,
@@ -162,11 +165,13 @@ export function DataTable<Row>({
               : rows.map((row, index) => {
                   const id = getRowId(row)
                   const isSelected = selected.includes(id)
+                  const isActive = activeRowId === id
                   return (
                     <tr
                       key={id}
                       className={onRowClick ? 'ui-dt__row ui-dt__row--action' : 'ui-dt__row'}
-                      data-selected={isSelected ? '' : undefined}
+                      data-selected={isSelected || isActive ? '' : undefined}
+                      aria-current={isActive ? 'true' : undefined}
                       data-state={forceHoverId === id ? 'hover' : undefined}
                       tabIndex={onRowClick ? 0 : undefined}
                       onClick={onRowClick ? (event) => onRowActivate(event, row) : undefined}

@@ -12,5 +12,5 @@ export function comparePriority(a: string, b: string): number {
   return priorityRank(a) - priorityRank(b)
 }
 
-/** Dot in front of a status label. Amber (`caution`) is only for "wait, look at this": pending, stale. */
-export type StatusTone = 'neutral' | 'info' | 'success' | 'caution' | 'open'
+/** Dot in front of a status label. Amber (`caution`) is only for "wait, look at this": pending, stale. `danger` is a refusal. */
+export type StatusTone = 'neutral' | 'info' | 'success' | 'caution' | 'open' | 'danger'
