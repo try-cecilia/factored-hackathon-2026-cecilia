@@ -18,3 +18,22 @@ The submission asks for a pitch video with voice that explains the solution and 
 
 `demo_app.webm` in this folder is the first recording (design v2, degraded mode, no voice). It is kept here
 for the record and left out of the public repository.
+
+## Operator console (web)
+
+`operador-kit-*.png` are screenshots of the `/operador/*` web console built on the UI kit, in Spanish and Portuguese, desktop
+(1440×900) and mobile (390×844): login, queue, ticket in each state (unassigned, taken, version conflict 409, decided),
+monitoring, traces, read-only session, empty result, filters, expired session, missing ticket and API down.
+`paper-operator-queue.jpg` and `paper-operator-ticket-states.jpg` are the approved Paper artboards ("Operator · Queue" and
+"Operator · Ticket states") they were checked against. They come from a local run on synthetic data:
+`python -m ops.seed_operator_demo`, then the API and `pnpm --dir web dev`, driven with Playwright. The setup and the key
+handling are in `docs/integracion.md` (frontier 2).
+
+## Customer web app
+
+`cliente-*.png` are the customer screens (home, sign in, chat, in Spanish and Portuguese, on desktop and phone), from a local run
+with `make serve-all-fixture` (the API on the tests' warehouse, a keyword stand-in for the model, `DEMO_MODE=1`), driven with Playwright.
+They show each kind of message the chat draws, the sidebar with its cases and its rail, the drawer on a phone, and the
+delivery states; `cliente-*-sin-demo-*` are the same chat with `DEMO_MODE=0`, where the demo panel does not exist. The
+design they follow is the Paper file "Cecil.ai" (`UI · Chat messages`, `UI · Sidebars`, `UI · Loaders`). `cliente-27-*` and `cliente-28-*` show the phone drawer and the demo panel with the focus already inside (Chromium, normal animations). `ui-kit-*.png` are the
+component gallery (`/dev/ui`). The figures and ids on screen are the fixture's.
