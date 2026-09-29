@@ -283,11 +283,20 @@ class Orchestrator:
     def _open_trace(self, proposal, session, lang, trace_id, done, escalate) -> TurnResult:
         """The customer said yes: open the trace, read it back, and only then say it exists."""
         action = {"tool": "request_trace", "args": {"product_id": proposal["product_id"]}, "confirmed_by_customer": True}
+        still_pending = True
         try:
-            default_traces.open(session.customer_id, proposal["transaction_id"], proposal["product_id"], session.ref)
-            verified = default_traces.find(session.customer_id, proposal["transaction_id"])  # this customer's, this movement's
+            # The proposal is one turn old: the movement may have settled since, so eligibility is checked again.
+            pending = TOOL_FUNCTIONS["request_trace"](session.customer_id, product_id=proposal["product_id"],
+                                                      transaction_id=proposal["transaction_id"])["items"]
+            still_pending = any(m["transaction_id"] == proposal["transaction_id"] for m in pending)
+            verified = None
+            if still_pending:
+                default_traces.open(session.customer_id, proposal["transaction_id"], proposal["product_id"], session.ref)
+                verified = default_traces.find(session.customer_id, proposal["transaction_id"])  # this customer's, this movement's
         except Exception:  # noqa: BLE001 - an unwritable service is an unverified action, never a crash
             verified = None
+        if not still_pending:
+            return escalate(router.trace_step({"items": []}), [{**action, "success": False, "error_type": "MovementNoLongerPending"}], [])
         if not verified:
             return escalate(router.trace_unverified(), [{**action, "success": False, "error_type": "TraceNotReadBack"}], [])
         decision = router.trace_opened()

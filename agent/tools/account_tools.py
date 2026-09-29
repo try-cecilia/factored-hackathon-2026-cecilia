@@ -259,10 +259,13 @@ def get_exchange_rate(customer_id: str, source_currency: str, target_currency: s
                     {"on_date": on_date, "source_currency": source_currency, "target_currency": target_currency}, _run)
 
 
-def request_trace(customer_id: str, product_id: Optional[str] = None, amount: Any = None, on_date: Optional[str] = None) -> dict:
+def request_trace(customer_id: str, product_id: Optional[str] = None, amount: Any = None, on_date: Optional[str] = None,
+                  transaction_id: Optional[str] = None) -> dict:
     """The customer's pending transfers, payments and deposits that match what they said: the candidates for a
     trace (D3), each with the trace already open for it, if any. Nothing is opened here: the orchestrator proposes
-    the one match and opens it in the trace service only after the customer confirms."""
+    the one match and opens it in the trace service only after the customer confirms. `transaction_id` is for the
+    orchestrator's re-check of a stored proposal (not in the model's schema): it looks up that one movement under
+    the same owner/status/type rules, so the candidate cap can't hide it."""
 
     def _run():
         if product_id:
@@ -272,6 +275,8 @@ def request_trace(customer_id: str, product_id: Optional[str] = None, amount: An
         params: list = [customer_id, *TRACEABLE_TYPES]
         if product_id:
             clauses.append("t.product_id = ?"); params.append(product_id)
+        if transaction_id:
+            clauses.append("t.transaction_id = ?"); params.append(transaction_id)
         if amount not in (None, ""):
             try:
                 value = abs(float(str(amount).replace(",", ".")))
@@ -284,13 +289,13 @@ def request_trace(customer_id: str, product_id: Optional[str] = None, amount: An
             f"""SELECT t.transaction_id, t.transaction_date, t.transaction_type, t.amount, t.currency, t.product_id,
                        p.product_type, p.product_number
                 FROM transactions t JOIN products p ON p.product_id = t.product_id
-                WHERE {' AND '.join(clauses)} ORDER BY t.transaction_date DESC, t.transaction_id LIMIT {MAX_TRACE_CANDIDATES}""", params)
+                WHERE {' AND '.join(clauses)} ORDER BY t.transaction_date DESC, t.transaction_id LIMIT {1 if transaction_id else MAX_TRACE_CANDIDATES}""", params)
         for it in items:
             it["last4"] = _last4(it.pop("product_number"))
             it["open_trace"] = default_traces.find(customer_id, it["transaction_id"])
         return {"items": items, "as_of": data_as_of(), "filters": {"product_id": product_id, "amount": amount, "on_date": day}}
 
-    return _audited("request_trace", customer_id, {"product_id": product_id, "amount": amount, "on_date": on_date}, _run)
+    return _audited("request_trace", customer_id, {"product_id": product_id, "amount": amount, "on_date": on_date, "transaction_id": transaction_id}, _run)
 
 
 def recent_activity_for_review(customer_id: str, limit: int = 10) -> dict:

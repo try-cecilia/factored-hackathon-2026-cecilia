@@ -196,3 +196,24 @@ def test_a_pending_movement_can_be_picked_by_its_number_in_the_list(monkeypatch)
 ])
 def test_an_ordinal_picks_from_the_list_only_when_it_is_the_whole_answer(text, n, index):
     assert router.ordinal(text, n) == index
+
+
+def test_a_movement_that_settled_after_the_proposal_is_not_traced(monkeypatch):
+    """The yes answers a proposal one turn old: eligibility is checked again, and a person takes over."""
+    from agent.core import orchestrator as orch_mod
+    orch, tok, _ = make(tool_call_response("request_trace", {}))
+    assert orch.handle_message(tok, "hice una transferencia que todavía no llega").policy_rule == "action:trace_proposed"
+    monkeypatch.setitem(orch_mod.TOOL_FUNCTIONS, "request_trace", lambda *a, **k: {"items": []})  # it is no longer Pending
+    r = orch.handle_message(tok, "sí")
+    assert (r.disposition, r.policy_rule) == ("ESCALATE", "action:trace_unmatched")
+    assert stored() == []
+
+
+def test_a_movement_pushed_past_the_candidate_cap_is_still_traced_on_confirmation(monkeypatch):
+    """Found by amount/date, then five newer pendings crowd it out of a top-N list: the re-check asks for it by id."""
+    from agent.tools import account_tools
+    orch, tok, _ = make(tool_call_response("request_trace", {}))
+    assert orch.handle_message(tok, "hice una transferencia que todavía no llega").policy_rule == "action:trace_proposed"
+    monkeypatch.setattr(account_tools, "MAX_TRACE_CANDIDATES", 0)  # a list query would now return nothing
+    r = orch.handle_message(tok, "sí")
+    assert r.policy_rule == "action:trace_opened" and len(stored()) == 1

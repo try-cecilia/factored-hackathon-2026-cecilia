@@ -159,6 +159,10 @@ NOT_NULL_COLUMNS = {
 }
 
 
+# The five categories the dictionary lists (p. 9); the data also carries "Retención" (20,578 rows in the full run).
+DICTIONARY_REASON_CATEGORIES = ["Transaccional", "Producto", "Queja", "Técnico", "Comercial"]
+
+
 def _in(col: str, values) -> str:
     quoted = ", ".join("'" + v.replace("'", "''") + "'" for v in values)
     return f"{col} IN ({quoted})"
@@ -207,6 +211,7 @@ DOMAIN_RULES: dict[str, list[tuple[str, str, str]]] = {
         ("duration_non_negative", "duration_seconds IS NULL OR duration_seconds >= 0", "error"),
         ("wait_non_negative", "wait_time_seconds IS NULL OR wait_time_seconds >= 0", "error"),
         ("reason_equals_category", "contact_reason = reason_category", "warn"),
+        ("reason_category_in_dictionary", _in("reason_category", DICTIONARY_REASON_CATEGORIES), "warn"),
     ],
     "call_transcripts": [
         ("agent_text_rendered", "agent_text IS NULL OR agent_text NOT LIKE '%{%}%'", "warn"),
@@ -225,6 +230,9 @@ CONTRACT_DEVIATIONS = [
     {"table": "call_transcripts", "column": "duration_seconds", "dictionary": "INTEGER NOT NULL",
      "observed": "14.0% null (24,029 of 171,321 in the full run)",
      "decision": "warn rule instead of quarantine; analysis-only table, column unused"},
+    {"table": "call_center_interactions", "column": "reason_category", "dictionary": "5 categories (p. 9)",
+     "observed": "6th category \"Retención\" (20,578 of 686,296 in the full run)",
+     "decision": "warn rule instead of quarantine; kept as delivered, never translated or remapped"},
 ]
 
 # Excess rows over a key the dictionary declares UNIQUE (beyond the primary key), measured on the whole table.

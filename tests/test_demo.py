@@ -272,7 +272,8 @@ def test_the_data_quality_page_carries_the_complete_dataset_run_and_the_contract
         (c["table"], c["check"], c["failed"], c["total"]) for c in report["checks"] if c["passed"] is False}
     assert full["tables"]["transactions"]["rows_staged"] == report["tables"]["transactions"]["rows_staged"]
     assert dq["contract"]["version"] == "2.0.0"
-    assert [(d["table"], d["column"]) for d in dq["contract"]["deviations"]] == [("call_transcripts", "duration_seconds")]
+    assert [(d["table"], d["column"]) for d in dq["contract"]["deviations"]] == [
+        ("call_transcripts", "duration_seconds"), ("call_center_interactions", "reason_category")]
 
 
 def _keys(value) -> set[str]:
