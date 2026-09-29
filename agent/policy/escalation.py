@@ -97,7 +97,8 @@ class HumanQueue:
         """Tickets owned by the authenticated customer, across all of their sessions."""
         if not self.path.exists():
             return []
-        tickets = (json.loads(line) for line in self.path.read_text(encoding="utf-8").splitlines() if line.strip())
+        # Only the customer's own lines are parsed: this runs on every turn, and the file holds everyone's tickets.
+        tickets = (json.loads(line) for line in self.path.read_text(encoding="utf-8").splitlines() if customer_id in line)
         return [ticket for ticket in tickets if ticket["customer_id"] == customer_id]
 
 

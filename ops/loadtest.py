@@ -114,20 +114,26 @@ def percentile(values: list[float], p: float) -> float | None:
     return round(values[min(len(values) - 1, int(p * (len(values) - 1)))], 1) if values else None
 
 
-async def drive(base: str, clients: int, requests: int, sessions: list[str]) -> dict:
-    """Closed loop: each client sends its next message as soon as the last answer arrives, until `requests` are sent."""
+async def drive(base: str, clients: int, requests: int, sessions: list[str], honor_retry_after: bool = True) -> dict:
+    """Closed loop: each client sends its next message as soon as the last answer arrives, until `requests` are sent.
+    A well-behaved client waits out `Retry-After` after a 429 or 503; `honor_retry_after=False` is a client that hammers."""
     import httpx
 
     left = [requests]
     results: list[tuple[int, float, bool]] = []
     async with httpx.AsyncClient(base_url=base, timeout=60, limits=httpx.Limits(max_connections=clients + 5)) as c:
         async def client(i: int) -> None:
+            # A ramp of 5 ms per client: 128+ connections opened in the same instant overflow the OS accept queue
+            # (128 on macOS, `kern.ipc.somaxconn`), and the dropped SYNs read as multi-second stalls that are not the service's.
+            await asyncio.sleep(i * 0.005)
             tok = sessions[i % len(sessions)]
             while left[0] > 0:
                 left[0] -= 1
                 t0 = time.perf_counter()
                 r = await c.post("/chat", json={"session_token": tok, "message": "cual es mi saldo"})
                 results.append((r.status_code, (time.perf_counter() - t0) * 1000, "retry-after" in r.headers))
+                if honor_retry_after and r.status_code in (429, 503):
+                    await asyncio.sleep(min(float(r.headers.get("retry-after", 1)), 10))
 
         t0 = time.perf_counter()
         await asyncio.gather(*(client(i) for i in range(clients)))
@@ -186,13 +192,15 @@ def run_http(a) -> None:
     out = [f"# Load test of the HTTP surface (fixture warehouse, model simulated at {a.llm_ms:.0f} ms)\n",
            f"Limits in force: max_concurrent_chats={limits['max_concurrent_chats']} chat_queue_max={limits['chat_queue_max']} "
            f"chat_queue_wait_seconds={limits['chat_queue_wait_seconds']} retry_after_seconds={limits['retry_after_seconds']}; "
-           f"rate limits raised out of the way for this run.\n"]
+           f"rate limits raised out of the way for this run. Clients "
+           f"{'ignore Retry-After and resend at once' if a.ignore_retry_after else 'wait out Retry-After'}.\n"]
     for title, down in (("Model answering", False), ("Model down (every turn falls back to a handoff)", True)):
         model.down = down
         rows = []
         for n in a.levels:
+            Path(os.environ["HUMAN_QUEUE_PATH"]).write_text("")  # the queue is read linearly: keep each level's tickets its own
             asyncio.run(drive(base, min(n, 4), 8, sessions))  # warm the connections and the warehouse
-            rows.append(asyncio.run(drive(base, n, max(a.requests, n * 3), sessions)))
+            rows.append(asyncio.run(drive(base, n, max(a.requests, n * 3), sessions, not a.ignore_retry_after)))
         out.append(f"## {title}\n\n{table(rows)}\n")
     state = httpx.get(f"{base}/admin/capacity", headers={"X-Admin-Key": "loadtest"}).json()["state"]
     out.append(f"Server counters at the end: {state}\n")
@@ -221,6 +229,7 @@ def main() -> None:
     ap.add_argument("--llm-ms", type=float, default=1800.0, help="simulated model latency for --http")
     ap.add_argument("--levels", type=int, nargs="+", default=[8, 32, 64, 128, 256], help="concurrent clients for --http")
     ap.add_argument("--requests", type=int, default=200, help="requests per level for --http (at least 3 per client)")
+    ap.add_argument("--ignore-retry-after", action="store_true", help="--http clients that resend at once after a 429/503")
     ap.add_argument("--out", help="also write the --http report here")
     a = ap.parse_args()
     (run_http if a.http else run_direct)(a)

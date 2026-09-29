@@ -1,5 +1,5 @@
-"""LLM client: Groq, Together AI and Anthropic (Claude) in a configurable
-order (LLM_PROVIDERS), with bounded retries.
+"""LLM client: Groq, Together AI, Anthropic (Claude) and a local model (Ollama or any
+OpenAI-compatible server, no key) in a configurable order (LLM_PROVIDERS), with bounded retries.
 
 Reliability contract (what "bounded retries, safe fallback" means here):
 - Every request has a timeout; every turn has a total time budget, which is also capped by the turn's own deadline
@@ -81,6 +81,10 @@ class Provider:
     factory: Callable[[str, float], Any]
     per_request_timeout: bool = True  # SDK accepts timeout= on create()
     call: Callable[..., tuple] | None = None  # None: OpenAI-compatible chat.completions
+    keyless: bool = False  # a local server: listed in LLM_PROVIDERS means wanted, and no key is needed
+
+    def configured(self) -> bool:
+        return self.keyless or bool(os.environ.get(self.api_key_env))
 
 
 def _recover_failed_tool_call(exc: Exception, tools: list[dict[str, Any]] | None) -> dict[str, Any] | None:
@@ -192,6 +196,35 @@ def _together_factory(api_key: str, timeout: float):
         return Together(api_key=api_key)
 
 
+class _LocalCompletions:
+    """POST {base}/chat/completions, the OpenAI wire format that Ollama, llama.cpp and vLLM serve. Over httpx, so no
+    SDK and no key. Answers come back as attribute-style objects, like the SDKs' (openai_compatible_call reads them
+    the same way); an HTTP error status raises with `.response.status_code`, which classify_error already reads."""
+
+    def __init__(self, base_url: str, timeout: float):
+        import httpx
+
+        self._http = httpx.Client(base_url=base_url.rstrip("/") + "/", timeout=timeout)
+
+    def create(self, **kwargs):
+        from types import SimpleNamespace
+
+        timeout = kwargs.pop("timeout", None)
+        r = self._http.post("chat/completions", json=kwargs, timeout=timeout)
+        r.raise_for_status()
+        return json.loads(r.text, object_hook=lambda d: SimpleNamespace(**d))
+
+
+def local_base_url() -> str:
+    return os.environ.get("LOCAL_LLM_BASE_URL") or "http://127.0.0.1:11434/v1"
+
+
+def _local_factory(api_key: str, timeout: float):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(chat=SimpleNamespace(completions=_LocalCompletions(local_base_url(), timeout)))
+
+
 def _anthropic_factory(api_key: str, timeout: float):
     import anthropic
 
@@ -205,6 +238,10 @@ def _known_providers() -> dict[str, Provider]:
                          "GROQ_API_KEY", _groq_factory),
         "together": Provider("together", os.environ.get("TOGETHER_MODEL", "meta-llama/Llama-3.3-70B-Instruct-Turbo"),
                              "TOGETHER_API_KEY", _together_factory, per_request_timeout=False),
+        # A model served on this machine or in this compose (Ollama by default): no account, no key, no cost. Only
+        # tried when LLM_PROVIDERS names it. Local models can be slow: raise LLM_TIMEOUT_SECONDS and the budgets.
+        "local": Provider("local", os.environ.get("LOCAL_LLM_MODEL", "gpt-oss:20b"), "LOCAL_LLM_BASE_URL", _local_factory,
+                          keyless=True),
         # Sonnet 5: the higher safe automated resolution and the lower cost per safe resolution on the held-out
         # workload (eval/reports/SYSTEM_EVAL_LIVE.md), and what render.yaml runs.
         "anthropic": Provider("anthropic", os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-5"), "ANTHROPIC_API_KEY",
@@ -228,6 +265,15 @@ def candidate_client(spec: str) -> "LLMClient":
     if name not in known or not model:
         raise ValueError(f"expected provider:model with a provider in {sorted(known)}, got {spec!r}")
     return LLMClient(providers=[dataclasses.replace(known[name], model=model)], max_attempts_per_provider=1)
+
+
+def retry_after_hint(exc: Exception) -> float | None:
+    """Seconds a provider asked us to wait: the Retry-After header of the response an SDK error carries."""
+    headers = getattr(getattr(exc, "response", None), "headers", None)
+    try:
+        return float(headers.get("retry-after")) if headers is not None else None
+    except (TypeError, ValueError):
+        return None
 
 
 def classify_error(exc: Exception) -> str:
@@ -300,8 +346,8 @@ class LLMClient:
             deadline = min(deadline, turn.at)
         attempts: list[dict[str, Any]] = []
         for p in self.providers:
-            api_key = os.environ.get(p.api_key_env)
-            if not api_key:
+            api_key = os.environ.get(p.api_key_env) or ""
+            if not p.configured():
                 attempts.append({"provider": p.name, "outcome": "skipped", "reason": f"{p.api_key_env} not set"})
                 continue
             if self._down_until.get(p.name, 0) > time.time():
@@ -321,8 +367,10 @@ class LLMClient:
                     return LLMResponse(content, tool_calls, p.name, (time.perf_counter() - start) * 1000, served_model, usage, attempts, raw)
                 except Exception as exc:  # noqa: BLE001 - SDK error types vary by provider
                     kind = classify_error(exc)
-                    attempts.append({"provider": p.name, "outcome": "error", "kind": kind, "error": f"{type(exc).__name__}: {exc}"[:300],
-                                     "ms": round((time.perf_counter() - t0) * 1000, 1)})
+                    hinted = retry_after_hint(exc)
+                    attempts.append({"provider": p.name, "outcome": "error", "kind": kind,
+                                     "error": f"{type(exc).__name__}: {exc}"[:300], "ms": round((time.perf_counter() - t0) * 1000, 1),
+                                     **({"retry_after_s": round(hinted, 1)} if hinted is not None else {})})
                     logger.warning("LLM %s attempt %d failed (%s): %s", p.name, attempt + 1, kind, exc)
                     if kind == "permanent":
                         break
@@ -330,6 +378,8 @@ class LLMClient:
                         break  # the circuit just opened: no more attempts on a provider that is now declared down
                     if attempt < self.max_attempts - 1:
                         delay = backoff_delay(attempt, self.backoff_base_s, self.backoff_cap_s, random.random)
+                        if hinted is not None:  # the provider said when to come back: never earlier than that
+                            delay = max(delay, hinted)
                         if delay >= deadline - time.perf_counter():  # waiting would leave no time for the retry itself
                             attempts.append({"provider": p.name, "outcome": "skipped", "reason": "turn_budget_exhausted"})
                             break

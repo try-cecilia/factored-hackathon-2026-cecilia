@@ -161,3 +161,26 @@ def test_a_slow_provider_costs_one_timeout_not_one_per_request(monkeypatch):
         with pytest.raises(LLMUnavailable):
             client.chat([{"role": "user", "content": "hi"}])
     assert calls == ["p1", "p1"]  # two attempts in the first turn trip the breaker; the next two turns never reach the provider
+
+
+def test_a_retry_after_from_the_provider_is_never_undercut_and_never_waited_past_the_budget(monkeypatch):
+    monkeypatch.setenv("P1_KEY", "k")
+
+    class Limited(Exception):
+        status_code = 429
+
+        def __init__(self, retry_after):
+            super().__init__("HTTP 429")
+            self.response = SimpleNamespace(headers={"retry-after": str(retry_after)}, status_code=429)
+
+    for retry_after, budget, expect_sleep in ((3, 25, 3.0), (60, 25, None)):
+        calls, sleeps = [], []
+        client = LLMClient([provider("p1", calls, error=Limited(retry_after))], total_budget_s=budget, backoff_base_s=0.1,
+                           sleep=sleeps.append)
+        with pytest.raises(LLMUnavailable) as e:
+            client.chat([{"role": "user", "content": "hi"}])
+        if expect_sleep is None:  # asked to wait longer than the turn has: no wait, no second call
+            assert calls == ["p1"] and sleeps == [] and e.value.attempts[-1]["reason"] == "turn_budget_exhausted"
+        else:
+            assert calls == ["p1", "p1"] and sleeps == [pytest.approx(expect_sleep)]  # waited what it asked, not the 0.1 s backoff
+        assert e.value.attempts[0]["retry_after_s"] == retry_after

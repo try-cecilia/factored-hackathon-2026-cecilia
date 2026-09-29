@@ -8,7 +8,7 @@ WEB_PORT ?= 3000
 # Combined development always connects to its local API, unless overridden.
 AGENT_API_URL ?= http://127.0.0.1:$(API_PORT)
 
-.PHONY: gate operator-labels retention loadtest loadtest-fixture loadtest-http setup ingest ingest-demo analysis train-eval workload eval eval-adversarial eval-live live-smoke test serve docker-build all mlflow-ui
+.PHONY: gate operator-labels retention test-resilience loadtest loadtest-fixture loadtest-http setup ingest ingest-demo analysis train-eval workload eval eval-adversarial eval-live live-smoke test serve docker-build all mlflow-ui
 .PHONY: web-setup serve-web web-build web-typecheck serve-all
 
 web-setup:        ## install the frontend's pinned dependencies (Node 24, pnpm 10.33.2)
@@ -69,6 +69,9 @@ live-smoke:       ## live model on the fixture warehouse: every required path, E
 test:             ## hermetic test suite (fixture warehouse; no S3, no API keys)
 	$(PY) -m pytest tests/ -q
 
+test-resilience:  ## hermetic: traces, bounded retries, safe fallback and capacity limits (no S3, no API keys)
+	$(PY) -m pytest tests/test_tracing.py tests/test_retry.py tests/test_resilience.py tests/test_capacity.py tests/test_local_llm.py -q
+
 mlflow-ui:        ## browse every tracked classifier selection and evaluation run: http://127.0.0.1:5000
 	$(PY) -m mlflow ui --backend-store-uri sqlite:///mlruns/mlflow.db
 
@@ -93,3 +96,4 @@ loadtest-fixture: ## the same throughput test on the hand-made fixture warehouse
 
 loadtest-http:    ## the HTTP surface under overload on the fixture warehouse: simulated model latency, 429/503 and Retry-After
 	$(PY) -m ops.loadtest --http --out eval/reports/LOADTEST_HTTP.md
+	$(PY) -m ops.loadtest --http --ignore-retry-after --levels 128 256 --out eval/reports/LOADTEST_HTTP_NO_BACKOFF.md
