@@ -4,8 +4,8 @@ import { defineConfig, loadEnv } from 'vite'
 
 export default defineConfig(({ mode }) => {
   // Vite's .env files are not automatically copied into the server's process.env.
-  const env = loadEnv(mode, process.cwd(), 'AGENT_')
-  if (env.AGENT_API_URL) process.env.AGENT_API_URL ??= env.AGENT_API_URL
+  const env = loadEnv(mode, process.cwd(), ['AGENT_', 'TRUSTED_CLIENT_IP_HEADER'])
+  for (const [key, value] of Object.entries(env)) process.env[key] ??= value
 
   return {
     clearScreen: false,
