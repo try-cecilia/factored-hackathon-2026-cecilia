@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from agent.policy.router import Decision
-from agent.resilience import Deadline, RetryPolicy, retry_call
+from agent.resilience import Deadline, RetryPolicy, acquire_within, current_handoff, handoff_budget_seconds, handoff_deadline, retry_call
 from agent.policy.signals import PRIORITY_BY_CATEGORY
 from agent.tools import account_tools
 
@@ -55,7 +55,6 @@ class EscalationTicket:
 
 
 ENQUEUE_RETRY = RetryPolicy(max_attempts=3, base_s=0.1, cap_s=0.5)
-HANDOFF_BUDGET_S = float(os.environ.get("HANDOFF_BUDGET_SECONDS") or 3)  # its own clock: a turn out of time still files its handoff
 
 
 class HumanQueue:
@@ -69,19 +68,25 @@ class HumanQueue:
         return p
 
     def enqueue(self, ticket: EscalationTicket) -> None:
-        """Append the ticket, retrying a failed write a bounded number of times. The ticket id is the idempotency key:
-        a retry first looks for the ticket, so a write that landed but reported failure is not filed twice."""
+        """Append the ticket, retrying a failed write a bounded number of times, all inside the handoff's budget. The ticket
+        id is the idempotency key: a retry first looks for the ticket, so a write that landed but reported failure is not
+        filed twice. The wait for the lock is bounded by what is left of the budget, and once it is spent nothing is
+        written: a ticket never lands after the customer was told it did not."""
+        budget = current_handoff.get() or Deadline(handoff_budget_seconds())
         tries = 0
 
         def write() -> None:
             nonlocal tries
             tries += 1
-            if tries > 1 and self.get(ticket.ticket_id) is not None:
-                return
-            with self._write_lock, open(self.path, "a", encoding="utf-8") as f:
-                f.write(json.dumps(asdict(ticket), default=str, ensure_ascii=False) + "\n")
+            with acquire_within(self._write_lock, budget.remaining()):  # replaced by a bounded flock between processes
+                if budget.expired:
+                    raise TimeoutError("handoff budget spent before the ticket could be written")
+                if tries > 1 and self.get(ticket.ticket_id) is not None:
+                    return
+                with open(self.path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps(asdict(ticket), default=str, ensure_ascii=False) + "\n")
 
-        retry_call(write, policy=ENQUEUE_RETRY, idempotency_key=ticket.ticket_id, deadline=Deadline(HANDOFF_BUDGET_S))
+        retry_call(write, policy=ENQUEUE_RETRY, idempotency_key=ticket.ticket_id, deadline=budget)
 
     def get(self, ticket_id: str) -> dict | None:
         # ponytail: linear scan of a local JSONL file; the bank's case system answers this by id
@@ -160,7 +165,17 @@ def escalate(
     trace_id: str | None,
     pending_action: dict[str, Any] | None = None,
 ) -> EscalationTicket:
-    evidence, notes = _evidence_for(decision, customer_id, actions)
+    with handoff_deadline() as budget:
+        if budget.expired:  # best-effort by design, and never worth more time than the handoff has
+            evidence, notes = [], ["Evidence was not gathered: the handoff's time budget was spent."]
+        else:
+            evidence, notes = _evidence_for(decision, customer_id, actions)
+        return _file(decision, customer_id, session_ref, request, language, actions, verified_facts, prior_requests, attributes,
+                     trace_id, pending_action, evidence, notes)
+
+
+def _file(decision, customer_id, session_ref, request, language, actions, verified_facts, prior_requests, attributes, trace_id,
+          pending_action, evidence, notes) -> EscalationTicket:
     ticket = EscalationTicket(
         ticket_id=str(uuid.uuid4()),
         trace_id=trace_id,

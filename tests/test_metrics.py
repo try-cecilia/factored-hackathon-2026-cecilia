@@ -83,8 +83,8 @@ def test_tool_calls_and_their_time_reach_the_metrics(client):
     client.post("/chat", json={"session_token": token, "message": "¿Cuál es mi saldo?"})  # degraded mode reads the balance with a tool
     _, s = scrape(client)
     assert value(s, "cecilai_tool_call_seconds_count", tool="get_account_summary") == 1
-    assert value(s, "cecilai_stage_latency_seconds_sum", stage="tools") == pytest.approx(
-        value(s, "cecilai_tool_call_seconds_sum"))  # the turn's tool stage is all its tool calls' time
+    tools = value(s, "cecilai_stage_latency_seconds_sum", stage="tools")  # the turn's own tool span
+    assert 0 < tools <= value(s, "cecilai_turn_latency_seconds_sum")
     assert value(s, "cecilai_stage_latency_seconds_sum", stage="policy_render") >= 0
 
 

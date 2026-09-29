@@ -76,3 +76,39 @@ def test_over_http_it_is_a_200_with_the_ticket_not_a_500_and_the_count_is_readab
     assert r.status_code == 200 and r.json()["ticket_id"] and r.json()["trace_id"] == r.headers["X-Request-ID"]
     state = client.get("/admin/capacity", headers={"X-Admin-Key": "test-admin-key"}).json()
     assert state["failures"]["trace_write"] >= 1
+
+
+# --- the case news are optional ----------------------------------------------------------------------------------
+
+def test_the_case_news_failing_after_a_ticket_was_filed_keeps_the_handoff(monkeypatch, caplog):
+    orch, tok = orchestrator([])
+
+    def unreadable(customer_id):
+        raise OSError("queue unreadable")
+
+    monkeypatch.setattr(orch_mod.escalation.default_queue, "for_customer", unreadable)
+    before = observability.failure_counts().get("case_news", 0)
+    with caplog.at_level(logging.ERROR):
+        r = orch.handle_message(tok, "Me clonaron la tarjeta")
+    assert (r.disposition, r.category) == ("ESCALATE", "theft") and r.ticket_id
+    assert [json.loads(line)["ticket_id"] for line in open(os.environ["HUMAN_QUEUE_PATH"])] == [r.ticket_id]
+    assert observability.failure_counts()["case_news"] == before + 1
+    assert any(getattr(rec, "fields", {}).get("kind") == "case_news" for rec in caplog.records) and "queue unreadable" not in caplog.text
+    assert json.loads(open(os.environ["TRACE_LOG_PATH"]).read().splitlines()[-1])["trace_id"] == r.trace_id  # and the turn has its trace
+
+
+def test_the_case_news_failing_after_a_trace_was_opened_still_tells_the_customer(monkeypatch):
+    orch, tok = orchestrator([tool_call_response("request_trace", {})], customer="CLI-FIX0004")
+    orch.handle_message(tok, "hice una transferencia que todavía no llega")
+    monkeypatch.setattr(orch_mod.default_desk, "state", lambda ticket_id: (_ for _ in ()).throw(OSError("desk unreadable")))
+    monkeypatch.setattr(orch_mod.escalation.default_queue, "for_customer", lambda customer_id: [{"ticket_id": "T-1"}])
+    r = orch.handle_message(tok, "sí")
+    assert r.policy_rule == "action:trace_opened" and "TR-" in r.response_text
+    assert len(open(os.environ["TRACE_REQUESTS_PATH"]).read().splitlines()) == 1
+
+
+def test_a_failed_case_news_leaves_the_reply_exactly_as_the_turn_made_it(monkeypatch):
+    orch, tok = orchestrator([])
+    monkeypatch.setattr(orch_mod.escalation.default_queue, "for_customer", lambda customer_id: (_ for _ in ()).throw(OSError("x")))
+    first = orch.handle_message(tok, "Me clonaron la tarjeta")
+    assert first.response_text.strip() == orch_mod.render.MSG["escalate"]["es"]  # no news line was glued on

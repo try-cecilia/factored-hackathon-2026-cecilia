@@ -18,7 +18,7 @@ import os
 import random
 import time
 from dataclasses import dataclass
-from typing import Callable, Iterator, TypeVar
+from typing import Any, Callable, Iterator, TypeVar
 
 T = TypeVar("T")
 
@@ -132,3 +132,49 @@ def retry_call(fn: Callable[[], T], *, policy: RetryPolicy = RetryPolicy(), idem
                 raise  # the wait would eat what is left of the turn: fail now, and let the caller fall back
             sleep(delay)
     raise AssertionError("unreachable")  # the loop returns or raises
+
+
+# --- the handoff's own budget ------------------------------------------------------------------------------------------
+
+DEFAULT_HANDOFF_BUDGET_S = 3.0
+
+current_handoff: contextvars.ContextVar[Deadline | None] = contextvars.ContextVar("current_handoff", default=None)
+
+
+def handoff_budget_seconds() -> float:
+    return float(os.environ.get("HANDOFF_BUDGET_SECONDS") or DEFAULT_HANDOFF_BUDGET_S)
+
+
+def request_budget_seconds() -> float:
+    """The most a chat turn works for once it is running: the turn's budget, then the handoff's. The wait for a slot and
+    the read of the request body come before it and have their own limits (CHAT_QUEUE_WAIT_SECONDS, REQUEST_BODY_TIMEOUT_SECONDS)."""
+    return turn_budget_seconds() + handoff_budget_seconds()
+
+
+@contextlib.contextmanager
+def handoff_deadline() -> Iterator[Deadline]:
+    """The clock of one handoff (evidence, lock, write, read-back), independent of the turn's: a turn out of time can
+    still hand over, and a handoff cannot take more than its own budget. Nested handoffs share the outer clock."""
+    outer = current_handoff.get()
+    if outer is not None:
+        yield outer
+        return
+    d = Deadline(handoff_budget_seconds())
+    token = current_handoff.set(d)
+    try:
+        yield d
+    finally:
+        current_handoff.reset(token)
+
+
+@contextlib.contextmanager
+def acquire_within(lock: Any, seconds: float) -> Iterator[None]:
+    """Hold `lock` for the block, waiting at most `seconds` for it (TimeoutError otherwise). The one place a bounded wait
+    for a writer's lock lives: a lock between processes (a `flock` on the file) replaces `lock` here, with the same
+    timeout, without changing the callers."""
+    if not lock.acquire(timeout=max(0.0, seconds)):
+        raise TimeoutError("could not take the write lock within the handoff budget")
+    try:
+        yield
+    finally:
+        lock.release()

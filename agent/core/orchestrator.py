@@ -46,7 +46,7 @@ from agent.policy import escalation, router
 from agent.policy.desk import default_desk
 from agent.policy.router import Decision, Disposition
 from agent.policy.signals import detect_language, normalize
-from agent.resilience import RetryPolicy, current_deadline, retry_call, turn_deadline
+from agent.resilience import RetryPolicy, current_deadline, handoff_deadline, retry_call, turn_deadline
 from agent.session.auth import ExpiredSession, InvalidSession, SessionStore, default_store, session_ref
 from agent.tools import account_tools, state
 from agent.observability import stage
@@ -306,7 +306,10 @@ class Orchestrator:
                     result = self._handle(session_token, text, trace_id, trace)
                 except Exception as exc:  # noqa: BLE001 - whatever broke, the customer gets a handoff, never a crash
                     result = self._unexpected_failure(session_token, text, trace_id, trace, exc)
-                result = self._with_case_news(session_token, result)
+                try:
+                    result = self._with_case_news(session_token, result)
+                except Exception as exc:  # noqa: BLE001 - the news are a courtesy: the answer, and what it already did, go out without them
+                    self._record_failed("case_news", trace_id, exc)
                 trace["stages"] = recorder.spans
                 trace["turn_budget_left_ms"] = round(deadline.remaining() * 1000)
         finally:
@@ -377,8 +380,8 @@ class Orchestrator:
         news = []
         try:
             tickets = escalation.default_queue.for_customer(session.customer_id)
-        except Exception:  # noqa: BLE001 - the notices are a courtesy: with the queue unreadable, the answer still goes out
-            logger.exception("could not read the customer's tickets")
+        except Exception as exc:  # noqa: BLE001 - the notices are a courtesy: with the queue unreadable, the answer still goes out
+            self._record_failed("case_news", result.trace_id, exc)
             return result
         for ticket in tickets:
             ticket_id = ticket["ticket_id"]
@@ -417,11 +420,12 @@ class Orchestrator:
                   pending_action: dict | None = None) -> TurnResult:
         """File the ticket, read it back, and only then tell the customer they were transferred."""
         try:
-            with stage("ticket", category=decision.category) as info:
+            with handoff_deadline() as budget, stage("ticket", category=decision.category) as info:
                 ticket = escalation.escalate(decision, session.customer_id, session.ref, ticket_text, lang, actions,
                                              [{"tool": f["tool"], "result": f["result"]} for f in facts],
                                              list(conv.requests), session.attributes, trace_id, pending_action)
-                filed = escalation.default_queue.get(ticket.ticket_id) is not None
+                # The read-back is the last step of the same budget: past it the ticket cannot be confirmed, so it is not claimed.
+                filed = not budget.expired and escalation.default_queue.get(ticket.ticket_id) is not None
                 info["outcome"] = "ok" if filed else "not_read_back"
         except Exception:  # noqa: BLE001 - an unwritable queue must not crash the turn; it is reported as unfiled
             filed = False
@@ -518,6 +522,9 @@ class Orchestrator:
         to a human."""
         if not reading.model_available or (reading.p_intent or 0) < DEGRADED_MIN_CONFIDENCE:
             return None
+        if out_of_time():  # the same clock as any lookup: nothing is read or answered once the turn's budget is gone
+            trace["degraded_skipped"] = "turn_budget_spent"
+            return None
         if reading.intent == "out_of_scope":
             trace["rule"] = "degraded:classifier_out_of_scope"
             return TurnResult(trace_id, Disposition.ABSTAIN.value, render.MSG["abstain"][lang], lang, "out_of_scope",
@@ -526,7 +533,11 @@ class Orchestrator:
             normalize(w) in normalize(text) for w in ("ahorro", "corriente", "credito", "debito", "prestamo", "hipotec",
                                                       "poupanca", "corrente", "cartao", "emprestimo", "financiamento"))
         if reading.intent == "balance_inquiry" and not mentions_product:
-            result = account_tools.get_account_summary(session.customer_id)
+            with stage("tool:get_account_summary", degraded=True):
+                result = run_tool("get_account_summary", session.customer_id)
+            if out_of_time():  # the lookup finished after the budget: its result is not used, a person answers
+                trace["degraded_skipped"] = "turn_budget_spent"
+                return None
             facts = [{"tool": "get_account_summary", "args": {}, "result": result}]
             trace["rule"] = "degraded:deterministic_balance"
             return TurnResult(trace_id, Disposition.AUTO_RESOLVE.value, render.render_answer(facts, lang), lang, "resolved",
