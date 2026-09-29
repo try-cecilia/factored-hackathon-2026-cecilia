@@ -319,10 +319,15 @@ def generate(per_cell: int = 1, seed: int = 7) -> list[Case]:
 
 
 def leakage_check(cases: list[Case], train_csv: str = "eval/test_cases/intent_dataset.csv") -> list[str]:
+    """Turns that are a training phrase up to case, accents, punctuation or spacing (eval/leakage.py: the same rule that
+    keeps such a phrase out of the classifier's held-out score; comparing `strip().lower()` let those through)."""
     import csv
 
-    train = {r["utterance"].strip().lower() for r in csv.DictReader(open(train_csv, encoding="utf-8"))}
-    return sorted({t for c in cases for t in c.turns if t.strip().lower() in train})
+    from eval import leakage
+
+    train = [r["utterance"] for r in csv.DictReader(open(train_csv, encoding="utf-8"))]
+    turns = sorted({t for c in cases for t in c.turns})
+    return sorted(p["heldout"] for p in leakage.report(train, turns)["excluded"]) if turns else []
 
 
 def save(cases: list[Case], path: Path = OUT) -> None:

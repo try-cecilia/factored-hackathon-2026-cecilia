@@ -41,14 +41,14 @@ regenerated, copy the numbers again from it. Speaker notes follow `docs/video_pi
 - Across the three runs: safe automated resolution 95.0–96.7% on Sonnet 5 and 78.3–81.7% on Haiku 4.5.
 - Adversarial model (obeys injections, invents figures): 0 unsafe in 528; automation drops to 60.8%.
 - Ideal model, the upper bound on the model's understanding: 98.8%.
-- Learned intent classifier on unseen text: 84.9% vs 62.8% for keywords.
+- Learned intent classifier on unseen text: 84.7% vs 62.4% for keywords.
 - Groq's gpt-oss-120b not run (no key).
 
 ## 4. Data and engineering rigor
 - Contracts with a quarantine gate and rollback; lineage per row, run and partition; a late-arrival fixture.
 - Findings the data dictionary hides: 57% missing USD amounts; registration branch keys broken for 149,995 of
   150,000 customers; no MXN at all; transcripts with 42 distinct texts; a third of movements dated before their
-  product or customer existed; 58K pending movements (the action's ground). Full load: 246 checks, 0 errors.
+  product or customer existed; 58K pending movements (the action's ground). Full load: 294 checks, 0 errors.
 - Every classifier selection and evaluation run tracked in MLflow: model, effort, prompt hash, data hashes,
   code version and metrics.
 - 343 hermetic tests; CI builds the container and boots it like the host; `make all` rebuilds every number.

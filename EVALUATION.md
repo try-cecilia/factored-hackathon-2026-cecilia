@@ -43,6 +43,9 @@ projections are labeled as such and never mixed.
   and ≈955 (≈59 agent-hours) at Sonnet 5's live rate. Each automated contact
   skips ≈120 s of waiting.
 
+Which figures we accept as proof of a claim, and the pass/fail rules for the human-written set (fixed before it has
+results), are in [`docs/preregistration.md`](docs/preregistration.md).
+
 ## 1. Problem evidence and human baseline (measured)
 
 `make analysis` → `docs/evidence/baseline_metrics.md`. Account/payment
@@ -69,11 +72,24 @@ time plus 120 s wait, 91.5% resolved on first contact, 9.9% escalated.
   - regional slang ("lana", "guita", "plata", "grana", "TRM", "cupo");
   - abbreviations ("q saldo", "qto"), missing accents, ES/PT code-switching;
   - plus the 2 real request sentences from the transcripts.
-- Exact-match leakage between training and held-out is asserted at run time.
-  It caught one duplicate during development, which was rewritten.
+- Leakage between training and held-out is checked on near-duplicates, not on
+  exact text (char 3-gram Jaccard on text without case, accents or
+  punctuation; `eval/leakage.py`):
+  - ≥ 0.90 is the same phrase: it is **left out of scoring** (1 of 174,
+    "quantos pesos vale um dólar", identical to a training phrase but for the
+    question mark; the old exact-text check let it through);
+  - 0.60–0.90 is usually a shorter form of a template: kept, listed, and the
+    test result is also given without those phrases (79 of 85 left;
+    learned 83.5%, keywords 63.3%);
+  - the dev split against the test split (which chose the model against
+    which scores it) has a highest similarity of 0.83, no pair at ≥ 0.90.
+  - The cut-offs were read off the distribution of the whole held-out
+    (dev and test together); see LIMITATIONS.md.
 
 **Protocol.**
-- The held-out set is split by intent-stratified hash into **dev** (88) and **test** (86).
+- The held-out set is split by intent-stratified hash into **dev** (88) and 86
+  test utterances, before anything is left out; the leakage exclusion takes one
+  from test, so **test** (85) is what is scored.
 - Dev chooses the representation and the runtime escalation threshold.
   Char+word n-grams were chosen with macro-F1 0.90, vs 0.83 char-only and 0.82 word-only.
   The escalation threshold is τ = 0.55: maximum recall with ≤ 5% false escalations.
@@ -83,9 +99,17 @@ time plus 120 s wait, 91.5% resolved on first contact, 9.9% escalated.
 
 | | Keyword baseline | Learned |
 |---|---|---|
-| Accuracy | 62.8% [52.2–72.2] | **84.9% [75.8–91.0]** |
+| Accuracy | 62.4% [51.7–71.9] | **84.7% [75.6–90.8]** |
 | Macro-F1 | 0.65 | **0.85** |
-| Portuguese accuracy | 59.5% | 81.1% |
+| Portuguese accuracy | 58.3% | 80.6% |
+
+- Both are scored on the same 85 utterances, so the difference is estimated
+  on them directly: **+22.4 points** (paired bootstrap 95% [+9.4, +35.3];
+  the learned classifier is right where the keywords are wrong on 27
+  utterances and the reverse on 8; exact McNemar p = 0.0019). The two Wilson
+  intervals above do not overlap either.
+- A floor below the keyword baseline: always answering the most common
+  training class (`payment_status`) gets 17.6% [11.0–27.1].
 
 | Escalation guard (runs before the LLM) | Recall | False escalations |
 |---|---|---|
@@ -103,6 +127,23 @@ time plus 120 s wait, 91.5% resolved on first contact, 9.9% escalated.
 **Known bias.** The same team wrote the training and held-out text. Style
 diversity mitigates it; a human-authored or production-sampled set is the fix
 (LIMITATIONS.md).
+
+**What is checked, and by what.** `make validate-data-ml` runs
+`tests/test_data_ml_validation.py` and writes
+[`docs/evidence/data_ml_validation.md`](docs/evidence/data_ml_validation.md).
+For this component it fails if:
+- the committed report is not what the code and the data produce, or the
+  deployed model does not give the reported model's probabilities;
+- the learned classifier stops beating the keyword baseline (non-overlapping
+  Wilson intervals, paired interval above zero, McNemar p < 0.01);
+- anything chosen (representation, τ, the whole sweep) changes when the test
+  labels are changed. The same change on dev does move it, which shows the
+  check could have failed;
+- a training phrase, or a copy of one with other case, accents or punctuation,
+  reaches the scored dev or test set, or dev and test share a near-duplicate;
+- the features are anything but the customer's words;
+- the test miss above enters the lexicon (it was reported, not tuned away);
+- the figures in this section stop matching the report.
 
 ## 3. System evaluation: baseline vs proposed on the same workload
 

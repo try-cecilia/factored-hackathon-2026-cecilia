@@ -22,6 +22,7 @@ complaints tables used only for analysis (docs/data_evidence.md).
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import subprocess
@@ -34,7 +35,7 @@ from pathlib import Path
 import duckdb
 from dotenv import load_dotenv
 
-from data.contracts import CONTRACT_DEVIATIONS, CONTRACT_VERSION, DEDUP_ORDER, PRIMARY_KEYS
+from data.contracts import COLUMN_TYPES, CONTRACT_DEVIATIONS, CONTRACT_VERSION, DEDUP_ORDER, PRIMARY_KEYS
 from data.quality import (
     CheckResult,
     DataQualityError,
@@ -130,9 +131,21 @@ def ensure_meta_tables(con) -> None:
         contract_version VARCHAR, code_version VARCHAR, params VARCHAR, started_at TIMESTAMP, finished_at TIMESTAMP)""")
     con.execute("""CREATE TABLE IF NOT EXISTS _partition_log (
         run_id VARCHAR, table_name VARCHAR, partition_date DATE, source_uri VARCHAR, n_bytes BIGINT, loaded_at TIMESTAMP)""")
+    # One row per source file per load, flat tables included: where the bytes came from and which bytes they were.
+    con.execute("""CREATE TABLE IF NOT EXISTS _source_files (
+        run_id VARCHAR, table_name VARCHAR, source_file VARCHAR, source_uri VARCHAR, n_bytes BIGINT, sha256 VARCHAR,
+        partition_date DATE, loaded_at TIMESTAMP)""")
     con.execute("""CREATE TABLE IF NOT EXISTS _dq_results (
         run_id VARCHAR, table_name VARCHAR, check_name VARCHAR, category VARCHAR, severity VARCHAR,
         failed BIGINT, total BIGINT, rate DOUBLE, passed BOOLEAN, detail VARCHAR, measured_at TIMESTAMP)""")
+
+
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(8 * 1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _table_exists(con, name: str) -> bool:
@@ -247,11 +260,17 @@ def load_table(con, spec: TableSpec, cfg: RunConfig, run_id: str, source, sample
     con.execute("BEGIN TRANSACTION")
     try:
         paths = ", ".join("'" + str(f.local_path.resolve()).replace("'", "''") + "'" for f in files)
+        # DECIMAL columns are read as text: left to the reader they become DOUBLE, and 8995304.28 is not exactly
+        # representable, so "the cast loses nothing" could not be judged on the value that was delivered.
+        header = {r[0] for r in con.execute(
+            f"DESCRIBE SELECT * FROM read_csv_auto([{paths}], union_by_name=true, hive_partitioning=false)").fetchall()}
+        as_text = {c: "VARCHAR" for c, t in COLUMN_TYPES[spec.name].items() if t.startswith("DECIMAL(") and c in header}
+        types = f", types={as_text!r}" if as_text else ""
         con.execute(f"""
             CREATE OR REPLACE TEMP TABLE {raw} AS
             SELECT * EXCLUDE (filename), replace(filename, '{root}', '') AS _source_file,
                    '{run_id}' AS _run_id, now()::TIMESTAMP AS _ingested_at
-            FROM read_csv_auto([{paths}], union_by_name=true, filename=true, hive_partitioning=false)
+            FROM read_csv_auto([{paths}], union_by_name=true, filename=true, hive_partitioning=false{types})
         """)
         checks = schema_drift(con, raw, spec.name)
         if checks[0].failed:
@@ -281,6 +300,11 @@ def load_table(con, spec: TableSpec, cfg: RunConfig, run_id: str, source, sample
 
         now = datetime.now(timezone.utc)
         parts = [f for f in files if f.partition]
+        con.executemany(
+            "INSERT INTO _source_files VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            [(run_id, spec.name, str(f.local_path.resolve()).removeprefix(root), f.uri, f.size, file_sha256(f.local_path),
+              f.partition, now) for f in files],
+        )
         if parts:
             con.executemany(
                 "INSERT INTO _partition_log VALUES (?, ?, ?, ?, ?, ?)",

@@ -2,7 +2,7 @@
 
 Revisión del 28 de septiembre de 2026 contra el [diccionario oficial](https://drive.google.com/file/d/***REMOVED***/view). La copia descargada nuevamente coincide con la usada en la auditoría. Su SHA256 es `65cc2bd37d525fc0c7812ea442d56fdfb8152f1b937e5a8995bb98bfd7dea513`.
 
-Este documento define validaciones a partir de defectos observados. No implementa el pipeline definitivo ni elige Python o TypeScript. Los scripts de comprobación y reportes detallados permanecen locales. Esta entrega contiene solo Markdown.
+Este documento define validaciones a partir de defectos observados. Al escribirse no implementaba el pipeline; hoy `data/pipeline.py` ejecuta gran parte de ellas y la sección 9 dice cuáles, con la prueba que las respalda y qué falta. Los scripts de comprobación y reportes detallados de la auditoría permanecen locales.
 
 ## Cobertura y criterio
 
@@ -82,7 +82,7 @@ Hay 13 columnas `INTEGER` con valores no nulos representados con formato decimal
 | `complaints.resolution_satisfaction` | 2.484 |
 | `campaign_sends.click_count` | 1.130, solo muestra |
 
-El parser debe comprobar con aritmética decimal que el valor sea finito, integral y representable por el tipo destino. Puede convertir `700.0` a `700` sin pérdida. Debe rechazar `700.5` en un campo entero y evitar conversiones que trunquen silenciosamente. Estos ejemplos ilustran la regla y no son identificadores del origen. Conservar el texto raw.
+El parser debe comprobar con aritmética decimal que el valor sea finito, integral y representable por el tipo destino. Puede convertir `700.0` a `700` sin pérdida. Debe rechazar `700.5` en un campo entero y `200000.005` en un `DECIMAL(15,2)` (se guardaría como `200000.01`), y evitar conversiones que trunquen o redondeen silenciosamente. `10.500` en esa columna sí se acepta: es el mismo número. La comparación se hace a 9 decimales. Estos ejemplos ilustran la regla y no son identificadores del origen. Conservar el texto raw.
 
 Esto no requiere normalizar nuevamente el modelo relacional. Es parsing explícito del CSV.
 
@@ -212,8 +212,26 @@ Las reglas temporales comparan fechas ya parseadas, no strings con formatos arbi
 - Detectar los 6 números de producto y 13 códigos de empleado en conflicto sin fusionar identidades.
 - Bloquear los 44.570 joins reclamo-producto con ownership incorrecto, conservando usos independientes del reclamo.
 - Distinguir los 24.029 nulos obligatorios de los nulos permitidos en referencias opcionales.
-- Convertir enteros con sufijo `.0` sin pérdida y rechazar fracciones reales en columnas INTEGER.
+- Convertir enteros con sufijo `.0` sin pérdida y rechazar fracciones reales en columnas INTEGER y decimales con más dígitos que la escala en columnas DECIMAL.
 - Bloquear decisiones monetarias basadas en los 1.040 importes reclamados sin moneda.
 - No declarar verificadas las resoluciones de los 1.549 reclamos con evidencia incompleta a partir del estado histórico solamente.
 - Probar con fixtures identificados el replay, un archivo truncado, una corrección conflictiva y una columna nueva. Mantener la publicación válida anterior ante fallo.
 - Si cambia el origen, comparar conteos con un baseline versionado y explicar la variación. Los conteos de este informe son un resultado de auditoría, no umbrales permanentes de aceptación.
+
+## 9. Estado en el código (2026-09-29)
+
+Qué de las secciones 6 y 8 ejecuta hoy el pipeline del repositorio y con qué prueba (`make validate-data-ml`
+corre las de `tests/test_data_ml_validation.py`; el resto son de `tests/test_pipeline.py` y `tests/test_cross_checks.py`).
+
+| Requisito | Estado | Dónde |
+|---|---|---|
+| §6.1 objeto, tamaño, hash, timestamp, línea de origen; raw sin modificar | Hecho, salvo la versión del objeto S3 | `_source_files` (ruta, URI, tamaño, SHA-256), `_ingestion_log` (versión de contrato y de código), `_run_id`/`_source_file`/`_ingested_at` por fila; `test_lineage_*` |
+| §6.2 schema y tipos sin pérdida; clave ausente o valor no parseable a quarantine con motivo | Hecho | `data/quality.py`; `test_contracts_*`, `test_integer_columns_accept_700_point_0_and_reject_700_point_5`, `test_decimal_columns_accept_trailing_zeros_and_reject_digits_beyond_the_scale`, `test_contracts_a_value_that_would_be_rounded_*` |
+| §6.3 PK y campos `UNIQUE` | PK deduplicada; `UNIQUE` medido como advertencia (`cross:product_number_unique` = 6), sin fusionar. `service_agents` no se ingiere | `data/contracts.py`; `tests/test_cross_checks.py` |
+| §6.4 FK, ownership, cronología y gates de evidencia | Medidos como advertencias; ningún serving usa un join bloqueado | `CROSS_TABLE_CHECKS`, `DOMAIN_RULES` |
+| §6.5 vistas por uso | No hecho: hay una tabla servida por entidad; los joins bloqueados no se exponen porque las herramientas no los usan | `agent/tools/account_tools.py` |
+| §6.6 publicación atómica, reproceso sin duplicar | Hecho | una transacción por tabla; `test_contracts_over_the_quarantine_threshold_*`, `test_late_arriving_partition_updates_in_place_and_is_idempotent` |
+| §6.7 reporte por release; deshabilitar el uso sin conjunto válido | Reporte hecho; el uso no se deshabilita solo (lo hace la política de frescura, si se activa) | `data/reports/quality_report.json`, `test_quality_*`, `test_freshness_*` |
+| §8 replay, archivo truncado, corrección conflictiva, columna nueva; el estado previo sobrevive a un fallo | Hecho | `test_late_arriving_partition_*`, `test_contracts_a_truncated_file_*`, `test_schema_evolution_adds_new_column`, `test_quality_gate_rolls_back_*` |
+| §8 conteos contra un baseline versionado | El reporte de la corrida completa se versiona y el doc que lo cita se comprueba contra él | `test_quality_the_committed_full_run_report_*` |
+
