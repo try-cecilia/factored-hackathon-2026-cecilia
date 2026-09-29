@@ -44,7 +44,10 @@ const CASE_POLL_MS = 45_000
 export function ConversationProvider({ sessionRef, initial, children }: { sessionRef: string; initial: HistoryResult; children: ReactNode }) {
   const [entries, setEntries] = useState<Entry[]>(() => (initial.ok ? fromHistory(initial.turns, 1, 0) : []))
   const nextId = useRef(entries.length + 1)
+  // Which session an answer was asked in, and how many times this conversation changed by hand since: an answer that comes back
+  // for another session, or for a conversation that has moved on, is dropped instead of written over the present.
   const epoch = useRef(0)
+  const edits = useRef(0)
   const [sending, setSending] = useState(false)
   const sendingRef = useRef(false)
   const [ended, setEnded] = useState(!initial.ok && initial.failure === 'session_expired')
@@ -66,6 +69,7 @@ export function ConversationProvider({ sessionRef, initial, children }: { sessio
   // The bookkeeping that is not state follows in an effect: an answer that arrives for the session that was left is ignored.
   useEffect(() => {
     epoch.current += 1
+    edits.current += 1
     nextId.current = (initial.ok ? fromHistory(initial.turns, 1, 0).length : 0) + 1
     sendingRef.current = false
     asked.current.clear()
@@ -77,14 +81,16 @@ export function ConversationProvider({ sessionRef, initial, children }: { sessio
 
   const loadCase = useCallback(async (ticketId: string) => {
     // The first look shows "loading"; the ones after keep the last answer on screen until the new one arrives.
+    const mine = epoch.current
     if (!(ticketId in statesRef.current)) setStates((s) => ({ ...s, [ticketId]: { state: 'loading' } }))
     try {
       const result = await getCase({ data: { ticket_id: ticketId } })
+      if (mine !== epoch.current) return
       if (result.ok) setStates((s) => ({ ...s, [ticketId]: { state: 'ready', status: result.case.status, message: result.case.message } }))
       else if (result.failure === 'session_expired') setEnded(true)
       else setStates((s) => (s[ticketId]?.state === 'ready' ? s : { ...s, [ticketId]: { state: 'error' } }))
     } catch {
-      setStates((s) => (s[ticketId]?.state === 'ready' ? s : { ...s, [ticketId]: { state: 'error' } }))
+      if (mine === epoch.current) setStates((s) => (s[ticketId]?.state === 'ready' ? s : { ...s, [ticketId]: { state: 'error' } }))
     }
   }, [])
 
@@ -129,6 +135,7 @@ export function ConversationProvider({ sessionRef, initial, children }: { sessio
       if (mine !== epoch.current) return null
       if (result.ok) {
         patch(id, { delivery: 'sent', failure: undefined })
+        edits.current += 1
         setEntries((all) => [...all, { id: nextId.current++, role: 'assistant', reply: result.reply, at: Date.now() }])
         if (splitCaseNews(result.reply.response_text).news.length > 0) refreshCases()
         return result.reply
@@ -154,6 +161,7 @@ export function ConversationProvider({ sessionRef, initial, children }: { sessio
     if (sendingRef.current) return Promise.resolve(null)
     const id = nextId.current++
     const key = newMessageKey()
+    edits.current += 1
     setEntries((all) => [...all, { id, role: 'user', text, at: Date.now(), key, delivery: 'sending' }])
     return deliver(id, text, key)
   }, [deliver])
@@ -166,8 +174,10 @@ export function ConversationProvider({ sessionRef, initial, children }: { sessio
 
   const reload = useCallback(async () => {
     if (sendingRef.current) return
+    const mine = { session: epoch.current, edits: edits.current }
     try {
       const result = await getHistory()
+      if (mine.session !== epoch.current || mine.edits !== edits.current) return
       if (result.ok) {
         const next = fromHistory(result.turns, nextId.current, Date.now())
         nextId.current += next.length
@@ -176,7 +186,7 @@ export function ConversationProvider({ sessionRef, initial, children }: { sessio
       } else if (result.failure === 'session_expired') setEnded(true)
       else setHistoryFailed(true)
     } catch {
-      setHistoryFailed(true)
+      if (mine.session === epoch.current && mine.edits === edits.current) setHistoryFailed(true)
     }
   }, [])
 

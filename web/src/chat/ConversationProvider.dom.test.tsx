@@ -144,4 +144,53 @@ describe('ConversationProvider', () => {
     expect(items('assistant')).toHaveLength(0)
     expect(screen.getByTestId('sending').textContent).toBe('false')
   })
+
+  describe('a late answer never lands in the wrong place', () => {
+    const late = <T,>() => {
+      let done: (value: T) => void = () => {}
+      const promise = new Promise<T>((resolve) => { done = resolve })
+      return { promise, done }
+    }
+    const turns = (text: string): HistoryResult => ({ ok: true, turns: [{ role: 'user', text, at: 1 }, { role: 'assistant', reply: reply({ response_text: `Respuesta a ${text}` }), at: 2 }] })
+
+    it('a reload started in one session and answered in another is dropped', async () => {
+      const a = late<HistoryResult>()
+      server.getHistory.mockReturnValue(a.promise)
+      const view = mount(turns('sesion A'), 's1')
+      await userEvent.setup().click(screen.getByText('reload'))
+      view.rerender(<ConversationProvider sessionRef="s2" initial={turns('sesion B')}><Probe /></ConversationProvider>)
+      await act(async () => a.done(turns('vieja de A')))
+      expect(items('user').map((e) => e.textContent)).toEqual(['sesion B'])
+    })
+
+    it('a reload that was in flight when a message was sent does not overwrite it with the old history', async () => {
+      const old = late<HistoryResult>()
+      server.getHistory.mockReturnValue(old.promise)
+      server.sendMessage.mockResolvedValue(ok(reply({ response_text: 'La respuesta nueva.' })))
+      mount(turns('vieja'))
+      const user = userEvent.setup()
+      await user.click(screen.getByText('reload'))
+      await user.click(screen.getByText('send'))
+      await waitFor(() => expect(items('assistant').map((e) => e.textContent)).toContain('La respuesta nueva.'))
+      await act(async () => old.done(turns('vieja')))
+      expect(items('user').map((e) => e.textContent)).toEqual(['vieja', 'hola'])
+      expect(items('assistant').map((e) => e.textContent)).toContain('La respuesta nueva.')
+    })
+
+    it('the status of a case asked in one session does not fill the same case of the next', async () => {
+      const t = 'T-0123456789'
+      const withCase: HistoryResult = { ok: true, turns: [{ role: 'user', text: 'x', at: 1 }, { role: 'assistant', reply: reply({ disposition: 'ESCALATE', category: 'theft', ticket_id: t }), at: 2 }] }
+      const a = late<unknown>()
+      const b = late<unknown>()
+      server.getCase.mockReturnValueOnce(a.promise).mockReturnValueOnce(b.promise)
+      const view = mount(withCase, 's1')
+      await waitFor(() => expect(server.getCase).toHaveBeenCalledTimes(1))
+      view.rerender(<ConversationProvider sessionRef="s2" initial={withCase}><Probe /></ConversationProvider>)
+      await waitFor(() => expect(server.getCase).toHaveBeenCalledTimes(2))
+      await act(async () => a.done({ ok: true, case: { ticket_id: t, status: 'approved', message: null } }))
+      expect(document.querySelector(`[data-case="${t}"]`)?.textContent).toBe('loading')
+      await act(async () => b.done({ ok: true, case: { ticket_id: t, status: 'open', message: null } }))
+      expect(document.querySelector(`[data-case="${t}"]`)?.textContent).toBe('open')
+    })
+  })
 })
