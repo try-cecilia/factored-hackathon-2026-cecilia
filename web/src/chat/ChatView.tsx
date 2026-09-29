@@ -44,7 +44,7 @@ function useOnline() {
 export function ChatView({ session }: { session: Session }) {
   const t = useT()
   const navigate = useNavigate()
-  const { entries, cases, sending, ended, historyFailed, send, retry, reload, prefill, takePrefill } = useConversation()
+  const { entries, cases, sending, ended, historyFailed, send, retry, reload } = useConversation()
   const { showCase } = useShell()
   const composer = useRef<ComposerHandle>(null)
   const end = useRef<HTMLDivElement>(null)
@@ -150,8 +150,6 @@ export function ChatView({ session }: { session: Session }) {
           hint={over ? t('conversation.composer.sessionEnded') : t('conversation.composer.offline')}
           showSuggestions={entries.length === 0}
           onSend={sendText}
-          prefill={prefill}
-          onPrefillTaken={takePrefill}
         />
       </div>
     </div>

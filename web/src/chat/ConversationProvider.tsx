@@ -15,13 +15,6 @@ export type CaseRead = 'ready' | 'not_found' | 'error' | 'ended' | 'superseded'
 
 export type CaseRow = { ref: CaseRef; state: CaseState }
 
-/**
- * A text somebody else (the demo panel) asks the composer to hold: the composer takes it, and `seq` tells one request from the
- * next when the text is the same. `replace` says the person chose it on purpose, so it goes over what they had written; without
- * it, a draft that is already there stays.
- */
-export type Prefill = { seq: number; text: string; replace: boolean }
-
 export type Conversation = {
   entries: Entry[]
   /** A message is on its way: one turn at a time. */
@@ -35,10 +28,6 @@ export type Conversation = {
   retry: (id: number) => void
   /** Reads the conversation from the API again (what the message the API already has needs). */
   reload: () => Promise<void>
-  /** The text waiting for the composer, until it takes it. */
-  prefill: Prefill | null
-  requestPrefill: (text: string, replace: boolean) => void
-  takePrefill: (seq: number) => void
   cases: CaseRow[]
   refreshCases: () => void
   /** Reads one case again now (the case view's "update"); the sidebar and the handoff message follow. */
@@ -73,8 +62,6 @@ export function ConversationProvider({ sessionRef, initial, children }: { sessio
   const [ended, setEnded] = useState(!initial.ok && initial.failure === 'session_expired')
   const [historyFailed, setHistoryFailed] = useState(!initial.ok && initial.failure === 'unavailable')
   const [states, setStates] = useState<Record<string, CaseState>>({})
-  const [prefill, setPrefill] = useState<Prefill | null>(null)
-  const prefills = useRef(0)
   const statesRef = useRef(states)
   statesRef.current = states
   const asked = useRef(new Set<string>())
@@ -90,7 +77,6 @@ export function ConversationProvider({ sessionRef, initial, children }: { sessio
     setEnded(!initial.ok && initial.failure === 'session_expired')
     setHistoryFailed(!initial.ok && initial.failure === 'unavailable')
     setStates({})
-    setPrefill(null)
   }
   // The bookkeeping that is not state follows in an effect: an answer that arrives for the session that was left is ignored.
   useEffect(() => {
@@ -244,14 +230,11 @@ export function ConversationProvider({ sessionRef, initial, children }: { sessio
     }
   }, [])
 
-  const requestPrefill = useCallback((text: string, replace: boolean) => setPrefill({ seq: ++prefills.current, text, replace }), [])
-  const takePrefill = useCallback((seq: number) => setPrefill((p) => (p?.seq === seq ? null : p)), [])
-
   const cases = useMemo<CaseRow[]>(() => refs.map((ref) => ({ ref, state: states[ref.ticketId] ?? { state: 'loading' } })), [refs, states])
 
   const value = useMemo<Conversation>(
-    () => ({ entries, sending, ended, historyFailed, send, retry, reload, prefill, requestPrefill, takePrefill, cases, refreshCases, refreshCase: loadCase }),
-    [entries, sending, ended, historyFailed, send, retry, reload, prefill, requestPrefill, takePrefill, cases, refreshCases, loadCase],
+    () => ({ entries, sending, ended, historyFailed, send, retry, reload, cases, refreshCases, refreshCase: loadCase }),
+    [entries, sending, ended, historyFailed, send, retry, reload, cases, refreshCases, loadCase],
   )
   return <ConversationContext value={value}>{children}</ConversationContext>
 }
