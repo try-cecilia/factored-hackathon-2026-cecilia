@@ -167,8 +167,9 @@ python ops/export_public.py . ../factored-hackathon-2026-<team> <redactions-file
 | Deterministic layers (policy, tools, rendering, tracing) | 58–80 turns/s on 1 thread, 170–191 turns/s on 8 threads, p95 27–33 ms / 63–73 ms | `make loadtest` on the full 4.4M-transaction warehouse, LLM excluded; design v3, four runs on a 16-thread laptop. Not re-run since: the full warehouse is not on the machine that measured the rest of this section |
 | The same layers on the fixture warehouse, with this branch's traces, stage timing and retries | 557–566 turns/s on 1 thread (p50 1.6 ms, p95 2.0 ms), 565–573 turns/s on 8 threads (p50 11 ms, p95 14–17 ms) | `make loadtest-fixture PY=.venv/bin/python`, two runs each, Apple M5 Pro (18 threads), the model scripted. The fixture holds 5 customers, so this is the Python overhead per turn (about 1.6 ms), not warehouse query cost; 8 threads share one GIL, so they add latency and no throughput |
 | HTTP surface, model answering | 17.4 chats/s at saturation with 32 slots and a model at 1.8 s (32 / 1.8 s = 17.8 ideal); up to 32 concurrent clients served at 1.8 s p50; 64 clients wait for a slot (p50 3.6 s); 128–256 clients: 256 served per level at p50 5.4 s (the 5 s queue wait plus the model), the rest refused with 503 + `Retry-After` in 1.6 ms (p95) | `make loadtest-http PY=.venv/bin/python`, report in `eval/reports/LOADTEST_HTTP.md`: the real API on uvicorn, fixture warehouse, **model simulated at the measured 1.8 s p50**, closed-loop clients that wait out `Retry-After`, load generator on the same machine and process |
-| HTTP surface, model down | every turn falls back to a handoff: 330–420 turns/s and p95 22–212 ms with 8–64 clients; 106–140 turns/s and p95 2.3–3.8 s with 128–256 clients | same report. The knee at 128 clients is the load generator and the server sharing one process (GIL) and one 128-slot accept queue on this laptop, not a limit of the service; a clean number needs a separate load host |
-| Clients that ignore `Retry-After` | same 17.2–17.3 chats/s served, 288–640 refusals per level answered in 157 ms–1.5 s (p95), no errors | `eval/reports/LOADTEST_HTTP_NO_BACKOFF.md` (the second command of `make loadtest-http`): refusing costs almost nothing, so a hammering client does not slow the ones being served |
+| HTTP surface, model down: degraded resolution | a plain balance question is answered without the model: 293–394 turns/s and p95 23–278 ms with 8–64 clients; 251 turns/s (p95 0.85 s) with 128; 114 turns/s with 256 | same report; every 200 is checked to be `AUTO_RESOLVE` / `resolved` with no ticket (`wrong_outcome` 0) |
+| HTTP surface, model down: handoff | a request that needs the model goes to a person and a ticket is written: 216–228 turns/s and p95 49–391 ms with 8–64 clients; 52–90 turns/s with 128–256 clients (p95 2.7–9.6 s) | same report; every 200 is checked to be `ESCALATE` / `llm_unavailable` with a ticket id, and the ticket is looked up on disk (`tickets_written` equals the answers in every row). The knee at 128 is the load generator and the server sharing one process (GIL) and one 128-slot accept queue on this laptop, and the linear scan of the ticket file, not a limit found in the service; a clean number needs a separate load host |
+| Clients that ignore `Retry-After` | same 17.2–17.3 chats/s served, 288–640 refusals per level answered in 123 ms–2.0 s (p95), no errors | `eval/reports/LOADTEST_HTTP_NO_BACKOFF.md` (the second command of `make loadtest-http`): refusing costs almost nothing, so a hammering client does not slow the ones being served |
 | Per-session rate limit | 20/min: 30 back-to-back messages gave 20 answers and 10 refusals with 429 | same report |
 | LLM calls per turn | at most 1 (design v3); turns decided by the pre-LLM checks make none | 0.80 per case with Sonnet 5 on the held-out sample (`llm_calls_per_case`) |
 | LLM latency and cost | Claude Sonnet 5 (effort low): 1.8 s p50 / 3.9 s p95 per case, USD 0.0014 per case (0.0029 per safe resolution); Haiku 4.5: 1.2 / 3.8 s, USD 0.0023 per case | `make eval-live`, 132 held-out cases, `eval/reports/SYSTEM_EVAL_LIVE.md`; the tools + rules prefix is prompt-cached (≈1.7K of ≈2.1K input tokens in the smoke run on prompt 3.0.0, `eval/reports/LIVE_SMOKE.md`) |
@@ -196,8 +197,8 @@ its evidence. The full suite is `make test PY=.venv/bin/python`; the files below
 
 | Point | What is guaranteed | Code | Test | Command |
 |---|---|---|---|---|
-| Traces | one id per turn from the HTTP request to the ticket; time and outcome per stage; logs without customer data | `api/middleware.py`, `agent/observability.py`, `agent/core/orchestrator.py` | `tests/test_tracing.py` (13) | `pytest tests/test_tracing.py -q` |
-| Bounded retries | capped attempts, jittered capped backoff, one time budget per turn, retryable errors only, no unkeyed repeat of a write | `agent/resilience.py`, `agent/llm/client.py`, `agent/tools/traces.py`, `agent/policy/escalation.py` | `tests/test_retry.py` (13), `tests/test_resilience.py` (24), `tests/test_local_llm.py` (11) | `pytest tests/test_retry.py tests/test_resilience.py tests/test_local_llm.py -q` |
+| Traces | one id per turn from the HTTP request to the ticket; time and outcome per stage; logs without customer data | `api/middleware.py`, `agent/observability.py`, `agent/core/orchestrator.py` | `tests/test_tracing.py` (13), `tests/test_record_failures.py` (4), `tests/test_llm_error_privacy.py` (9) | `pytest tests/test_tracing.py tests/test_record_failures.py tests/test_llm_error_privacy.py -q` |
+| Bounded retries | capped attempts, jittered capped backoff, one time budget per turn, retryable errors only, no unkeyed repeat of a write | `agent/resilience.py`, `agent/llm/client.py`, `agent/tools/traces.py`, `agent/policy/escalation.py` | `tests/test_retry.py` (13), `tests/test_resilience.py` (24), `tests/test_turn_deadline.py` (4), `tests/test_local_llm.py` (11) | `pytest tests/test_retry.py tests/test_resilience.py tests/test_turn_deadline.py tests/test_local_llm.py -q` |
 | Safe fallback | every failure ends in a fixed reply or a handoff: never an invented answer, never a half-done action | `agent/core/orchestrator.py`, `agent/policy/router.py` | `tests/test_resilience.py` | `pytest tests/test_resilience.py -q` |
 | Capacity limits | body size, concurrency with a queue and 503, rate limits with 429, per-session and daily cost caps, prompt and output caps | `api/middleware.py`, `api/main.py`, `agent/llm/budget.py`, `agent/core/orchestrator.py` | `tests/test_capacity.py` (21) | `pytest tests/test_capacity.py -q`; `make loadtest-http PY=.venv/bin/python` |
 
@@ -240,6 +241,8 @@ Logs use the standard `logging` module. `LOG_FORMAT=json` writes one JSON object
 turn line (`cecilai.turn`) carries the disposition, category, rule, latency, model calls, cost, ticket id and the
 milliseconds per stage. It never carries what the customer wrote, a reply, a figure or a customer id, and an exception is
 logged by type only, because its message can quote data (`test_the_turn_log_line_has_the_id_and_the_outcome_and_nothing_the_customer_wrote`).
+A model error leaves only its type, its HTTP status and a code from a fixed list in the attempt log and the logs, never its
+message or body: providers quote the input they reject (`tests/test_llm_error_privacy.py`).
 The trace record itself does hold the reply text and the masked request, as before: it is customer data and follows
 Data retention.
 
@@ -256,8 +259,10 @@ Data retention.
 | read tools (`run_tool`) | 2 | 0.05 s doubling, capped at 0.25 s | the turn's deadline | `OSError`, `TimeoutError`, `ConnectionError`, DuckDB I/O and connection errors | reads; a `ToolError` (not yours, no data, bad argument) is an answer and is never retried |
 
 The turn has one clock (`TURN_BUDGET_SECONDS`, default 30, in `agent/resilience.py`) that the orchestrator starts and
-the model client and every retry draw on. The first attempt of any call always runs, even past the deadline: a handoff
-must be tried. A write with neither `idempotent=True` nor an idempotency key is attempted once, whatever the error.
+the model client and every retry draw on. It is checked before every lookup and before the one action (opening a trace),
+and after each lookup: what finishes after it is not used. A model call has a limit on its whole duration, not only on each
+read (a server that keeps sending pieces cannot outlast it). The handoff has a budget of its own
+(`HANDOFF_BUDGET_SECONDS`, 3 s) so a turn out of time can still file its ticket; its first attempt always runs. A write with neither `idempotent=True` nor an idempotency key is attempted once, whatever the error.
 `tests/test_retry.py` proves each bound with injected faults (attempt caps, the backoff range, no sleep after the last
 attempt, no wait past the deadline, permanent errors not retried, the write rule).
 
@@ -277,13 +282,16 @@ One test per way a turn can fail (`tests/test_resilience.py`). In every row the 
 | this session spent its own budget | the same, for that session only | attempt `session_budget_exhausted` |
 | the model answers with prose or an unknown tool | prose is never shown (clarify or abstain by template); an unknown tool is a handoff | `tool_failure` |
 | the turn's time ran out after the model answered | nothing is looked up; a handoff | `turn_timeout` |
+| a lookup finishes after the budget | its result is not used; a handoff | `turn_timeout` |
+| the customer's yes arrives with the budget spent | no trace is opened; the handoff carries the proposal, so a person can approve it | `turn_timeout` (ticket with `pending_action`) |
+| a provider dribbles its answer past the model's budget | cut off at the budget; the turn falls back like any model failure | `llm_unavailable` |
 | a tool is down | 2 attempts, then a handoff; a `ToolError` that is an answer is not retried | `tool_failure` / `data_unavailable` |
 | the tracing service fails once | the retry opens exactly one request and it is read back | `action:trace_opened` |
 | the tracing service stays down | 3 attempts; the customer is never told a trace exists | `action:trace_unverified` (handoff) |
 | the ticket write lands but reports failure | not filed twice | `escalate` |
 | the queue cannot be written | 3 attempts; the customer is told nothing was registered and gets the 8-character code | `…|handoff_unverified` |
 | our own code raises (any exception in a turn) | a handoff if a ticket can be filed and read back, otherwise the unverified message with the code; the exception text is never kept | `tool_failure` (trace rule `unexpected_failure`, `error_type`) |
-| the state store cannot save the conversation | the reply is still returned | |
+| the trace sink or the state store cannot write | the reply is still returned (a ticket already filed or a trace already opened is still told); the failure is logged by type and counted in `/admin/capacity` under `failures` | |
 | an exception outside a turn | HTTP 500 that says only `internal error` and carries the request id | |
 
 ### Capacity limits
