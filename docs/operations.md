@@ -645,7 +645,7 @@ whether the door held with the row; it fails the moment a route is added without
 | `POST /admin/tickets/{ticket_id}/{action}` | - | - | yes | - | claim, approve, reject, release; the actor is the key's name |
 | `GET /admin/operator/me` | - | - | yes | - | the operator key's name, touching no ticket (the web BFF's login check) |
 | `GET /metrics` | - | - | - | yes | admin key, or the METRICS_TOKEN a scraper holds (which opens only this) |
-| `GET /admin/human_queue` | - | - | - | yes |  |
+| `GET /admin/human_queue` | - | - | - | yes | the latest `limit` tickets (at most 200) plus every ticket still open or claimed that the file still holds, however old (the 90-day retention removes it); approved, rejected, handed-back and stale ones are cut by age |
 | `GET /admin/tickets/{ticket_id}` | - | - | - | yes |  |
 | `GET /admin/audit_log` | - | - | - | yes |  |
 | `GET /admin/trace_log` | - | - | - | yes |  |

@@ -298,8 +298,9 @@ cliente se entere del resultado se cubre con `GET /case/{id}` y con un aviso en 
 
 **Punto de sustitución.** `HumanQueue.enqueue/get` y `TicketDesk.act/state`.
 
-**Lo que la consola recibe de la cola.** `loadQueue` (`web/src/server/operator.functions.ts`) lee `/admin/human_queue` y
-devuelve al navegador `QueueRow` (`web/src/server/queue-row.ts`), no el ticket: `ticket_id`, `created_at`, `category`,
+**Lo que la consola recibe de la cola.** `loadQueue` (`web/src/server/operator.functions.ts`) lee `/admin/human_queue?limit=200` (los 200 tickets más nuevos y, sin importar su antigüedad, todos los que siguen `open` o
+`claimed`: un caso que nadie decidió no sale de la cola por viejo, pero sí sale con la retención: pasados los 90 días el ticket
+deja el archivo y la API ya no lo ve) y devuelve al navegador `QueueRow` (`web/src/server/queue-row.ts`), no el ticket: `ticket_id`, `created_at`, `category`,
 `priority`, `queue`, `customer_id`, `country`, `language`, `request` y del desk solo `status`, `operator` y `version`. Es
 lo que usan la tabla, sus filtros, las pestañas y los contadores del sidebar, y la cola se relee cada 30 s. La evidencia,
 los hechos verificados, las acciones, las preguntas abiertas, la acción pendiente y el historial del desk viajan solo con

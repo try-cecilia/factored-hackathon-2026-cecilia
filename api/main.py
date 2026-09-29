@@ -55,6 +55,7 @@ from agent.tools.audit import default_audit_log, default_trace_log
 from agent.policy.desk import Conflict, DeskError, NotFound, default_desk
 from agent.policy.escalation import default_queue
 from api import access, demo, idempotency, middleware
+from api.human_queue import listing as human_queue_listing
 from api.observability import ObservabilityMiddleware, RouteTemplates, readiness
 from api.security import SecurityHeadersMiddleware, configure_cors, constant_time_equals
 from ops.drift import recent_rows, report as drift_report, save_baseline as save_drift_baseline
@@ -478,7 +479,8 @@ def _tail(path: Path, limit: int) -> list[dict]:
 
 @app.get("/admin/human_queue", dependencies=[Depends(require_admin)])
 def human_queue(limit: int = 20) -> list[dict]:
-    return [{**t, "desk": default_desk.state(t["ticket_id"])} for t in _tail(default_queue.path, min(limit, 200))]
+    """The latest `limit` tickets (at most 200) and, however old, every one still open or claimed: work nobody decided does not age out."""
+    return human_queue_listing(default_queue.path, default_desk, max(min(limit, 200), 0))
 
 
 class DeskAction(BaseModel):

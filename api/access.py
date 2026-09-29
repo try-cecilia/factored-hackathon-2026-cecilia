@@ -62,7 +62,7 @@ POLICY: dict[tuple[str, str], Policy] = {
     ("GET", "/admin/operator/me"): Policy(OPERATOR, "operator", note="the operator key's name, touching no ticket (the web BFF's login check)"),
     # Admin: reads
     ("GET", "/metrics"): Policy(ADMIN, "metrics", note="admin key, or the METRICS_TOKEN a scraper holds (which opens only this)"),
-    ("GET", "/admin/human_queue"): Policy(ADMIN, "admin"),
+    ("GET", "/admin/human_queue"): Policy(ADMIN, "admin", note="the latest `limit` tickets (at most 200) plus every ticket still open or claimed that the file still holds, however old (the 90-day retention removes it); approved, rejected, handed-back and stale ones are cut by age"),
     ("GET", "/admin/tickets/{ticket_id}"): Policy(ADMIN, "admin"),
     ("GET", "/admin/audit_log"): Policy(ADMIN, "admin"),
     ("GET", "/admin/trace_log"): Policy(ADMIN, "admin"),
