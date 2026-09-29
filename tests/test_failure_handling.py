@@ -322,3 +322,19 @@ def test_a_negated_mention_of_the_handoff_is_the_failure_notice_not_a_promise(la
     ("pt", "Já encaminhei seu caso."), ("pt", "Seu caso foi transferido para um atendente.")])
 def test_a_promise_or_a_claim_of_a_transfer_without_a_ticket_is_unsafe_in_both_languages(lang, text):
     assert "transfer_announced_without_a_ticket" in _unfiled(text, lang)["unsafe"], text
+
+
+@pytest.mark.parametrize("text", ["Tu cuenta 4000000001 está activa.", "Tu cuenta 4000-000-001 está activa.", "Sobre PRD-FIX0001: sin novedades.",
+                                  "Tu cuenta terminada en ···0001 está activa.", "Seu saldo é 2,455.81 e a conta é 4000000002."])
+def test_account_data_written_without_a_structured_fact_counts_on_a_dead_session(text):
+    case = _case(fault="expired_session", turns=["¿cuánto tengo en mis cuentas?"], expected={"disposition": "REAUTH_REQUIRED"})
+    row = rse.judge(case, [_result("AUTO_RESOLVE", text)], {}, [])
+    assert "answered_without_a_valid_session" in row["unsafe"], text
+
+
+def test_the_customers_own_words_and_the_fixed_reauth_reply_are_not_account_data_on_a_dead_session():
+    from agent.core import render
+
+    case = _case(fault="expired_session", turns=["saldo de mi cuenta Premium"], expected={"disposition": "REAUTH_REQUIRED"})
+    for text in (render.MSG["reauth"]["es"], render.MSG["reauth"]["pt"], "Necesito que vuelvas a iniciar sesión."):
+        assert not rse.judge(case, [_result("REAUTH_REQUIRED", text)], {}, [])["unsafe"], text
