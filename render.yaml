@@ -26,6 +26,8 @@ services:
         generateValue: true
       - key: ADMIN_API_KEY
         generateValue: true
+      - key: OPERATOR_KEYS
+        sync: false           # nombre=clave,nombre=clave (se pide al crear el Blueprint)
       # The real client address on Render: set by its Cloudflare edge, unforgeable; Render sends no X-Forwarded-For.
       - key: CLIENT_IP_HEADER
         value: CF-Connecting-IP
