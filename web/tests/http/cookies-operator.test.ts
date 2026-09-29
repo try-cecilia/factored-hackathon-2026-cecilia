@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict'
 import { after, before, describe, test } from 'node:test'
 import { cookieNamed, flags } from './cookie-helpers.ts'
-import { ADMIN, startConsole } from './harness.ts'
+import { ADMIN, assertRefused, startConsole } from './harness.ts'
 
 const HTTPS = 'https://console.bank.example'
 const HTTP = 'http://127.0.0.1:3000'
@@ -39,10 +39,9 @@ describe('over plain http (the local Docker stack) the cookies are storable by a
     assert.ok(!flags(line).includes('secure') && flags(line).includes('httponly'), line)
   })
 
-  test('the origin check still refuses a cross-site login and sets nothing', async () => {
+  test('the origin check still refuses a cross-site login: no session', async () => {
     const res = await post(HTTP, ADMIN, { Origin: 'https://attacker.invalid', 'Sec-Fetch-Site': 'cross-site' })
-    assert.equal(res.status, 403)
-    assert.equal(res.headers.getSetCookie().length, 0)
+    assertRefused(res, 'origin_refused')
   })
 })
 

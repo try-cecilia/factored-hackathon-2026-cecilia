@@ -109,7 +109,7 @@ lectura y trazas. Cómo se configuran las claves:
   controla un campo de contraseña o pasa una clave a una función de servidor. Además hay pruebas HTTP contra el handler del
   build de producción (`web/tests/http/`, con una API falsa): CSRF, destinos de redirección hostiles y rotación de sesión.
 - *Formularios protegidos contra CSRF.* Los tres POST (`/operador/sesion`, `/operador/clave`, `/operador/salir`) se rechazan
-  con 403, sin tocar cookies, si no prueban venir de una página de la consola: `Sec-Fetch-Site`, cuando el navegador lo
+  —sin leer el cuerpo ni tocar la sesión— si no prueban venir de una página de la consola: `Sec-Fetch-Site`, cuando el navegador lo
   manda, tiene que ser `same-origin`; `Origin` (o `Referer` si falta) tiene que ser **exactamente el origen público**
   (esquema, host y puerto); sin ninguna de las dos cabeceras no hay prueba y se rechaza. `SameSite=Strict` no alcanzaba
   para el ingreso porque todavía no hay cookie. El origen público sale de **`WEB_PUBLIC_ORIGIN`** en el servidor de la web
@@ -121,6 +121,10 @@ lectura y trazas. Cómo se configuran las claves:
   que no sea un origen http(s) invalida todo el valor (se rechaza todo en vez de abrir algo por un error de tipeo), y las cabeceras
   `X-Forwarded-*` siguen sin leerse. En producción va **un origen https explícito**. Si hay lista, el primero decide las cookies. En desarrollo, si está
   vacía, se usa el origen de la URL de la petición (`http://127.0.0.1:<puerto>`). Está en `web/.env.example`.
+  **El rechazo no es una página en blanco:** es un `303` a `/operador/login` con un aviso en la cookie de flash (un código fijo,
+  nunca algo de la petición: ni las claves ni el origen que mandó el navegador), en ES y PT: «No pudimos verificar el origen del
+  formulario. Ingresar desde <orígenes configurados>.», o, si `WEB_PUBLIC_ORIGIN` falta o es inválido, que la consola no tiene
+  configurado su origen público. No se emite ninguna cookie de sesión.
 - *Cookies según el origen.* Que una cookie salga `Secure` y con prefijo `__Host-` lo decide **`WEB_PUBLIC_ORIGIN`**, no `NODE_ENV`
   (la imagen de Docker corre con `NODE_ENV=production` también en local). Con un origen **https** son `Secure` con `__Host-`
   (`__Host-cecilai_session`, `__Host-cecilai_operator`, `__Host-cecilai_operator_flash`; el idioma, `cecilai_lang`, va `Secure`

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { after, before, beforeEach, describe, test } from 'node:test'
-import { ADMIN, ORIGIN, sessionCookie, setCookies, startConsole } from './harness.ts'
+import { ADMIN, assertRefused, ORIGIN, sessionCookie, startConsole } from './harness.ts'
 
 let app: Awaited<ReturnType<typeof startConsole>>
 before(async () => { app = await startConsole() })
@@ -35,8 +35,7 @@ describe('the origin the forms trust is the configured public one, scheme, host 
     ]
     for (const headers of attacks) {
       const res = await login(headers)
-      assert.equal(res.status, 403, JSON.stringify(headers))
-      assert.deepEqual(setCookies(res), [], JSON.stringify(headers))
+      assertRefused(res, 'origin_refused', JSON.stringify(headers))
     }
   })
 
@@ -48,18 +47,18 @@ describe('the origin the forms trust is the configured public one, scheme, host 
       { Origin: 'https://attacker.invalid' },
     ]
     for (const headers of others) {
-      assert.equal((await login(headers)).status, 403, JSON.stringify(headers))
+      assertRefused(await login(headers), 'origin_refused', JSON.stringify(headers))
     }
   })
 
   test('proxy headers do not make an origin ours', async () => {
     const res = await login({ Origin: 'http://console.bank.example', 'X-Forwarded-Proto': 'https', 'X-Forwarded-Host': 'console.bank.example', Forwarded: 'proto=https;host=console.bank.example' })
-    assert.equal(res.status, 403)
+    assertRefused(res, 'origin_refused')
   })
 
   test('the request URL and Host header do not decide it either when a public origin is configured', async () => {
     const res = await login({ Origin: ORIGIN, 'Sec-Fetch-Site': 'same-origin' }, ORIGIN)
-    assert.equal(res.status, 403, 'http://console.test is not the configured origin')
+    assertRefused(res, 'origin_refused', 'http://console.test is not the configured origin')
   })
 })
 
@@ -81,20 +80,58 @@ describe('a list of origins: the local stack answers on 127.0.0.1 and on localho
   test('another host, another port or another scheme is refused', async () => {
     for (const foreign of ['http://localhost:3001', 'http://127.0.0.1:8000', 'https://localhost:3000', 'http://192.168.1.20:3000', 'https://attacker.invalid']) {
       const res = await login({ Origin: foreign, Referer: `${foreign}/x`, 'Sec-Fetch-Site': 'cross-site' }, LOCAL[0])
-      assert.equal(res.status, 403, foreign)
-      assert.equal(sessionCookie(res), null, foreign)
+      assertRefused(res, 'origin_refused', foreign)
     }
   })
 
   test('proxy headers still do not add an origin to the list', async () => {
     const res = await login({ Origin: 'http://console.bank.example', 'X-Forwarded-Host': 'localhost:3000', 'X-Forwarded-Proto': 'http' }, LOCAL[0])
-    assert.equal(res.status, 403)
+    assertRefused(res, 'origin_refused')
   })
 
   test('a wildcard is not an origin: the whole value is refused', async () => {
     process.env.WEB_PUBLIC_ORIGIN = `${LOCAL[0]},*`
     const res = await login({ Origin: LOCAL[0], 'Sec-Fetch-Site': 'same-origin' }, LOCAL[0])
-    assert.equal(res.status, 403)
+    assertRefused(res, 'origin_config')
+  })
+})
+
+describe('a refused post explains itself on the login page instead of leaving a blank 403', () => {
+  const cookieOf = (res: Response) => res.headers.getSetCookie()[0].split(';')[0]
+
+  test('the notice names the configured origins, in Spanish and in Portuguese', async () => {
+    process.env.WEB_PUBLIC_ORIGIN = 'http://127.0.0.1:3000,http://localhost:3000'
+    for (const path of ['/operador/sesion', '/operador/clave', '/operador/salir']) {
+      const refused = await app.send(path, { method: 'POST', fields: { admin_key: ADMIN, operator_key: 'k' }, headers: { Origin: 'http://192.168.1.20:3000' }, base: 'http://127.0.0.1:3000' })
+      assertRefused(refused, 'origin_refused', path)
+      const flash = cookieOf(refused)
+      const es = await (await app.send('/operador/login', { headers: { Cookie: flash }, base: 'http://127.0.0.1:3000' })).text()
+      assert.match(es, /No pudimos verificar el origen del formulario\. Ingresar desde http:\/\/127\.0\.0\.1:3000, http:\/\/localhost:3000\./, path)
+      const pt = await (await app.send('/operador/login', { headers: { Cookie: `${flash}; cecilai_lang=pt` }, base: 'http://127.0.0.1:3000' })).text()
+      assert.match(pt, /Não conseguimos verificar a origem do formulário\. Entrar por http:\/\/127\.0\.0\.1:3000, http:\/\/localhost:3000\./, path)
+    }
+  })
+
+  test('the notice never echoes what the request carried: not the keys, not the origin it sent', async () => {
+    process.env.WEB_PUBLIC_ORIGIN = PUBLIC
+    const res = await app.send('/operador/sesion', { fields: { admin_key: ADMIN, redirect: '/x' }, headers: { Origin: 'https://attacker.invalid/<script>' }, base: PUBLIC })
+    assertRefused(res, 'origin_refused')
+    const page = await (await app.send('/operador/login', { headers: { Cookie: cookieOf(res) }, base: PUBLIC })).text()
+    assert.ok(!page.includes(ADMIN) && !page.includes('attacker.invalid'))
+    assert.match(page, /Ingresar desde https:\/\/console\.bank\.example\./)
+  })
+
+  test('with no usable origin configured the notice says so (and the flash is one-shot)', async () => {
+    process.env.WEB_PUBLIC_ORIGIN = 'not-an-origin-flash-test'
+    const original = console.error
+    console.error = () => {}
+    try {
+      const res = await login({ Origin: PUBLIC, 'Sec-Fetch-Site': 'same-origin' })
+      assertRefused(res, 'origin_config')
+      const page = await app.send('/operador/login', { headers: { Cookie: cookieOf(res) } })
+      assert.match(await page.text(), /no tiene configurado su origen público \(WEB_PUBLIC_ORIGIN\)/)
+      assert.match(page.headers.getSetCookie().join(' '), /cecilai_operator_flash=;|Max-Age=0/i, 'the flash is consumed')
+    } finally { console.error = original }
   })
 })
 
@@ -109,8 +146,7 @@ describe('in production the public origin is required', () => {
       if (value === undefined) delete process.env.WEB_PUBLIC_ORIGIN
       else process.env.WEB_PUBLIC_ORIGIN = value
       const res = await login({ Origin: PUBLIC, 'Sec-Fetch-Site': 'same-origin' })
-      assert.equal(res.status, 403)
-      assert.deepEqual(setCookies(res), [])
+      assertRefused(res, 'origin_config')
       assert.ok(errors.some((line) => line.includes('WEB_PUBLIC_ORIGIN')), `logged: ${errors.join(' | ')}`)
     })
   }

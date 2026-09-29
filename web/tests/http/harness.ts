@@ -1,5 +1,6 @@
 // HTTP tests against the production build (dist/server/server.js): the same request handler `vite build` produces,
 // called with real Request objects, in front of a fake agent API. `pnpm test:http` builds first.
+import assert from 'node:assert/strict'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { pathToFileURL } from 'node:url'
@@ -72,6 +73,16 @@ export const CROSS_SITE = { Origin: 'https://attacker.invalid', Referer: 'https:
 export function sessionCookie(response: Response) {
   const set = response.headers.getSetCookie().find((c) => /cecilai_operator=/.test(c) && !/flash/.test(c) && !/=;|Max-Age=0|Expires=Thu, 01 Jan 1970/i.test(c))
   return set ? set.split(';')[0] : null
+}
+
+/** A refused form post: back to the login (never a bare 403), with only the flash cookie that says why and no session. */
+export function assertRefused(response: Response, flash: string, note = '') {
+  assert.equal(response.status, 303, note)
+  assert.equal(response.headers.get('location'), '/operador/login', note)
+  const cookies = response.headers.getSetCookie()
+  assert.equal(cookies.length, 1, `${note} set-cookie: ${cookies.join(' | ')}`)
+  assert.match(cookies[0], new RegExp(`^(__Host-)?cecilai_operator_flash=${flash};`), note)
+  assert.equal(sessionCookie(response), null, note)
 }
 
 export const setCookies = (response: Response) => response.headers.getSetCookie()

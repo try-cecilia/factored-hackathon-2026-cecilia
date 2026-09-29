@@ -15,8 +15,13 @@ const see = (to: string) => new Response(null, { status: 303, headers: { Locatio
 
 const readForm = (request: Request) => request.formData().catch(() => null)
 
-// A post that does not prove it came from one of our pages is refused before it reads a body or touches a cookie.
-const refused = () => new Response('Forbidden', { status: 403, headers: { 'Cache-Control': 'no-store' } })
+// A post that does not prove it came from one of our pages is refused before it reads a body or touches the session. The
+// answer is not a bare 403 page (a person who opened the console at another address than the configured one would see only
+// "Forbidden"): it is a redirect to the login with a flash code that says why, which never carries anything from the request.
+const refused = (flash: 'origin_refused' | 'origin_config') => {
+  setFlash(flash)
+  return see('/operador/login')
+}
 
 // One log line per minute per bad value, so a flood of hostile posts does not flood the log.
 const loggedAt = new Map<string, number>()
@@ -32,7 +37,7 @@ function foreign(request: Request) {
         'in production, and an http(s) origin wherever it is set.',
     )
   }
-  return refused()
+  return refused(verdict.reason === 'misconfigured' ? 'origin_config' : 'origin_refused')
 }
 
 export async function handleLogin(request: Request) {

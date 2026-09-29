@@ -294,6 +294,9 @@ export const operator: Like<typeof es> = {
     submit: 'Entrar',
     errors: {
       admin_missing: 'Digitar a chave de leitura.',
+      origin_refused: 'Não conseguimos verificar a origem do formulário. Entrar por {origins}.',
+      origin_refused_bare: 'Não conseguimos verificar a origem do formulário. Abrir o console de novo e tentar outra vez.',
+      origin_config: 'O console não tem a origem pública configurada (WEB_PUBLIC_ORIGIN). Avisar quem o administra.',
       sessionNotSaved: 'Seu navegador não guardou a sessão. Verifique se ele aceita cookies deste site e tente de novo. Fora do localhost, o console deve ser aberto por https.',
       session_replaced: 'A sessão foi substituída ao entrar em outra aba. Tentar de novo.',
       key_invalid: 'Uma das chaves não é válida.',

@@ -35,6 +35,8 @@ const messages: Record<string, MessageKey> = {
   operator_401: 'operator.login.errors.operator_401',
   operator_429: 'operator.login.errors.operator_429',
   operator_503: 'operator.login.errors.operator_503',
+  origin_refused: 'operator.login.errors.origin_refused',
+  origin_config: 'operator.login.errors.origin_config',
 }
 
 // A plain HTML form: the keys are typed into uncontrolled inputs and posted straight to the server (/operador/sesion),
@@ -44,7 +46,13 @@ function OperatorLogin() {
   const t = useT()
   const flash = Route.useLoaderData()
   const { redirect: target, motivo } = Route.useSearch()
-  const flashKey = flash ? (Object.hasOwn(messages, flash) ? messages[flash] : 'operator.login.errors.unavailable') : null
+  const code = flash?.code
+  // A refused origin names the origins the console does trust; with none configured (development) the message is the bare one.
+  const flashKey = code
+    ? code === 'origin_refused' && !flash?.origins
+      ? 'operator.login.errors.origin_refused_bare'
+      : Object.hasOwn(messages, code) ? messages[code] : 'operator.login.errors.unavailable'
+    : null
   // The login went through but the browser came back without the session: it did not keep the cookie (see handleArrival).
   const errorKey = flashKey ?? (motivo === 'sin-cookie' ? 'operator.login.errors.sessionNotSaved' : null)
 
@@ -70,7 +78,7 @@ function OperatorLogin() {
             <span className="op-field-label">{t('operator.login.labelOperator')} <span className="op-muted">{t('operator.login.optional')}</span></span>
             <input className="op-input" name="operator_key" type="password" maxLength={200} autoComplete="off" spellCheck={false} />
           </label>
-          {errorKey && <p id="op-login-error" className="op-error" role="alert">{t(errorKey)}</p>}
+          {errorKey && <p id="op-login-error" className="op-error" role="alert">{t(errorKey, { origins: flash?.origins ?? '' })}</p>}
           <Button type="submit" size="lg">{t('operator.login.submit')}</Button>
         </form>
         <LanguageSwitcher />
