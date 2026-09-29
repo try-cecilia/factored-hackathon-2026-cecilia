@@ -56,6 +56,11 @@ service, and as our own roadmap.
 - The identity service is a **test IdP**: an HMAC PIN, no MFA, no device
   binding. Production plugs in the bank's IdP and keeps the rest (only tokens
   reach `/chat`).
+- **Identidad de operadores.** Los operadores se autentican con claves con nombre (`OPERATOR_KEYS`); el
+  nombre en el registro sale de la clave, no de lo que envíe el operador, y leer (clave de admin) está
+  separado de actuar (clave de operador). Sigue sin haber MFA, las claves viven en variables de entorno
+  y se rotan a mano, y el límite de intentos fallidos está en memoria y se reinicia con el proceso. El
+  camino a producción es SSO corporativo (OIDC) con los roles del banco.
 - `/demo/customers` publishes test PINs for a few sandbox accounts, like any
   sandbox's test login. It must be empty (`DEMO_PUBLIC_CUSTOMERS=`) anywhere real.
 - `DEMO_MODE=1` turns on the jury sandbox: scenarios with those test PINs, a

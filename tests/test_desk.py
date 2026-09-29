@@ -124,19 +124,21 @@ def test_a_ticket_that_carries_no_action_cannot_be_approved():
         default_desk.act(t.ticket_id, "approve", "ana")
 
 
-def test_the_operator_endpoints_need_the_admin_key_and_map_conflicts_to_409(monkeypatch):
-    monkeypatch.setenv("ADMIN_API_KEY", "k")
-    client, hdr = TestClient(main.app), {"X-Admin-Key": "k"}
+def test_the_operator_endpoints_need_the_operator_key_and_map_conflicts_to_409(monkeypatch):
+    monkeypatch.setenv("ADMIN_API_KEY", "admin-key-0123456789-abcdefgh")
+    monkeypatch.setenv("OPERATOR_KEYS", "ana=ana-key-0123456789-abcdefgh")
+    client = TestClient(main.app)
+    admin, ana = {"X-Admin-Key": "admin-key-0123456789-abcdefgh"}, {"X-Operator-Key": "ana-key-0123456789-abcdefgh"}
     ticket_id = file_ticket()
-    body = {"operator": "ana"}
+    body = {}
     assert client.post(f"/admin/tickets/{ticket_id}/claim", json=body).status_code == 401
-    assert client.post(f"/admin/tickets/{ticket_id}/approve", json=body, headers=hdr).status_code == 409  # not claimed
-    assert client.post(f"/admin/tickets/{ticket_id}/claim", json=body, headers=hdr).json()["status"] == "claimed"
-    assert client.get(f"/admin/tickets/{ticket_id}", headers=hdr).json()["desk"]["operator"] == "ana"
-    assert client.post(f"/admin/tickets/{ticket_id}/approve", json=body, headers=hdr).json()["status"] == "approved"
-    assert client.post(f"/admin/tickets/{ticket_id}/approve", json=body, headers=hdr).status_code == 200  # idempotent
-    assert client.post("/admin/tickets/none/claim", json=body, headers=hdr).status_code == 404
-    listed = client.get("/admin/human_queue", headers=hdr).json()
+    assert client.post(f"/admin/tickets/{ticket_id}/approve", json=body, headers=ana).status_code == 409  # not claimed
+    assert client.post(f"/admin/tickets/{ticket_id}/claim", json=body, headers=ana).json()["status"] == "claimed"
+    assert client.get(f"/admin/tickets/{ticket_id}", headers=admin).json()["desk"]["operator"] == "ana"
+    assert client.post(f"/admin/tickets/{ticket_id}/approve", json=body, headers=ana).json()["status"] == "approved"
+    assert client.post(f"/admin/tickets/{ticket_id}/approve", json=body, headers=ana).status_code == 200  # idempotent
+    assert client.post("/admin/tickets/none/claim", json=body, headers=ana).status_code == 404
+    listed = client.get("/admin/human_queue", headers=admin).json()
     assert listed[-1]["desk"]["status"] == "approved"
 
 

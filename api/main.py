@@ -34,6 +34,7 @@ from agent.llm.client import default_providers
 from agent.policy import intent_guard
 from agent.session.auth import ExpiredSession, InvalidSession
 from agent.session.identity import AuthError, IdentityUnavailable, LockedOut, default_identity, derive_test_pin
+from agent.session.operators import OperatorDirectory
 from agent.tools import account_tools
 from agent.tools.audit import default_audit_log, default_trace_log
 from agent.policy.desk import Conflict, DeskError, NotFound, default_desk
@@ -62,6 +63,19 @@ class RateLimiter:
                 return False
             q.append(now)
             return True
+
+    def over(self, key: str) -> bool:
+        """Whether this key has used up its hits in the window. Looking does not count as a hit."""
+        now = time.time()
+        with self._lock:
+            q = self._hits[key]
+            while q and now - q[0] > self.window_s:
+                q.popleft()
+            return len(q) >= self.limit
+
+    def record(self, key: str) -> None:
+        with self._lock:
+            self._hits[key].append(time.time())
 
 
 chat_limiter = RateLimiter(int(os.environ.get("CHAT_RATE_PER_MIN", "20")), 60)
@@ -112,6 +126,29 @@ def require_admin(x_admin_key: str | None = Header(default=None)) -> None:
         raise HTTPException(503, "admin endpoints disabled: ADMIN_API_KEY not configured")
     if not x_admin_key or not hmac.compare_digest(x_admin_key, expected):
         raise HTTPException(401, "invalid admin key")
+
+
+OperatorDirectory.from_env()  # a bad OPERATOR_KEYS stops the service from starting, rather than failing at the first request
+
+operator_fail_limiter = RateLimiter(int(os.environ.get("OPERATOR_AUTH_FAILS_PER_MIN", "10")), 60)
+
+
+def require_operator(request: Request, x_operator_key: str | None = Header(default=None)) -> str:
+    """The authenticated operator's name, from the key they present: never from anything they send. Only failures
+    count against the limit; once over it, even the right key is refused until the window passes."""
+    directory = OperatorDirectory.from_env()
+    if not directory.enabled:
+        raise HTTPException(503, "operator endpoints disabled: OPERATOR_KEYS not configured")
+    origin = client_ip(request)
+    if operator_fail_limiter.over(origin):
+        default_audit_log.event("operator_auth_failed", origin=origin, reason="blocked")
+        raise HTTPException(429, "too many failed attempts")
+    name = directory.authenticate(x_operator_key)
+    if name is None:
+        operator_fail_limiter.record(origin)
+        default_audit_log.event("operator_auth_failed", origin=origin, reason="invalid")
+        raise HTTPException(401, "invalid operator key")
+    return name
 
 
 @app.get("/")
@@ -191,7 +228,6 @@ def human_queue(limit: int = 20) -> list[dict]:
 
 
 class DeskAction(BaseModel):
-    operator: str = Field(min_length=1, max_length=80)
     expected_version: int | None = None  # the version the operator saw; a newer one refuses the decision
     reason: str | None = Field(default=None, max_length=300)
 
@@ -204,11 +240,13 @@ def ticket(ticket_id: str) -> dict:
     return {**found, "desk": default_desk.state(ticket_id)}
 
 
-@app.post("/admin/tickets/{ticket_id}/{action}", dependencies=[Depends(require_admin)])
-def ticket_action(ticket_id: str, action: Literal["claim", "approve", "reject", "release"], body: DeskAction) -> dict:
-    """An operator takes a ticket, approves or rejects the action it carries, or hands the conversation back."""
+@app.post("/admin/tickets/{ticket_id}/{action}")
+def ticket_action(ticket_id: str, action: Literal["claim", "approve", "reject", "release"], body: DeskAction,
+                  operator: str = Depends(require_operator)) -> dict:
+    """An operator takes a ticket, approves or rejects the action it carries, or hands the conversation back.
+    Who acted is the name of the key they presented; the body cannot say otherwise."""
     try:
-        return default_desk.act(ticket_id, action, body.operator, body.expected_version, body.reason)
+        return default_desk.act(ticket_id, action, operator, body.expected_version, body.reason)
     except NotFound as exc:
         raise HTTPException(404, str(exc)) from None
     except Conflict as exc:
