@@ -1,0 +1,43 @@
+/* The customer's window: sidebar, bar and page, and the demo panel apart. No strokes: panels are tonal fills, layers that float have a soft shadow. */
+.shell { display: flex; height: 100dvh; background: var(--color-paper); color: var(--color-ink-app); }
+.shell__side { display: flex; flex: none; height: 100%; }
+.shell__main { display: flex; flex: 1 1 0; flex-direction: column; min-width: 0; }
+.shell__bar { display: flex; flex: none; align-items: center; gap: 12px; min-height: 56px; padding: 0 20px; }
+.shell__title { margin: 0; font-size: var(--text-compact-lg); font-weight: var(--font-weight-bold); letter-spacing: -0.02em; line-height: 20px; }
+.shell__trust {
+  display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: var(--radius-pill);
+  background: var(--color-fill-subtle); color: var(--color-ink-70); font-size: var(--text-xs); font-weight: var(--font-weight-medium); white-space: nowrap;
+}
+.shell__tools { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.shell__menu { display: none; margin-left: -6px; }
+.shell__page { display: flex; flex: 1 1 0; flex-direction: column; min-height: 0; }
+.shell__demo { flex: none; width: 340px; height: 100%; overflow-y: auto; background: var(--color-fill-subtle); }
+.shell__demo[inert] { display: none; }
+.shell__scrim { position: fixed; inset: 0; z-index: 20; padding: 0; border: 0; background: color-mix(in srgb, var(--color-ink) 32%, transparent); cursor: default; }
+
+/* Narrow: the demo panel slides over the page from the right, on paper, with a soft shadow. */
+@media (max-width: 1179px) {
+  .shell__demo, .shell__demo[inert] {
+    position: fixed; top: 0; right: 0; bottom: 0; z-index: 30; display: block; width: min(380px, 100vw); background: var(--color-paper);
+    box-shadow: 0 1px 1px #0F0A1414, 0 24px 50px -24px #0F0A148C; transform: translateX(100%); visibility: hidden;
+    transition: transform 0.18s ease, visibility 0.18s;
+  }
+  .shell[data-demo='open'] .shell__demo { transform: none; visibility: visible; }
+}
+
+/* Phone: the sidebar is a drawer, the bar carries the menu button, and the trust note leaves. */
+@media (max-width: 759px) {
+  .shell__side {
+    position: fixed; top: 0; bottom: 0; left: 0; z-index: 30; width: min(288px, 86vw); box-shadow: 0 1px 1px #0F0A1414, 0 24px 50px -24px #0F0A148C;
+    background: var(--color-paper); transform: translateX(-100%); visibility: hidden; transition: transform 0.18s ease, visibility 0.18s;
+  }
+  .shell[data-menu='open'] .shell__side { transform: none; visibility: visible; }
+  .shell__side .ui-sidebar { width: 100%; }
+  .shell__menu { display: inline-flex; }
+  .shell__trust { display: none; }
+  .shell__bar { gap: 8px; padding: 0 12px; }
+  .shell__title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .shell__side, .shell__demo { transition: none; }
+}

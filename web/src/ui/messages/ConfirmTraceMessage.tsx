@@ -19,6 +19,8 @@ export type ConfirmTraceMessageProps = {
   /** The movement, when the data is at hand. The API sends the proposal as text, so the chat may pass none: the text is then the whole proposal. */
   item?: TraceItem
   state?: ConfirmTraceState
+  /** Both answers wait: another message is on its way, or the conversation moved on and the yes would no longer mean this proposal. */
+  disabled?: boolean
   /** The customer's yes. Tracing never happens without it (ADR-002). */
   onConfirm?: () => void
   onDecline?: () => void
@@ -26,7 +28,7 @@ export type ConfirmTraceMessageProps = {
 }
 
 /** The one action the assistant can take, proposed and then held until the customer says yes. */
-export function ConfirmTraceMessage({ children, time, dateTime, item, state = 'idle', onConfirm, onDecline, className }: ConfirmTraceMessageProps) {
+export function ConfirmTraceMessage({ children, time, dateTime, item, state = 'idle', disabled, onConfirm, onDecline, className }: ConfirmTraceMessageProps) {
   const t = useT()
   const titleId = useId()
   const answering = state === 'idle' || state === 'loading'
@@ -52,10 +54,10 @@ export function ConfirmTraceMessage({ children, time, dateTime, item, state = 'i
         <div className="ui-confirm__actions">
           {answering && (
             <>
-              <Button variant="primary" size="md" loading={state === 'loading'} onClick={onConfirm}>
+              <Button variant="primary" size="md" loading={state === 'loading'} disabled={disabled} onClick={onConfirm}>
                 {state === 'loading' ? t('chat.confirm.yesLoading') : t('chat.confirm.yes')}
               </Button>
-              <Button variant="ghost" size="md" disabled={state === 'loading'} onClick={onDecline}>{t('chat.confirm.no')}</Button>
+              <Button variant="ghost" size="md" disabled={disabled || state === 'loading'} onClick={onDecline}>{t('chat.confirm.no')}</Button>
             </>
           )}
           {/* Always mounted so the outcome is announced when its text appears. */}
