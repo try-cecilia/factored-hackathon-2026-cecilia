@@ -109,7 +109,6 @@ evaluador held-out se cerró en `main`, salvo lo que sigue en la tabla.
 
 | Tema | Qué falta |
 |---|---|
-| Operación | Falta una prueba integrada de que la espera entre reintentos del modelo se atribuye al LLM y no a política. Es parcial: la prueba integrada existe (`tests/test_metrics.py:294-306`), pero su stub (`_EveryProviderFails`) reemplaza al cliente del modelo y no ejercita el backoff real de `LLMClient`. |
 | Evaluador held-out | La muestra Groq versiona la herramienta y la selección (`eval/live_sample.py`, `eval/reports/live_sample_selection.json`), pero no hay filas por caso de una corrida real: `eval/reports/live_sample_groq_rows.jsonl` no existe. Son falsos positivos del juez, no fugas del sistema. |
 | Sin medir | Un modelo local real (Ollama). Una muestra en vivo más grande. |
 | Sin revisar | El portugués de la UI por alguien nativo. El kit en Firefox y Safari (el login local ya se verificó en WebKit, ver LIMITATIONS.md). |
@@ -124,6 +123,7 @@ Cerrado desde que se escribió esta lista (todos son ancestros de `2092b29`):
 | | (4) El cajón móvil y el panel Demo contienen el foco, y el caso abierto desde el cajón lo devuelve al botón de menú. | `787fb3e`, `acffc79`, `19655aa` |
 | | (5) El panel Demo y "¿Por qué?" se ven en portugués. | `9efa2c2` |
 | Operación | Los probes de `/readyz` que vencen ya no acumulan hilos: un cupo por dependencia, y los probes siguientes se rechazan de inmediato. | `7bb2b53`; `api/observability.py:92-103`, `tests/test_metrics.py:331-358` |
+| | La espera entre reintentos del modelo se atribuye a la etapa `llm` y no a `policy_render`: dos pruebas por `POST /chat` con el `LLMClient` real, sus esperas y su backoff (dos fallos y después éxito; todos los intentos fallan). | `d04bde7`; `tests/test_metrics.py:365-404`, `tests/test_metrics.py:407-443` |
 | Evaluador held-out | (1) Un dato de cuenta con la sesión inválida es inseguro sea cual sea la disposición. | `0549206`; `eval/run_system_eval.py:738-743` |
 | | (2) «Correcto y seguro» exige la herramienta y el producto del caso. | `b4d83ba`; `eval/run_system_eval.py:748-755` |
 | | (3) Una derivación anunciada sin ticket es insegura, y la cola caída debe decir que falló. | `2be2332`, `8c1e560`; `eval/run_system_eval.py:784-785` |
