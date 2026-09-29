@@ -22,6 +22,7 @@ rule that fired, LLM attempts/usage, tool calls and cost.
 from __future__ import annotations
 
 import json
+import threading
 import time
 import uuid
 from collections import OrderedDict
@@ -35,10 +36,11 @@ from agent.llm.client import LLMUnavailable, Usage, get_default_client
 from agent.llm.pricing import cost_usd
 from agent.llm.privacy import mask_card_numbers, redact
 from agent.policy import escalation, router
+from agent.policy.desk import default_desk
 from agent.policy.router import Decision, Disposition
 from agent.policy.signals import detect_language, normalize
-from agent.session.auth import ExpiredSession, InvalidSession, SessionStore, default_store
-from agent.tools import account_tools
+from agent.session.auth import ExpiredSession, InvalidSession, SessionStore, default_store, session_ref
+from agent.tools import account_tools, state
 from agent.tools.audit import current_trace_id, default_trace_log
 from agent.tools.errors import InvalidArgument, MissingSlot, NotApplicable, ToolError
 from agent.tools.traces import default_traces
@@ -96,27 +98,60 @@ class _Conversation:
     pending_clarification: bool = False
     pending_action: dict | None = None  # a trace proposed on the last turn, kept in code: never sent to the model
     pending_choice: list[dict] | None = None  # the pending movements listed on the last turn, to pick one by number
+    cases: dict[str, str] = field(default_factory=dict)  # legacy notices, retained when loading older conversations
 
 
 class ConversationStore:
     """Bounded LRU of per-session histories: for the model, the customer's
     masked words and figure-free summaries of our replies; for tickets, the
-    customer's requests with card numbers masked."""
+    customer's requests with card numbers masked. Each turn is also written to
+    SQLite (agent/tools/state.py), so a restart or a refresh resumes the same
+    conversation, including a trace proposed and waiting for the customer's yes."""
 
-    def __init__(self, max_conversations: int = MAX_CONVERSATIONS, max_messages: int = MAX_HISTORY_MESSAGES):
+    RETENTION_SECONDS = 24 * 3600  # a conversation outlives its 15-minute session only briefly
+
+    def __init__(self, max_conversations: int = MAX_CONVERSATIONS, max_messages: int = MAX_HISTORY_MESSAGES,
+                 db_path: str | None = None):
         self._data: OrderedDict[str, _Conversation] = OrderedDict()
         self.max_conversations, self.max_messages = max_conversations, max_messages
+        self._db, self._lock = state.connect(db_path), threading.Lock()
+        with self._lock, self._db:
+            self._db.execute("DELETE FROM conversations WHERE updated_at < ?", (time.time() - self.RETENTION_SECONDS,))
 
     def get(self, key: str) -> _Conversation:
-        conv = self._data.pop(key, None) or _Conversation()
+        conv = self._data.pop(key, None) or self._load(key) or _Conversation()
         self._data[key] = conv
         while len(self._data) > self.max_conversations:
             self._data.popitem(last=False)
         return conv
 
+    def _load(self, key: str) -> _Conversation | None:
+        with self._lock:
+            row = self._db.execute("SELECT data FROM conversations WHERE key = ?", (key,)).fetchone()
+        return _Conversation(**json.loads(row[0])) if row else None
+
+    def save(self, key: str) -> None:
+        """Write the conversation as the turn left it (a no-op for a key this store has not handed out)."""
+        conv = self._data.get(key)
+        if conv is not None:
+            with self._lock, self._db:
+                self._db.execute("INSERT OR REPLACE INTO conversations VALUES (?, ?, ?)",
+                                 (key, json.dumps(asdict(conv), ensure_ascii=False, default=str), time.time()))
+
     def append(self, conv: _Conversation, role: str, content: str) -> None:
         conv.messages.append({"role": role, "content": content})
         del conv.messages[:-self.max_messages]
+
+    def mark_case_notified(self, customer_id: str, ticket_id: str, status: str) -> bool:
+        """Record a notice once per customer, even across sessions, restarts and conversation cleanup."""
+        with self._lock, self._db:
+            # Only a claimed ticket can change again; a terminal notice must never be repeated or rolled back.
+            changed = self._db.execute(
+                "INSERT INTO case_notifications VALUES (?, ?, ?) "
+                "ON CONFLICT(customer_id, ticket_id) DO UPDATE SET status = excluded.status "
+                "WHERE case_notifications.status = 'claimed' AND case_notifications.status != excluded.status",
+                (customer_id, ticket_id, status))
+            return changed.rowcount == 1
 
     def append_request(self, conv: _Conversation, request: str) -> None:
         conv.requests.append(request)
@@ -223,13 +258,47 @@ class Orchestrator:
         ts, start = time.time(), time.perf_counter()
         trace: dict[str, Any] = {"trace_id": trace_id, "ts": ts, "prompt_version": prompts.PROMPT_VERSION, "llm_steps": []}
         try:
-            result = self._handle(session_token, text, trace_id, trace)
+            result = self._with_case_news(session_token, self._handle(session_token, text, trace_id, trace))
         finally:
             current_trace_id.reset(ctx_token)
+            self.conversations.save(session_ref(session_token))  # even on a crash: what the turn changed is kept
         result.latency_ms = (time.perf_counter() - start) * 1000
         default_trace_log.write({**trace, **{k: v for k, v in asdict(result).items() if k not in ("verified_facts",)},
                                  "verified_tools": [f["tool"] for f in result.verified_facts]})
         return result
+
+    def _with_case_news(self, session_token: str, result: TurnResult) -> TurnResult:
+        """What a person did with this customer's tickets since they last heard: said once, by code, ahead of the reply."""
+        try:
+            session = self.session_store.validate(session_token)
+        except (InvalidSession, ExpiredSession):
+            return result
+        conv = self.conversations.get(session.ref)
+        news = []
+        for ticket in escalation.default_queue.for_customer(session.customer_id):
+            ticket_id = ticket["ticket_id"]
+            state = default_desk.state(ticket_id)
+            line = render.case_update(state["status"], result.language, default_traces.get(state["trace_id"] or ""))
+            if line and self.conversations.mark_case_notified(session.customer_id, ticket_id, state["status"]):
+                # Seed notices already delivered by the earlier, session-scoped implementation without repeating them.
+                if conv.cases.get(ticket_id) == state["status"]:
+                    continue
+                news.append(line)
+        if news:
+            result.response_text = "\n".join(news) + "\n\n" + result.response_text
+        return result
+
+    def case_status(self, session_token: str, ticket_id: str) -> dict | None:
+        """The status of one of this customer's tickets, worded as the chat would; None if it is not theirs.
+        Raises InvalidSession/ExpiredSession for a bad token."""
+        session = self.session_store.validate(session_token)
+        ticket = escalation.default_queue.get(ticket_id)
+        if ticket is None or ticket["customer_id"] != session.customer_id:
+            return None
+        state = default_desk.state(ticket_id)
+        lang = self.conversations.get(session.ref).language
+        text = render.case_update(state["status"], lang, default_traces.get(state["trace_id"] or ""))
+        return {"ticket_id": ticket_id, "status": state["status"], "message": text}
 
     # -- helpers --
     def _finish(self, conv, model_text, ticket_text, result: TurnResult) -> TurnResult:
@@ -284,7 +353,7 @@ class Orchestrator:
     def _open_trace(self, proposal, session, lang, trace_id, done, escalate) -> TurnResult:
         """The customer said yes: open the trace, read it back, and only then say it exists."""
         action = {"tool": "request_trace", "args": {"product_id": proposal["product_id"]}, "confirmed_by_customer": True}
-        still_pending, review = True, None
+        still_pending, review, age_days = True, None, None
         try:
             # The proposal is one turn old: the movement may have settled since, so eligibility is checked again.
             pending = TOOL_FUNCTIONS["request_trace"](session.customer_id, product_id=proposal["product_id"],
@@ -292,6 +361,7 @@ class Orchestrator:
             found = next((m for m in pending if m["transaction_id"] == proposal["transaction_id"]), None)
             still_pending = found is not None
             review = found.get("review_reason") if found else None
+            age_days = found.get("age_days") if found else None
             verified = None
             if still_pending and not review:
                 default_traces.open(session.customer_id, proposal["transaction_id"], proposal["product_id"], session.ref)
@@ -301,7 +371,8 @@ class Orchestrator:
         if review:  # old or self-contradicting: the customer's yes is recorded, a person decides
             return escalate(router.trace_review(review), [{**action, "success": False, "error_type": "NeedsHumanApproval"}], [],
                             {"tool": "request_trace", "transaction_id": proposal["transaction_id"],
-                             "product_id": proposal["product_id"], "review_reason": review, "movement": proposal["movement"]})
+                             "product_id": proposal["product_id"], "review_reason": review, "age_days": age_days,
+                             "movement": proposal["movement"]})
         if not still_pending:
             return escalate(router.trace_step({"items": []}), [{**action, "success": False, "error_type": "MovementNoLongerPending"}], [])
         if not verified:

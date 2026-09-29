@@ -103,9 +103,13 @@ service, and as our own roadmap.
 
 ## Operations
 
-- **Single process.** Sessions and conversations are in memory; multiple
-  replicas need Redis. DuckDB on local disk has a single writer; production
-  serves reads from the core system or a replicated store.
+- **Single process.** Sessions and conversations are kept in SQLite on the
+  persistent disk (`STATE_DB_PATH`), so a restart resumes a case in flight, but
+  SQLite has one writer at a time: several replicas need Redis or Postgres.
+  Tickets, operator decisions and traces are JSONL files read linearly, and the
+  rate limiters, the model budget counter and the provider circuit breakers
+  still live in memory and reset on restart. DuckDB on local disk has a single
+  writer; production serves reads from the core system or a replicated store.
 - **Ingestion runs at first boot** in the container. Production runs it on a
   schedule into persistent storage.
 - **Monitoring is JSONL plus admin endpoints.** The alert thresholds are

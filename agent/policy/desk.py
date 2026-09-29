@@ -59,11 +59,12 @@ class TicketDesk:
 
     def state(self, ticket_id: str) -> dict[str, Any]:
         events = self._events(ticket_id)
-        status, operator = "open", None
+        status, operator, trace_id = "open", None, None
         for e in events:
             status = e["status"]
             operator = e["operator"] if status == "claimed" else operator
-        return {"ticket_id": ticket_id, "status": status, "operator": operator, "version": len(events),
+            trace_id = e["detail"].get("trace_id", trace_id)
+        return {"ticket_id": ticket_id, "status": status, "operator": operator, "trace_id": trace_id, "version": len(events),
                 "history": [{k: e[k] for k in ("action", "status", "operator", "ts", "detail")} for e in events]}
 
     def _record(self, ticket_id: str, action: str, status: str, operator: str, detail: dict | None = None) -> None:

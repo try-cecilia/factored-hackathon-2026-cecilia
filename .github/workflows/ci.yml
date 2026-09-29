@@ -30,6 +30,8 @@ jobs:
           assert learned > base, "learned classifier no longer beats the keyword baseline"
           assert guard["false_escalation"]["rate"] <= 0.05
           EOF
+      - name: Quality gate (safety floors, guard recall, evidence made with the current prompt)
+        run: python -m eval.gate
 
   container:
     runs-on: ubuntu-latest
