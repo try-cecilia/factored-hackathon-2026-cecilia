@@ -29,7 +29,9 @@ const TYPES = {
   '.jpg': 'image/jpeg', '.ico': 'image/x-icon', '.woff': 'font/woff', '.woff2': 'font/woff2', '.txt': 'text/plain; charset=utf-8',
   '.map': 'application/json',
 }
-const SECURITY = { 'x-content-type-options': 'nosniff', 'x-frame-options': 'DENY', 'referrer-policy': 'no-referrer' }
+// same-origin, not no-referrer: under no-referrer a browser sends `Origin: null` with a form post, and the operator forms'
+// origin check (src/server/origin-check.ts) would refuse every login. Nothing is sent to other sites either way.
+const SECURITY = { 'x-content-type-options': 'nosniff', 'x-frame-options': 'DENY', 'referrer-policy': 'same-origin' }
 
 function staticFile(pathname) {
   if (pathname === '/' || pathname.includes('\0')) return null

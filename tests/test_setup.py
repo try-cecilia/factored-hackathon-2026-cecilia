@@ -128,7 +128,7 @@ def test_the_compose_stack_is_api_and_web_with_optional_monitoring_and_local_mod
     assert services["web"]["depends_on"]["api"]["condition"] == "service_healthy"  # the web waits for a ready API
     assert services["ollama-pull"]["depends_on"]["ollama"]["condition"] == "service_healthy"
     assert "readyz" in " ".join(services["api"]["healthcheck"]["test"]) and services["ollama"]["healthcheck"]["test"][-1] == "list"
-    assert services["web"]["environment"] == ["AGENT_API_URL=http://api:8000"]
+    assert services["web"]["environment"][0] == "AGENT_API_URL=http://api:8000"
     assert "ollama:/root/.ollama" in services["ollama"]["volumes"]  # models survive a restart
     assert COMPOSE["name"].startswith("cecilai-local")  # its volumes must not collide with an older setup's
     for name, service in services.items():
@@ -192,8 +192,23 @@ def test_the_ci_runs_every_layer_in_parallel_jobs_with_a_time_limit():
     runs = {name: " ".join(str(s.get("run", "")) for s in job["steps"]) for name, job in jobs.items()}
     assert "make lock-check" in runs["python"] and "make test" in runs["python"] and "make gate" in runs["python"]
     assert "pnpm install --frozen-lockfile" in runs["web"] and "pnpm typecheck" in runs["web"] and "pnpm build" in runs["web"]
+    assert "pnpm test:all" in runs["web"]  # node:test, vitest on the DOM and the HTTP tests against the production build
     assert "make alerts-check" in runs["alerts"] and "make compose-e2e" in runs["compose"]
     assert "ops/container_smoke.py" in runs["container"]
+
+
+def test_the_ci_python_job_covers_the_data_ml_validation_and_the_resilience_tests_and_checks_the_tree_stays_clean():
+    """Neither has a step of its own because `make gate` runs the one and `make test` (the whole tests/ folder) the other."""
+    makefile = (ROOT / "Makefile").read_text()
+    gate = re.search(r"^gate:.*\n((?:\t.*\n)+)", makefile, re.M).group(1)
+    assert "$(MAKE) validate-data-ml" in gate
+    resilience = re.search(r"^test-resilience:.*\n\t\$\(PY\) -m pytest (.*) -q\n", makefile, re.M).group(1).split()
+    assert resilience and all((ROOT / f).exists() and f.startswith("tests/") for f in resilience)
+    assert re.search(r"^test:.*\n\t\$\(PY\) -m pytest tests/ -q\n", makefile, re.M)  # the whole folder, so the files above run
+    steps = WORKFLOW["jobs"]["python"]["steps"]
+    runs = [str(step.get("run", "")) for step in steps]
+    order = {key: next(i for i, run in enumerate(runs) if key in run) for key in ("make test", "make gate", "git status --porcelain", "evaluate_intent_classifier")}
+    assert order["make test"] < order["make gate"] < order["git status --porcelain"] < order["evaluate_intent_classifier"]
 
 
 def test_the_ci_installs_from_the_hash_checked_lock():
@@ -223,8 +238,10 @@ FIXED_IN_THE_CONTAINER = {
 }
 
 
-# Read by compose itself (published ports, the Grafana login, the dataset mount), not by the API
-COMPOSE_ONLY = {"API_PORT", "WEB_PORT", "PROMETHEUS_PORT", "GRAFANA_PORT", "OLLAMA_PORT", "GRAFANA_ADMIN_PASSWORD", "RAW_DIR"}
+# Read by the web service (checked below against what the web's code reads), by compose itself (published ports, the Grafana
+# login, the dataset mount), not by the API
+WEB_SETTINGS = {"WEB_PUBLIC_ORIGIN", "TRUSTED_CLIENT_IP_HEADER", "OPERATOR_IDLE_SECONDS", "UI_GALLERY"}
+COMPOSE_ONLY = {"API_PORT", "WEB_PORT", "PROMETHEUS_PORT", "GRAFANA_PORT", "OLLAMA_PORT", "GRAFANA_ADMIN_PASSWORD", "RAW_DIR"} | WEB_SETTINGS
 
 
 def test_the_compose_passes_every_setting_the_code_reads_and_every_one_env_example_lists():
@@ -236,3 +253,108 @@ def test_the_compose_passes_every_setting_the_code_reads_and_every_one_env_examp
     assert not missing, f"ops/docker-compose.yml does not pass to the api: {sorted(missing)}"
     assert set(FIXED_IN_THE_CONTAINER) <= settings_read_by_the_code()  # an exclusion for a setting that is gone is stale
     assert COMPOSE_ONLY <= declared
+
+
+# What the image or the runtime fixes for the web, so nothing has to pass it: the image sets NODE_ENV and PORT, HOST has a default
+FIXED_FOR_THE_WEB = {"NODE_ENV", "PORT", "HOST"}
+
+
+def settings_read_by_the_web() -> set[str]:
+    found = set()
+    for path in [ROOT / "web" / "serve.mjs", *(ROOT / "web" / "src").rglob("*.ts*")]:
+        if ".test." in path.name:
+            continue
+        found |= set(re.findall(r"\benv\.([A-Z][A-Z0-9_]+)", path.read_text(encoding="utf-8")))
+    return found - FIXED_FOR_THE_WEB
+
+
+def test_the_compose_passes_every_setting_the_web_reads_and_a_working_origin_for_the_operator_console():
+    """The web image runs in production, where the console refuses every form post without WEB_PUBLIC_ORIGIN: a setting the web
+    reads and the compose does not pass is one that silently does nothing (or, for the origin, a console that cannot log in)."""
+    passed = {entry.split("=", 1)[0] for entry in COMPOSE["services"]["web"]["environment"]}
+    missing = settings_read_by_the_web() - passed
+    assert not missing, f"ops/docker-compose.yml does not pass to the web: {sorted(missing)}"
+    assert settings_read_by_the_web() >= WEB_SETTINGS  # a name that is no longer read is stale here and in .env.example
+    declared = set(re.findall(r"^#?\s*([A-Z][A-Z0-9_]+)=", EXAMPLE, re.M))
+    assert WEB_SETTINGS <= declared
+    origin = next(e for e in COMPOSE["services"]["web"]["environment"] if e.startswith("WEB_PUBLIC_ORIGIN="))
+    assert origin == "WEB_PUBLIC_ORIGIN=${WEB_PUBLIC_ORIGIN:-http://127.0.0.1:${WEB_PORT:-3000}}"  # follows the published port
+    assert re.search(r"^WEB_PUBLIC_ORIGIN=$", EXAMPLE, re.M) and re.search(r"^UI_GALLERY=0$", EXAMPLE, re.M)  # gallery off by default
+
+
+# --- make env-check / env-fill (ops/env_check.py) -----------------------------------------------------------------------------
+
+from ops import env_check  # noqa: E402
+
+OLD_ENV = "DEMO_IDP_SECRET=old-secret-value\nADMIN_API_KEY=old-admin-value\nINGEST_ARGS=--profile serving --sample-customers 5000\nAPI_PORT=8100\n"
+
+
+def test_env_check_lists_the_missing_names_and_warns_about_s3_and_prints_no_value():
+    lines = "\n".join(env_check.report(EXAMPLE, OLD_ENV))
+    for name in ("METRICS_TOKEN", "GRAFANA_ADMIN_PASSWORD", "WEB_PUBLIC_ORIGIN", "UI_GALLERY"):
+        assert f"  {name}" in lines
+    assert "  DEMO_IDP_SECRET" not in lines and "  API_PORT" not in lines  # present: not missing
+    assert "INGEST_ARGS has no `--source local`" in lines
+    assert "old-secret-value" not in lines and "old-admin-value" not in lines and "8100" not in lines
+
+
+def test_env_check_is_quiet_on_an_env_made_by_make_env_and_flags_only_a_secret_left_empty():
+    made = bootstrap_env.render(EXAMPLE, bootstrap_env.local_values())
+    assert env_check.report(EXAMPLE, made) == []
+    assert not env_check.ingests_from_s3(made)
+    blank = made.replace(re.search(r"^METRICS_TOKEN=.*$", made, re.M).group(0), "METRICS_TOKEN=")
+    assert env_check.empty_secrets(blank) == ["METRICS_TOKEN"]
+
+
+def test_env_check_ingest_args_reading():
+    assert env_check.ingests_from_s3("INGEST_ARGS=--profile serving --since 2025-06-17\n")
+    assert not env_check.ingests_from_s3("INGEST_ARGS=--profile serving --source local --raw-dir /x\n")
+    assert not env_check.ingests_from_s3("INGEST_ARGS=--source=local\n")
+    assert not env_check.ingests_from_s3("API_PORT=1\n")  # unset: the compose default is the fixture
+
+
+def test_env_fill_appends_only_the_missing_with_generated_secrets_and_changes_nothing_else(tmp_path, capsys):
+    (tmp_path / ".env.example").write_text(EXAMPLE)
+    env = tmp_path / ".env"
+    env.write_text(OLD_ENV.rstrip("\n"))  # no trailing newline: the fill must not glue its first line to the last one
+    env.chmod(0o600)
+    assert env_check.main(["--env", str(env), "--example", str(tmp_path / ".env.example"), "--fill"]) == 0
+    out = capsys.readouterr().out
+    text = env.read_text()
+    assert text.startswith(OLD_ENV.rstrip("\n") + "\n")  # what was there is untouched, byte for byte
+    assert env.stat().st_mode & 0o077 == 0
+    filled = env_check.parse(text)
+    assert env_check.missing(EXAMPLE, text) == []
+    assert len(filled["METRICS_TOKEN"]) >= 32 and len(filled["GRAFANA_ADMIN_PASSWORD"]) >= 32
+    assert filled["DEMO_IDP_SECRET"] == "old-secret-value" and filled["API_PORT"] == "8100" and filled["WEB_PORT"] == "3000"
+    assert filled["INGEST_ARGS"].startswith("--profile serving --sample-customers 5000")  # an existing value is never replaced
+    for value in (filled["METRICS_TOKEN"], filled["GRAFANA_ADMIN_PASSWORD"], "old-secret-value"):
+        assert value not in out  # only names are printed
+    assert "METRICS_TOKEN" in out
+    again = env.read_text()
+    assert env_check.main(["--env", str(env), "--example", str(tmp_path / ".env.example"), "--fill"]) == 0 and env.read_text() == again
+
+
+def test_env_check_never_fails_the_make_up_unless_asked_and_a_missing_env_is_not_an_error(tmp_path):
+    (tmp_path / ".env.example").write_text(EXAMPLE)
+    (tmp_path / ".env").write_text(OLD_ENV)
+    args = ["--env", str(tmp_path / ".env"), "--example", str(tmp_path / ".env.example")]
+    assert env_check.main(args) == 0 and env_check.main([*args, "--strict"]) == 1
+    assert env_check.main(["--env", str(tmp_path / "none"), "--example", str(tmp_path / ".env.example")]) == 0
+
+
+def test_make_up_runs_the_env_check_as_a_warning_and_evidence_is_an_explicit_step():
+    makefile = (ROOT / "Makefile").read_text()
+    for target in ("up", "monitoring-up", "up-llm-local", "up-llm-host", "up-dataset"):
+        assert re.search(rf"^{target}: env env-check\b", makefile, re.M), target
+    assert "$(PY) -m ops.env_check --fill" in makefile
+    # the gate and the CI verify without writing; only `make evidence` regenerates the versioned files
+    assert re.search(r"^validate-data-ml:.*\n\t\$\(PY\) -m eval.validate_data_ml\n", makefile, re.M)
+    assert re.search(r"^evidence:.*\n\t\$\(PY\) -m eval.validate_data_ml --out-dir docs/evidence\n", makefile, re.M)
+
+
+def test_the_web_server_does_not_send_no_referrer_because_a_browser_then_posts_origin_null_and_the_console_login_is_refused():
+    """Found in Chromium: under Referrer-Policy: no-referrer a form post carries `Origin: null` and no Referer, and the operator
+    forms' origin check (web/src/server/origin-check.ts, which rightly refuses `null`) turned every login into a 403."""
+    serve = (ROOT / "web" / "serve.mjs").read_text(encoding="utf-8")
+    assert "'referrer-policy': 'same-origin'" in serve and "'referrer-policy': 'no-referrer'" not in serve

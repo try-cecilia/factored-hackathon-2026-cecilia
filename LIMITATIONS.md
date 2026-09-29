@@ -249,6 +249,14 @@ service, and as our own roadmap.
   load or behind a real edge, and no production host for it is chosen. The stack was verified with Docker on macOS
   (OrbStack) and never on Linux or Docker Desktop; the CI workflow has not been run on GitHub from here (its commands were run
   locally; see the report).
+- **The local web is checked over HTTP, and by hand in one browser.** `make compose-e2e` drives the web the way a browser does
+  (the same requests, cookies and headers: customer login and a chat turn, operator login on the plain form and the queue,
+  `/dev/ui` closed), but no browser runs in it. Once, on 2026-09-29, the compose stack was driven with Chromium 154 (customer
+  login and a balance question, operator login and the queue): that found that the web's `Referrer-Policy: no-referrer` made the
+  browser post `Origin: null` and every operator login a 403, now fixed and pinned by a header check. The image is in production
+  mode, so its session cookies are `Secure` `__Host-` cookies over plain `http://127.0.0.1`; Chromium stores them. Firefox and
+  Safari were not tried (Safari is known not to store a Secure cookie from plain http: use another browser, or a TLS proxy with
+  `WEB_PUBLIC_ORIGIN` set to its origin).
 - **The local model is wired, not measured.** The compose stack can start Ollama and pass the API `LLM_PROVIDERS=local`, and the
   profile was verified with a 0.5 GB model. No evaluation has run against any local model (`gpt-oss:20b` or a smaller one),
   and on macOS Docker runs models on CPU only.

@@ -1,8 +1,10 @@
 #!/bin/sh
 # The local stack from scratch on the fixture warehouse, checked end to end: `make compose-e2e` (and the CI job "compose").
 # It builds both images, starts API + web + Prometheus + Grafana, waits for them to be healthy, then checks:
-#   the API's probes and the smoke test (ops/container_smoke.py), the web's page and its path to the API, the security headers,
-#   the access checks that matter most, /metrics with and without credentials, that Prometheus scrapes the API and has
+#   the API's probes and the smoke test (ops/container_smoke.py), the web's page and its path to the API, through the web (the
+#   BFF, in production mode, as a browser would use it): a customer's login and a chat turn, an operator's login on the plain form
+#   with the origin the compose configures (and a post without it refused) and the queue behind it, and /dev/ui closed; the
+#   security headers, the access checks that matter most, /metrics with and without credentials, that Prometheus scrapes the API and has
 #   loaded every alert rule, and that Grafana is provisioned with a dashboard whose queries Prometheus accepts.
 # The llm-local profile (a model server) is not started here.
 #
@@ -27,7 +29,7 @@ val() { grep "^$1=" "$ENVFILE" | head -1 | cut -d= -f2-; }
 # Names below start with E2E_ so the unset of the settings file's own names (further down) cannot remove them
 E2E_API_PORT="$(val API_PORT)"; E2E_PROM_PORT="$(val PROMETHEUS_PORT)"; E2E_GRAFANA_PORT="$(val GRAFANA_PORT)"
 E2E_ADMIN="$(val ADMIN_API_KEY)"; E2E_METRICS="$(val METRICS_TOKEN)"; E2E_GRAFANA_PASSWORD="$(val GRAFANA_ADMIN_PASSWORD)"
-E2E_WEB_PORT="$(val WEB_PORT)"
+E2E_WEB_PORT="$(val WEB_PORT)"; E2E_OPERATOR="$(val OPERATOR_KEYS | cut -d= -f2-)"
 API="http://127.0.0.1:$E2E_API_PORT"; WEB="http://127.0.0.1:$E2E_WEB_PORT"
 COMPOSE="docker compose -p $PROJECT -f ops/docker-compose.yml --env-file $ENVFILE --profile monitoring"
 
@@ -75,6 +77,98 @@ ok "security headers, and SECURITY_HSTS from the settings file"
 health="$(curl -fs "$WEB/api/agent/health")" || fail "the web's /api/agent/health did not reach the API"
 echo "$health" | grep -q '"status":"ok"' && echo "$health" | grep -q '"data_as_of":"2024-01-16"' || fail "web health: $health"
 ok "web serves its pages and reaches the API"
+
+# --- web, as a browser uses it: customer login + chat, operator login + queue, /dev/ui closed ---
+# The server functions' ids are hashes of the build: read them from the running image, where the build is.
+rpc_id() { $COMPOSE exec -T web sh -c "grep -rhoE 'var $1 = createServerFn.{0,200}createSsrRpc\\(\"[0-9a-f]{64}\"\\)' dist/server" | grep -oE '[0-9a-f]{64}' | head -1; }
+E2E_LOGIN_FN="$(rpc_id login)"; E2E_SEND_FN="$(rpc_id sendMessage)"
+[ -n "$E2E_LOGIN_FN" ] && [ -n "$E2E_SEND_FN" ] || fail "could not find the login and chat server functions in the web build"
+E2E_CUSTOMER="$(curl -fs "$API/demo/customers" | python3 -c 'import json, sys; c = json.load(sys.stdin)[0]; print(c["customer_id"] + ":" + c["test_pin"])')" || fail "the API lists no demo customer"
+python3 - "$WEB" "$E2E_LOGIN_FN" "$E2E_SEND_FN" "$E2E_CUSTOMER" "$E2E_ADMIN" "$E2E_OPERATOR" <<'PY' || fail "the web's login, chat or operator console (see above)"
+import json, re, sys, urllib.error, urllib.parse, urllib.request
+
+web, login_fn, send_fn, customer, admin_key, operator_key = sys.argv[1:7]
+customer_id, pin = customer.split(":")
+
+
+class Stay(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):  # a login answers with a redirect and a cookie: look at it, do not follow it
+        return None
+
+
+opener = urllib.request.build_opener(Stay)
+
+
+def call(method, path, body=None, headers=None):
+    request = urllib.request.Request(web + path, data=body, headers=headers or {}, method=method)
+    try:
+        response = opener.open(request, timeout=60)
+    except urllib.error.HTTPError as error:
+        response = error
+    return response.status, response.headers, response.read().decode()
+
+
+def cookie_of(headers, name):
+    """`name=value` of the cookie a response sets, or None."""
+    for line in headers.get_all("Set-Cookie") or []:
+        if line.startswith(name + "=") and "Max-Age=0" not in line:
+            return line.split(";")[0], line
+    return None, None
+
+
+def check(condition, what):
+    print(("ok   " if condition else "FAIL ") + what)
+    if not condition:
+        raise SystemExit(1)
+
+
+def serverfn(fn, cookie=None, **data):
+    """A call to a server function as the browser makes it: seroval JSON, same-origin (the framework's CSRF check)."""
+    obj = lambda i, fields: {"t": 10, "i": i, "p": {"k": list(fields), "v": [{"t": 1, "s": v} for v in fields.values()]}, "o": 0}
+    payload = {"t": {"t": 10, "i": 0, "p": {"k": ["data", "context"], "v": [obj(1, data), obj(2, {})]}, "o": 0}, "f": 127, "m": []}
+    headers = {"Content-Type": "application/json", "x-tsr-serverFn": "true", "Sec-Fetch-Site": "same-origin"}
+    if cookie:
+        headers["Cookie"] = cookie
+    return call("POST", "/_serverFn/" + fn, json.dumps(payload).encode(), headers)
+
+
+# customer: a wrong PIN is refused (401), the right one starts a session held in an httpOnly cookie, and a turn goes through
+status, headers, body = serverfn(login_fn, customer_id=customer_id, pin="000000" if pin != "000000" else "111111")
+check(status == 200 and '"k":["ok","status"],"v":[{"t":2,"s":3},{"t":0,"s":401}]' in body, "web login: a wrong PIN is refused with 401")
+check(cookie_of(headers, "__Host-cecilai_session")[0] is None, "web login: a refused login sets no session")
+status, headers, body = serverfn(login_fn, customer_id=customer_id, pin=pin)
+session, line = cookie_of(headers, "__Host-cecilai_session")
+check(status == 200 and '"k":["ok"],"v":[{"t":2,"s":2}]' in body and session, "web login: the customer's login starts a session")
+check(all(a in line for a in ("HttpOnly", "Secure", "SameSite=Lax", "Path=/")), "web login: the session cookie is __Host-, httpOnly, Secure and SameSite=Lax")
+status, _, body = serverfn(send_fn, cookie=session, message="cual es mi saldo", key="e2e-key-0001")
+check(status == 200 and '"k":["ok","reply"],"v":[{"t":2,"s":2}' in body and '"s":"AUTO_RESOLVE"' in body, "web chat: a turn through the BFF answers, resolved from verified data")
+status, _, body = serverfn(send_fn, message="cual es mi saldo", key="e2e-key-0002")
+check(status == 200 and '"s":"session_expired"' in body and '"reply"' not in body, "web chat: without the session cookie there is no turn (session_expired)")
+
+# operator: the plain form, from this origin (what the compose configures as WEB_PUBLIC_ORIGIN), and the queue behind it
+origin = web
+form = urllib.parse.urlencode({"admin_key": admin_key, "operator_key": operator_key}).encode()
+same = {"Content-Type": "application/x-www-form-urlencoded", "Origin": origin, "Referer": origin + "/operador/login"}
+for name, headers in (("with no Origin or Referer", {"Content-Type": same["Content-Type"]}),
+                      ("from another origin", {**same, "Origin": "https://attacker.invalid", "Referer": "https://attacker.invalid/x"})):
+    status, response, _ = call("POST", "/operador/sesion", form, headers)
+    check(status == 403 and cookie_of(response, "__Host-cecilai_operator")[0] is None, f"operator login {name}: refused with 403, no session")
+status, response, _ = call("POST", "/operador/sesion", form, same)
+cookie, line = cookie_of(response, "__Host-cecilai_operator")
+check(status == 303 and response["Location"] == "/operador/cola" and cookie, "operator login from this origin: 303 to the queue with a session")
+check(all(a in line for a in ("HttpOnly", "Secure", "SameSite=Strict")), "operator session cookie: __Host-, httpOnly, Secure and SameSite=Strict")
+check(call("GET", "/operador/cola")[0] == 307, "the queue without a session redirects to the login")
+status, _, page = call("GET", "/operador/cola", headers={"Cookie": cookie})
+check(status == 200 and "Cola humana" in page and re.search(r"pendientes? de [1-9]", page), "operator queue: opens with the session and lists the tickets the stack filed")
+check("No se pudo cargar" not in page and operator_key not in page and admin_key not in page, "operator queue: loaded from the API, and no key in the page")
+
+# the UI kit gallery is a development tool: a production build answers 404 unless UI_GALLERY=1
+check(call("GET", "/dev/ui")[0] == 404, "/dev/ui answers 404 in the production build")
+PY
+# A browser sends `Origin: null` with a form post under `Referrer-Policy: no-referrer`, which the operator forms refuse: the web
+# must send a policy that keeps the origin for its own posts (found by logging in with Chromium; curl cannot show it)
+headers "$WEB/operador/login" | grep -qi '^referrer-policy: same-origin' || fail "the web's Referrer-Policy is not same-origin: a browser's operator login would send Origin: null"
+ok "web as a browser uses it: customer login and chat, operator login and queue, /dev/ui closed"
 
 # --- access ---
 [ "$(curl -s -o /dev/null -w '%{http_code}' "$API/admin/ops")" = 401 ] || fail "/admin/ops is open"

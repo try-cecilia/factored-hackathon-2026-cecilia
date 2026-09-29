@@ -187,10 +187,12 @@ rather than a silently relaxed contract.
 ## How each claim is checked
 
 `make validate-data-ml` runs `tests/test_data_ml_validation.py`, one test per
-claim, and writes [`docs/evidence/data_ml_validation.md`](evidence/data_ml_validation.md)
-with PASS/FAIL, the evidence and the command for each criterion. It uses only
-the fixture warehouse and the committed reports (no S3, no keys) and is part of
-`make gate`.
+claim, and reports PASS/FAIL per criterion. `make evidence` writes
+[`docs/evidence/data_ml_validation.md`](evidence/data_ml_validation.md) with the
+evidence and the command for each criterion (its date and commit are those of
+that run); `make validate-data-ml` and `make gate` only verify and write nothing.
+It uses only the fixture warehouse and the committed reports (no S3, no keys)
+and is part of `make gate`.
 
 | Claim in this document | Test that fails if it stops being true |
 |---|---|
