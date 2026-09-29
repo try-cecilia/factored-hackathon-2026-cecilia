@@ -37,7 +37,7 @@ from agent.llm.client import LLMUnavailable, Usage, get_default_client
 from agent.llm.pricing import cost_usd
 from agent.llm.privacy import mask_card_numbers, redact
 from agent.policy import escalation, router
-from agent.policy.desk import TERMINAL, default_desk
+from agent.policy.desk import default_desk
 from agent.policy.router import Decision, Disposition
 from agent.policy.signals import detect_language, normalize
 from agent.session.auth import ExpiredSession, InvalidSession, SessionStore, default_store, session_ref
@@ -99,7 +99,7 @@ class _Conversation:
     pending_clarification: bool = False
     pending_action: dict | None = None  # a trace proposed on the last turn, kept in code: never sent to the model
     pending_choice: list[dict] | None = None  # the pending movements listed on the last turn, to pick one by number
-    cases: dict[str, str] = field(default_factory=dict)  # ticket id -> last status the customer was told ("open" when filed)
+    cases: dict[str, str] = field(default_factory=dict)  # legacy notices, retained when loading older conversations
 
 
 class ConversationStore:
@@ -142,6 +142,17 @@ class ConversationStore:
     def append(self, conv: _Conversation, role: str, content: str) -> None:
         conv.messages.append({"role": role, "content": content})
         del conv.messages[:-self.max_messages]
+
+    def mark_case_notified(self, customer_id: str, ticket_id: str, status: str) -> bool:
+        """Record a notice once per customer, even across sessions, restarts and conversation cleanup."""
+        with self._lock, self._db:
+            # Only a claimed ticket can change again; a terminal notice must never be repeated or rolled back.
+            changed = self._db.execute(
+                "INSERT INTO case_notifications VALUES (?, ?, ?) "
+                "ON CONFLICT(customer_id, ticket_id) DO UPDATE SET status = excluded.status "
+                "WHERE case_notifications.status = 'claimed' AND case_notifications.status != excluded.status",
+                (customer_id, ticket_id, status))
+            return changed.rowcount == 1
 
     def append_request(self, conv: _Conversation, request: str) -> None:
         conv.requests.append(request)
@@ -268,15 +279,14 @@ class Orchestrator:
             return result
         conv = self.conversations.get(session.ref)
         news = []
-        for ticket_id, told in list(conv.cases.items()):
-            if told in TERMINAL:
-                continue
+        for ticket in escalation.default_queue.for_customer(session.customer_id):
+            ticket_id = ticket["ticket_id"]
             state = default_desk.state(ticket_id)
-            if state["status"] in (told, "open"):
-                continue
-            conv.cases[ticket_id] = state["status"]
             line = render.case_update(state["status"], result.language, default_traces.get(state["trace_id"] or ""))
-            if line:
+            if line and self.conversations.mark_case_notified(session.customer_id, ticket_id, state["status"]):
+                # Seed notices already delivered by the earlier, session-scoped implementation without repeating them.
+                if conv.cases.get(ticket_id) == state["status"]:
+                    continue
                 news.append(line)
         if news:
             result.response_text = "\n".join(news) + "\n\n" + result.response_text
@@ -310,8 +320,6 @@ class Orchestrator:
                                          [{"tool": f["tool"], "result": f["result"]} for f in facts],
                                          list(conv.requests), session.attributes, trace_id, pending_action)
             filed = escalation.default_queue.get(ticket.ticket_id) is not None
-            if filed:
-                conv.cases[ticket.ticket_id] = "open"
         except Exception:  # noqa: BLE001 - an unwritable queue must not crash the turn; it is reported as unfiled
             filed = False
         if not filed:

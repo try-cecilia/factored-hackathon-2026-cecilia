@@ -155,7 +155,7 @@ def test_the_customer_hears_once_what_a_person_did_with_their_case():
     assert "Novedad" not in orch.handle_message(tok, "gracias").response_text  # a finished case is not repeated
 
 
-def test_the_news_survives_a_restart_because_what_was_told_is_saved_with_the_conversation(tmp_path, monkeypatch):
+def test_the_news_survives_a_restart_because_what_was_told_is_saved(tmp_path, monkeypatch):
     from agent.core.orchestrator import ConversationStore
     db = str(tmp_path / "state.sqlite")
     fake = FakeLLMClient([tool_call_response("request_trace", {}), *[text_response("ok")] * 10])
@@ -175,6 +175,42 @@ def test_the_news_survives_a_restart_because_what_was_told_is_saved_with_the_con
     default_desk.act(ticket_id, "reject", "ana", reason="interno")
     said = after.handle_message(tok, "hola").response_text
     assert "no pudo abrir el rastreo" in said and "interno" not in said
+
+
+@pytest.mark.parametrize("end_session", ["expire", "revoke"])
+@pytest.mark.parametrize("action, expected", [("approve", "aprobó el rastreo"), ("reject", "no pudo abrir el rastreo")])
+def test_case_news_follows_the_customer_after_login_and_conversation_cleanup(tmp_path, end_session, action, expected):
+    import sqlite3
+    from agent.core.orchestrator import ConversationStore
+
+    db = str(tmp_path / "state.sqlite")
+    fake = FakeLLMClient([tool_call_response("request_trace", {}), *[text_response("ok")] * 10])
+
+    def process():
+        return Orchestrator(SessionStore(db_path=db), llm=lambda: fake, conversations=ConversationStore(db_path=db))
+
+    before = process()
+    attrs = {"segment": "Student", "country": "México", "customer_status": "Active"}
+    old = before.session_store.issue("CLI-FIX0004", attrs).token
+    before.handle_message(old, "hice una transferencia que todavía no llega")
+    ticket_id = before.handle_message(old, "sí").ticket_id
+    default_desk.act(ticket_id, "claim", "ana")
+    assert "ya lo tomó" in before.handle_message(old, "hola").response_text
+    getattr(before.session_store, end_session)(old)
+
+    with sqlite3.connect(db) as conn:
+        conn.execute("UPDATE conversations SET updated_at = 0")
+    after = process()
+    token = after.session_store.issue("CLI-FIX0004", attrs).token
+    assert "Novedad" not in after.handle_message(token, "hola").response_text
+    default_desk.act(ticket_id, action, "ana")
+    other = after.session_store.issue("CLI-FIX0001", attrs).token
+    assert "Novedad" not in after.handle_message(other, "hola").response_text
+    assert expected in after.handle_message(token, "hola").response_text
+
+    restarted = process()
+    newest = restarted.session_store.issue("CLI-FIX0004", attrs).token
+    assert "Novedad" not in restarted.handle_message(newest, "hola").response_text
 
 
 def test_the_case_endpoint_shows_a_customer_only_their_own_ticket(monkeypatch):
