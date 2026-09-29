@@ -1,7 +1,11 @@
 """HTTP surface for the Account/Payment Inquiries agent.
 
 - /auth/session exchanges customer_id + test PIN for a short-lived token
-  (agent/session/identity.py); /chat only ever accepts that token.
+  (agent/session/identity.py); /chat only ever accepts that token. GET
+  /auth/session with X-Session-Token reads the session back without extending
+  it; DELETE revokes it (always 204). A web BFF holds the token and calls these.
+- Behind that BFF, CLIENT_IP_HEADER=X-Client-IP makes per-IP limits use the end
+  user's address, safe only when nothing but the BFF can reach the API.
 - /admin/* require X-Admin-Key == ADMIN_API_KEY and are disabled (503) when
   no key is configured — they expose tickets, audit and traces, which carry
   customer data.
@@ -23,7 +27,7 @@ from collections import Counter, defaultdict, deque
 from pathlib import Path
 from typing import Literal
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
@@ -32,7 +36,7 @@ from agent.core.orchestrator import default_orchestrator
 from agent.llm.budget import default_budget
 from agent.llm.client import default_providers
 from agent.policy import intent_guard
-from agent.session.auth import ExpiredSession, InvalidSession
+from agent.session.auth import ExpiredSession, InvalidSession, default_store
 from agent.session.identity import AuthError, IdentityUnavailable, LockedOut, default_identity, derive_test_pin
 from agent.session.operators import OperatorDirectory
 from agent.tools import account_tools
@@ -92,6 +96,16 @@ class SessionResponse(BaseModel):
     session_ref: str
     expires_at: float
     expires_in: int  # seconds left, independent of the client's clock
+
+
+class SessionInfo(BaseModel):
+    customer_id: str
+    session_ref: str
+    segment: str
+    country: str
+    customer_status: str
+    expires_at: float
+    expires_in: int
 
 
 class ChatRequest(BaseModel):
@@ -181,6 +195,26 @@ def create_session(req: SessionRequest, request: Request) -> SessionResponse:
     except AuthError:
         raise HTTPException(401, "invalid credentials") from None
     return SessionResponse(token=s.token, session_ref=s.ref, expires_at=s.expires_at, expires_in=round(s.expires_at - s.issued_at))
+
+
+@app.get("/auth/session", response_model=SessionInfo)
+def read_session(x_session_token: str | None = Header(default=None)) -> SessionInfo:
+    """Who the token belongs to and how long it has left. Reading does not extend it."""
+    try:
+        s = default_store.validate(x_session_token or "")
+    except (InvalidSession, ExpiredSession):
+        raise HTTPException(401, "invalid or expired session") from None
+    return SessionInfo(customer_id=s.customer_id, session_ref=s.ref, segment=s.attributes.get("segment", ""),
+                       country=s.attributes.get("country", ""), customer_status=s.attributes.get("customer_status", ""),
+                       expires_at=s.expires_at, expires_in=max(0, round(s.expires_at - time.time())))
+
+
+@app.delete("/auth/session", status_code=204)
+def end_session(x_session_token: str | None = Header(default=None)) -> Response:
+    """Logout. Always 204, so an unknown or already revoked token is not an error."""
+    if x_session_token:
+        default_store.revoke(x_session_token)
+    return Response(status_code=204)
 
 
 @app.post("/chat", response_model=ChatResponse)
