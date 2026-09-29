@@ -53,6 +53,16 @@ export function elevateOperatorSession(operatorKey: string, operator?: string) {
   return id !== null
 }
 
+/** The id in the request's cookie (what identifies the session this request used), or undefined. */
+export const operatorSessionId = () => getCookie(name)
+
+/**
+ * Ends a session on the server, by id, and sends nothing to the browser. What an API error does to a session: the id
+ * named is the one THIS request used, so if a login has replaced it meanwhile there is nothing left to end, and the
+ * new session (under another id) is untouched. Only an explicit logout clears the cookie.
+ */
+export const invalidateOperatorSession = (id: string | undefined) => store.end(id)
+
 export function endOperatorSession() {
   store.end(getCookie(name))
   deleteCookie(name, options)

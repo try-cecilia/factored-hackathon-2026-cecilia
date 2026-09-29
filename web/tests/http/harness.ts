@@ -11,8 +11,15 @@ export const ORIGIN = 'http://console.test'
 
 type Handler = { fetch(request: Request): Promise<Response> }
 
+type ApiMode = 'ok' | 'revoked' | 'forbidden' | 'error'
+type Gate = { reached: Promise<void>; release: (status?: number) => void }
+
 export async function startConsole() {
-  const api: Server = createServer((req, res) => {
+  // What the fake agent API does next: a mode for every admin read, and an optional gate that holds one queue read
+  // until the test releases it (a slow response that arrives after other things have happened).
+  let mode: ApiMode = 'ok'
+  let pending: { onReach: () => void; released: Promise<number> } | null = null
+  const api: Server = createServer(async (req, res) => {
     const reply = (status: number, body: unknown) => {
       res.writeHead(status, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify(body))
@@ -20,6 +27,14 @@ export async function startConsole() {
     const admin = req.headers['x-admin-key'] === ADMIN
     const operator = req.headers['x-operator-key'] === ANA
     if (req.url?.startsWith('/admin/operator/me')) return operator ? reply(200, { operator: 'ana' }) : reply(401, { detail: 'invalid operator key' })
+    if (req.url?.startsWith('/admin/human_queue') && pending) {
+      const gate = pending
+      pending = null
+      gate.onReach()
+      const status = await gate.released
+      return status === 200 ? reply(200, []) : reply(status, { detail: 'held response' })
+    }
+    if (req.url?.startsWith('/admin/') && mode !== 'ok') return reply({ revoked: 401, forbidden: 403, error: 500 }[mode], { detail: mode })
     if (req.url?.startsWith('/admin/')) return admin ? reply(200, req.url.startsWith('/admin/human_queue') ? [] : {}) : reply(401, { detail: 'invalid admin key' })
     reply(404, {})
   })
@@ -38,7 +53,15 @@ export async function startConsole() {
     }
     return built.default.fetch(new Request(`${init.base ?? ORIGIN}${path}`, { method: init.method ?? (init.fields ? 'POST' : 'GET'), headers, body, redirect: 'manual' }))
   }
-  return { send, close: () => api.close() }
+  const hold = (): Gate => {
+    let release!: (status?: number) => void
+    let reached!: () => void
+    const released = new Promise<number>((done) => (release = (status = 200) => done(status)))
+    const arrived = new Promise<void>((done) => (reached = done))
+    pending = { onReach: reached, released }
+    return { reached: arrived, release }
+  }
+  return { send, hold, setApi: (next: ApiMode) => void (mode = next), close: () => api.close() }
 }
 
 /** What a browser submitting the console's own form sends. */
