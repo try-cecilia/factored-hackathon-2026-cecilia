@@ -51,3 +51,25 @@ def test_the_real_fingerprint_covers_templates_traces_and_the_other_inputs_of_th
     assert {"agent/core/render.py", "agent/tools/traces.py", "agent/tools/errors.py", "agent/llm/privacy.py",
             "agent/llm/prompts.py", "agent/session/auth.py", "agent/resilience.py",
             "eval/models/intent_clf.joblib", "eval/models/intent_clf_meta.json"} <= names
+
+
+def test_editing_the_judge_or_the_gold_changes_the_fingerprint(tmp_path):
+    # what the evaluation measures also depends on how it judges and on what it expects: not only on the system
+    for rel in ("eval/run_system_eval.py", "eval/workload/cases_test.jsonl", "eval/heldout/cases_failures.jsonl",
+                "eval/fake_llm.py", "eval/categories.py"):
+        root = tree(tmp_path / rel.replace("/", "_"), b"x = 1\n")
+        target = root / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(b'{"expected": "ESCALATE"}\n')
+        before = fingerprint.policy_fingerprint(root)
+        target.write_bytes(b'{"expected": "AUTO_RESOLVE"}\n')
+        assert fingerprint.policy_fingerprint(root) != before, rel
+
+
+def test_the_real_fingerprint_covers_the_judge_the_simulated_models_and_the_gold():
+    names = {p.relative_to(fingerprint.ROOT).as_posix() for p in fingerprint.policy_files()}
+    assert {"eval/run_system_eval.py", "eval/categories.py", "eval/failure_eval.py", "eval/heldout.py", "eval/workload.py",
+            "eval/stats.py", "eval/baseline_bot.py", "eval/fake_llm.py",
+            "eval/workload/cases_test.jsonl", "eval/heldout/cases_failures.jsonl", "eval/heldout/cases_failures_2.jsonl",
+            "tests/fixtures/raw/customers.csv"} <= names
+    assert not any(n.startswith("eval/reports/") or n in ("eval/gate.py", "eval/tracking.py") for n in names)
