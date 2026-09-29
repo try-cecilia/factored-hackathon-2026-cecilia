@@ -273,7 +273,9 @@ ventanas en memoria son de 1000 registros de auditoría y 500 de trazas.
 funciones de servidor en `web/src/server/`, y el token de sesión vive en una cookie httpOnly (ver frontera 1). La ruta
 `/chat` (`web/src/chat/`) es el chat del cliente; el shell y los estilos siguen el diseño "Cecil.ai" de Paper, y sus
 tokens están en `web/src/tokens.css` con los mismos nombres que en Paper (`--color-cecil-blue`, `--color-gray-500`,
-`--radius-app`...). La consola del operador debe reutilizar esas variables, no redefinirlas.
+`--radius-app`...). La consola del operador debe reutilizar esas variables, no redefinirlas. Nada depende de la nube: Inter y DM Mono salen
+de paquetes npm (`@fontsource`) y quedan dentro del build, y el avatar de Cecilia está en `web/public`; no hay CDN ni
+Google Fonts.
 
 **Cómo correrlo.**
 
