@@ -70,7 +70,7 @@ test:             ## hermetic test suite (fixture warehouse; no S3, no API keys)
 	$(PY) -m pytest tests/ -q
 
 test-resilience:  ## hermetic: traces, bounded retries, safe fallback and capacity limits (no S3, no API keys)
-	$(PY) -m pytest tests/test_tracing.py tests/test_retry.py tests/test_resilience.py tests/test_capacity.py tests/test_local_llm.py tests/test_turn_deadline.py tests/test_record_failures.py tests/test_llm_error_privacy.py tests/test_loadtest.py -q
+	$(PY) -m pytest tests/test_tracing.py tests/test_retry.py tests/test_resilience.py tests/test_capacity.py tests/test_local_llm.py tests/test_turn_deadline.py tests/test_record_failures.py tests/test_llm_error_privacy.py tests/test_call_cancellation.py tests/test_handoff_budget.py tests/test_loadtest.py -q
 
 mlflow-ui:        ## browse every tracked classifier selection and evaluation run: http://127.0.0.1:5000
 	$(PY) -m mlflow ui --backend-store-uri sqlite:///mlruns/mlflow.db
