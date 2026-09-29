@@ -18,3 +18,10 @@ The submission asks for a pitch video with voice that explains the solution and 
 
 `demo_app.webm` in this folder is the first recording (design v2, degraded mode, no voice). It is kept here
 for the record and left out of the public repository.
+
+## Operator console (web)
+
+`operador-*.png` are screenshots of the `/operador/*` web console (login, read-only queue, ticket detail, confirmation
+dialogs, a 409 conflict, an approval that opens a trace, monitoring, traces, mobile, API down). They come from a local run
+on synthetic data: `python -m ops.seed_operator_demo`, then the API and `pnpm --dir web dev`, driven with Playwright. The
+setup and the key handling are in `docs/integracion.md` (frontier 2).

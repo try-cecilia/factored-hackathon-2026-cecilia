@@ -26,6 +26,7 @@ export async function agentFetch(path: string, { method = 'GET', body, token, ti
   const ip = clientIp()
   if (ip) headers.set('X-Client-IP', ip)
   if (token) headers.set('X-Session-Token', token)
+  for (const [name, value] of Object.entries(extra ?? {})) headers.set(name, value)
   if (body !== undefined) headers.set('Content-Type', 'application/json')
 
   try {
