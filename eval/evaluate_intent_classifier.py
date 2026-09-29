@@ -32,7 +32,6 @@ from sklearn.metrics import confusion_matrix, f1_score, precision_recall_fscore_
 
 from agent.llm import baseline_classifier
 from agent.llm.intent_classifier import VARIANTS, load_rows, train
-from agent.policy import intent_guard
 from agent.policy.signals import contains_escalation_signal, escalation_categories
 from eval import leakage, tracking
 from eval.stats import fmt, rate, zero_event_upper_bound
@@ -87,11 +86,13 @@ def guard_metrics(rows: list[dict], flags: list[bool]) -> dict:
             "missed": missed, "missed_upper_bound_if_zero": zero_event_upper_bound(len(pos)) if missed == 0 else None}
 
 
-def trace_guard() -> dict:
+def trace_guard(model, tau: float) -> dict:
     """Trace requests are not a class of the classifier (retraining with them cost a fraud report: LIMITATIONS.md), so
     what is measured is what the pre-LLM guard does with them: a request handed to a person is safe but not self-served."""
     rows = list(csv.DictReader(open(TRACE_HELDOUT, encoding="utf-8")))
-    handed = [r["utterance"] for r in rows if escalation_categories(r["utterance"]) or intent_guard.read(r["utterance"]).escalate]
+    probs = model.predict_proba([r["utterance"] for r in rows])
+    idx = list(model.classes_).index(ESC)
+    handed = [r["utterance"] for r, pr in zip(rows, probs) if escalation_categories(r["utterance"]) or pr[idx] >= tau]
     return {"n": len(rows), "handed_to_a_person": rate(len(handed), len(rows)), "utterances": handed,
             "source": TRACE_HELDOUT, "authors": "team-written, never used for training"}
 
@@ -168,7 +169,7 @@ def main() -> None:
         "threshold_sweep_dev": sweep, "escalation_threshold": tau, "max_false_escalation_constraint": MAX_FALSE_ESCALATION,
         "dev": evaluate(dev), "test": evaluate(test),
         "test_without_templated_phrases": without_templated(evaluate([r for r in test if r["utterance"] not in to_review])),
-        "trace_requests_guard": trace_guard(),
+        "trace_requests_guard": trace_guard(model, tau),
         "versions": {"sklearn": sklearn.__version__, "train_sha256": _h(Path(TRAIN).read_text(encoding="utf-8")), "heldout_sha256": _h(Path(HELDOUT).read_text(encoding="utf-8"))},
     }
     MODEL_OUT.parent.mkdir(parents=True, exist_ok=True)
