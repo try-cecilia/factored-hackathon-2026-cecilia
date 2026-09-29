@@ -59,8 +59,10 @@ export function AppShell({ session, kit, children }: { session: Session; kit: Pr
   const [loggingOut, setLoggingOut] = useState(false)
   const [logoutFailed, setLogoutFailed] = useState(false)
   // The case being looked at. `open` slides the view in; the case stays while it slides out, and `seen` counts the openings, so
-  // opening the same case again asks for it again.
-  const [caseView, setCaseView] = useState<{ id: string; open: boolean; seen: number } | null>(null)
+  // opening the same case again asks for it again. It belongs to the session it was opened in: another session (a Demo scenario
+  // signs in as another customer) has neither that case nor its view.
+  const [opened, setCaseView] = useState<{ id: string; open: boolean; seen: number; session: string } | null>(null)
+  const caseView = opened?.session === session.session_ref ? opened : null
   const caseOpen = caseView?.open ?? false
   const caseTitle = useId()
   const side = useRef<HTMLDivElement>(null)
@@ -81,8 +83,8 @@ export function AppShell({ session, kit, children }: { session: Session; kit: Pr
   // "Ver caso" in a handoff message and a case's row in the sidebar open the case's view (on a phone the drawer closes first).
   const showCase = useCallback((ticketId: string) => {
     setMenuOpen(false)
-    setCaseView((view) => ({ id: ticketId, open: true, seen: (view?.seen ?? 0) + 1 }))
-  }, [])
+    setCaseView((view) => ({ id: ticketId, open: true, seen: (view?.seen ?? 0) + 1, session: session.session_ref }))
+  }, [session.session_ref])
 
   // From the view back to the conversation: the handoff message comes into view with the focus on it, once the view has closed
   // and handed the focus back.

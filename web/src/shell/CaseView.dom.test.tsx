@@ -1,4 +1,4 @@
-import { act, screen, within } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -7,7 +7,8 @@ import { ConversationProvider, useConversation } from '../chat/ConversationProvi
 import type { CaseResult, HistoryResult } from '../chat/types'
 import type { Session } from '../server/auth.functions'
 import type { DemoKit } from '../server/demo.functions'
-import { renderWithI18n } from '../test/render'
+import { I18nProvider } from '../i18n/context'
+import { dictionaries } from '../test/render'
 import { AppShell } from './AppShell'
 import { useShell } from './ShellContext'
 
@@ -40,18 +41,23 @@ function Page() {
   return <ChatLog entries={entries} cases={cases} sending={false} live ended={false} onSend={() => {}} onRetry={() => {}} onReload={() => {}} onViewCase={showCase} onSignIn={() => {}} />
 }
 
+const kit = Promise.resolve<DemoKit>({ enabled: false })
+
+/** The chat page of one session: another `ref` is what a Demo scenario leaves after signing in as another customer. */
+function tree(locale: 'es' | 'pt', ref = 's1', initial: HistoryResult = history) {
+  return (
+    <I18nProvider locale={locale} messages={dictionaries[locale]}>
+      <ConversationProvider sessionRef={ref} initial={initial}>
+        <AppShell session={{ ...session, session_ref: ref }} kit={kit}><Page /></AppShell>
+      </ConversationProvider>
+    </I18nProvider>
+  )
+}
+
 async function draw(locale: 'es' | 'pt' = 'es') {
-  const kit = Promise.resolve<DemoKit>({ enabled: false })
-  let drawn: ReturnType<typeof renderWithI18n> | undefined
-  await act(async () => {
-    drawn = renderWithI18n(
-      <ConversationProvider sessionRef="s1" initial={history}>
-        <AppShell session={session} kit={kit}><Page /></AppShell>
-      </ConversationProvider>,
-      locale,
-    )
-  })
-  return drawn as ReturnType<typeof renderWithI18n>
+  let drawn: ReturnType<typeof render> | undefined
+  await act(async () => { drawn = render(tree(locale)) })
+  return drawn as ReturnType<typeof render>
 }
 
 beforeEach(() => {
@@ -169,5 +175,17 @@ describe('the case view', () => {
     await user.keyboard('{Escape}')
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Abrir el menú' }))
+  })
+
+  it('a new session (another customer, from Demo) closes the previous session\'s case and keeps nothing of it', async () => {
+    const user = userEvent.setup()
+    const { container, rerender } = await draw()
+    await user.click(screen.getByRole('button', { name: /^Ver caso 55d09c14/ }))
+    await screen.findByRole('dialog')
+    await act(async () => { rerender(tree('es', 's2', { ok: true, turns: [], cases: [] })) })
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect((container.querySelector('#shell-case') as HTMLElement).textContent).toBe('')
+    expect(screen.queryByText('Consultando el estado…')).toBeNull()
+    expect((container.querySelector('.shell__main') as HTMLElement).hasAttribute('inert')).toBe(false)
   })
 })
