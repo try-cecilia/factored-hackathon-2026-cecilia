@@ -2,11 +2,12 @@
 order (LLM_PROVIDERS), with bounded retries.
 
 Reliability contract (what "bounded retries, safe fallback" means here):
-- Every request has a timeout; every turn has a total time budget.
+- Every request has a timeout; every turn has a total time budget, which is also capped by the turn's own deadline
+  (agent/resilience.py) when the orchestrator has started one. Output is capped (LLM_MAX_OUTPUT_TOKENS).
 - Only transient failures (timeouts, connection errors, 429, 5xx) are
-  retried, with jittered exponential backoff and no sleep after the last
-  attempt. Permanent ones (auth, bad request, missing key) move straight to
-  the next provider.
+  retried, with jittered exponential backoff, no sleep after the last attempt
+  and no sleep that would outlast the budget. Permanent ones (auth, bad
+  request, missing key) move straight to the next provider.
 - A per-provider circuit breaker skips a provider that just failed
   repeatedly, so an outage costs one timeout, not one per request.
 - If every provider fails, LLMUnavailable is raised; the orchestrator turns
@@ -24,6 +25,8 @@ import threading
 import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
+
+from agent.resilience import backoff_delay, current_deadline
 
 logger = logging.getLogger(__name__)
 
@@ -99,8 +102,14 @@ def _recover_failed_tool_call(exc: Exception, tools: list[dict[str, Any]] | None
     return {"id": "recovered", "name": name, "arguments": json.dumps(args, ensure_ascii=False)}
 
 
+def max_output_tokens() -> int:
+    """The cap on what one model call may generate (LLM_MAX_OUTPUT_TOKENS): it bounds cost and time per call."""
+    return int(os.environ.get("LLM_MAX_OUTPUT_TOKENS") or ANTHROPIC_MAX_TOKENS)
+
+
 def openai_compatible_call(sdk, p: Provider, messages, tools, temperature: float, timeout: float) -> tuple:
-    kwargs: dict[str, Any] = {"model": p.model, "messages": messages, "temperature": temperature}
+    kwargs: dict[str, Any] = {"model": p.model, "messages": messages, "temperature": temperature,
+                              "max_tokens": max_output_tokens()}
     if p.per_request_timeout:
         kwargs["timeout"] = timeout
     if tools:
@@ -139,7 +148,7 @@ def anthropic_call(sdk, p: Provider, messages, tools, temperature: float, timeou
     turns = [{"role": m["role"], "content": m["content"]} for m in messages if m["role"] in ("user", "assistant")]
     while turns and turns[0]["role"] != "user":  # the Messages API requires the customer to speak first
         turns.pop(0)
-    kwargs: dict[str, Any] = {"model": p.model, "max_tokens": ANTHROPIC_MAX_TOKENS, "timeout": timeout, "messages": turns}
+    kwargs: dict[str, Any] = {"model": p.model, "max_tokens": max_output_tokens(), "timeout": timeout, "messages": turns}
     system = [{"type": "text", "text": m["content"]} for m in messages if m["role"] == "system"]
     if system:
         # Cache breakpoint on the first (fixed) system block: tools render before it, so both are cached;
@@ -243,6 +252,7 @@ class LLMClient:
         total_budget_s: float | None = None,
         max_attempts_per_provider: int = 2,
         backoff_base_s: float = 0.5,
+        backoff_cap_s: float = 4.0,
         breaker_threshold: int = 2,
         breaker_cooldown_s: float = 30.0,
         sleep: Callable[[float], None] = time.sleep,
@@ -252,6 +262,7 @@ class LLMClient:
         self.total_budget_s = total_budget_s or float(os.environ.get("LLM_TOTAL_BUDGET_SECONDS", "25"))
         self.max_attempts = max_attempts_per_provider
         self.backoff_base_s = backoff_base_s
+        self.backoff_cap_s = backoff_cap_s
         self.breaker_threshold = breaker_threshold
         self.breaker_cooldown_s = breaker_cooldown_s
         self._sleep = sleep
@@ -265,11 +276,15 @@ class LLMClient:
             self._clients[p.name] = p.factory(api_key, self.timeout_s)
         return self._clients[p.name]
 
-    def _record_failure(self, name: str) -> None:
+    def _record_failure(self, name: str) -> bool:
+        """Count a failure; True if the circuit is now open. The counter is not reset by the cooldown, so the first call
+        after it is a single probe: one more failure opens the circuit again, one success closes it."""
         with self._lock:
             self._failures[name] = self._failures.get(name, 0) + 1
             if self._failures[name] >= self.breaker_threshold:
                 self._down_until[name] = time.time() + self.breaker_cooldown_s
+                return True
+            return False
 
     def _record_success(self, name: str) -> None:
         with self._lock:
@@ -280,6 +295,9 @@ class LLMClient:
              temperature: float = 0.0) -> LLMResponse:
         start = time.perf_counter()  # durations and the turn's deadline on a monotonic clock, fine to the millisecond
         deadline = start + self.total_budget_s
+        turn = current_deadline.get()  # the orchestrator's clock for the whole turn: the model never gets more than what is left
+        if turn is not None:
+            deadline = min(deadline, turn.at)
         attempts: list[dict[str, Any]] = []
         for p in self.providers:
             api_key = os.environ.get(p.api_key_env)
@@ -308,10 +326,14 @@ class LLMClient:
                     logger.warning("LLM %s attempt %d failed (%s): %s", p.name, attempt + 1, kind, exc)
                     if kind == "permanent":
                         break
-                    self._record_failure(p.name)
+                    if self._record_failure(p.name):
+                        break  # the circuit just opened: no more attempts on a provider that is now declared down
                     if attempt < self.max_attempts - 1:
-                        delay = self.backoff_base_s * (2 ** attempt) * (1 + random.random() * 0.25)
-                        self._sleep(max(0.0, min(delay, deadline - time.perf_counter())))
+                        delay = backoff_delay(attempt, self.backoff_base_s, self.backoff_cap_s, random.random)
+                        if delay >= deadline - time.perf_counter():  # waiting would leave no time for the retry itself
+                            attempts.append({"provider": p.name, "outcome": "skipped", "reason": "turn_budget_exhausted"})
+                            break
+                        self._sleep(delay)
         raise LLMUnavailable("all LLM providers failed or were unavailable", attempts)
 
 

@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from agent.policy.router import Decision
+from agent.resilience import RetryPolicy, retry_call
 from agent.policy.signals import PRIORITY_BY_CATEGORY
 from agent.tools import account_tools
 
@@ -52,6 +53,9 @@ class EscalationTicket:
     pending_action: dict[str, Any] | None = None
 
 
+ENQUEUE_RETRY = RetryPolicy(max_attempts=3, base_s=0.1, cap_s=0.5)
+
+
 class HumanQueue:
     @property
     def path(self) -> Path:
@@ -60,8 +64,19 @@ class HumanQueue:
         return p
 
     def enqueue(self, ticket: EscalationTicket) -> None:
-        with open(self.path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(asdict(ticket), default=str, ensure_ascii=False) + "\n")
+        """Append the ticket, retrying a failed write a bounded number of times. The ticket id is the idempotency key:
+        a retry first looks for the ticket, so a write that landed but reported failure is not filed twice."""
+        tries = 0
+
+        def write() -> None:
+            nonlocal tries
+            tries += 1
+            if tries > 1 and self.get(ticket.ticket_id) is not None:
+                return
+            with open(self.path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(asdict(ticket), default=str, ensure_ascii=False) + "\n")
+
+        retry_call(write, policy=ENQUEUE_RETRY, idempotency_key=ticket.ticket_id)
 
     def get(self, ticket_id: str) -> dict | None:
         # ponytail: linear scan of a local JSONL file; the bank's case system answers this by id
@@ -96,6 +111,8 @@ NEXT_STEP = {
     "data_unavailable": "Look up the missing field in the core system and answer the customer.",
     "tool_failure": "Answer from the core system manually; report the failing lookup.",
     "llm_unavailable": "Answer manually; the assistant was down.",
+    "turn_timeout": "Answer manually; the assistant ran out of time before it could look anything up.",
+    "internal_error": "Answer manually; the assistant failed on this request (see the trace).",
     "trace_unmatched": "Check the movement with payments operations or the sending bank: nothing of the customer's is pending.",
     "trace_unverified": "Open the trace manually and give the customer its number: the tracing service did not confirm it.",
     "trace_review": "Review the movement (see pending_action.review_reason) and approve or reject the trace the customer asked for.",
