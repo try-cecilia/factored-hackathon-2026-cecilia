@@ -7,8 +7,11 @@ import type { HistoryCase, HistoryResult, Reply } from './types'
 /** How far a case is known: asked, failed to ask, not one of this session's (the API said 404), or answered. */
 export type CaseState = { state: 'loading' } | { state: 'error' } | { state: 'not_found' } | { state: 'ready'; status: string; message: string | null }
 
-/** What one read of a case came to: `ended` is a session that is over, and the conversation says so. */
-export type CaseRead = 'ready' | 'not_found' | 'error' | 'ended'
+/**
+ * What one read of a case came to: `ended` is a session that is over, and the conversation says so; `superseded`, a read that
+ * a newer one of the same case overtook (its answer was dropped: the newer one's is the one that counts).
+ */
+export type CaseRead = 'ready' | 'not_found' | 'error' | 'ended' | 'superseded'
 
 export type CaseRow = { ref: CaseRef; state: CaseState }
 
@@ -62,6 +65,8 @@ export function ConversationProvider({ sessionRef, initial, children }: { sessio
   const statesRef = useRef(states)
   statesRef.current = states
   const asked = useRef(new Set<string>())
+  // The last read asked for each case in this session: an answer to an older one that arrives later is stale.
+  const reads = useRef(new Map<string, number>())
 
   const [current, setCurrent] = useState(sessionRef)
   if (current !== sessionRef) {
@@ -80,6 +85,7 @@ export function ConversationProvider({ sessionRef, initial, children }: { sessio
     nextId.current = (initial.ok ? fromHistory(initial.turns, 1, 0).length : 0) + 1
     sendingRef.current = false
     asked.current.clear()
+    reads.current.clear()
   }, [sessionRef])
 
   const patch = useCallback((id: number, change: Partial<UserEntry>) => {
@@ -90,11 +96,14 @@ export function ConversationProvider({ sessionRef, initial, children }: { sessio
     // The first look shows "loading"; the ones after keep the last answer on screen until the new one arrives, and a failed
     // one keeps it too (the caller is told it failed).
     const mine = epoch.current
+    const read = (reads.current.get(ticketId) ?? 0) + 1
+    reads.current.set(ticketId, read)
+    const latest = () => mine === epoch.current && reads.current.get(ticketId) === read
     const failed = () => setStates((s) => (s[ticketId]?.state === 'ready' ? s : { ...s, [ticketId]: { state: 'error' } }))
     if (!(ticketId in statesRef.current)) setStates((s) => ({ ...s, [ticketId]: { state: 'loading' } }))
     try {
       const result = await getCase({ data: { ticket_id: ticketId } })
-      if (mine !== epoch.current) return 'error'
+      if (!latest()) return 'superseded'
       if (result.ok) {
         setStates((s) => ({ ...s, [ticketId]: { state: 'ready', status: result.case.status, message: result.case.message } }))
         return 'ready'
@@ -110,7 +119,8 @@ export function ConversationProvider({ sessionRef, initial, children }: { sessio
       failed()
       return 'error'
     } catch {
-      if (mine === epoch.current) failed()
+      if (!latest()) return 'superseded'
+      failed()
       return 'error'
     }
   }, [])

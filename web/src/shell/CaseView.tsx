@@ -37,6 +37,8 @@ export function CaseView({ ticketId, row, ended, titleId, refresh, onClose, onSh
     setRefreshing(true)
     const read = await refresh(ticketId)
     setRefreshing(false)
+    // A read that a newer one overtook says nothing: the newer one does.
+    if (read === 'superseded') return
     if (announce) setNote(read === 'ready' ? { ok: true, at: Date.now() } : read === 'error' ? { ok: false, at: Date.now() } : null)
   }, [refresh, ticketId])
 

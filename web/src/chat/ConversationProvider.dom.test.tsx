@@ -2,7 +2,7 @@ import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ConversationProvider, useConversation } from './ConversationProvider'
-import type { HistoryResult, Reply, SendResult } from './types'
+import type { CaseResult, HistoryResult, Reply, SendResult } from './types'
 
 const server = vi.hoisted(() => ({
   sendMessage: vi.fn(),
@@ -24,6 +24,7 @@ function Probe() {
       <button type="button" onClick={() => void c.send('hola')}>send</button>
       <button type="button" onClick={() => c.retry(c.entries.find((e) => e.role === 'user')?.id ?? 0)}>retry</button>
       <button type="button" onClick={() => void c.reload()}>reload</button>
+      <button type="button" onClick={() => void c.refreshCase(c.cases[0]?.ref.ticketId ?? '')}>refresh-case</button>
       <output data-testid="ended">{String(c.ended)}</output>
       <output data-testid="sending">{String(c.sending)}</output>
       <output data-testid="history-failed">{String(c.historyFailed)}</output>
@@ -255,5 +256,20 @@ describe('ConversationProvider', () => {
       await waitFor(() => expect(items('assistant')[0]?.textContent).toBe('La guardada.'))
       expect(items('user').map((e) => e.getAttribute('data-failure'))).toEqual([null])
     })
+  })
+
+  it('an older read of a case that answers last does not replace a newer one', async () => {
+    const escalated = reply({ disposition: 'ESCALATE', category: 'theft', ticket_id: 'T1', response_text: 'Voy a transferir tu caso.' })
+    mount({ ok: true, cases: [], turns: [{ role: 'user', text: 'me robaron', at: 1 }, { role: 'assistant', reply: escalated, at: 2 }] })
+    await screen.findByText('open')
+    const answers: ((r: CaseResult) => void)[] = []
+    server.getCase.mockImplementation(() => new Promise<CaseResult>((resolve) => { answers.push(resolve) }))
+    const user = userEvent.setup()
+    await user.click(screen.getByText('refresh-case'))
+    await user.click(screen.getByText('refresh-case'))
+    expect(answers).toHaveLength(2)
+    await act(async () => answers[1]({ ok: true, case: { ticket_id: 'T1', status: 'approved', message: null } }))
+    await act(async () => answers[0]({ ok: true, case: { ticket_id: 'T1', status: 'claimed', message: null } }))
+    expect(document.querySelector('li[data-case="T1"]')?.textContent).toBe('approved')
   })
 })
