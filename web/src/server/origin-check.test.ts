@@ -93,3 +93,22 @@ test('a list that mixes http and https is invalid, in either order: the cookies 
     assert.deepEqual(verdict, { ok: false, reason: 'misconfigured' }, publicOrigin)
   }
 })
+
+test('Unicode look-alikes are not origins: what normalizes to a wildcard or another host invalidates the whole value', () => {
+  const good = 'https://console.bank.example'
+  const bad = [
+    'https://\uFF0A.bank.example', // fullwidth asterisk: the URL parser turns it into *
+    'https://\uFF0A', 'https://console\u3002bank.example', 'https://console\uFF0Ebank.example', 'https://console\uFF61bank.example', // other dots
+    'https://\uFF43\uFF4F\uFF4E\uFF53\uFF4F\uFF4C\uFF45.bank.example', // fullwidth letters
+    'https://con\u00ADsole.bank.example', 'https://console\u200B.bank.example', 'https://console.bank.example\u2044evil.example',
+    'https://b\u00FCcher.example', // an IDN must be written in punycode
+    'https://console.bank.example:\uFF13\uFF10\uFF10\uFF10', 'https://console.bank.example:99999', 'https://%2A.bank.example',
+    'https://-console.bank.example', 'https://console..bank.example', 'https://console.bank.example.', 'https://0x7f.1', 'https://[not-ipv6]',
+  ]
+  for (const entry of bad) {
+    assert.equal(publicOrigins(`${good},${entry}`), null, `second: ${JSON.stringify(entry)}`)
+    assert.equal(publicOrigins(`${entry},${good}`), null, `first: ${JSON.stringify(entry)}`)
+  }
+  assert.deepEqual(publicOrigins(`${good},https://xn--bcher-kva.example,https://a-b.c1.example:8443`), [good, 'https://xn--bcher-kva.example', 'https://a-b.c1.example:8443'])
+  assert.deepEqual(publicOrigins('http://127.0.0.1:3000,http://[::1]:8080,http://localhost:3000'), ['http://127.0.0.1:3000', 'http://[::1]:8080', 'http://localhost:3000'])
+})

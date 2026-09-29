@@ -160,6 +160,7 @@ describe('a list is valid only if every entry is a pure origin: one bad entry re
     ['a path', 'https://console.bank.example/operador', 'https://console.bank.example'],
     ['a query', 'https://console.bank.example?x=1', 'https://console.bank.example'],
     ['a fragment', 'https://console.bank.example#x', 'https://console.bank.example'],
+    ['a fullwidth asterisk (U+FF0A) that the URL parser turns into a wildcard', 'https://console.bank.example,https://\uFF0A.bank.example', 'https://console.bank.example'],
   ]
   for (const [name, value, logged] of cases) {
     test(`${name}: ${value}`, async () => {
