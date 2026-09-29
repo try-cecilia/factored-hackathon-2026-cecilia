@@ -26,7 +26,7 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict
 
-CONTRACT_VERSION = "2.0.0"
+CONTRACT_VERSION = "2.1.0"
 
 CREDIT_PRODUCT_TYPES = ("Tarjeta Crédito", "Préstamo Personal", "Préstamo Hipotecario")
 PRODUCT_TYPES = (
@@ -104,6 +104,18 @@ COLUMN_TYPES: dict[str, dict[str, str]] = {
         "question_3_response": "INTEGER", "open_comments": "VARCHAR", "comment_sentiment": "VARCHAR",
         "response_time_hours": "DECIMAL(8,2)", "campaign_response_rate": "DECIMAL(5,2)",
     },
+    "complaints": {
+        "complaint_id": "VARCHAR", "creation_date": "TIMESTAMP", "process_date": "DATE",
+        "customer_id": "VARCHAR", "case_type": "VARCHAR", "category": "VARCHAR",
+        "subcategory": "VARCHAR", "reception_channel": "VARCHAR", "affected_product_id": "VARCHAR",
+        "related_branch_id": "VARCHAR", "origin_interaction_id": "VARCHAR", "description": "VARCHAR",
+        "claimed_amount": "DECIMAL(15,2)", "currency": "VARCHAR", "priority": "VARCHAR",
+        "status": "VARCHAR", "assigned_agent_id": "VARCHAR", "assignment_date": "TIMESTAMP",
+        "first_response_date": "TIMESTAMP", "resolution_date": "TIMESTAMP", "closing_date": "TIMESTAMP",
+        "sla_breached": "BOOLEAN", "resolution_days": "INTEGER", "resolution": "VARCHAR",
+        "compensation_granted": "DECIMAL(15,2)", "resolution_satisfaction": "INTEGER",
+        "is_repeat_complainer": "BOOLEAN",
+    },
 }
 
 PRIMARY_KEYS = {
@@ -115,6 +127,7 @@ PRIMARY_KEYS = {
     "call_center_interactions": ["interaction_id"],
     "call_transcripts": ["transcript_id"],
     "satisfaction_surveys": ["survey_id"],
+    "complaints": ["complaint_id"],
 }
 
 # Column that decides which duplicate survives dedup (latest wins). Tables
@@ -155,6 +168,10 @@ NOT_NULL_COLUMNS = {
     ],
     "satisfaction_surveys": [
         "survey_id", "survey_date", "process_date", "customer_id", "survey_type", "send_channel", "main_score",
+    ],
+    "complaints": [
+        "complaint_id", "creation_date", "process_date", "customer_id", "case_type", "category",
+        "reception_channel", "description", "priority", "status", "sla_breached", "is_repeat_complainer",
     ],
 }
 
@@ -220,6 +237,19 @@ DOMAIN_RULES: dict[str, list[tuple[str, str, str]]] = {
     "satisfaction_surveys": [
         ("csat_range", "survey_type <> 'CSAT' OR main_score BETWEEN 1 AND 5", "warn"),
         ("nps_range", "survey_type <> 'NPS' OR main_score BETWEEN 0 AND 10", "warn"),
+    ],
+    "complaints": [
+        ("case_type_enum", _in("case_type", ["Complaint", "Claim", "Request", "Suggestion"]), "error"),
+        ("channel_enum", _in("reception_channel", ["Call Center", "Email", "Web", "App", "Branch", "Regulator"]), "error"),
+        ("currency_enum", f"currency IS NULL OR {_in('currency', CURRENCIES)}", "error"),
+        ("priority_enum", _in("priority", ["Low", "Medium", "High", "Critical"]), "error"),
+        ("status_enum", _in("status", ["Open", "In Process", "Escalated", "Resolved", "Closed", "Rejected"]), "error"),
+        ("resolution_days_non_negative", "resolution_days IS NULL OR resolution_days >= 0", "error"),
+        ("resolution_satisfaction_range",
+         "resolution_satisfaction IS NULL OR resolution_satisfaction BETWEEN 1 AND 5", "error"),
+        ("claimed_amount_has_currency", "claimed_amount IS NULL OR currency IS NOT NULL", "warn"),
+        ("resolved_has_evidence",
+         "status NOT IN ('Resolved', 'Closed') OR (resolution_date IS NOT NULL AND resolution IS NOT NULL)", "warn"),
     ],
 }
 
@@ -293,6 +323,36 @@ CROSS_TABLE_CHECKS: dict[str, list[tuple[str, list[str], str]]] = {
         ("contact_not_before_registration", ["customers"],
          "SELECT count(*) FILTER (WHERE CAST(i.interaction_date AS DATE) < CAST(c.registration_date AS DATE)), count(*) "
          "FROM call_center_interactions i JOIN customers c USING (customer_id)"),
+    ],
+    "complaints": [
+        ("fk_customer", ["customers"],
+         "SELECT count(*) FILTER (WHERE u.customer_id IS NULL), count(*) "
+         "FROM complaints c LEFT JOIN customers u USING (customer_id)"),
+        # Optional FKs evaluate only non-null references. Their coverage is also
+        # reported by each column's null-rate check.
+        ("fk_affected_product", ["products"],
+         "SELECT count(*) FILTER (WHERE p.product_id IS NULL), count(*) "
+         "FROM complaints c LEFT JOIN products p ON p.product_id = c.affected_product_id "
+         "WHERE c.affected_product_id IS NOT NULL"),
+        # Existence is not enough: a complaint cannot use another customer's
+        # product for serving, authorization or labels. Keep the row and warn.
+        ("customer_owns_affected_product", ["products"],
+         "SELECT count(*) FILTER (WHERE p.customer_id <> c.customer_id), count(*) "
+         "FROM complaints c JOIN products p ON p.product_id = c.affected_product_id"),
+        ("fk_related_branch", ["branches"],
+         "SELECT count(*) FILTER (WHERE b.branch_id IS NULL), count(*) "
+         "FROM complaints c LEFT JOIN branches b ON b.branch_id = c.related_branch_id "
+         "WHERE c.related_branch_id IS NOT NULL"),
+        ("fk_origin_interaction", ["call_center_interactions"],
+         "SELECT count(*) FILTER (WHERE i.interaction_id IS NULL), count(*) "
+         "FROM complaints c LEFT JOIN call_center_interactions i ON i.interaction_id = c.origin_interaction_id "
+         "WHERE c.origin_interaction_id IS NOT NULL"),
+        # service_agents is outside the supported registry; the quality report
+        # records this check as not run unless that parent is already present.
+        ("fk_assigned_agent", ["service_agents"],
+         "SELECT count(*) FILTER (WHERE a.agent_id IS NULL), count(*) "
+         "FROM complaints c LEFT JOIN service_agents a ON a.agent_id = c.assigned_agent_id "
+         "WHERE c.assigned_agent_id IS NOT NULL"),
     ],
 }
 
@@ -411,6 +471,36 @@ class SatisfactionSurvey(_Model):
     main_score: int
 
 
+class Complaint(_Model):
+    complaint_id: str
+    creation_date: datetime
+    process_date: date
+    customer_id: str
+    case_type: str
+    category: str
+    subcategory: Optional[str] = None
+    reception_channel: str
+    affected_product_id: Optional[str] = None
+    related_branch_id: Optional[str] = None
+    origin_interaction_id: Optional[str] = None
+    description: str
+    claimed_amount: Optional[Decimal] = None
+    currency: Optional[str] = None
+    priority: str
+    status: str
+    assigned_agent_id: Optional[str] = None
+    assignment_date: Optional[datetime] = None
+    first_response_date: Optional[datetime] = None
+    resolution_date: Optional[datetime] = None
+    closing_date: Optional[datetime] = None
+    sla_breached: bool
+    resolution_days: Optional[int] = None
+    resolution: Optional[str] = None
+    compensation_granted: Optional[Decimal] = None
+    resolution_satisfaction: Optional[int] = None
+    is_repeat_complainer: bool
+
+
 ROW_MODELS = {
     "customers": Customer,
     "products": Product,
@@ -420,4 +510,5 @@ ROW_MODELS = {
     "call_center_interactions": CallCenterInteraction,
     "call_transcripts": CallTranscript,
     "satisfaction_surveys": SatisfactionSurvey,
+    "complaints": Complaint,
 }
