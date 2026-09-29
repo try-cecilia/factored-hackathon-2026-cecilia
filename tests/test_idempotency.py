@@ -4,10 +4,12 @@ again, so it cannot file a second ticket or confirm a second action. Fixture: CL
 from __future__ import annotations
 
 import threading
+import time
 
 import pytest
 from fastapi.testclient import TestClient
 
+from agent.session.auth import default_store
 from api import idempotency, main
 from tests.test_api import login
 
@@ -156,3 +158,50 @@ def test_a_stored_reply_survives_a_restart_when_state_is_on_disk(tmp_path):
         slot.save('{"kept": true}')
     with idempotency.IdempotencyStore(db_path=db).guard("ref", "key-00000003", "hola") as slot:
         assert slot.replay == '{"kept": true}'
+
+
+def test_a_replay_is_not_delivered_once_the_session_is_over(client):
+    """Logging out, or letting the session run out, ends what the stored reply may be shown to."""
+    tok = token(client)
+    before = tickets(client)
+    first = chat(client, tok, CLONED, key="msg-0010-aaaa")
+    assert first.json()["disposition"] == "ESCALATE"
+    assert client.delete("/auth/session", headers={"X-Session-Token": tok}).status_code == 204
+    again = chat(client, tok, CLONED, key="msg-0010-aaaa")
+    assert again.json()["disposition"] == "REAUTH_REQUIRED" and again.json()["ticket_id"] is None
+    assert "Idempotent-Replayed" not in again.headers
+    assert tickets(client) == before + 1
+
+    other = token(client)
+    chat(client, other, "¿Cuál es mi saldo?", key="msg-0011-aaaa")
+    default_store.expire(other)
+    assert chat(client, other, "¿Cuál es mi saldo?", key="msg-0011-aaaa").json()["disposition"] == "REAUTH_REQUIRED"
+
+
+def test_a_retry_that_waited_for_the_first_turn_is_checked_again_when_its_turn_comes(client, monkeypatch):
+    tok = token(client)
+    started, release, out = threading.Event(), threading.Event(), {}
+    real = main._chat_turn
+
+    def slow(req):
+        reply = real(req)  # the turn has run; the reply is not yet saved or delivered
+        started.set()
+        release.wait(5)
+        return reply
+
+    monkeypatch.setattr(main, "_chat_turn", slow)
+
+    def retry():
+        started.wait(5)
+        out["retry"] = chat(TestClient(main.app), tok, "¿Cuál es mi saldo?", key="msg-0012-aaaa")
+
+    first = threading.Thread(target=lambda: out.setdefault("first", chat(TestClient(main.app), tok, "¿Cuál es mi saldo?", key="msg-0012-aaaa")))
+    second = threading.Thread(target=retry)
+    first.start(); second.start()
+    started.wait(5)
+    time.sleep(0.2)  # the retry is now waiting on the key's lock
+    default_store.revoke(tok)  # the session ends while it waits
+    release.set()
+    first.join(5); second.join(5)
+    assert out["first"].json()["disposition"] == "AUTO_RESOLVE"
+    assert out["retry"].json()["disposition"] == "REAUTH_REQUIRED"

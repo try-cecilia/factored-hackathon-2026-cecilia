@@ -224,10 +224,14 @@ def chat(req: ChatRequest, response: Response, idempotency_key: str | None = Hea
         return _chat_turn(req)
     if not idempotency.KEY_PATTERN.match(idempotency_key):
         raise HTTPException(422, "Idempotency-Key must be 8-64 characters of letters, digits, - or _")
+    if not _session_is_live(req.session_token):  # nothing stored is shown to a session that is over
+        return _chat_turn(req)  # the usual REAUTH_REQUIRED reply
     try:
         with idempotency.default.guard(session_ref(req.session_token), idempotency_key, req.message) as slot:
-            if slot.replay is not None:  # a replay is not a new turn: it does not count against the chat limit
-                response.headers["Idempotent-Replayed"] = "true"
+            if slot.replay is not None:
+                if not _session_is_live(req.session_token):  # it ended while this retry waited for the first turn
+                    return _chat_turn(req)
+                response.headers["Idempotent-Replayed"] = "true"  # a replay is not a new turn: no chat-limit hit
                 return ChatResponse.model_validate_json(slot.replay)
             reply = _chat_turn(req)
             if reply.disposition != "REAUTH_REQUIRED":  # a dead session is answered afresh after signing in again
@@ -235,6 +239,14 @@ def chat(req: ChatRequest, response: Response, idempotency_key: str | None = Hea
             return reply
     except idempotency.KeyReused:
         raise HTTPException(422, "Idempotency-Key was already used with a different message") from None
+
+
+def _session_is_live(token: str) -> bool:
+    try:
+        default_store.validate(token)
+        return True
+    except (InvalidSession, ExpiredSession):
+        return False
 
 
 def _chat_turn(req: ChatRequest) -> ChatResponse:
