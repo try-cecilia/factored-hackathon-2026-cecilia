@@ -217,7 +217,7 @@ def health() -> dict:
     except Exception as exc:  # noqa: BLE001
         as_of = f"unavailable: {type(exc).__name__}"
     return {"status": "ok", "data_as_of": as_of,
-            "llm_providers_configured": [p.name for p in default_providers() if os.environ.get(p.api_key_env)],
+            "llm_providers_configured": [p.name for p in default_providers() if p.configured()],
             "llm_budget_exhausted": default_budget.exhausted(),
             "intent_classifier_loaded": intent_guard.read("hola").model_available}
 
