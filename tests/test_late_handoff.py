@@ -131,3 +131,29 @@ def test_a_ticket_written_in_time_but_read_back_late_is_not_named_either(monkeyp
     assert r.ticket_id is None and r.policy_rule.endswith("|handoff_unverified") and tickets()[0]["trace_id"] == r.trace_id
 
 
+
+
+def test_a_retry_whose_lookup_is_slow_neither_holds_the_caller_nor_begins_a_write_past_the_deadline(monkeypatch):
+    """The first write fails; the retry looks for the ticket first, and that lookup takes 0.4 s against a 0.2 s budget."""
+    monkeypatch.setenv("HANDOFF_BUDGET_SECONDS", "0.2")
+    real_open, opened = open, []
+
+    def first_write_fails(path, mode="r", *a, **kw):
+        if "a" in mode:
+            opened.append(1)
+            if len(opened) == 1:
+                raise OSError("busy")
+        return real_open(path, mode, *a, **kw)
+
+    real_get = escalation.HumanQueue.get
+    monkeypatch.setattr(escalation, "open", first_write_fails, raising=False)
+    monkeypatch.setattr(escalation.HumanQueue, "get", lambda self, ticket_id: (time.sleep(0.4), real_get(self, ticket_id))[1])
+    landed, failed = late_counts()
+    orch, tok = orchestrator()
+    t0 = time.perf_counter()
+    r = orch.handle_message(tok, "Me clonaron la tarjeta")
+    assert time.perf_counter() - t0 < 0.2 + 0.12  # the caller is not held by the lookup
+    assert r.ticket_id is None and r.policy_rule.endswith("|handoff_unverified")
+    time.sleep(0.6)  # the lookup is over now: a write that only waited for it would begin here
+    assert tickets() == [] and len(opened) == 2  # the retry's file was opened, and nothing was written to it
+    assert late_counts() == (landed, failed)  # it never began, so there is no late outcome to record
