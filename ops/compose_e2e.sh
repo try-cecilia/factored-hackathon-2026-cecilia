@@ -158,9 +158,10 @@ same = {"Content-Type": "application/x-www-form-urlencoded", "Origin": origin, "
 for name, headers in (("with no Origin or Referer", {"Content-Type": same["Content-Type"]}),
                       ("from another origin", {**same, "Origin": "https://attacker.invalid", "Referer": "https://attacker.invalid/x"})):
     status, response, _ = call("POST", "/operador/sesion", form, headers)
-    check(status == 303 and response["Location"] == "/operador/login" and cookie_of(response, prefix + "cecilai_operator")[0] is None
-          and cookie_of(response, prefix + "cecilai_operator_flash")[0] is not None,
-          f"operator login {name}: refused, back to the login with a notice and no session")
+    check(status == 303 and response["Location"] == "/operador/login?motivo=origen" and not response.get_all("Set-Cookie"),
+          f"operator login {name}: refused, back to the login with a notice in the URL and no cookie")
+_, _, page = call("GET", "/operador/login?motivo=origen")
+check("No pudimos verificar el origen del formulario" in page and public_origin in page, "the login page names the origin to use, without any cookie")
 if not https:
     # the compose trusts the machine by IP and by name; a form from another port or host is still refused
     localhost = f"http://localhost:{public_origin.rsplit(':', 1)[1]}"
@@ -168,7 +169,7 @@ if not https:
     check(status == 303 and response["Location"].startswith("/operador/ingreso") and cookie_of(response, "cecilai_operator")[0], "operator login from http://localhost:<port>: accepted (the compose lists both origins)")
     other = "http://localhost:1"
     status, response, _ = call("POST", "/operador/sesion", form, {**same, "Origin": other, "Referer": other + "/x"})
-    check(status == 303 and response["Location"] == "/operador/login" and cookie_of(response, "cecilai_operator")[0] is None, "operator login from another port: refused")
+    check(status == 303 and response["Location"] == "/operador/login?motivo=origen" and cookie_of(response, "cecilai_operator")[0] is None, "operator login from another port: refused")
 status, response, _ = call("POST", "/operador/sesion", form, same)
 cookie, line = cookie_of(response, prefix + "cecilai_operator")
 check(status == 303 and response["Location"] == "/operador/ingreso?to=%2Foperador%2Fcola" and cookie, "operator login from this origin: 303 to the arrival check with a session")

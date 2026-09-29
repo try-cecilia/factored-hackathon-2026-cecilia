@@ -306,9 +306,8 @@ service, and as our own roadmap.
   (`ops/browser_cookies_check.mjs`; screenshots in `docs/demo/cookies-*.png`): customer and operator login through both hosts, in both
   engines. **Not tried:** Safari itself (WebKit under Playwright is its engine, not the same build) and Firefox. **Known edge:** a
   `WEB_PUBLIC_ORIGIN` that says https while the browser is on http (a mistake) gets Secure cookies WebKit drops; the customer login
-  says the session was not kept, but the operator's refusal notice travels in a flash cookie of that same kind, so WebKit shows the
-  console's login without the notice. Fix the origin: the notice names it whenever the cookie arrives. A list that mixes http and
-  https origins is not supported (the first one decides the cookies).
+  says the session was not kept, and the operator's refusal notice names the origin to use (it travels in the URL, not in a cookie).
+  A list that mixes http and https origins is invalid as a whole.
 - **The local model is wired, not measured.** The compose stack can start Ollama and pass the API `LLM_PROVIDERS=local`, and the
   profile was verified with a 0.5 GB model. No evaluation has run against any local model (`gpt-oss:20b` or a smaller one),
   and on macOS Docker runs models on CPU only.

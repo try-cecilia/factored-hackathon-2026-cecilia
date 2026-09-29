@@ -117,12 +117,16 @@ lectura y trazas. Cómo se configuran las claves:
   no puede forzar un ingreso sobre `https://`. **En producción es obligatoria**: sin ella, o con un valor que no sea un
   origen http(s), todos los POST de la consola se rechazan y el servidor escribe en el log qué falta.
   **Puede ser una lista de orígenes exactos separados por comas** (esquema, host y puerto de cada uno): el stack local de Docker
-  responde en `http://127.0.0.1:3000` y en `http://localhost:3000`, y el compose pasa ambos por defecto. Sin comodines: una entrada
-  que no sea un origen http(s) invalida todo el valor (se rechaza todo en vez de abrir algo por un error de tipeo), y las cabeceras
-  `X-Forwarded-*` siguen sin leerse. En producción va **un origen https explícito**. Si hay lista, el primero decide las cookies. En desarrollo, si está
+  responde en `http://127.0.0.1:3000` y en `http://localhost:3000`, y el compose pasa ambos por defecto. Cada entrada
+  tiene que ser un origen puro tal como está escrita: sin comodines, usuario@, ruta, query ni fragmento (se valida el texto
+  antes de normalizarlo; una `/` final se tolera). **Una sola entrada inválida invalida todo el valor**, y **una lista que mezcla
+  http y https también** (las cookies no pueden ser correctas para las dos): se rechaza todo en vez de abrir algo por un error de
+  tipeo. Las cookies y la autorización usan esa misma validación. Las cabeceras `X-Forwarded-*` siguen sin leerse. En producción
+  va **un origen https explícito**. En desarrollo, si está
   vacía, se usa el origen de la URL de la petición (`http://127.0.0.1:<puerto>`). Está en `web/.env.example`.
-  **El rechazo no es una página en blanco:** es un `303` a `/operador/login` con un aviso en la cookie de flash (un código fijo,
-  nunca algo de la petición: ni las claves ni el origen que mandó el navegador), en ES y PT: «No pudimos verificar el origen del
+  **El rechazo no es una página en blanco:** es un `303` a `/operador/login?motivo=origen` (u `origen-config`) con el motivo en la URL, no en una
+  cookie (un navegador que no guarda cookies igual lo ve), de una lista cerrada y sin eco de la petición: ni las claves ni el origen
+  que mandó el navegador; también se ve si ya hay una sesión activa, que no se toca. En ES y PT: «No pudimos verificar el origen del
   formulario. Ingresar desde <orígenes configurados>.», o, si `WEB_PUBLIC_ORIGIN` falta o es inválido, que la consola no tiene
   configurado su origen público. No se emite ninguna cookie de sesión.
 - *Cookies según el origen.* Que una cookie salga `Secure` y con prefijo `__Host-` lo decide **`WEB_PUBLIC_ORIGIN`**, no `NODE_ENV`
