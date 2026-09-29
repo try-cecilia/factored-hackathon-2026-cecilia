@@ -129,15 +129,28 @@ Qué falta todavía: [`LIMITATIONS.md`](LIMITATIONS.md).
 
 ## Inicio rápido
 
+**Con Docker, un comando** (sin cuentas, sin S3, sin claves de API):
+
+```bash
+make up                     # API + web sobre el warehouse de fixtures: http://127.0.0.1:3000 (web) y :8000 (chat); `make down` lo baja
+```
+
+Sin clave de modelo corre en modo degradado seguro. Con un `.env` que ya tenías, `make up` no lo toca: `make env-check` (lo corre `make up`
+como aviso) lista las variables que le faltan respecto de `.env.example` (solo nombres) y avisa si `INGEST_ARGS` leería S3; `make env-fill` agrega
+las ausentes con secretos generados. Para probar la web: `http://127.0.0.1:3000/login` (cliente, con un PIN de prueba de la página del chat) y
+`http://127.0.0.1:3000/operador/login` (consola, con `ADMIN_API_KEY` y la clave de `OPERATOR_KEYS` de tu `.env`). `make compose-e2e` comprueba todo eso
+en un proyecto Docker aparte, sin tocar el tuyo. Con monitoreo (Prometheus + Grafana), con tus CSV locales o con un modelo
+local (Ollama): [`docs/operations.md`](docs/operations.md#local-development). Sin Docker:
+
 ```bash
 python3.11 -m venv .venv && source .venv/bin/activate   # Python 3.11 (el modelo de intención versionado fija scikit-learn 1.9.1); o: uv venv --python 3.11 --seed
-cp .env.example .env        # completar AWS_* + DATASET_BUCKET (dataset), DEMO_IDP_SECRET, ADMIN_API_KEY, y ANTHROPIC_API_KEY o GROQ_API_KEY
-make setup
+cp .env.example .env        # completar AWS_* + DATASET_BUCKET (dataset), DEMO_IDP_SECRET, ADMIN_API_KEY, y ANTHROPIC_API_KEY o GROQ_API_KEY (o `make env`: genera los secretos)
+make setup                  # dependencias bloqueadas con hashes (requirements*.txt)
 make ingest                 # warehouse completo desde S3 (~6 min: 1,1 GB de archivos diarios en ~80 s, luego la carga; o `make ingest-demo`, ~1 min)
 make serve                  # http://localhost:8000 — chat web con logins de prueba del sandbox
 make test                   # 346 tests herméticos: warehouse de fixtures, sin S3, sin claves de API
 make all                    # reconstruye cada número de los docs
-make validate-data-ml       # contratos, calidad, linaje, frescura, clasificador vs línea base y fuga: PASS/FAIL en docs/evidence/data_ml_validation.md
+make validate-data-ml       # contratos, calidad, linaje, frescura, clasificador vs línea base y fuga: PASS/FAIL, sin escribir nada; `make evidence` regenera docs/evidence/data_ml_validation.md
 make mlflow-ui              # cada selección y evaluación del clasificador, registrada en MLflow
 ```
 
@@ -172,8 +185,8 @@ El proxy de salud usa automáticamente `API_PORT`. Consultá la sección de
 servicio por separado o preparar los fixtures sin acceso a S3.
 
 Se inicia sesión con un id de cliente y su **PIN de prueba** (un número de cliente solo no se acepta). La
-interfaz web lista las cuentas del sandbox desde `DEMO_PUBLIC_CUSTOMERS`. Quienes operan pueden obtener
-cualquier PIN de prueba con `X-Admin-Key` en `/admin/demo_pin/{id}`. Los traces, tickets, el registro de
+interfaz web lista las cuentas del sandbox desde `DEMO_PUBLIC_CUSTOMERS`. Con `DEMO_MODE=1`, quienes operan pueden obtener
+cualquier PIN de prueba con `X-Admin-Key` en `/admin/demo_pin/{id}` (fuera del sandbox ese endpoint no existe). Los traces, tickets, el registro de
 auditoría y el reporte de calidad de datos están bajo `/admin/*`.
 
 **Demo para el jurado (`DEMO_MODE=1`).** La misma app web se convierte en un recorrido guiado por los caminos
@@ -213,6 +226,8 @@ tests/       346 tests herméticos + fixtures
 
 ## Estado
 
+- Estado de la integración en curso (ramas, qué se probó, cómo reproducirlo y qué falta):
+  [`docs/estado-integracion.md`](docs/estado-integracion.md).
 - Construido y evaluado de punta a punta, offline y con modelos en vivo, sobre el warehouse del organizador.
   CI corre la suite hermética y verifica el reporte del clasificador. Cada selección y evaluación del
   clasificador queda registrada en MLflow: modelo, esfuerzo, hash del prompt, hashes de los datos, versión del

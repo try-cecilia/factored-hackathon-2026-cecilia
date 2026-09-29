@@ -1,0 +1,17 @@
+/* Bulk bar (Paper "UI · Data tables", block 3): a dark floating pill, the only shadow the tables use. */
+.ui-bulk-host { width: fit-content; max-width: 100%; }
+.ui-bulk {
+  display: flex; align-items: center; gap: 4px; width: fit-content; max-width: 100%; height: 40px; padding: 0 6px 0 16px;
+  border-radius: var(--radius-xl); background: var(--color-ink-app); color: var(--color-paper);
+  box-shadow: 0 12px 28px -10px color-mix(in srgb, var(--color-ink) 40%, transparent); /* Paper: #00000066 */
+}
+.ui-bulk__count { padding-right: 12px; font-size: var(--text-compact-sm); font-weight: var(--font-weight-semibold); line-height: 16px; white-space: nowrap; }
+
+/* Buttons are the kit's ghost buttons, recolored for a dark surface. */
+.ui-bulk .ui-btn--ghost { color: var(--color-paper); --spinner-track: color-mix(in srgb, var(--color-paper) 25%, transparent); }
+.ui-bulk .ui-btn--ghost:hover:not(:disabled) { background: color-mix(in srgb, var(--color-paper) 8%, transparent); }
+.ui-bulk .ui-btn--ghost:active:not(:disabled) { background: color-mix(in srgb, var(--color-paper) 14%, transparent); }
+.ui-bulk .ui-btn--tinted { background: color-mix(in srgb, var(--color-paper) 12%, transparent); } /* Paper: #FFFFFF1F */
+.ui-bulk .ui-btn--tinted:hover:not(:disabled) { background: color-mix(in srgb, var(--color-paper) 18%, transparent); }
+.ui-bulk .ui-btn--muted, .ui-bulk .ui-btn--icon { color: color-mix(in srgb, var(--color-paper) 70%, transparent); } /* Paper: #FFFFFFB3 */
+.ui-bulk .ui-btn--ghost:disabled { color: color-mix(in srgb, var(--color-paper) 35%, transparent); }

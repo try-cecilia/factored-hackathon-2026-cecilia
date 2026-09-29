@@ -1,0 +1,72 @@
+/* Button: fills carry the meaning. The only strokes are the outline variant and the focus ring (Paper "UI · Buttons"). */
+.ui-btn {
+  display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center; gap: 6px;
+  height: 32px; padding: 0 14px; border: 0; border-radius: var(--radius-control); background: transparent;
+  color: var(--color-ink-app); font: inherit; font-size: var(--text-compact-md); font-weight: var(--font-weight-semibold);
+  letter-spacing: -0.01em; line-height: 16px; text-decoration: none; white-space: nowrap; cursor: pointer;
+  transition: background-color 0.12s ease, box-shadow 0.12s ease;
+}
+.ui-btn > span:not(.ui-btn__count) { display: block; }
+.ui-btn:disabled { cursor: default; }
+/* A loading button is disabled for real, but it must keep its resting look, so every `:disabled` look below excludes it. */
+.ui-btn--loading, .ui-btn--loading:disabled { cursor: progress; }
+.ui-btn:focus-visible, .ui-btn[data-state='focus'] { outline: none; box-shadow: var(--ring-focus); }
+
+/* Sizes */
+.ui-btn--lg { height: 40px; padding: 0 20px; font-size: var(--text-sm); line-height: 18px; }
+.ui-btn--sm { height: 28px; padding: 0 12px; font-size: var(--text-compact-sm); }
+.ui-btn--xs {
+  height: 24px; padding: 0 10px; border-radius: var(--radius-compact); font-size: var(--text-compact-xs);
+  letter-spacing: -0.005em; line-height: 14px;
+}
+.ui-btn--lg[data-leading], .ui-btn--md[data-leading] { padding-left: 10px; }
+.ui-btn--lg[data-trailing], .ui-btn--md[data-trailing] { padding-right: 10px; }
+.ui-btn--icon { width: 32px; padding: 0; }
+.ui-btn--icon.ui-btn--lg { width: 40px; }
+.ui-btn--icon.ui-btn--sm { width: 28px; }
+.ui-btn--icon.ui-btn--xs { width: 24px; }
+
+/* Primary */
+.ui-btn--primary { background: var(--color-ink-app); color: var(--color-paper); }
+.ui-btn--primary:hover:not(:disabled), .ui-btn--primary[data-state='hover'] { background: var(--color-ink-hover); }
+.ui-btn--primary:active:not(:disabled), .ui-btn--primary[data-state='pressed'] { background: var(--color-ink); }
+.ui-btn--primary:disabled:not(.ui-btn--loading) { background: var(--color-fill-muted); color: var(--color-disabled-text); }
+
+/* Destructive */
+.ui-btn--destructive { background: var(--color-danger); color: var(--color-paper); }
+.ui-btn--destructive:hover:not(:disabled), .ui-btn--destructive[data-state='hover'] { background: var(--color-danger-hover); }
+.ui-btn--destructive:active:not(:disabled), .ui-btn--destructive[data-state='pressed'] { background: var(--color-danger-pressed); }
+.ui-btn--destructive:disabled:not(.ui-btn--loading) { background: var(--color-fill-muted); color: var(--color-disabled-text); }
+.ui-btn--destructive.ui-btn--icon { background: color-mix(in srgb, var(--color-danger) 10%, transparent); color: var(--color-danger); }
+.ui-btn--destructive.ui-btn--icon:hover:not(:disabled), .ui-btn--destructive.ui-btn--icon[data-state='hover'] { background: color-mix(in srgb, var(--color-danger) 16%, transparent); }
+.ui-btn--destructive.ui-btn--icon:active:not(:disabled), .ui-btn--destructive.ui-btn--icon[data-state='pressed'] { background: color-mix(in srgb, var(--color-danger) 22%, transparent); }
+.ui-btn--destructive.ui-btn--icon:disabled:not(.ui-btn--loading) { background: var(--color-fill-muted); color: var(--color-disabled-text); }
+
+/* Ghost */
+.ui-btn--ghost { --spinner-track: color-mix(in srgb, var(--color-ink) 15%, transparent); }
+.ui-btn--ghost:hover:not(:disabled), .ui-btn--ghost[data-state='hover'] { background: var(--color-fill-subtle); }
+.ui-btn--ghost:active:not(:disabled), .ui-btn--ghost[data-state='pressed'] { background: var(--color-fill-muted); }
+.ui-btn--ghost:disabled:not(.ui-btn--loading) { color: var(--color-disabled-text); }
+.ui-btn--tinted { background: var(--color-fill-muted); }
+.ui-btn--tinted:hover:not(:disabled), .ui-btn--tinted[data-state='hover'] { background: var(--color-fill-strong); }
+.ui-btn--muted { color: var(--color-ink-70); }
+
+/* Outline: the one control that draws a stroke, and it is an inset shadow so it never changes the box. */
+.ui-btn--outline { --spinner-track: color-mix(in srgb, var(--color-ink) 15%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-ink) 16%, transparent); }
+.ui-btn--outline:hover:not(:disabled), .ui-btn--outline[data-state='hover'] {
+  background: var(--color-fill-subtle); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-ink) 22%, transparent);
+}
+.ui-btn--outline:active:not(:disabled), .ui-btn--outline[data-state='pressed'] {
+  background: var(--color-fill-muted); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-ink) 22%, transparent);
+}
+.ui-btn--outline:focus-visible, .ui-btn--outline[data-state='focus'] { box-shadow: inset 0 0 0 1px var(--color-cecil-blue), var(--ring-focus); }
+.ui-btn--outline:disabled:not(.ui-btn--loading) { color: var(--color-disabled-text); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-ink) 8%, transparent); }
+
+
+/* Count pill */
+.ui-btn__count {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px;
+  border-radius: var(--radius-pill); background: var(--color-cecil-blue); color: var(--color-paper);
+  font-size: var(--text-compact-xs); font-weight: var(--font-weight-semibold); letter-spacing: 0; line-height: 14px;
+}
+.ui-btn:has(.ui-btn__count) { padding-inline: 12px; }

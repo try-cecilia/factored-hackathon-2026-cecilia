@@ -1,28 +1,52 @@
 name: ci
 
+# Jobs run in parallel and each is cached:
+#   python     the hermetic suite (which includes the resilience tests, `make test-resilience` is a subset of it), the classifier
+#              evaluation, the quality gate (eval.gate) and the data/ML validation (`make gate` runs `make validate-data-ml`), and
+#              a check that none of that rewrote a versioned file
+#   web        the frontend's locked install, typecheck, build and every test (`pnpm test:all`: node:test, vitest on the DOM,
+#              and HTTP tests against the production build)
+#   alerts     promtool over ops/alerts.yml and its unit tests
+#   container  the API image booted the way Render does (existing checks)
+#   web-image  the web image builds, runs unprivileged and answers
+#   compose    the whole stack (API + web + Prometheus) from scratch on the fixture warehouse: ops/compose_e2e.sh
+# Checks that other branches add (per-category floors in eval.gate) come in through `make` targets: `make gate` runs whatever
+# eval.gate checks. The versioned evidence is regenerated on purpose (`make evidence`, `make eval ...`), never by a CI run.
+
 on:
   push:
   pull_request:
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
+  python:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version-file: .python-version
           cache: pip
-      - run: pip install -r requirements-tracking.txt  # the runtime pins plus mlflow, so the tracking tests run
+          cache-dependency-path: requirements-tracking.txt
+      - name: The lock files match the pins they were compiled from
+        run: make lock-check
+      - name: Install the locked dependencies (exact versions, every wheel checked against its sha256)
+        run: pip install --require-hashes -r requirements-tracking.txt  # the serving lock plus mlflow, so the tracking tests run
       - name: Hermetic test suite (fixture warehouse, no S3, no API keys)
-        run: python -m pytest tests/ -q
-      - name: Intent classifier evaluation is reproducible
+        run: make test
+      - name: Quality gate (safety floors, guard recall, evidence made with the current prompt)
+        run: make gate
+      - name: Intent classifier evaluation is reproducible (its report and model go to a temporary directory, not over the versioned ones)
         run: |
-          python -m eval.evaluate_intent_classifier > /dev/null
+          out="$RUNNER_TEMP/intent-classifier"
+          python -m eval.evaluate_intent_classifier --out-dir "$out" > /dev/null
           python - <<'EOF'
-          import json
-          r = json.load(open("eval/reports/intent_classifier.json"))
+          import json, os
+          r = json.load(open(os.environ["RUNNER_TEMP"] + "/intent-classifier/intent_classifier.json"))
           t = r["test"]
           learned, base = t["learned"]["accuracy"]["rate"], t["baseline_keywords"]["accuracy"]["rate"]
           guard = t["escalation_guard"]["lexicon_or_classifier (runtime)"]
@@ -30,8 +54,40 @@ jobs:
           assert learned > base, "learned classifier no longer beats the keyword baseline"
           assert guard["false_escalation"]["rate"] <= 0.05
           EOF
-      - name: Quality gate (safety floors, guard recall, evidence made with the current prompt)
-        run: python -m eval.gate
+      - name: Nothing versioned was rewritten (the last step, so it covers the suite, the gate, the validation and the evaluation above)
+        run: |
+          git status --porcelain
+          test -z "$(git status --porcelain)" || { git --no-pager diff --stat; echo "a CI step rewrote a versioned file"; exit 1; }
+
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json  # the pnpm version comes from "packageManager"
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm build
+      - name: Unit tests (node:test), component tests (vitest, DOM) and HTTP tests against the production build
+        run: pnpm test:all
+
+  alerts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Alert rules and their unit tests (promtool)
+        run: make alerts-check
 
   container:
     runs-on: ubuntu-latest
@@ -80,6 +136,55 @@ jobs:
           curl -fs localhost:8001/health | grep -q '"data_as_of":"2024-01-16"' || { docker logs retry; exit 1; }
           sudo test -f /srv/bad/bank.duckdb && sudo test ! -e /srv/bad/bank.duckdb.building && sudo test ! -e /srv/bad/bank.duckdb.wal
           docker rm -f retry
+      - name: Retention runs on its schedule, records itself in the audit log and shows in /metrics
+        run: |
+          docker logs app 2>&1 | grep -q "retention loop started"
+          for i in $(seq 1 30); do docker exec app test -s /app/data/warehouse/retention_status.json && break; sleep 1; done
+          curl -fs -H "X-Admin-Key: ci-admin" "localhost:8000/admin/audit_log?limit=500" | grep -Eq '"event": ?"retention_purge"'
+          docker exec app python -m ops.retention --dry-run
+          curl -fs -H "X-Admin-Key: ci-admin" localhost:8000/metrics | grep -E '^cecilai_retention_last_run_timestamp_seconds [1-9]'
       - name: Container logs
         if: always()
         run: docker logs app
+
+  web-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build the web image (layers cached in the Actions cache)
+        uses: docker/build-push-action@v6
+        with:
+          context: web
+          file: ops/Dockerfile.web
+          load: true
+          tags: cecilai-web
+          cache-from: type=gha,scope=web-image
+          cache-to: type=gha,scope=web-image,mode=max
+      - name: It runs unprivileged, answers, and takes its API address at run time
+        run: |
+          docker run -d --name web -p 3000:3000 -e AGENT_API_URL=http://127.0.0.1:1 cecilai-web
+          for i in $(seq 1 30); do curl -fs localhost:3000/_healthz && break; sleep 1; done
+          test "$(docker exec web id -u)" != "0"
+          test "$(curl -s -o /dev/null -w '%{http_code}' localhost:3000/)" = 200
+          # no API behind it: the page still loads and the health route says so, instead of hanging or crashing
+          curl -s localhost:3000/api/agent/health | grep -q '"status":"unavailable"'
+      - name: Container logs
+        if: always()
+        run: docker logs web
+
+  compose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: The compose file resolves with nothing configured
+        run: |
+          docker compose -f ops/docker-compose.yml config -q
+          # every profile resolves; the heavy one (llm-local: a model server) is validated here and not started
+          docker compose -f ops/docker-compose.yml --profile monitoring --profile llm-local config -q
+          docker compose -f ops/docker-compose.yml -f ops/docker-compose.gpu.yml --profile llm-local config -q
+      - name: The stack from scratch on the fixture (no S3, no model keys), checked end to end
+        run: make compose-e2e
+

@@ -21,6 +21,15 @@ service, and as our own roadmap.
    checks that a first load that fails or is killed leaves nothing a later
    boot would serve.
 
+3. **Failure handling with a live model.** The reserved failure set (`eval/heldout/`, 226 cases) ran in full with the scripted
+   ideal model and the deliberately bad one. With a live model only a small sample ran (Groq's `gpt-oss-120b`, 42 of the
+   226 cases and 23 of the generated workload, one run: `eval/reports/LIVE_SAMPLE_GROQ.md`): 0 unsafe, but 3 of 42 not handled as the
+   policy asks, and intervals of 20-30 points. `make eval-failures-live` (or `eval-failures-local`) runs all of it.
+4. **The reserved set is small and no longer held out for what it found.** Five fixture customers, 17-31 cases per
+   category and language: the 95% intervals are 10 to 40 points wide, and 0 unsafe in 226 bounds the true rate
+   only below ≈1.3%. Batch 1 was written and committed before the system ran on it; batch 2 after seeing batch 1's
+   failures and before fixing them; the fixes came after seeing both. Their post-fix numbers are regression evidence,
+   not a held-out measurement, for the failures they fixed. A fresh, human-written set is the remaining fix.
 ## Data and ML
 
 - **No usable text in the supplied data.** 171K transcripts hold 42 distinct
@@ -98,18 +107,26 @@ service, and as our own roadmap.
   `SameSite=Strict` con un identificador opaco): un reinicio o una segunda réplica cierra las sesiones, y una clave
   filtrada sigue valiendo hasta rotarla. Cada persona teclea sus claves en un formulario nativo que las envía una vez al BFF (nunca pasan por el
   JavaScript de la página ni vuelven al navegador), así que dependen de que el canal sea TLS. Sin `CLIENT_IP_HEADER=X-Client-IP` detrás del BFF, el límite de intentos fallidos cuenta por la IP del
-  BFF. La cola se lee entera (las últimas 200 entradas del archivo) y se refresca por sondeo cada 30 s, sin
-  notificaciones ni paginación. La web tiene pocos tests (`make web-test`: el formulario de ingreso, el plazo de la sesión, y pruebas HTTP contra el build de
-  producción de CSRF, redirecciones y rotación de sesión; no hay tests de componentes, y el CI no los corre): el resto se verificó con `typecheck`, `build` y un
-  recorrido en navegador (`docs/demo/operador-*.png`, con datos sintéticos de `ops.seed_operator_demo`); con el modelo
+  BFF. La cola se lee entera (las últimas 200 entradas del archivo), se filtra, ordena y pagina en el navegador (25 por página) y se refresca por sondeo cada 30 s, sin
+  notificaciones. Tomar, aprobar, rechazar y devolver actúan con un clic, sin diálogo de confirmación, como en el diseño aprobado. El motivo que escribe la persona solo se guarda al rechazar (es lo que la API registra). El diseño muestra una insignia "Demo · synthetic data" que la consola no dibuja: la API no informa si corre en modo demo. La web tiene pocos tests (`make web-test`: el formulario de ingreso, el plazo de la sesión, y pruebas HTTP contra el build de
+  producción de CSRF, redirecciones y rotación de sesión, y tests de DOM del panel del caso —sus cuatro estados, el 409 y la marca de evidencia— y de la tabla; el CI no los corre): el resto se verificó con `typecheck`, `build` y un
+  recorrido en navegador (`docs/demo/operador-kit-*.png`, en español y portugués, con datos sintéticos de `ops.seed_operator_demo`); con el modelo
   de clientes y un banco real quedaría por probar la carga y la accesibilidad con lector de pantalla.
 - `/demo/customers` publishes test PINs for a few sandbox accounts, like any
-  sandbox's test login. It must be empty (`DEMO_PUBLIC_CUSTOMERS=`) anywhere real.
+  sandbox's test login. It exists only with `DEMO_MODE=1` (a 404 otherwise, as does `/admin/demo_pin`).
 - `DEMO_MODE=1` turns on the jury sandbox: scenarios with those test PINs, a
   "Why?" that shows policy rules and what the model received, the session's
   own tickets, and buttons that expire the session or take the model down for
   it. Everything acts on the caller's own session, but it is a demo surface:
-  it must stay off anywhere real.
+  it must stay off anywhere real. It is off by default, in the image, in `.env.example`
+  and in the compose stack's defaults; `make up` turns it on locally on purpose.
+- **Access control is a matrix over shared keys.** `api/access.py` classifies every route by role and the service will not
+  start with an unclassified one, but the roles come from three kinds of shared secret in environment variables: one
+  admin key for every reader, one metrics token, and named operator keys. There is no per-reader identity for admin
+  reads, no rotation other than a redeploy, no MFA, and the counters that stop key guessing live in memory. `/health`
+  and `/readyz` are public by design (a probe must reach them) and say which providers are configured and which
+  dependency is down, as yes/no. The page's Content-Security-Policy allows inline styles, because the page styles elements
+  with `style` attributes. No CORS is configured: a browser app on another origin needs `CORS_ALLOWED_ORIGINS`.
 - Traces, audit logs and tickets contain customer data. Masking of account
   numbers is done, and card/account/ID numbers typed by the customer are
   masked in tickets. Still missing are field-level encryption at rest and
@@ -146,7 +163,7 @@ service, and as our own roadmap.
   that is the customer speaking, not the system leaking. It always counts
   ids, 8+ digit numbers, emails and document numbers, because the system
   must mask those even when the customer types them.
-- No WAF or bot protection beyond per-session and per-IP rate limits.
+- No WAF or bot protection beyond per-session, per-customer and per-address rate limits and the concurrency gate.
 - **Web chat: retries rely on an idempotency key.** Each message travels with an `Idempotency-Key` and the API keeps
   the reply for as long as the session lives, so a retry after a lost answer does not file a second ticket or confirm
   twice. Replies live in the single-writer SQLite state like sessions; if that file is lost the turn runs again, and
@@ -158,6 +175,48 @@ service, and as our own roadmap.
 - **Web chat: contrast and screen readers are checked by hand only.** Text contrast was computed in the browser on
   the chat page (no pair under 4.5:1; oklch/color-mix values it cannot parse are skipped), focus rings and the
   live region were inspected, but no assistive technology or automated audit (axe) has run.
+- **An internal id typed in lowercase and split is not masked** ("prd fix 0006", "prd_fix_0006"). The masker requires a
+  capital letter in the middle of a split id on purpose (so "el cli de 2024" stays as written), and the ownership check
+  in the pre-LLM guard uses the same reader. The reserved failure set has it as its one open failure in each language
+  (`foreign_id_spelled`): the text reaches the model unmasked, the tool layer refuses the product (`PermissionDenied`,
+  handed to a person as a security case), so nothing of another customer's is shown. Organizer ids look like
+  `***REMOVED***`: written in lowercase without a split ("prd 04di2iny5hzt") they are masked, but split once
+  ("prd 04di 2iny5hzt") they are not. Reported, not tuned: masking more would also hide ordinary words, and the
+  ownership check downstream holds either way.
+- **A tool call has no clock of its own.** The orchestrator bounds the model call and the number of tool calls, not the
+  time of a tool. The evaluation injects a timeout as the exception a client would raise, and the system hands that to
+  a person; a call that hangs would hold its turn until the database driver gives up. DuckDB is local, so it is a
+  risk of the production stores that replace it.
+- **A broken audit or trace log has two different answers.** If the per-tool audit record cannot be written, the
+  lookup fails and a person takes the case (no answer without its audit record). If the per-turn trace record cannot
+  be written, the customer still gets the answer and the failure is logged. Both were chosen without the bank's
+  policy; the bank may want the second to fail closed too.
+- **Web UI kit: checked against Paper by eye and by measurement, not by pixel diff.** The gallery at `/dev/ui`
+  (`docs/demo/ui-kit-*.png`) was compared with each Paper artboard; values come from Paper's `get_jsx` and
+  `get_computed_styles`. Where Paper draws only one state, the rest was designed in the same language and is listed in
+  `docs/integracion.md`: the open "Why?" panel, the failed action result, the hover and selected quick replies, and the
+  failed step and error toast of the loaders. Paper draws no "delivered" message state and no skeleton avatar in tables,
+  so the kit has neither. The customer chat adds two delivery states Paper does not draw: *unconfirmed* (the answer was lost;
+  retrying is safe) and *received* (a 409: the API has the message and only the conversation can show its reply).
+- **Chat history keeps figures.** `GET /chat/history` returns the session's last 40 turns as the customer saw them, rendered
+  reply included (balances, movements). They live in the conversation state, which the API keeps for 24 hours after a
+  session ends (`ConversationStore.RETENTION_SECONDS`) so a restart or a refresh resumes it. Only the live session's token
+  reads it, and logging out clears it; a session that only expires leaves the text in the state until that purge. The
+  customer's words are stored with card numbers masked, as in the ticket. Production needs encryption at rest and a
+  retention period the bank chooses (or expiry with the session). The demo's "Why?" is not stored: after a reload the
+  earlier answers have no explanation.
+- **Customer screens: what they cannot know.** The cases in the sidebar are those this conversation opened: there is no
+  endpoint that lists a customer's cases across sessions, so a new sign-in starts with none even if the bank still has
+  one open. Their status refreshes every 45 s while the page is visible, not by push. The "action result" message is
+  recognised by its position (it follows the customer's yes to a proposal) because the API gives every resolved reply
+  `category=resolved`; a trace the tracing service did not confirm is drawn as a handoff with its case number, not as a
+  red "could not open the trace" card. The demo scenarios' titles come from the API in Spanish and English, so the
+  Portuguese interface shows them in Spanish. The keyboard and focus order were checked in a browser and in DOM tests;
+  it was not tried with a screen reader. Changing language reloads the route's data (session, history), so with the API down
+  it shows the "service unavailable" page with a retry instead of switching.
+- **Web UI: the Portuguese was written by the team, not reviewed by a native speaker**, and the interface has only Spanish
+  and Portuguese (the assistant's replies come from the API in the customer's language). The customer screens (home,
+  sign in, chat) use the kit and i18n; the operator console is not migrated yet.
 
 ## Operations
 
@@ -168,11 +227,56 @@ service, and as our own roadmap.
   rate limiters, the model budget counter and the provider circuit breakers
   still live in memory and reset on restart. DuckDB on local disk has a single
   writer; production serves reads from the core system or a replicated store.
+- **Limits and retries are per process.** The rate limiters (per session, customer and address), the concurrency
+  gate, the model budgets and the circuit breakers live in memory of one process: several replicas multiply every
+  limit until they share a store. The capacity numbers (docs/operations.md) come from the fixture warehouse with the
+  model **simulated** at its measured latency: they show the limits and the behaviour under overload, not the
+  provider's own rate limits, which stay unmeasured.
+- **Traces are not exported.** Every turn has a correlation id (`X-Request-ID`, `traceparent`), per-stage timings
+  and structured logs, in a span-shaped format, but no OpenTelemetry exporter is wired and nothing reads them but the
+  JSONL and the admin endpoints. The trace record still holds the reply text and the masked request (see Data
+  retention). The server does not time out slow request headers; the edge proxy does.
+- **The tracing service is a sandbox.** Its retries and idempotency (trace id derived from customer and movement) are
+  written for a service with that contract; a bank's payments-operations API would need its own error mapping and a
+  real idempotency key.
 - **Ingestion runs at first boot** in the container. Production runs it on a
   schedule into persistent storage.
-- **Monitoring is JSONL plus admin endpoints.** The alert thresholds are
-  specified (docs/operations.md); `python -m ops.alerts` checks the stateless ones, but nothing schedules it yet
-  and the week-over-week ones are not wired to a metrics stack.
+- **Monitoring has metrics, rules and a dashboard, and no production traffic behind them.** `/metrics`, the alert rules
+  (`ops/alerts.yml`, checked and unit-tested with promtool) and a Grafana dashboard exist and run in the compose stack.
+  Prometheus only evaluates the alerts: no Alertmanager or pager is wired. `python -m ops.alerts` checks the stateless signals through the admin endpoints and can post to `ALERT_WEBHOOK_URL`, but nothing schedules it. The thresholds are the starting values
+  in docs/operations.md, untuned. The week-over-week drift rules need eight days of series and have no unit test. A
+  per-customer security threshold is not expressible (a label per customer is unbounded): the alert counts in total and
+  the customer is found in the traces. Counters are per process and reset on restart, so several replicas would need each
+  one scraped, which the single-writer design does not need yet.
+- **Retention is applied, not proven at scale.** The purge is tested for every store and runs daily in the container. It
+  holds a cross-process lock (`flock` on `<file>.lock`, `agent/filelock.py`) from reading a JSONL file to swapping it in, and
+  every writer of those files takes the same lock, so a record confirmed to its writer is not lost to it (tested with a write
+  landing exactly at the swap and with a writer in another process). What that does not cover: a process that appends
+  without taking the lock (a script of your own), and Windows, where the lock is a no-op. The ticket queue and the desk take
+  the lock through a wrapper installed at API start-up (`serialize_policy_writers`), not in their own code, because editing
+  `agent/policy/` invalidates the evaluation reports' policy fingerprint and those can only be regenerated against the full
+  warehouse; when those files are next changed on purpose they should call `append_line` themselves. SQLite gives freed pages back to
+  the file only on a `VACUUM`, which is not run. Backups, if any exist, are outside the policy. Ticket and event
+  retention (90 days) is a sandbox stand-in for the bank's regulatory schedule. The warehouse itself holds the customer
+  tables and is replaced, not pruned.
+- **Reproducible setup, with limits.** Python dependencies are locked with hashes and installed with `--require-hashes`; the
+  Docker base images (`python:3.11-slim`, `node:24-slim`, and the Prometheus, Grafana and Ollama images) are pinned by tag,
+  not by digest, so a rebuild can take a newer patch release of a base image. `make lock` needs `uv`. The web image runs
+  the build with `web/serve.mjs`, a small server of ours; it is tested in the compose stack and the CI, not under production
+  load or behind a real edge, and no production host for it is chosen. The stack was verified with Docker on macOS
+  (OrbStack) and never on Linux or Docker Desktop; the CI workflow has not been run on GitHub from here (its commands were run
+  locally; see the report).
+- **The local web is checked over HTTP, and by hand in one browser.** `make compose-e2e` drives the web the way a browser does
+  (the same requests, cookies and headers: customer login and a chat turn, operator login on the plain form and the queue,
+  `/dev/ui` closed), but no browser runs in it. Once, on 2026-09-29, the compose stack was driven with Chromium 154 (customer
+  login and a balance question, operator login and the queue): that found that the web's `Referrer-Policy: no-referrer` made the
+  browser post `Origin: null` and every operator login a 403, now fixed and pinned by a header check. The image is in production
+  mode, so its session cookies are `Secure` `__Host-` cookies over plain `http://127.0.0.1`; Chromium stores them. Firefox and
+  Safari were not tried (Safari is known not to store a Secure cookie from plain http: use another browser, or a TLS proxy with
+  `WEB_PUBLIC_ORIGIN` set to its origin).
+- **The local model is wired, not measured.** The compose stack can start Ollama and pass the API `LLM_PROVIDERS=local`, and the
+  profile was verified with a 0.5 GB model. No evaluation has run against any local model (`gpt-oss:20b` or a smaller one),
+  and on macOS Docker runs models on CPU only.
 - **Voice is not built.** 85% of account/payment contacts are phone calls; this
   system serves the 15% on text channels until speech-to-text and
   text-to-speech are added.

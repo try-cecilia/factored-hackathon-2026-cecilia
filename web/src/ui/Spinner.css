@@ -1,0 +1,9 @@
+.ui-spinner { flex-shrink: 0; rotate: -90deg; transform-origin: 50% 50%; animation: ui-spin 0.9s linear infinite; }
+.ui-spinner--static { animation: none; }
+.ui-spinner__track { stroke: var(--spinner-track, color-mix(in srgb, currentColor 35%, transparent)); }
+.ui-spinner__arc { stroke: currentColor; }
+/* Tones (Paper "UI · Loaders"): the track is a tonal fill, not derived from the arc. */
+.ui-spinner--ink { color: var(--color-ink-app); --spinner-track: var(--color-fill-strong); }
+.ui-spinner--brand { color: var(--color-cecil-blue); --spinner-track: var(--color-fill-strong); }
+.ui-spinner--onDark { color: var(--color-paper); --spinner-track: color-mix(in srgb, var(--color-paper) 35%, transparent); }
+@keyframes ui-spin { to { rotate: 270deg; } }

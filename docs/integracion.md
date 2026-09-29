@@ -56,8 +56,8 @@ prueba confiable" que pide la consigna: un número de cliente solo no prueba ide
 emite la sesión siempre termina en `SessionStore.issue(customer_id, atributos)`, y el resto del sistema solo conoce el token.
 
 **En producción.** El IdP del banco (inicio de sesión en la app, OTP o PIN de IVR), con MFA y vinculación de dispositivo;
-los atributos vendrían del IdP. `/demo/customers` publica PINs de prueba y debe estar vacío (`DEMO_PUBLIC_CUSTOMERS=`)
-en cualquier entorno real.
+los atributos vendrían del IdP. `/demo/customers` publica PINs de prueba: solo existe con `DEMO_MODE=1` (404 en cualquier
+otro caso) y debe quedar apagado en cualquier entorno real.
 
 **Cómo se verifica.** `tests/test_api.py` (inicio de sesión, consulta y cierre, límite de intentos detrás del BFF),
 `tests/test_durable_state.py` (sesiones tras un reinicio, solo el hash en disco).
@@ -145,17 +145,30 @@ lectura y trazas. Cómo se configuran las claves:
   costo es que un enlace a la consola desde otra app (un chat, un correo) abre primero el ingreso.
 - *Errores.* 401 (clave rotada) cierra la sesión o pide de nuevo la clave de operador; 403 en la web significa "sesión
   de solo lectura"; 409 (otra persona movió el caso, o la pantalla estaba vieja: cada acción envía la `version` que se
-  vio) recarga el estado y muestra el motivo; 429 y 503 se explican en pantalla. Las acciones piden confirmación.
+  vio) recarga el estado y muestra el panel de conflicto ("No se aplicó: el caso cambió", de `v3` a `v4`, con quién lo movió); mientras ese aviso está
+  visible no se puede decidir hasta usar "Recargar caso". 429 y 503 se explican en pantalla. Tomar, aprobar, rechazar y devolver actúan con
+  un clic (como en el artboard aprobado), sin diálogo de confirmación: la protección es `expected_version` más el nombre de la clave en el historial.
 - *Datos del cliente.* La consola muestra lo que la API ya devuelve a la clave de lectura: el ticket (con su
   `customer_id`, el pedido recortado y la evidencia). De las trazas **no** muestra el texto de la respuesta, lo que vio el
   modelo ni los argumentos de las herramientas: el BFF deja pasar solo un conjunto fijo de campos (`loadTraceLog` y
   `loadTrace` en `web/src/server/operator.functions.ts`).
 - *Probarlo sin datos reales ni claves de modelo:* `python -m ops.seed_operator_demo --dir /tmp/cecilai-operator-demo`
   arma un warehouse mínimo, genera claves nuevas y llena la cola y las trazas con turnos de verdad; imprime las claves y
-  deja `operator-demo.env` para cargar antes de `uvicorn`. Las capturas del recorrido están en `docs/demo/operador-*.png`.
+  deja `operator-demo.env` para cargar antes de `uvicorn`. Las capturas del recorrido están en `docs/demo/operador-kit-*.png`.
+
+- *Cómo está armada la pantalla.* Es el diseño aprobado de Paper (artboards "Operator · Queue" y "Operator · Ticket states", copias en
+  `docs/demo/paper-operator-*.jpg`) sobre el kit: sidebar compacto con las vistas (Todos abiertos, Míos, Sin asignar), las siete colas
+  con su cantidad de casos pendientes y los registros (monitoreo y trazas); tabla compacta (`DataTable`) con orden por columna, pestañas
+  de estado, filtros de prioridad, país e idioma, búsqueda (`Ctrl`/`Cmd` + `K`) y paginación de 25; y el detalle del caso en un panel
+  tonal a la derecha. Los filtros viven en la URL de `/operador/cola` (`vista=mias|sin-asignar`, `cola`, `estado=abiertos|tomados|decididos`,
+  `prioridad`, `pais`, `idioma`) y se validan en `web/src/routes/-operator/queue.ts`. La cola se lee en el layout `/_operator` (no en la
+  ruta de la cola) para que el sidebar tenga sus conteos en todas las páginas; el sondeo cada 30 s también se mudó ahí y sigue pasando
+  por `refreshQuietly`. La evidencia marca como riesgo los movimientos que la API marcó o cuyo score llega a 70
+  (`FRAUD_SCORE_FLAG` en `agent/policy/escalation.py`). Los textos de la consola están en `web/src/i18n/dict/{es,pt}/operator.ts` y
+  `monitor.ts`; lo que viene de la API (pedido del cliente, motivos, próximos pasos) se muestra tal cual, sin traducir.
 
 **Cómo se verifica.** `tests/test_operators.py`, `tests/test_operator_auth.py` (incluye `/admin/operator/me`) y, para la consola,
-`make web-test web-typecheck web-build` más el recorrido con capturas de `docs/demo/operador-*.png` (`LIMITATIONS.md` dice qué
+`make web-test web-typecheck web-build` más el recorrido con capturas de `docs/demo/operador-kit-*.png` (`LIMITATIONS.md` dice qué
 no cubre).
 
 ---
@@ -318,15 +331,21 @@ razonamiento oculto del modelo, que la consigna no acepta como artefacto de audi
 
 | Registro | Contenido | Retención |
 |---|---|---|
-| `audit_log.jsonl` | Una línea por llamada a una herramienta, y los intentos fallidos de operador | 30 días |
+| `audit_log.jsonl` | Una línea por llamada a una herramienta, los intentos fallidos de clave y cada purga de retención | 30 días |
 | `traces.jsonl` | Una línea por turno: intentos al modelo y su uso, política aplicada, latencia, costo y cohorte | 30 días |
-| `ticket_events.jsonl` | Cada decisión del operador, con su nombre | Sin política de retención definida |
+| `ticket_events.jsonl` | Cada decisión del operador, con su nombre | con el ticket (se borran juntos, ya fuera de la cola y con el último evento de más de 90 días) |
 | `human_queue.jsonl` | Los tickets | 90 días (sustituto) |
+| `trace_requests.jsonl` | Los pedidos de rastreo | 90 días |
+| sesiones y conversaciones (SQLite) | Solo el hash del token; el historial enmascarado | vencidas al purgar; 1 día |
 
-La retención corre a diario con `python -m ops.retention`. Los endpoints de solo lectura (clave de admin) son
-`/admin/human_queue`, `audit_log`, `trace_log`, `traces/{id}`, `ops`, `llm_budget`, `data_quality`, `drift` y
-`experiments`. Los umbrales de alerta están especificados en `docs/operations.md` y `python -m ops.alerts` evalúa los que no necesitan historial, pero **nada lo ejecuta
-periódicamente** y no están conectados a un stack de métricas.
+La retención la aplica `python -m ops.retention` (una política para todos los almacenes, cada período en una variable
+`RETENTION_*_DAYS`); el contenedor la corre en un bucle diario, es idempotente y cada corrida queda registrada como evento
+`retention_purge` en la auditoría. Los endpoints de solo lectura (clave de admin) son `/admin/human_queue`, `audit_log`,
+`trace_log`, `traces/{id}`, `ops`, `llm_budget`, `data_quality`, `drift` y `experiments`. `GET /metrics` (formato Prometheus,
+con `METRICS_TOKEN` o la clave de admin), `/livez` y `/readyz` completan la observabilidad, y `ops/alerts.yml` trae las reglas de
+alerta. Las reglas y un dashboard de Grafana corren en el compose local (`make monitoring-up`); **no hay un Alertmanager ni un
+canal de notificación conectado**. Aparte, `python -m ops.alerts` evalúa por los endpoints de admin las señales que no
+necesitan historial y puede avisar a `ALERT_WEBHOOK_URL`, pero nada lo ejecuta periódicamente. Detalle y comandos: `docs/operations.md` (Monitoring, Access control, Data retention).
 
 **Punto de sustitución.** `_JsonlSink.write(record)` en `audit.py`: es donde un SIEM o una canalización de logs recibiría
 cada registro.
@@ -335,7 +354,8 @@ cada registro.
 alertas cableadas. Hoy **no hay evidencia de manipulación** (un encadenamiento por hash está pensado, no hecho), y las
 ventanas en memoria son de 1000 registros de auditoría y 500 de trazas.
 
-**Cómo se verifica.** `tests/test_api.py` (el registro de trazas y que ningún registro exponga el token) y `tests/test_drift.py`.
+**Cómo se verifica.** `tests/test_api.py` (el registro de trazas y que ningún registro exponga el token), `tests/test_drift.py`,
+`tests/test_retention.py`, `tests/test_metrics.py` y `tests/test_alerts.py`.
 
 ---
 
@@ -343,8 +363,9 @@ ventanas en memoria son de 1000 registros de auditoría y 500 de trazas.
 
 **Hoy.** `web/` (TanStack Start, React 19). El navegador nunca habla con la API de Python: lo hace un BFF, con
 funciones de servidor en `web/src/server/`, y el token de sesión vive en una cookie httpOnly (ver frontera 1). La ruta
-`/chat` (`web/src/chat/`) es el chat del cliente; el shell y los estilos siguen el diseño "Cecil.ai" de Paper, y sus
-tokens están en `web/src/tokens.css` con los mismos nombres que en Paper (`--color-cecil-blue`, `--color-gray-500`,
+`/chat` es el chat del cliente: el shell (`web/src/shell/`), la conversación (`web/src/chat/`) y las pantallas públicas
+siguen el diseño "Cecil.ai" de Paper (componentes del kit, sin bordes, paleta de azules; el único ámbar es
+`--color-caution`, para precaución), y sus tokens están en `web/src/tokens.css` con los mismos nombres que en Paper (`--color-cecil-blue`, `--color-gray-500`,
 `--radius-app`...). La consola del operador debe reutilizar esas variables, no redefinirlas. Nada depende de la nube: Inter y DM Mono salen
 de paquetes npm (`@fontsource`) y quedan dentro del build, y el avatar de Cecilia está en `web/public`; no hay CDN ni
 Google Fonts.
@@ -372,6 +393,7 @@ Sirve para desarrollar y mostrar el front; no dice nada de cómo se comporta un 
 | Función de servidor | Llamada a la API | Qué devuelve al navegador |
 |---|---|---|
 | `sendMessage` | `POST /chat` con `session_token` (lo agrega el servidor) y `Idempotency-Key` (un UUID por mensaje, que el cliente conserva en los reintentos), plazo de 35 s | La respuesta (`disposition`, texto, idioma, `category`, `ticket_id`, y `why` solo en demo) o un motivo de fallo |
+| `getHistory` | `GET /chat/history` con el token de la cookie | La conversación de la sesión viva, ya renderizada por la API (ver abajo), o `session_expired` / `unavailable` |
 | `getCase` | `GET /case/{ticket_id}` | Estado del caso y el texto de novedad, o `not_found` |
 | `getDemoKit`, `startScenario`, `applyDemoFault`, `getDemoTickets` | `/demo/*` | Solo con `DEMO_MODE=1`; los PIN de prueba se quedan en el servidor |
 
@@ -379,15 +401,60 @@ La propuesta de rastreo se reconoce por `disposition=CLARIFY` y `category=confir
 que el código de la API evalúa (nunca el modelo). Una aclaración se dibuja como lista de opciones cuando el texto trae
 `1) ...; 2) ...`; si no calza con ese formato se muestra el texto tal cual.
 
+**Historial (`GET /chat/history`).** Devuelve, con el token de la sesión viva (cabecera `X-Session-Token`, como `/case`), los turnos
+que la API guardó tal como el cliente los vio: sus palabras con los números de tarjeta enmascarados, la respuesta ya
+armada por las plantillas y, por turno de la asistente, `trace_id`, `disposition`, `category`, `language`, `ticket_id` y
+`degraded`. Nada interno: ni la regla que decidió, ni `why`, ni lo que recibió el modelo, ni los resultados de las
+herramientas. Es de solo lectura, el rol es CUSTOMER en la matriz de `api/access.py`, y la conversación es la de esa sesión:
+otra sesión, aunque sea del mismo cliente, recibe la suya (vacía si es nueva); sin sesión viva, 401. Se guardan hasta 40
+turnos (`MAX_TRANSCRIPT`) en el estado de la conversación (`agent/core/orchestrator.py`), que ya sobrevive a un reinicio, y se
+borran al cerrar sesión. El BFF lo lee en el loader de la ruta autenticada, así que el HTML del servidor ya trae la
+conversación: recargar la página no la vacía. Al recargar aparece la nota "Conversación retomada". La respuesta de `/chat`
+trae además `degraded` (el modelo no estaba disponible y el código respondió solo), que el front dibuja como el banner de
+modo limitado.
+
+**Pantallas del cliente** (`web/src/shell/`, `web/src/chat/`; el kit está en la sección siguiente).
+
+- *Shell.* Sidebar de cliente (expandido de 260 px, o rail de 56 px con el botón de la marca), barra con el título, el
+  selector de idioma y, solo en la demo, el botón "Demo". Bajo los 760 px el sidebar es un cajón (botón de menú, cierre con
+  Escape, con la barra de fondo o con su botón; el foco entra y vuelve al botón). Texto e íconos del sidebar van en tinta:
+  el azul queda para el anillo de foco y los puntos de "no leído".
+- *Casos.* La sección lista los casos de la conversación (las derivaciones que llegaron con número) y el estado de cada
+  uno, consultado con `GET /case/{id}` (otra vez cada 45 s mientras un caso siga abierto y la página esté visible, y
+  cuando una respuesta trae una novedad). El título sale de la categoría de la derivación (`cases.category.*`).
+- *Mensajes.* Cada respuesta se dibuja con el componente del kit que pide su disposición (`resolveMessage`): AUTO_RESOLVE,
+  respuesta (con "¿Por qué?" solo si la API mandó `why`, o sea, en la demo); CLARIFY, aclaración con opciones, o la
+  propuesta de rastreo con Sí/No (`category=confirm_action`); ABSTAIN, rechazo con sugerencias; ESCALATE con número de
+  caso, pase a una persona; ESCALATE **sin** número (no se pudo registrar), "no pude verificar", con reintento que reenvía
+  el mensaje del cliente; la respuesta al "sí" de una propuesta, resultado de la acción; `degraded`, banner de modo
+  limitado; las novedades de un caso que la API antepone a una respuesta ("Novedad de tu caso: ..."), notas de sistema; sesión
+  terminada, "ingresar de nuevo". El resultado de la acción se reconoce por su posición (sigue al "sí" del cliente a una
+  propuesta), no por un campo: `category=resolved` lo comparten todas las respuestas resueltas.
+- *Espera y entrega.* Tres puntos hasta que llega la respuesta y, pasados 6 s, los pasos de verificación (un paso hecho, el
+  envío, y el que está en curso); nada de texto que aparezca de a poco. Cada mensaje del cliente lleva su estado: enviando;
+  **sin confirmar** (se perdió la respuesta: "Reintentar" es seguro porque viaja con la misma clave); no enviado (429 o turno
+  en curso; también con la misma clave); y **recibido** (409, ver arriba): el mensaje que la API ya tiene no se reenvía, se
+  ofrece "Cargar la conversación", que vuelve a leer `/chat/history` y ahora sí muestra su respuesta.
+- *Sesión.* Ya no se redirige sola: al terminar (respuesta `REAUTH_REQUIRED`, 401 o cuenta regresiva) el chat queda en su
+  lugar, con una nota, el compositor deshabilitado y el mensaje "Ingresar de nuevo", que lleva a
+  `/login?redirect=/chat&motivo=expired`. Otro inicio de sesión es otra conversación (empieza de cero).
+- *Demo.* Con `DEMO_MODE=1` el panel de demo es una columna aparte (cajón deslizante bajo los 1180 px), con la etiqueta
+  Demo; sin la variable no existe ni en el HTML. Los títulos de los escenarios los manda la API en español e inglés: en
+  portugués se ven en español.
+- *Idioma.* Todo texto de la interfaz está en ES y PT (`web/src/i18n/dict/*/{shell,cases,conversation,demo}.ts`); las
+  respuestas de la asistente llegan de la API en el idioma del cliente y no se traducen. El español no usa imperativo de
+  tuteo (un test lo comprueba).
+
 **Fallas, y qué ve el cliente.**
 
 | Situación | Qué pasa |
 |---|---|
-| Sesión vencida (`REAUTH_REQUIRED`, HTTP 401 o cookie ausente) | El BFF borra la cookie y el chat va a `/login?redirect=/chat&motivo=expired`, con aviso; al ingresar vuelve al chat (la conversación empieza de cero) |
-| 429 | Aviso en la conversación y botón "Reintentar"; no se reenvía solo |
-| API caída, conexión cortada o plazo agotado | Resultado incierto: "No pude confirmar si el servicio recibió tu mensaje", con "Reintentar" manual. El reintento es seguro porque viaja con la misma clave: si la API ya lo procesó, devuelve la misma respuesta y no crea otro ticket ni confirma dos veces |
-| Respuesta que no calza con el contrato | "Recibí una respuesta que no pude mostrar" y "Reintentar" |
+| Sesión vencida (`REAUTH_REQUIRED`, HTTP 401 o cookie ausente) | El BFF borra la cookie; el chat muestra el mensaje "Ingresar de nuevo" (ver *Sesión*). Con la cookie ausente al cargar, `/chat` redirige a `/login?redirect=/chat` |
+| 429 | El mensaje queda "No enviado" con "Reintentar" (misma clave); no se reenvía solo |
+| API caída, conexión cortada o plazo agotado | Resultado incierto: "Sin confirmar", "No pude confirmar si el servicio recibió tu mensaje", con "Reintentar" manual. El reintento es seguro porque viaja con la misma clave: si la API ya lo procesó, devuelve la misma respuesta y no crea otro ticket ni confirma dos veces |
+| Respuesta que no calza con el contrato | "Recibí una respuesta que no pude mostrar" y "Reintentar" (misma clave) |
 | Doble envío | Un turno a la vez: el compositor se bloquea mientras envía, y el BFF rechaza un segundo envío de la misma sesión mientras el primero corre |
+| La conversación no se pudo leer al cargar | Aviso con "Reintentar" que vuelve a pedir `/chat/history`; el resto de la página funciona |
 
 **Idempotencia de `POST /chat`.** Con la cabecera `Idempotency-Key` (8 a 64 caracteres: letras, dígitos, `-` o `_`), la API
 (`api/idempotency.py`) guarda la respuesta por (sesión, clave) mientras viva la sesión (`SESSION_TTL_SECONDS`, 900 por
@@ -399,23 +466,98 @@ un turno normal. La misma clave con otro texto es un 422. No se guardan las resp
 ya se creó y falla el log de trazas) deja la clave marcada: el reintento recibe 409 y nunca un segundo turno; el lugar solo
 se devuelve si el turno se rechazó antes de empezar (429, sesión terminada).
 Pasadas 50 000 respuestas guardadas, las más viejas pierden la respuesta pero conservan una marca (hash de la clave):
-un reintento de esa clave recibe un 409 "already processed" en vez de volver a ejecutarse, y la UI dice "Ya lo
-recibimos, pero la respuesta ya no está guardada". Las marcas de sesiones vivas no se expulsan nunca: con 500 000 claves
+un reintento de esa clave recibe un 409 "already processed" en vez de volver a ejecutarse, y la UI marca el mensaje
+como "Recibido" y dice "El servicio ya recibió este mensaje. Cargar la conversación muestra su respuesta": el turno sí
+quedó en el historial de la sesión (`GET /chat/history`), aunque la respuesta ya no esté en la tabla de idempotencia. Las marcas de sesiones vivas no se expulsan nunca: con 500 000 claves
 retenidas, un turno nuevo se rechaza antes de ejecutarse (503 con `Retry-After`, sin efectos), y cada turno toma su lugar
 en la misma transacción que comprueba el tope. Sin la cabecera, el comportamiento es el de siempre. Con
 `DEMO_MODE=1` la respuesta guardada incluye `why` y `policy_rule`, y un replay los filtra según el modo vigente.
 
-**Punto de sustitución.** El BFF solo conoce `POST /chat` y `GET /case/{id}`; con el core real el contrato no cambia.
+**Punto de sustitución.** El BFF solo conoce `POST /chat`, `GET /chat/history` y `GET /case/{id}`; con el core real el contrato no cambia.
 
 **En producción.** Falta un `POST /auth/session/refresh` para ofrecer "Seguir conectado" antes de que venza.
 
-**Cómo se verifica.** `make web-typecheck`, `make web-test` (formato de las aclaraciones, envío, 401, clave de idempotencia),
-`tests/test_idempotency.py` (API) y `make web-build`; el flujo
-completo se probó en el navegador con `make serve-all-fixture`, y las capturas están en `docs/demo/web-*.png`
-(login, chat vacío, propuesta de rastreo, escalamiento con número de caso, sesión vencida y su aviso previo, aclaración,
-límite de tasa, API caída, plazo agotado, escenario en portugués, móvil, respuesta inesperada, chat sin `DEMO_MODE`).
+**Cómo se verifica.** `make web-typecheck`, `make web-test` (formato de las aclaraciones, envío, 401, clave de
+idempotencia, lectura del historial, la lógica de la conversación, cada variante de mensaje y cada estado de entrega en el DOM,
+el shell con su rail y su cajón, y pruebas HTTP contra el build: `/chat` con y sin sesión, la conversación ya en el HTML, ES y PT,
+el token que no sale del servidor, el panel de demo que solo existe con la demo), `tests/test_chat_history.py` y
+`tests/test_access_matrix.py` (API: el historial, que otra sesión no lo lee, y su fila en la matriz) y `make web-build`. El
+flujo completo se recorrió en el navegador, en español y portugués, en escritorio y móvil, con `make serve-all-fixture`; las
+capturas están en `docs/demo/cliente-*.png`: inicio y login (ES y PT), chat vacío, respuesta con "¿Por qué?", aclaración,
+rechazo, caso derivado con el sidebar de casos, recarga con la conversación, propuesta y resultado del rastreo, modo limitado,
+chat en portugués, rail, tablet, móvil (chat, cajón y demo), límite de mensajes, sesión terminada, entrega sin confirmar,
+espera (puntos y pasos) y el chat sin demo.
+
+### UI kit, i18n y galería
+
+**Cómo usar el kit.** Los componentes viven en `web/src/ui/` y salen de un solo punto:
+`import { Button, DataTable, Sidebar, AnswerMessage, Toast } from '../ui'`. Son presentacionales (reciben props, no llaman a
+la API), no dibujan bordes (solo el botón `outline` y el anillo de foco) y consumen únicamente variables de
+`web/src/tokens.css`; cada uno trae su CSS al lado, con clases `ui-*` que no chocan con las de `styles.css`. Las áreas son
+`Button` e `IconButton`; `loaders/` (`Spinner`, `ThinkingDots`, `CheckingSteps`, `Skeleton`, `Progress`, `DeliveryStatus`,
+`PageLoader`, `Toast`); `sidebar/` (cliente, rail, operador, menú de fila, vacío y cargando); `table/` (`DataTable` cómoda
+de 48 px y compacta de 32 px, selección con `BulkActionBar`, orden, `Pagination`); `messages/` (un componente por
+variante del chat, y `resolveMessage` que traduce la disposición de la API a una variante: AUTO_RESOLVE es respuesta,
+CLARIFY aclaración, ABSTAIN rechazo, ESCALATE pase a una persona, REAUTH_REQUIRED ingresar de nuevo). Las respuestas de la
+asistente llegan por props ya en el idioma del cliente y no se traducen. La lógica con reglas (orden, selección,
+paginación, estados de entrega, mapeo de disposiciones) está en archivos `.ts` puros con tests.
+
+**Idioma.** Español (`es`) y portugués de Brasil (`pt`). El servidor lo resuelve en este orden: cookie `cecilai_lang`,
+después `Accept-Language`, después `es` (`web/src/i18n/resolve.ts`); el loader de la ruta raíz lo entrega, así el HTML sale
+en el idioma correcto y `<html lang>` es `es` o `pt-BR`. `LanguageSwitcher` guarda la cookie (un año, no es un secreto) y
+recarga los datos de la ruta sin recargar la página. El español de la interfaz es neutro para Argentina, México y
+Colombia: sin voseo ni tuteo imperativo (infinitivos y construcciones nominales: "Reintentar", "Intentar de nuevo").
+
+**Cómo agregar un texto.**
+
+1. Escribirlo en el diccionario español del área, en `web/src/i18n/dict/es/<área>.ts` (objeto anidado; los valores
+   dinámicos van como `{nombre}`).
+2. Escribir su traducción en `web/src/i18n/dict/pt/<área>.ts`. Está tipado contra el español: si falta una clave o sobra
+   una, `make web-typecheck` falla.
+3. Usarlo: `const t = useT()` y `t('shell.customer', { id })`. Fuera de React, `translate(locale, clave, params)`. El título
+   de una ruta usa `headTitle(matches, clave)`. Una clave inexistente no compila.
+
+`make web-test` comprueba además que las dos lenguas tengan las mismas claves y los mismos marcadores, y que el español no
+tenga voseo. Un área nueva se agrega como un archivo en cada `dict/` y una línea en `es.ts` y `pt.ts`.
+
+**Galería.** `/dev/ui` muestra cada componente en todas sus variantes y estados, para cotejarlos contra los artboards de
+Paper; con `?both=1` dibuja el kit entero en español y en portugués. Existe con `make serve-web` (desarrollo) o con un
+build arrancado con `UI_GALLERY=1`; en cualquier otro build responde 404 y su código va en un chunk aparte que el
+cliente nunca descarga. Los estados que solo se alcanzan con el puntero o el teclado (hover, pressed, focus) se dibujan
+con la prop `forceState`. Las capturas de la galería contra Paper están en `docs/demo/ui-kit-*.png`.
+
+Las pantallas del cliente extendieron el kit sin tocar sus variantes de Paper: `DeliveryStatus` suma los estados *sin
+confirmar* y *recibido* (con `detail` y `onReload`), `UserMessage` acepta la línea de entrega y el tinte del mensaje que no
+llegó, y `ConfirmTraceMessage` acepta `disabled` y funciona sin tarjeta del movimiento (la API manda la propuesta como texto).
 
 ---
+
+## Levantar todo con un comando
+
+Todo se levanta y se prueba en Docker local, sin cuentas, sin S3 y sin claves de API; los servicios en la nube (S3, Render,
+proveedores de modelos) son opciones, nunca requisitos.
+
+```bash
+make up                 # API + web sobre el warehouse de fixtures; escribe .env con secretos nuevos; http://127.0.0.1:3000 y :8000
+make env-check          # con un .env viejo: qué variables de .env.example le faltan (solo nombres) y si INGEST_ARGS leería S3; make up lo corre como aviso
+make env-fill           # agrega al .env solo las que faltan, con secretos generados; no cambia nada de lo que ya está
+make monitoring-up      # además Prometheus (con las reglas de alerta) y Grafana con su dashboard: :9090 y :3001
+make up-dataset RAW_DIR=/ruta/a/data/raw   # tus CSV locales, montados de solo lectura, ingeridos en el primer arranque
+make up-llm-local       # además un modelo local (Ollama en Docker); make up-llm-host usa el Ollama del host
+make compose-e2e        # levanta todo desde cero en un proyecto aparte y descartable, lo comprueba de punta a punta y lo baja (es el job `compose` del CI)
+make down               # baja el stack; sus volúmenes se conservan
+make evidence           # regenera docs/evidence/data_ml_validation.{md,json}; make gate y validate-data-ml verifican sin escribir
+make clean-volumes      # además borra los volúmenes (pregunta antes)
+```
+
+La web del compose corre en modo producción: la consola de operador exige `WEB_PUBLIC_ORIGIN`, y el compose se la pasa
+(por defecto `http://127.0.0.1:${WEB_PORT}`, junto con `TRUSTED_CLIENT_IP_HEADER`, `OPERATOR_IDLE_SECONDS` y `UI_GALLERY`; están en
+`.env.example`). `make compose-e2e` entra por la web como un navegador: login de cliente y un turno de chat, login de operador por el
+formulario (con y sin el `Origin` correcto) y su cola, y `/dev/ui` en 404.
+
+Sin clave de modelo el asistente corre en modo degradado seguro: saldos simples desde datos verificados y todo lo demás a una
+persona. Requisitos de RAM y disco de los modelos locales, y por qué en macOS conviene el Ollama del host: `docs/operations.md`
+("Local development").
 
 ## Trabajo restante antes de desplegar
 
@@ -427,7 +569,7 @@ frontera correspondiente y en `LIMITATIONS.md`.
 3. **Rastreo:** API de operaciones de pagos con clave de idempotencia y lectura tras escritura.
 4. **Casos:** integración con el sistema de casos del banco y su retención regulatoria.
 5. **Modelos:** un modelo dentro del perímetro del banco, con acuerdo de tratamiento de datos.
-6. **Observabilidad:** un destino a prueba de manipulación, alertas cableadas al stack de métricas y cifrado en reposo.
+6. **Observabilidad:** un destino a prueba de manipulación, las alertas de `ops/alerts.yml` conectadas a un canal de notificación, y cifrado en reposo.
 7. **Escala:** el estado en SQLite tiene un solo escritor; varias réplicas necesitan Redis o Postgres.
 8. **Evaluación:** repetir la medición con datos y tráfico reales. Las cifras actuales son offline y de simulador, y
    **no son una mejora medida en producción**.

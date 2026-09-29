@@ -1,0 +1,83 @@
+export const loaders = {
+  loading: 'Cargando…',
+  thinking: 'Cecilia está pensando',
+  status: {
+    pending: 'pendiente',
+    active: 'en curso',
+    done: 'listo',
+    failed: 'con error',
+  },
+  steps: {
+    label: 'Verificaciones de Cecilia',
+  },
+  progress: {
+    stepsLabel: 'Pasos del proceso',
+  },
+  delivery: {
+    sending: 'Enviando',
+    sent: 'Enviado',
+    sentAt: 'Enviado · {time}',
+    failed: 'No se envió',
+    retry: 'Reintentar',
+    uncertain: 'Sin confirmar',
+    processed: 'Recibido',
+    reload: 'Cargar la conversación',
+  },
+  toast: {
+    close: 'Cerrar',
+    region: 'Notificaciones',
+  },
+  sample: {
+    spinner: {
+      title: '1 · Spinner',
+      lead: 'Un anillo, cuatro tamaños, tres tonos. El determinado usa el mismo anillo.',
+      brand: 'Marca',
+      onDark: 'Sobre oscuro',
+      done: 'Listo',
+    },
+    thinking: {
+      title: '2 · Puntos de espera',
+      lead: 'Desde el envío hasta que llega la primera línea. Tres cuadros del pulso.',
+      frame: 'Cuadro {n}',
+    },
+    steps: {
+      title: '3 · Pasos de verificación',
+      lead: 'Muestra las consultas reales, en orden. Las marcas aparecen a medida que se verifica cada una.',
+      accounts: 'Cuentas revisadas',
+      reading: 'Leyendo los movimientos de agosto',
+      preparing: 'Preparando tu respuesta',
+      failedLabel: 'Con error',
+      failed: 'No se pudo leer el detalle',
+    },
+    skeleton: {
+      title: '4 · Esqueletos',
+      lead: 'Mensaje, tarjeta de resumen. Dos tonos se alternan para que se lea como carga, no como vacío.',
+    },
+    progress: {
+      title: '5 · Progreso',
+      lead: 'Determinado, indeterminado y por pasos para flujos de varias partes.',
+      opening: 'Abriendo el seguimiento',
+      loading: 'Cargando movimientos',
+      verify: 'Verificar',
+      confirm: 'Confirmar',
+      done: 'Listo',
+    },
+    delivery: {
+      title: '6 · Entrega del mensaje',
+      lead: 'La burbuja del cliente lleva su estado debajo.',
+      message: 'Muéstrame mis últimos cinco movimientos',
+      time: '8:52 a. m.',
+      uncertainDetail: 'No pude confirmar si el servicio recibió tu mensaje. Reintentar es seguro: si ya lo recibió, no se repite.',
+      processedDetail: 'El servicio ya recibió este mensaje. Cargar la conversación muestra su respuesta.',
+    },
+    page: {
+      title: '7 · Página y aviso',
+      lead: 'Espera del inicio de sesión y un aviso de actualización que nunca bloquea la pantalla.',
+      signingIn: 'Iniciando sesión de forma segura',
+      updating: 'Actualizando movimientos',
+      updated: 'Movimientos actualizados',
+      failed: 'No se pudo actualizar',
+      retryAction: 'Reintentar',
+    },
+  },
+}

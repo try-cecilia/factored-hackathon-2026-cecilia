@@ -1,0 +1,59 @@
+/* Sidebar panel (Paper "UI · Sidebars"): a tonal fill, no dividers. Groups are separated by space, rows by fills. */
+.ui-sidebar {
+  /* Icon and quiet-control colors Paper draws with raw values: #1D1C1D is --color-ink-app, #0000008C is ink at 55%. */
+  --sb-ink-quiet: color-mix(in srgb, var(--color-ink) 55%, transparent);
+  --sb-ring: 0 0 0 2px var(--color-cecil-blue);
+  display: flex; flex-direction: column; flex-shrink: 0; box-sizing: border-box; width: 260px; height: 100%; min-height: 0;
+  padding: 10px 8px 8px; background: var(--color-fill-subtle); color: var(--color-ink-app);
+  font-family: var(--font-sans); -webkit-font-smoothing: antialiased;
+}
+.ui-sidebar--floating { border-radius: 14px; }
+.ui-sidebar--operator { width: 220px; padding: 8px 6px; }
+.ui-sidebar--collapsed { width: 56px; align-items: center; gap: 4px; padding: 10px 0; }
+
+/* The nav scrolls; the 2px pad keeps the row focus ring from being clipped by it. */
+.ui-sidebar__nav { flex: 1 1 auto; min-height: 0; margin: -2px; padding: 2px; overflow-x: hidden; overflow-y: auto; scrollbar-width: thin; }
+.ui-sidebar__nav > :first-child { padding-top: 8px; }
+.ui-sidebar--collapsed .ui-sidebar__nav {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; margin: 0; padding: 12px 0 0; overflow: visible;
+}
+.ui-sidebar--collapsed .ui-sidebar__nav > :first-child { padding-top: 0; }
+
+/* Brand */
+.ui-sidebar__brand { display: flex; flex-shrink: 0; align-items: center; gap: 8px; height: 32px; padding-inline: 6px; }
+.ui-sidebar--operator .ui-sidebar__brand { height: 28px; }
+.ui-sidebar--collapsed .ui-sidebar__brand { justify-content: center; padding-inline: 0; }
+.ui-sidebar__mascot {
+  display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center; overflow: clip; border-radius: 4px;
+  background: var(--color-sky-300); /* Paper keeps the mascot's tile in sky-300 for now */
+}
+.ui-sidebar__mascot img { display: block; width: 18px; height: 18px; }
+.ui-sidebar__wordmark { flex: 1; color: var(--color-ink-app); font-size: var(--text-sm); font-weight: var(--font-weight-bold); letter-spacing: -0.02em; line-height: 18px; }
+.ui-sidebar--operator .ui-sidebar__wordmark { flex: none; font-size: var(--text-compact-md); line-height: 16px; }
+.ui-sidebar__product { color: var(--color-ink-70); font-size: var(--text-compact-sm); line-height: 16px; }
+.ui-sidebar__toggle { color: var(--sb-ink-quiet); margin-right: -4px; }
+.ui-sidebar__toggle:hover:not(:disabled) { color: var(--color-ink-app); }
+.ui-sidebar__brand-button {
+  display: inline-flex; align-items: center; justify-content: center; height: 32px; padding: 0 7px; border: 0; border-radius: var(--radius-control);
+  background: transparent; cursor: pointer;
+}
+.ui-sidebar__brand-button:hover { background: var(--color-fill-subtle); }
+.ui-sidebar__brand-button:focus-visible { outline: none; box-shadow: var(--sb-ring); }
+
+/* Sections */
+.ui-sidebar__section { display: flex; flex-direction: column; gap: 1px; padding-top: 14px; }
+.ui-sidebar--operator .ui-sidebar__section { padding-top: 12px; }
+.ui-sidebar--collapsed .ui-sidebar__section { align-items: center; gap: 4px; padding-top: 0; }
+.ui-sidebar__heading {
+  display: flex; align-items: center; margin: 0; padding: 0 10px 4px; color: var(--color-ink-70);
+  font-size: var(--text-compact-sm); font-weight: var(--font-weight-medium); line-height: 16px;
+}
+.ui-sidebar--operator .ui-sidebar__heading { padding: 0 8px 3px; font-size: var(--text-compact-xs); line-height: 14px; }
+.ui-sidebar__heading-text { flex: 1; min-width: 0; }
+.ui-sidebar__heading-meta { flex-shrink: 0; font-size: var(--text-compact-xs); font-weight: var(--font-weight-normal); line-height: 14px; }
+.ui-sidebar__list { display: flex; flex-direction: column; gap: 1px; margin: 0; padding: 0; list-style: none; }
+.ui-sidebar--collapsed .ui-sidebar__list { align-items: center; gap: 4px; }
+/* In the rail the group names are read by assistive tech but not drawn. */
+.ui-sidebar--collapsed .ui-sidebar__heading, .ui-sidebar__sr {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+}

@@ -15,7 +15,15 @@ import threading
 import time
 from pathlib import Path
 
+from agent.filelock import append_line, locked
+from agent.resilience import Deadline, RetryPolicy, Transient, retry_call
+
 TRACE_SLA_BUSINESS_DAYS = 2  # synthetic policy
+TRACE_RETRY = RetryPolicy(max_attempts=3, base_s=0.1, cap_s=0.5)
+
+
+class TraceServiceUnavailable(Transient):
+    """The tracing service could not be reached or written to: a later attempt may work."""
 
 
 class TraceService:
@@ -47,6 +55,22 @@ class TraceService:
         return next((t for t in self._all() if t["trace_id"] == self.trace_id(customer_id, transaction_id)
                      and t["customer_id"] == customer_id and t["transaction_id"] == transaction_id), None)
 
+    def open_verified(self, customer_id: str, transaction_id: str, product_id: str, session_ref: str,
+                      deadline: Deadline | None = None, sleep=time.sleep, attempts_log: list[dict] | None = None) -> dict | None:
+        """Open the request and read it back, retrying a busy or unreachable service a bounded number of times inside
+        the turn's deadline. Safe to repeat: `open` returns the request it already made, and its id comes from customer
+        and movement, so a second attempt after a write that landed but did not confirm cannot make a second request.
+        None if it still cannot be read back, and the caller then never says it exists."""
+        def attempt() -> dict | None:
+            try:
+                self.open(customer_id, transaction_id, product_id, session_ref)
+                return self.find(customer_id, transaction_id)
+            except OSError as exc:
+                raise TraceServiceUnavailable(str(exc)) from exc
+
+        return retry_call(attempt, policy=TRACE_RETRY, idempotency_key=self.trace_id(customer_id, transaction_id),
+                          deadline=deadline, sleep=sleep, attempts_log=attempts_log)
+
     def open(self, customer_id: str, transaction_id: str, product_id: str, session_ref: str) -> dict:
         """The existing request for this movement, or a new one."""
         with self._lock:
@@ -57,14 +81,13 @@ class TraceService:
                        "transaction_id": transaction_id, "product_id": product_id, "session_ref": session_ref,
                        "created_at": time.time(), "status": "open", "sla_business_days": TRACE_SLA_BUSINESS_DAYS,
                        "queue": "payments_ops"}
-            with open(self.path, "a", encoding="utf-8") as f:
-                f.write(json.dumps(request, ensure_ascii=False) + "\n")
+            append_line(self.path, json.dumps(request, ensure_ascii=False))  # under the file lock (retention swaps this file)
             return request
 
     def clear(self, customer_id: str) -> int:
         """Sandbox only: forget a customer's requests, so a demo scenario starts from a clean state. The file is
         written aside and swapped in whole, so a visitor reading it at that moment never sees it half written."""
-        with self._lock:
+        with self._lock, locked(self.path):
             everything = self._all()
             keep = [t for t in everything if t["customer_id"] != customer_id]
             aside = self.path.with_name(self.path.name + ".tmp")

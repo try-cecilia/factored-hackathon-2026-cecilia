@@ -155,6 +155,7 @@ def test_the_8_character_code_a_customer_quotes_finds_the_trace(client):
 
 
 def test_demo_customers_only_lists_configured_sandbox_accounts(client, monkeypatch):
+    monkeypatch.setenv("DEMO_MODE", "1")  # a demo surface: outside the sandbox it does not exist (tests/test_access_matrix.py)
     assert client.get("/demo/customers").json() == []
     monkeypatch.setenv("DEMO_PUBLIC_CUSTOMERS", "CLI-FIX0001")
     body = client.get("/demo/customers").json()

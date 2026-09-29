@@ -1,17 +1,21 @@
 import { forwardRef, useImperativeHandle, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
-import { SendIcon } from './icons'
+import { useT } from '../i18n/context'
+import { ArrowUpIcon, IconButton, QuickReplies } from '../ui'
 
 const MAX = 1000
+const SUGGESTIONS = ['balance', 'recent', 'credit', 'fx', 'trace'] as const
 
 export type ComposerHandle = { focus: () => void }
 
 export const Composer = forwardRef<ComposerHandle, {
   disabled: boolean
   pending: boolean
+  /** Why it is disabled, in the placeholder ("No connection"). */
   hint: string | null
-  suggestions: string[]
+  showSuggestions: boolean
   onSend: (text: string) => void
-}>(function Composer({ disabled, pending, hint, suggestions, onSend }, ref) {
+}>(function Composer({ disabled, pending, hint, showSuggestions, onSend }, ref) {
+  const t = useT()
   const [value, setValue] = useState('')
   const input = useRef<HTMLTextAreaElement>(null)
   useImperativeHandle(ref, () => ({ focus: () => input.current?.focus() }))
@@ -36,17 +40,15 @@ export const Composer = forwardRef<ComposerHandle, {
 
   return (
     <div className="composer-wrap">
-      {suggestions.length > 0 && !blocked && (
-        <ul className="chips" aria-label="Sugerencias">
-          {suggestions.map((s) => (
-            <li key={s}>
-              <button type="button" className="chip" onClick={() => onSend(s)}>{s}</button>
-            </li>
-          ))}
-        </ul>
+      {showSuggestions && !blocked && (
+        <QuickReplies
+          label={t('conversation.suggestions.label')}
+          options={SUGGESTIONS.map((key) => ({ value: t(`conversation.suggestions.${key}`), label: t(`conversation.suggestions.${key}`) }))}
+          onSelect={onSend}
+        />
       )}
       <form className="composer" onSubmit={submit} data-disabled={disabled || undefined}>
-        <label className="sr-only" htmlFor="composer-input">Escribí tu mensaje para Cecilia</label>
+        <label className="sr-only" htmlFor="composer-input">{t('conversation.composer.label')}</label>
         <textarea
           id="composer-input"
           ref={input}
@@ -54,7 +56,7 @@ export const Composer = forwardRef<ComposerHandle, {
           value={value}
           maxLength={MAX}
           disabled={disabled}
-          placeholder={disabled && hint ? hint : 'Preguntale a Cecilia por tus cuentas'}
+          placeholder={disabled && hint ? hint : t('conversation.composer.placeholder')}
           onChange={(e) => {
             setValue(e.target.value)
             e.target.style.height = 'auto'
@@ -63,14 +65,17 @@ export const Composer = forwardRef<ComposerHandle, {
           onKeyDown={onKeyDown}
           aria-describedby="composer-help"
         />
-        <button type="submit" className="send" disabled={!canSend} aria-label={pending ? 'Enviando…' : 'Enviar mensaje'}>
-          <SendIcon />
-        </button>
+        <IconButton
+          type="submit"
+          variant="primary"
+          size="md"
+          label={pending ? t('conversation.composer.sending') : t('conversation.composer.send')}
+          icon={<ArrowUpIcon />}
+          disabled={!canSend}
+        />
       </form>
       <p id="composer-help" className="composer-foot">
-        {value.length > MAX - 100
-          ? `${MAX - value.length} caracteres restantes`
-          : 'Enter envía, Shift+Enter agrega una línea. Cecilia puede equivocarse: revisá los datos importantes en tus resúmenes.'}
+        {value.length > MAX - 100 ? t('conversation.composer.remaining', { n: MAX - value.length }) : t('conversation.composer.help')}
       </p>
     </div>
   )

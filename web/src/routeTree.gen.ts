@@ -14,6 +14,7 @@ import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as OperatorRouteImport } from './routes/_operator'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthedChatRouteImport } from './routes/_authed/chat'
+import { Route as DevUiRouteImport } from './routes/dev.ui'
 import { Route as OperadorClaveRouteImport } from './routes/operador.clave'
 import { Route as OperadorLoginRouteImport } from './routes/operador.login'
 import { Route as OperadorSalirRouteImport } from './routes/operador.salir'
@@ -50,6 +51,11 @@ const AuthedChatRoute = AuthedChatRouteImport.update({
   id: '/chat',
   path: '/chat',
   getParentRoute: () => AuthedRoute,
+} as any)
+const DevUiRoute = DevUiRouteImport.update({
+  id: '/dev/ui',
+  path: '/dev/ui',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const OperadorClaveRoute = OperadorClaveRouteImport.update({
   id: '/operador/clave',
@@ -126,6 +132,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/chat': typeof AuthedChatRoute
+  '/dev/ui': typeof DevUiRoute
   '/operador/clave': typeof OperadorClaveRoute
   '/operador/login': typeof OperadorLoginRoute
   '/operador/salir': typeof OperadorSalirRoute
@@ -144,6 +151,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/chat': typeof AuthedChatRoute
+  '/dev/ui': typeof DevUiRoute
   '/operador/clave': typeof OperadorClaveRoute
   '/operador/login': typeof OperadorLoginRoute
   '/operador/salir': typeof OperadorSalirRoute
@@ -163,6 +171,7 @@ export interface FileRoutesById {
   '/_operator': typeof OperatorRouteWithChildren
   '/login': typeof LoginRoute
   '/_authed/chat': typeof AuthedChatRoute
+  '/dev/ui': typeof DevUiRoute
   '/operador/clave': typeof OperadorClaveRoute
   '/operador/login': typeof OperadorLoginRoute
   '/operador/salir': typeof OperadorSalirRoute
@@ -183,6 +192,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/chat'
+    | '/dev/ui'
     | '/operador/clave'
     | '/operador/login'
     | '/operador/salir'
@@ -201,6 +211,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/chat'
+    | '/dev/ui'
     | '/operador/clave'
     | '/operador/login'
     | '/operador/salir'
@@ -219,6 +230,7 @@ export interface FileRouteTypes {
     | '/_operator'
     | '/login'
     | '/_authed/chat'
+    | '/dev/ui'
     | '/operador/clave'
     | '/operador/login'
     | '/operador/salir'
@@ -239,6 +251,7 @@ export interface RootRouteChildren {
   AuthedRoute: typeof AuthedRouteWithChildren
   OperatorRoute: typeof OperatorRouteWithChildren
   LoginRoute: typeof LoginRoute
+  DevUiRoute: typeof DevUiRoute
   OperadorClaveRoute: typeof OperadorClaveRoute
   OperadorLoginRoute: typeof OperadorLoginRoute
   OperadorSalirRoute: typeof OperadorSalirRoute
@@ -282,6 +295,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/chat'
       preLoaderRoute: typeof AuthedChatRouteImport
       parentRoute: typeof AuthedRoute
+    }
+    '/dev/ui': {
+      id: '/dev/ui'
+      path: '/dev/ui'
+      fullPath: '/dev/ui'
+      preLoaderRoute: typeof DevUiRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/operador/clave': {
       id: '/operador/clave'
@@ -440,6 +460,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthedRoute: AuthedRouteWithChildren,
   OperatorRoute: OperatorRouteWithChildren,
   LoginRoute: LoginRoute,
+  DevUiRoute: DevUiRoute,
   OperadorClaveRoute: OperadorClaveRoute,
   OperadorLoginRoute: OperadorLoginRoute,
   OperadorSalirRoute: OperadorSalirRoute,

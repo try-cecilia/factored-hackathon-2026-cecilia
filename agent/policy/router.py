@@ -120,6 +120,12 @@ def llm_unavailable(attempts: list[dict[str, Any]]) -> Decision:
                     open_questions=["Answer manually; the automated assistant was unavailable."], rule="llm_unavailable")
 
 
+def turn_timeout() -> Decision:
+    """The turn's time budget ran out between the model's answer and the lookup: nothing was looked up or done."""
+    return Decision(Disposition.ESCALATE, "The turn's time budget ran out before the lookup could run.", "turn_timeout",
+                    open_questions=["Answer manually; the automated assistant ran out of time."], rule="turn_timeout")
+
+
 # --- the one action: tracing a pending movement (D3) ------------------------------------------------------------
 
 _YES = {"si", "sim", "si si", "sim sim", "dale", "ok dale", "si dale", "dale si", "confirmo", "confirmar", "si confirmo",

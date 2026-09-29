@@ -1,0 +1,27 @@
+/* Footer person (Paper: 44px row in the client sidebar, 34px in the operator one). */
+.ui-sidebar__person {
+  display: flex; flex-shrink: 0; align-items: center; gap: 10px; box-sizing: border-box; width: 100%; height: 44px; padding: 0 8px; border: 0;
+  border-radius: var(--radius-control); background: transparent; color: var(--color-ink-app); font: inherit; text-align: left; text-decoration: none;
+}
+.ui-sidebar__person--operator { gap: 8px; height: 34px; padding: 0 6px; border-radius: var(--radius-compact); }
+.ui-sidebar__person--action { cursor: pointer; }
+.ui-sidebar__person--action:hover, .ui-sidebar__person[data-state='hover'] { background: var(--color-fill-subtle); }
+.ui-sidebar__person--action:focus-visible { outline: none; }
+.ui-sidebar__person--action:focus-visible, .ui-sidebar__person[data-state='focus'] { box-shadow: var(--sb-ring); }
+.ui-sidebar__person-text { display: flex; flex: 1; flex-direction: column; min-width: 0; }
+.ui-sidebar__person-name {
+  overflow: hidden; font-size: var(--text-compact-md); font-weight: var(--font-weight-semibold); letter-spacing: -0.01em; line-height: 16px;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.ui-sidebar__person--operator .ui-sidebar__person-name { font-family: var(--font-mono); font-size: var(--text-compact-sm); font-weight: var(--font-weight-normal); letter-spacing: 0; }
+.ui-sidebar__person-detail { overflow: hidden; color: var(--color-ink-70); font-size: var(--text-compact-xs); line-height: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.ui-sidebar__presence { flex-shrink: 0; width: 6px; height: 6px; border-radius: var(--radius-pill); background: var(--color-success); }
+
+/* Avatars: a photo, or initials on a tonal tile (customer) or an ink disc (operator). */
+.ui-sidebar__avatar { display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center; border-radius: var(--radius-control); object-fit: cover; }
+.ui-sidebar__avatar--initials { background: var(--color-fill-muted); color: var(--color-ink-app); font-size: var(--text-compact-xs); font-weight: var(--font-weight-bold); line-height: 14px; }
+.ui-sidebar__avatar--operator { border-radius: var(--radius-pill); background: var(--color-ink-app); color: var(--color-paper); font-size: 9px; font-weight: var(--font-weight-bold); line-height: 12px; }
+
+/* Rail: avatar, then the settings action. */
+.ui-sidebar__person-rail { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.ui-sidebar__avatar-wrap { display: inline-flex; margin-top: 2px; }

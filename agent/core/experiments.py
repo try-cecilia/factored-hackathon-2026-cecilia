@@ -25,7 +25,8 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Callable
 
-from agent.llm.client import LLMUnavailable, candidate_client
+from agent.filelock import append_line
+from agent.llm.client import LLMUnavailable, candidate_client, safe_error
 
 logger = logging.getLogger(__name__)
 
@@ -97,8 +98,8 @@ class Experiments:
                 return self._canary().chat(messages, tools=tools), "canary"
             except LLMUnavailable:
                 route = "canary_fallback"
-            except Exception:  # noqa: BLE001 - a broken candidate must never reach the customer
-                logger.exception("canary model failed; answering with the usual model")
+            except Exception as exc:  # noqa: BLE001 - a broken candidate must never reach the customer
+                logger.error("canary model failed (%s); answering with the usual model", safe_error(exc))
                 route = "canary_fallback"
             return primary().chat(messages, tools=tools), route
         return primary().chat(messages, tools=tools), "primary"
@@ -130,8 +131,8 @@ class Experiments:
         except Exception as exc:  # noqa: BLE001 - the candidate failing is a finding, not a problem for the customer
             record.update(shadow={"error": type(exc).__name__}, same_tools=None, same_args=None)
         try:
-            with self._lock, open(self.log_path, "a", encoding="utf-8") as f:
-                f.write(json.dumps(record, ensure_ascii=False) + "\n")
+            with self._lock:
+                append_line(self.log_path, json.dumps(record, ensure_ascii=False))  # under the file lock (retention swaps this file)
         except OSError:
             logger.exception("could not write the shadow log")
 

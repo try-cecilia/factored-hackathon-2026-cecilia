@@ -1,0 +1,62 @@
+import type { Like } from '../../types.ts'
+import type { demo as es } from '../es/demo.ts'
+
+export const demo: Like<typeof es> = {
+  badge: 'Demo',
+  title: 'Recursos de demonstração',
+  lead: 'Só existem no ambiente de teste. Trocam de cliente, forçam falhas e mostram o que o banco vê; não fazem parte do serviço real.',
+  panel: 'Painel de demonstração',
+  paths: {
+    normal: 'Normal',
+    ambiguous: 'Ambíguo',
+    out_of_scope: 'Fora do escopo',
+    action: 'Ação verificada',
+    human: 'Requer uma pessoa',
+    attack: 'Ataque',
+    failure: 'Falhas',
+  },
+  dispositions: {
+    AUTO_RESOLVE: 'Resolvido',
+    CLARIFY: 'Pergunta',
+    ABSTAIN: 'Recusa',
+    ESCALATE: 'Para uma pessoa',
+  },
+  faultNotes: {
+    llm_outage: 'começa com o modelo fora do ar',
+    expire_session: 'começa com a sessão expirada',
+    clear_traces: 'começa sem pedidos anteriores',
+  },
+  steps: {
+    label: 'Passos do cenário',
+    expected: 'Esperado: {what}',
+    anyOutcome: 'qualquer um',
+    came: '✓ {what}',
+    cameWrong: '✗ Saiu {what}',
+    send: 'Enviar esta mensagem',
+    close: 'Fechar passos',
+  },
+  scenarios: {
+    title: 'Cenários guiados',
+    load: 'Carregar',
+    restart: 'Reiniciar',
+    failed: 'Não foi possível iniciar o cenário.',
+    language: 'Idioma do cenário: {lang}',
+  },
+  faults: {
+    title: 'Falhas nesta sessão',
+    label: 'Falhas',
+    expire: 'Expirar a sessão',
+    modelDown: 'Simular queda do modelo',
+    modelRestore: 'Modelo fora do ar: restaurar',
+    failed: 'Não foi possível aplicar.',
+    expired: 'Sessão expirada: a próxima mensagem mostra como se pede para entrar de novo.',
+  },
+  bank: {
+    title: 'Visão do banco',
+    refresh: 'Atualizar',
+    empty: 'Ainda não há casos desta sessão. Experimente «Cobrança não reconhecida».',
+    request: 'Pedido',
+    reason: 'Motivo',
+    next: 'Próximo passo',
+  },
+}

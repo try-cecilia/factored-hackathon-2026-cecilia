@@ -12,7 +12,9 @@ that fired, and open questions. It never carries the session token — only
 from __future__ import annotations
 
 import json
+import logging
 import os
+import threading
 import time
 import uuid
 from dataclasses import asdict, dataclass, field
@@ -20,8 +22,15 @@ from pathlib import Path
 from typing import Any
 
 from agent.policy.router import Decision
+from agent import observability
+from agent.filelock import locked
+from agent.resilience import (Deadline, RetryPolicy, Saturated, current_handoff, handoff_budget_seconds, handoff_deadline, retry_call,
+                              run_bounded)
+from agent.resilience import writes as writes_pool
 from agent.policy.signals import PRIORITY_BY_CATEGORY
 from agent.tools import account_tools
+
+logger = logging.getLogger(__name__)
 
 FRAUD_SCORE_FLAG = 70
 
@@ -52,6 +61,27 @@ class EscalationTicket:
     pending_action: dict[str, Any] | None = None
 
 
+ENQUEUE_RETRY = RetryPolicy(max_attempts=3, base_s=0.1, cap_s=0.5)
+
+
+class HandoffInFlight(TimeoutError):
+    """The ticket's write had begun and did not finish inside the handoff's budget. It is an explicit state, not a ticket: the
+    caller names no ticket (only confirmed ones are named), and the write's own outcome, when it comes, is recorded by
+    `_record_late`. The customer has the trace code, and the ticket carries the same trace id."""
+
+
+def _record_late(ticket: "EscalationTicket", error: BaseException | None) -> None:
+    """The outcome of a write its caller had stopped waiting for: counted (/admin/capacity, /metrics) and logged by type."""
+    kind = "handoff_late_landed" if error is None else "handoff_late_failed"
+    observability.count_failure(kind)
+    fields = {"trace_id": ticket.trace_id, "kind": kind}
+    if error is None:
+        logger.info("a handoff write finished after its budget: the ticket exists", extra={"fields": {**fields, "ticket_id": ticket.ticket_id}})
+    else:  # no ticket exists, so nothing is named
+        logger.error("a handoff write failed after its budget (%s)", type(error).__name__,
+                     extra={"fields": {**fields, "error_type": type(error).__name__}})
+
+
 class HumanQueue:
     @property
     def path(self) -> Path:
@@ -60,8 +90,62 @@ class HumanQueue:
         return p
 
     def enqueue(self, ticket: EscalationTicket) -> None:
-        with open(self.path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(asdict(ticket), default=str, ensure_ascii=False) + "\n")
+        """Append the ticket, retrying a failed write a bounded number of times, all inside the handoff's budget. The ticket
+        id is the idempotency key: a retry first looks for the ticket, so a write that landed but reported failure is not
+        filed twice. The wait for the lock is what is left of the budget, and once it is spent no write begins: a ticket never
+        lands after the customer was told it did not. A write that has already begun is not cut off (half a line would be
+        worse than a late one): if it outlasts the budget, HandoffInFlight is raised, the write finishes on its own, and its
+        outcome is recorded when it does. The write takes a slot of `resilience.writes` until it ends; with none free it is
+        refused at once (Saturated) instead of piling up."""
+        budget = current_handoff.get() or Deadline(handoff_budget_seconds())
+        tries = 0
+        state = {"begun": False, "given_up": False, "done": False, "error": None}
+        guard = threading.Lock()
+
+        def write() -> None:
+            nonlocal tries
+            tries += 1
+            # Between processes and threads, and never past the budget: the wait for the lock is what is left of it.
+            with locked(self.path, timeout=budget.remaining()), open(self.path, "a", encoding="utf-8") as f:
+                # A retry first looks for the ticket, under the file's lock (so a write that landed is seen, and nobody else
+                # appends meanwhile) but outside `guard`: that lookup is I/O, and the caller needs `guard` to give up on time.
+                if tries > 1 and self.get(ticket.ticket_id) is not None:
+                    return
+                with guard:  # the last look before the write: it begins only if the budget is left and the caller still waits
+                    if budget.expired or state["given_up"]:
+                        raise TimeoutError("handoff budget spent before the ticket could be written")
+                    state["begun"] = True
+                f.write(json.dumps(asdict(ticket), default=str, ensure_ascii=False) + "\n")
+
+        def run() -> None:
+            error: BaseException | None = None
+            try:
+                retry_call(write, policy=ENQUEUE_RETRY, idempotency_key=ticket.ticket_id, deadline=budget)
+            except BaseException as exc:  # noqa: BLE001 - reported to the caller, or recorded if it stopped waiting
+                error = exc
+            finally:
+                writes_pool.release()
+            with guard:
+                state.update(done=True, error=error)
+                late = state["given_up"] and state["begun"]
+            if late:
+                _record_late(ticket, error)
+
+        if not writes_pool.try_acquire():
+            raise Saturated(f"{writes_pool.limit} ticket writes already in flight")
+        worker = threading.Thread(target=run, daemon=True, name="handoff-write")
+        worker.start()
+        worker.join(max(0.0, budget.remaining()))
+        with guard:
+            if not state["done"]:
+                state["given_up"] = True
+                begun = state["begun"]
+        if not state["done"]:
+            if begun:
+                raise HandoffInFlight(f"the write of a ticket for trace {ticket.trace_id} was still running at the deadline")
+            raise TimeoutError("handoff budget spent before the ticket could be written")
+        if state["error"] is not None:
+            raise state["error"]
 
     def get(self, ticket_id: str) -> dict | None:
         # ponytail: linear scan of a local JSONL file; the bank's case system answers this by id
@@ -78,7 +162,8 @@ class HumanQueue:
         """Tickets owned by the authenticated customer, across all of their sessions."""
         if not self.path.exists():
             return []
-        tickets = (json.loads(line) for line in self.path.read_text(encoding="utf-8").splitlines() if line.strip())
+        # Only the customer's own lines are parsed: this runs on every turn, and the file holds everyone's tickets.
+        tickets = (json.loads(line) for line in self.path.read_text(encoding="utf-8").splitlines() if customer_id in line)
         return [ticket for ticket in tickets if ticket["customer_id"] == customer_id]
 
 
@@ -96,6 +181,7 @@ NEXT_STEP = {
     "data_unavailable": "Look up the missing field in the core system and answer the customer.",
     "tool_failure": "Answer from the core system manually; report the failing lookup.",
     "llm_unavailable": "Answer manually; the assistant was down.",
+    "turn_timeout": "Answer manually; the assistant ran out of time before it could look anything up.",
     "trace_unmatched": "Check the movement with payments operations or the sending bank: nothing of the customer's is pending.",
     "trace_unverified": "Open the trace manually and give the customer its number: the tracing service did not confirm it.",
     "trace_review": "Review the movement (see pending_action.review_reason) and approve or reject the trace the customer asked for.",
@@ -138,7 +224,20 @@ def escalate(
     trace_id: str | None,
     pending_action: dict[str, Any] | None = None,
 ) -> EscalationTicket:
-    evidence, notes = _evidence_for(decision, customer_id, actions)
+    with handoff_deadline() as budget:
+        if budget.expired:  # best-effort by design, and never worth more time than the handoff has
+            evidence, notes = [], ["Evidence was not gathered: the handoff's time budget was spent."]
+        else:
+            try:  # a read: bounded, and left to finish in the background if it runs over
+                evidence, notes = run_bounded(lambda: _evidence_for(decision, customer_id, actions), budget.remaining() / 2)  # never more than half: the write comes next
+            except TimeoutError:
+                evidence, notes = [], ["Evidence was not gathered: it did not finish inside the handoff's time budget, or too many earlier ones are still running."]
+        return _file(decision, customer_id, session_ref, request, language, actions, verified_facts, prior_requests, attributes,
+                     trace_id, pending_action, evidence, notes)
+
+
+def _file(decision, customer_id, session_ref, request, language, actions, verified_facts, prior_requests, attributes, trace_id,
+          pending_action, evidence, notes) -> EscalationTicket:
     ticket = EscalationTicket(
         ticket_id=str(uuid.uuid4()),
         trace_id=trace_id,

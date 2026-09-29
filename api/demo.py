@@ -39,12 +39,12 @@ def enabled() -> bool:
     return os.environ.get("DEMO_MODE") == "1"
 
 
-def _require_demo() -> None:
+def require_demo() -> None:
     if not enabled():
         raise HTTPException(404, "Not Found")
 
 
-router = APIRouter(prefix="/demo", dependencies=[Depends(_require_demo)])
+router = APIRouter(prefix="/demo", dependencies=[Depends(require_demo)])
 
 
 # --- faults ------------------------------------------------------------------------------------------------------
@@ -71,14 +71,18 @@ class FaultIn(TokenIn):
     fault: Literal["expire_session", "llm_outage", "llm_restore", "clear_traces"]
 
 
+def _live_session(token: str):
+    try:
+        return default_store.validate(token)
+    except SessionError:
+        raise HTTPException(401, "no live session for this token") from None
+
+
 @router.post("/fault")
 def fault(req: FaultIn) -> dict:
     """A fault or a sandbox reset, for this session only. clear_traces forgets the session customer's trace requests,
     so the trace scenario shows its proposal even after an earlier run opened one (idempotency is per customer)."""
-    try:
-        session = default_store.validate(req.session_token)
-    except SessionError:
-        raise HTTPException(401, "no live session for this token") from None
+    session = _live_session(req.session_token)
     ref = session_ref(req.session_token)
     if req.fault == "clear_traces":
         return {"traces_cleared": default_traces.clear(session.customer_id)}
@@ -108,12 +112,14 @@ def _of_session(path, token: str) -> list[dict]:
 @router.post("/tickets")
 def tickets(req: TokenIn) -> list[dict]:
     """Tickets this session filed, exactly as the human agent receives them."""
+    _live_session(req.session_token)
     return _of_session(default_queue.path, req.session_token)
 
 
 @router.post("/traces")
 def traces(req: TokenIn) -> list[dict]:
     """Trace requests this session opened, as payments operations receives them."""
+    _live_session(req.session_token)
     return _of_session(default_traces.path, req.session_token)
 
 

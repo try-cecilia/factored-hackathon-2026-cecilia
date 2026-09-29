@@ -161,7 +161,8 @@ def test_clearing_a_customers_traces_never_leaves_the_file_half_written(trace_st
     with pytest.raises(OSError):
         service.clear("CLI-FIX0004")
     assert trace_store.read_text(encoding="utf-8") == before
-    assert [p.name for p in trace_store.parent.iterdir()] == [trace_store.name]
+    # no temporary file; the store's lock file (agent/filelock.py) is a stable sidecar, not a leftover
+    assert [p.name for p in trace_store.parent.iterdir() if not p.name.endswith(".lock")] == [trace_store.name]
 
 
 def test_trace_ids_are_long_enough_that_a_bank_never_sees_two_alike():

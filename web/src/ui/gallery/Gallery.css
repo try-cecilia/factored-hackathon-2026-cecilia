@@ -1,0 +1,23 @@
+/* Chrome of the dev gallery only. The components draw themselves; nothing here styles them. */
+.gal { min-height: 100dvh; padding: 48px 96px 96px; background: var(--color-paper); color: var(--color-ink-app); }
+.gal__inner { max-width: 1248px; margin-inline: auto; display: grid; gap: 72px; }
+.gal__head { display: grid; gap: 12px; }
+.gal__eyebrow { color: var(--color-ink-70); font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.gal__title { font-size: 48px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.1; }
+.gal__lead { max-width: 620px; color: var(--color-ink-70); font-size: var(--text-base); line-height: 24px; }
+.gal__bar { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
+.gal__nav { display: flex; flex-wrap: wrap; gap: 4px; }
+.gal__nav a { padding: 4px 10px; border-radius: var(--radius-compact); color: var(--color-ink-soft); font-size: 13px; font-weight: 600; text-decoration: none; }
+.gal__nav a:hover { background: var(--color-fill-subtle); }
+.gal__lang { display: grid; gap: 96px; }
+.gal__lang-tag { color: var(--color-cecil-blue); font-size: 12px; font-weight: 700; letter-spacing: 0.08em; }
+.gal__section { display: grid; gap: 32px; scroll-margin-top: 24px; }
+.gal__section > h2 { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
+.gal__group { display: grid; gap: 20px; }
+.gal__group > h3 { color: var(--color-ink-70); font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
+.gal__row { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
+.gal__caption { color: var(--color-ink-70); font-size: 12px; line-height: 16px; }
+.gal__cell { display: grid; justify-items: start; gap: 10px; }
+.gal__grid { display: grid; grid-template-columns: 110px repeat(6, 150px); align-items: center; gap: 20px 16px; }
+.gal__grid-label { font-size: 14px; font-weight: 600; line-height: 18px; }
+.gal__grid-head { color: var(--color-ink-70); font-size: 11px; font-weight: 600; letter-spacing: 0.06em; line-height: 14px; text-transform: uppercase; }

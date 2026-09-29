@@ -1,0 +1,30 @@
+/* Floating layer: the one place besides menus where a soft shadow is allowed. */
+.ui-toast-region {
+  position: fixed; inset-inline: 0; bottom: 24px; z-index: 60; box-sizing: border-box;
+  display: flex; flex-direction: column; align-items: center; gap: 8px; padding-inline: 16px; pointer-events: none;
+}
+.ui-toast-region--flow { position: static; align-items: flex-start; padding: 0; }
+.ui-toast-region > * { pointer-events: auto; }
+
+.ui-toast {
+  display: flex; align-items: center; gap: 10px; box-sizing: border-box; width: fit-content; max-width: min(100%, 440px); min-height: 40px;
+  padding: 10px 16px 10px 12px; border-radius: var(--radius-xl); background: var(--color-ink-app); color: var(--color-paper);
+  box-shadow: 0 12px 28px -10px #00000066; /* Paper toast shadow */
+  font-size: var(--text-compact-md); font-weight: var(--font-weight-medium); line-height: 16px;
+  animation: ui-toast-in 0.16s ease-out;
+}
+.ui-toast--loading { padding-left: 14px; }
+.ui-toast--closable, .ui-toast:has(.ui-toast__action) { padding-right: 8px; }
+.ui-toast .ui-spinner { --spinner-track: color-mix(in srgb, var(--color-paper) 30%, transparent); }
+.ui-toast__text { min-width: 0; }
+
+.ui-toast__action, .ui-toast__close {
+  display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center; height: 24px; border: 0;
+  border-radius: var(--radius-compact); background: transparent; color: var(--color-paper); font: inherit; cursor: pointer;
+}
+.ui-toast__action { margin-left: 6px; padding: 0 8px; font-size: var(--text-compact-sm); font-weight: var(--font-weight-semibold); }
+.ui-toast__close { width: 24px; color: color-mix(in srgb, var(--color-paper) 70%, transparent); }
+.ui-toast__action:hover, .ui-toast__close:hover { background: color-mix(in srgb, var(--color-paper) 12%, transparent); }
+.ui-toast__close:hover { color: var(--color-paper); }
+.ui-toast__action:focus-visible, .ui-toast__close:focus-visible { outline: none; box-shadow: var(--ring-focus); }
+@keyframes ui-toast-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }

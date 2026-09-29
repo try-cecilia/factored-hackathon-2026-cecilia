@@ -1,0 +1,89 @@
+/* Sidebar row. The item carries the fill, radius and ring; the link or button inside is transparent and fills it. */
+.ui-sidebar__item {
+  position: relative; display: flex; align-items: stretch; min-height: 32px; border-radius: var(--radius-control);
+  transition: background-color 0.12s ease;
+}
+.ui-sidebar__row {
+  display: flex; flex: 1; align-items: center; gap: 8px; min-width: 0; padding: 0 10px; border: 0; border-radius: inherit;
+  background: transparent; color: var(--color-ink-app); font: inherit; font-size: var(--text-compact-md); font-weight: var(--font-weight-medium);
+  line-height: 16px; text-align: left; text-decoration: none; cursor: pointer;
+}
+.ui-sidebar__row:focus-visible { outline: none; }
+.ui-sidebar__item:has(.ui-sidebar__row:focus-visible), .ui-sidebar__item[data-state='focus'] { box-shadow: var(--sb-ring); }
+/* Rows with an icon (the top actions) leave a wider gap after it than text-only rows leave before the age. */
+.ui-sidebar__row:has(> svg:first-child) { gap: 10px; }
+
+/* States: hover is a light fill, the current row a stronger one with semibold text. */
+.ui-sidebar__item:hover, .ui-sidebar__item[data-state='hover'] { background: var(--color-fill-subtle); }
+.ui-sidebar__item[data-active] { background: var(--color-fill-muted); }
+.ui-sidebar__item[data-active] .ui-sidebar__label, .ui-sidebar__item[data-status='unread'] .ui-sidebar__label { font-weight: var(--font-weight-semibold); }
+
+.ui-sidebar__text { display: flex; flex: 1; flex-direction: column; gap: 1px; min-width: 0; }
+.ui-sidebar__label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ui-sidebar__description { overflow: hidden; color: var(--color-ink-70); font-size: var(--text-compact-xs); font-weight: var(--font-weight-normal); line-height: 14px; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Case rows: two lines, a status dot on the first one. */
+.ui-sidebar__item--two-line { min-height: 0; }
+.ui-sidebar__item--two-line .ui-sidebar__row { align-items: flex-start; gap: 10px; padding-block: 7px; }
+.ui-sidebar__dot { flex-shrink: 0; width: 7px; height: 7px; margin-top: 5px; border-radius: var(--radius-pill); background: var(--color-ink-70); }
+.ui-sidebar__dot[data-tone='success'] { background: var(--color-success); }
+.ui-sidebar__dot[data-tone='caution'] { background: var(--color-caution); }
+.ui-sidebar__dot[data-tone='danger'] { background: var(--color-danger); }
+
+/* Trailing content */
+.ui-sidebar__trail { display: flex; flex-shrink: 0; align-items: center; justify-content: flex-end; gap: 8px; }
+.ui-sidebar__meta, .ui-sidebar__shortcut { color: var(--color-ink-70); font-size: var(--text-compact-xs); font-weight: var(--font-weight-normal); line-height: 14px; white-space: nowrap; }
+.ui-sidebar__shortcut { font-family: var(--font-mono); }
+.ui-sidebar__unread, .ui-sidebar__badge { flex-shrink: 0; border-radius: var(--radius-pill); background: var(--color-cecil-blue); }
+.ui-sidebar__unread { width: 6px; height: 6px; }
+.ui-sidebar__item--menu .ui-sidebar__trail { min-width: 16px; }
+
+/* Row menu trigger: takes the place of the trailing content while the row is hovered, focused or has its menu open. */
+.ui-sidebar__menu-trigger {
+  position: absolute; top: 50%; right: 4px; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 24px; padding: 0;
+  border: 0; border-radius: var(--radius-compact); background: transparent; color: color-mix(in srgb, var(--color-ink) 60%, transparent);
+  cursor: pointer; opacity: 0; transform: translateY(-50%);
+}
+.ui-sidebar__menu-trigger:hover { background: var(--color-fill-muted); color: var(--color-ink-app); }
+.ui-sidebar__menu-trigger:focus-visible { outline: none; box-shadow: var(--sb-ring); }
+.ui-sidebar__item:hover .ui-sidebar__menu-trigger, .ui-sidebar__item:focus-within .ui-sidebar__menu-trigger,
+.ui-sidebar__item[data-state='hover'] .ui-sidebar__menu-trigger, .ui-sidebar__menu-trigger[aria-expanded='true'] { opacity: 1; }
+@media (hover: hover) {
+  .ui-sidebar__item--menu:hover .ui-sidebar__trail, .ui-sidebar__item--menu:focus-within .ui-sidebar__trail,
+  .ui-sidebar__item--menu[data-state='hover'] .ui-sidebar__trail, .ui-sidebar__item--menu:has([aria-expanded='true']) .ui-sidebar__trail { visibility: hidden; }
+}
+/* Touch has no hover: the trigger stays visible and gets its own room next to the age. */
+@media (hover: none) {
+  .ui-sidebar__item--menu .ui-sidebar__row { padding-right: 34px; }
+  .ui-sidebar__menu-trigger { opacity: 1; }
+}
+
+/* Renaming: the row turns into a field on paper, ringed in blue like a focused input. */
+.ui-sidebar__item--renaming { background: var(--color-paper); box-shadow: var(--sb-ring); }
+.ui-sidebar__item--renaming:hover { background: var(--color-paper); }
+.ui-sidebar__rename {
+  flex: 1; min-width: 0; padding: 0 10px; border: 0; border-radius: inherit; background: transparent; color: var(--color-ink-app);
+  font: inherit; font-size: var(--text-compact-md); font-weight: var(--font-weight-medium); line-height: 16px; caret-color: var(--color-cecil-blue);
+}
+.ui-sidebar__rename:focus { outline: none; }
+
+/* Operator: 26px rows, 12px text, 6px radius, mono for queues and counts. */
+.ui-sidebar__item--operator { min-height: 26px; border-radius: var(--radius-compact); }
+.ui-sidebar__item--operator .ui-sidebar__row { padding-inline: 8px; font-size: var(--text-compact-sm); }
+.ui-sidebar__item--operator .ui-sidebar__meta { font-family: var(--font-mono); }
+.ui-sidebar__item--operator[data-active] .ui-sidebar__meta { color: var(--color-ink-app); }
+.ui-sidebar__item--mono .ui-sidebar__label { font-family: var(--font-mono); font-size: var(--text-compact-xs); line-height: 14px; }
+
+/* Rail: 36×32 icon buttons with the name in a tooltip on the right. */
+.ui-sidebar__item--rail { width: 36px; min-height: 32px; }
+.ui-sidebar__item--rail .ui-sidebar__row { justify-content: center; padding: 0; }
+.ui-sidebar__badge { position: absolute; top: 5px; right: 7px; width: 7px; height: 7px; }
+.ui-sidebar__tip {
+  position: absolute; top: 50%; left: calc(100% + 16px); z-index: 5; display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 10px;
+  border-radius: var(--radius-control); background: var(--color-ink-app); color: var(--color-paper); font-size: var(--text-compact-sm);
+  font-weight: var(--font-weight-medium); line-height: 16px; white-space: nowrap; pointer-events: none; visibility: hidden; opacity: 0;
+  transform: translateY(-50%); transition: opacity 0.12s ease;
+}
+.ui-sidebar__tip-key { color: color-mix(in srgb, var(--color-paper) 60%, transparent); font-family: var(--font-mono); font-size: var(--text-compact-xs); line-height: 14px; }
+.ui-sidebar__item--rail:hover .ui-sidebar__tip, .ui-sidebar__item--rail:has(.ui-sidebar__row:focus-visible) .ui-sidebar__tip,
+.ui-sidebar__item--rail[data-state='hover'] .ui-sidebar__tip { visibility: visible; opacity: 1; }

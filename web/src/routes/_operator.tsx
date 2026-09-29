@@ -1,8 +1,12 @@
-import { createFileRoute, Link, Outlet, redirect } from '@tanstack/react-router'
-import { getOperatorView } from '../server/operator.functions'
+import { createFileRoute, Outlet, redirect, useRouter, useRouterState } from '@tanstack/react-router'
+import { useEffect } from 'react'
+import { getOperatorView, loadQueue } from '../server/operator.functions'
 import operatorStylesheet from '../styles/operator.css?url'
-import { OperatorKeyForm } from './-operator/OperatorKeyForm'
-import { isAutomatic } from './-operator/refresh'
+import { OperatorShell } from './-operator/OperatorShell'
+import { isAutomatic, refreshQuietly } from './-operator/refresh'
+import { guarded } from './-operator/reload'
+import { QueueSkeleton } from './-operator/QueueSkeleton'
+import { Unavailable } from './-operator/Unavailable'
 
 export const Route = createFileRoute('/_operator')({
   beforeLoad: async ({ location }) => {
@@ -12,41 +16,41 @@ export const Route = createFileRoute('/_operator')({
     }
     return { view }
   },
+  // The queue is read here, not in /operador/cola: the sidebar counts come from it on every page of the console.
+  // `guarded`: a read that cannot even leave the browser is an error result, not a route error that would replace the whole console.
+  loader: () => guarded(() => loadQueue({ data: { auto: isAutomatic() } })),
   head: () => ({
     meta: [{ name: 'robots', content: 'noindex' }],
     links: [{ rel: 'stylesheet', href: operatorStylesheet }],
   }),
-  errorComponent: () => (
-    <div className="op">
-      <main className="op-main">
-        <p className="op-notice" role="alert">La consola no está disponible en este momento.</p>
-      </main>
-    </div>
-  ),
+  pendingMs: 300,
+  pendingComponent: QueueSkeleton,
+  errorComponent: Unavailable,
   component: OperatorLayout,
 })
 
+const REFRESH_MS = 30_000
+
 function OperatorLayout() {
   const { view } = Route.useRouteContext()
+  const queue = Route.useLoaderData()
+  const router = useRouter()
+  const watching = useRouterState({ select: (s) => /^\/operador\/(cola|trazas)/.test(s.location.pathname) })
+
+  // The queue and the traces re-read themselves. That read must not count as the operator being present (see refresh.ts),
+  // and it is read with `isAutomatic()` above. The monitoring page has its own, slower timer.
+  useEffect(() => {
+    if (!watching) return
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') void refreshQuietly(router)
+    }, REFRESH_MS)
+    return () => clearInterval(timer)
+  }, [router, watching])
   return (
     <div className="op">
-      <a className="op-skip" href="#contenido">Ir al contenido</a>
-      <header className="op-bar">
-        <a className="op-brand" href="/operador/cola" aria-label="Cecilai, consola de operador">cecilai<span>.</span></a>
-        <nav aria-label="Consola">
-          <Link to="/operador/cola" activeProps={{ 'aria-current': 'page' }}>Cola</Link>
-          <Link to="/operador/monitoreo" activeProps={{ 'aria-current': 'page' }}>Monitoreo</Link>
-          <Link to="/operador/trazas" activeProps={{ 'aria-current': 'page' }}>Trazas</Link>
-        </nav>
-        <div className="op-who">
-          {view.canAct ? <span>Operador <strong>{view.operator}</strong></span> : <span className="op-chip">Solo lectura</span>}
-          {!view.canAct && <OperatorKeyForm compact flash={view.flash} />}
-          <form method="post" action="/operador/salir"><button type="submit" className="op-link">Salir</button></form>
-        </div>
-      </header>
-      <main className="op-main" id="contenido" tabIndex={-1}>
+      <OperatorShell view={view} queue={queue}>
         <Outlet />
-      </main>
+      </OperatorShell>
     </div>
   )
 }

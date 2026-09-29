@@ -27,8 +27,17 @@ export type Reply = {
   category: string
   ticket_id: string | null
   latency_ms: number
+  /** Limited mode: the model was unavailable and the code answered alone. */
+  degraded?: boolean
   why?: Why
 }
+
+/** One turn of the conversation as the API kept it: what the customer wrote and what was rendered for them. `at` is ms since the epoch. */
+export type HistoryEntry = { role: 'user'; text: string; at: number } | { role: 'assistant'; reply: Reply; at: number }
+
+export type HistoryResult =
+  | { ok: true; turns: HistoryEntry[] }
+  | { ok: false; failure: 'session_expired' | 'unavailable' }
 
 export type SendFailure =
   | 'session_expired'

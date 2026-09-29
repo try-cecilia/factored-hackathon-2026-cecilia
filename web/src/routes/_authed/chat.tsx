@@ -1,15 +1,13 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { ChatView } from '../../chat/ChatView'
-import { getDemoKit } from '../../server/demo.functions'
+import { headTitle } from '../../i18n/head'
 
 export const Route = createFileRoute('/_authed/chat')({
-  loader: () => getDemoKit(),
-  head: () => ({ meta: [{ title: 'Chat · Cecilai' }] }),
+  head: ({ matches }) => headTitle(matches, 'shell.pageTitle.chat'),
   component: Chat,
 })
 
 function Chat() {
   const { session } = Route.useRouteContext()
-  const kit = Route.useLoaderData()
-  return <ChatView session={session} scenarios={kit.enabled ? kit.scenarios : null} />
+  return <ChatView session={session} />
 }

@@ -1,32 +1,36 @@
 import { useLocation } from '@tanstack/react-router'
+import { useT } from '../../i18n/context'
+import type { MessageKey } from '../../i18n/translate'
+import { Button } from '../../ui'
 
-const messages: Record<string, string> = {
-  operator_missing: 'Ingresá la clave de operador.',
-  key_invalid: 'La clave de operador no es válida.',
-  operator_401: 'La clave de operador no es válida.',
-  operator_429: 'Demasiados intentos fallidos desde este origen. Esperá un minuto.',
-  operator_503: 'No hay claves de operador configuradas o el servicio no está disponible.',
+const errorKeys: Record<string, MessageKey> = {
+  operator_missing: 'operator.keyForm.errors.operator_missing',
+  key_invalid: 'operator.keyForm.errors.key_invalid',
+  operator_401: 'operator.keyForm.errors.operator_401',
+  operator_429: 'operator.keyForm.errors.operator_429',
+  operator_503: 'operator.keyForm.errors.operator_503',
 }
 
 /** Adds an operator key to a read-only session with a plain HTML post: the page's JavaScript never sees the key. */
 export function OperatorKeyForm({ flash, compact = false }: { flash?: string | null; compact?: boolean }) {
+  const t = useT()
   const { href } = useLocation()
-  const error = flash && flash in messages ? messages[flash] : null
+  const errorKey = flash && Object.hasOwn(errorKeys, flash) ? errorKeys[flash] : null
   const form = (
-    <form className="op-inline-form" method="post" action="/operador/clave" autoComplete="off">
+    <form className="op-key-form" method="post" action="/operador/clave" autoComplete="off">
       <input type="hidden" name="redirect" value={href} />
       <label>
-        <span className={compact ? 'op-sr' : undefined}>Clave de operador</span>
-        <input name="operator_key" type="password" required maxLength={200} autoComplete="off" spellCheck={false} placeholder={compact ? 'Clave de operador' : undefined} />
+        <span className={compact ? 'sr-only' : 'op-field-label'}>{t('operator.keyForm.label')}</span>
+        <input className="op-input" name="operator_key" type="password" required maxLength={200} autoComplete="off" spellCheck={false} placeholder={compact ? t('operator.keyForm.label') : undefined} />
       </label>
-      <button className="op-button op-button-small" type="submit">Agregar</button>
-      {error && <p className="op-error" role="alert">{error}</p>}
+      <Button type="submit" size={compact ? 'xs' : 'sm'}>{t('operator.keyForm.submit')}</Button>
+      {errorKey && <p className="op-error" role="alert">{t(errorKey)}</p>}
     </form>
   )
   if (!compact) return form
   return (
-    <details className="op-key-toggle" open={Boolean(error)}>
-      <summary className="op-link">Agregar clave de operador</summary>
+    <details className="op-key-toggle" open={Boolean(errorKey)}>
+      <summary>{t('operator.session.addKey')}</summary>
       {form}
     </details>
   )

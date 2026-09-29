@@ -11,7 +11,7 @@ import re
 
 PRICING_AS_OF = "2026-09 (assumed list prices; verify before external use)"
 
-# (provider, model) -> (input_usd_per_mtok, output_usd_per_mtok). Groq: console.groq.com/docs/models,
+# The `local` provider costs 0 (its compute is ours, not billed per token). (provider, model) -> (input_usd_per_mtok, output_usd_per_mtok). Groq: console.groq.com/docs/models,
 # read 2026-09-27 (Llama 3.3 70B is "contact sales" since it left the self-serve tiers). Anthropic: list
 # prices from Anthropic's model reference (cached 2026-06-24); thinking tokens bill as output.
 PRICES_USD_PER_MTOK = {
@@ -31,6 +31,8 @@ CACHE_READ_FACTOR, CACHE_WRITE_FACTOR = 0.1, 1.25  # Anthropic prompt caching, 5
 def cost_usd(provider: str | None, model: str | None, prompt_tokens: int, completion_tokens: int,
              cache_read_tokens: int = 0, cache_write_tokens: int = 0) -> float | None:
     key = (provider or "", model or "")
+    if key[0] == "local":  # a model on our own hardware: no per-token price, whatever the model
+        return 0.0
     # APIs may answer with a dated snapshot of the requested alias (claude-haiku-4-5-20251001)
     price = PRICES_USD_PER_MTOK.get(key) or PRICES_USD_PER_MTOK.get((key[0], re.sub(r"-\d{8}$", "", key[1])))
     if price is None:
