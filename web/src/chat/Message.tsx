@@ -83,6 +83,7 @@ const failureCopy: Record<Exclude<SendFailure, 'session_expired'>, string> = {
   unavailable: 'No pude confirmar si el servicio recibió tu mensaje. Podés reintentar: si ya lo recibió, no se repite.',
   timeout: 'Tardó demasiado en responder y no pude confirmar si tu mensaje llegó. Podés reintentar: si ya lo recibió, no se repite.',
   rate_limited: 'Estás enviando mensajes muy rápido. Esperá un minuto y volvé a intentar.',
+  already_processed: 'Ya lo recibimos, pero la respuesta ya no está guardada. Recargá la conversación.',
   busy: 'Todavía estoy respondiendo tu mensaje anterior. Esperá un momento y volvé a intentar.',
   unexpected: 'Recibí una respuesta que no pude mostrar. Probá de nuevo en un momento.',
 }
@@ -102,7 +103,7 @@ export function ErrorMessage({ entry, active, onRetry }: {
           <AlertIcon />
           <span>{failureCopy[failure]}</span>
         </div>
-        {active && (
+        {active && failure !== 'already_processed' && (
           <div className="actions">
             <button type="button" className="btn btn-secondary" onClick={() => onRetry(entry)}>Reintentar</button>
           </div>

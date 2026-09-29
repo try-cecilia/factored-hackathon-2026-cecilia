@@ -58,6 +58,7 @@ export async function sendChat(session: ChatSession, transport: ChatTransport, m
       session.clear()
       return { ok: false, failure: 'session_expired' }
     }
+    if (response.status === 409) return { ok: false, failure: 'already_processed' }
     if (response.status === 429) return { ok: false, failure: 'rate_limited' }
     if (response.status >= 500) return { ok: false, failure: 'unavailable' }
     if (response.status < 200 || response.status >= 300) return { ok: false, failure: 'unexpected' }

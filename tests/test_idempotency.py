@@ -114,33 +114,70 @@ def test_an_expired_session_reply_is_not_kept(client):
     assert idempotency.default.count() == 0
 
 
-def test_entries_expire_after_the_ttl(monkeypatch):
+def test_an_entry_lives_as_long_as_the_session_it_belongs_to(monkeypatch):
     now = [1000.0]
     monkeypatch.setattr(idempotency.time, "time", lambda: now[0])
-    store = idempotency.IdempotencyStore(ttl_seconds=600)
-    with store.guard("ref", "key-00000001", "hola") as slot:
+    store = idempotency.IdempotencyStore()
+    with store.guard("ref", "key-00000001", "hola", expires_at=1900.0) as slot:
         assert slot.replay is None
         slot.save('{"a": 1}')
-    with store.guard("ref", "key-00000001", "hola") as slot:
+    now[0] += 601  # longer than the old fixed 10 minutes, shorter than the session
+    with store.guard("ref", "key-00000001", "hola", expires_at=1900.0) as slot:
         assert slot.replay == '{"a": 1}'
-    now[0] += 601
-    with store.guard("ref", "key-00000001", "hola") as slot:
-        assert slot.replay is None
+    now[0] = 1901  # the session is over: nothing is kept for it
+    with store.guard("ref", "key-00000001", "hola", expires_at=2800.0) as slot:
+        assert slot.replay is None and not slot.processed
+    assert store.count() == 0
 
+
+def test_a_retry_well_after_ten_minutes_still_gets_the_same_reply_and_no_second_ticket(client, monkeypatch):
+    tok = token(client)
+    before = tickets(client)
+    first = chat(client, tok, CLONED, key="msg-0013-aaaa")
+    real = idempotency.time.time
+    monkeypatch.setattr(idempotency.time, "time", lambda: real() + 601)  # the session lasts 900 s
+    retry = chat(client, tok, CLONED, key="msg-0013-aaaa")
+    assert retry.json() == first.json() and retry.headers["Idempotent-Replayed"] == "true"
+    assert tickets(client) == before + 1
+
+
+def test_when_space_runs_out_the_oldest_replies_are_dropped_but_their_keys_are_remembered(monkeypatch):
+    store = idempotency.IdempotencyStore(max_entries=4)
+    for n in range(6):
+        with store.guard("ref", f"key-0000000{n}", "hola", expires_at=9e9) as slot:
+            slot.save(f'{{"n": {n}}}')
+    with store.guard("ref", "key-00000000", "hola", expires_at=9e9) as slot:
+        assert slot.replay is None and slot.processed  # already ran; its reply is no longer kept
+    with store.guard("ref", "key-00000005", "hola", expires_at=9e9) as slot:
+        assert slot.replay == '{"n": 5}'
+    with pytest.raises(idempotency.KeyReused):
+        with store.guard("ref", "key-00000000", "otro texto", expires_at=9e9):
+            pass
+
+
+def test_a_key_that_ran_but_lost_its_reply_is_a_409_and_runs_nothing(client, monkeypatch):
+    monkeypatch.setattr(idempotency, "default", idempotency.IdempotencyStore(max_entries=4))
+    tok = token(client)
+    before = tickets(client)
+    for n in range(6):
+        assert chat(client, tok, CLONED, key=f"msg-1000-aaa{n}").status_code == 200
+    refused = chat(client, tok, CLONED, key="msg-1000-aaa0")
+    assert refused.status_code == 409 and "already processed" in refused.json()["detail"]
+    assert tickets(client) == before + 6
 
 def test_a_retry_that_arrives_while_the_first_still_runs_waits_for_its_answer():
     store = idempotency.IdempotencyStore()
     started, release, seen = threading.Event(), threading.Event(), []
 
     def first():
-        with store.guard("ref", "key-00000002", "hola") as slot:
+        with store.guard("ref", "key-00000002", "hola", expires_at=9e9) as slot:
             started.set()
             release.wait(5)
             slot.save('{"n": 1}')
 
     def retry():
         started.wait(5)
-        with store.guard("ref", "key-00000002", "hola") as slot:
+        with store.guard("ref", "key-00000002", "hola", expires_at=9e9) as slot:
             seen.append(slot.replay)
 
     t1, t2 = threading.Thread(target=first), threading.Thread(target=retry)
@@ -154,9 +191,9 @@ def test_a_retry_that_arrives_while_the_first_still_runs_waits_for_its_answer():
 
 def test_a_stored_reply_survives_a_restart_when_state_is_on_disk(tmp_path):
     db = str(tmp_path / "state.db")
-    with idempotency.IdempotencyStore(db_path=db).guard("ref", "key-00000003", "hola") as slot:
+    with idempotency.IdempotencyStore(db_path=db).guard("ref", "key-00000003", "hola", expires_at=9e9) as slot:
         slot.save('{"kept": true}')
-    with idempotency.IdempotencyStore(db_path=db).guard("ref", "key-00000003", "hola") as slot:
+    with idempotency.IdempotencyStore(db_path=db).guard("ref", "key-00000003", "hola", expires_at=9e9) as slot:
         assert slot.replay == '{"kept": true}'
 
 

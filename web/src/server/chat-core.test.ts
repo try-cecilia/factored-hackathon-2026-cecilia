@@ -53,6 +53,7 @@ test('429, 5xx and a body that is not a chat answer are told apart', async () =>
   assert.deepEqual(await sendChat(...args(setup(429, {}))), { ok: false, failure: 'rate_limited' })
   assert.deepEqual(await sendChat(...args(setup(503, {}))), { ok: false, failure: 'unavailable' })
   assert.deepEqual(await sendChat(...args(setup(422, {}))), { ok: false, failure: 'unexpected' })
+  assert.deepEqual(await sendChat(...args(setup(409, {}))), { ok: false, failure: 'already_processed' })
   assert.deepEqual(await sendChat(...args(setup(200, { hello: 'world' }))), { ok: false, failure: 'unexpected' })
 })
 

@@ -224,13 +224,17 @@ def chat(req: ChatRequest, response: Response, idempotency_key: str | None = Hea
         return _chat_turn(req)
     if not idempotency.KEY_PATTERN.match(idempotency_key):
         raise HTTPException(422, "Idempotency-Key must be 8-64 characters of letters, digits, - or _")
-    if not _session_is_live(req.session_token):  # nothing stored is shown to a session that is over
+    session = _live_session(req.session_token)
+    if session is None:  # nothing stored is shown to a session that is over
         return _chat_turn(req)  # the usual REAUTH_REQUIRED reply
     try:
-        with idempotency.default.guard(session_ref(req.session_token), idempotency_key, req.message) as slot:
-            if slot.replay is not None:
-                if not _session_is_live(req.session_token):  # it ended while this retry waited for the first turn
+        with idempotency.default.guard(session_ref(req.session_token), idempotency_key, req.message,
+                                       session.expires_at) as slot:
+            if slot.replay is not None or slot.processed:
+                if _live_session(req.session_token) is None:  # it ended while this retry waited for the first turn
                     return _chat_turn(req)
+                if slot.replay is None:  # it ran, but the table filled up and its reply was dropped
+                    raise HTTPException(409, "already processed: this message was received, its reply is no longer kept")
                 response.headers["Idempotent-Replayed"] = "true"  # a replay is not a new turn: no chat-limit hit
                 return ChatResponse.model_validate_json(slot.replay)
             reply = _chat_turn(req)
@@ -241,12 +245,11 @@ def chat(req: ChatRequest, response: Response, idempotency_key: str | None = Hea
         raise HTTPException(422, "Idempotency-Key was already used with a different message") from None
 
 
-def _session_is_live(token: str) -> bool:
+def _live_session(token: str):
     try:
-        default_store.validate(token)
-        return True
+        return default_store.validate(token)
     except (InvalidSession, ExpiredSession):
-        return False
+        return None
 
 
 def _chat_turn(req: ChatRequest) -> ChatResponse:

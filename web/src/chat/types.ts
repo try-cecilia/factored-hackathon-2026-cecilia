@@ -36,6 +36,7 @@ export type SendFailure =
   | 'unavailable' // never reached the API: safe to send again
   | 'timeout' // may have been processed: the customer decides
   | 'busy' // another send from this session is still in flight
+  | 'already_processed' // the API got this message before and no longer keeps its reply
   | 'unexpected'
 
 export type SendResult = { ok: true; reply: Reply } | { ok: false; failure: SendFailure }
