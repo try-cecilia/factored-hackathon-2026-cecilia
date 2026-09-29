@@ -12,7 +12,8 @@ if [ "$(id -u)" = "0" ]; then
 fi
 
 # First boot with no warehouse: ingest. Default INGEST_ARGS is a deterministic
-# 5k-customer / 12-month sample (~15 MB, fits a 512 MB instance). For the full
+# 5k-customer / 12-month sample (~15 MB; on a 512 MB instance with DUCKDB_THREADS=1 and
+# DUCKDB_MEMORY_LIMIT=192MB, as render.yaml sets: docs/operations.md). For the full
 # dataset set INGEST_ARGS="--profile serving" and give the container ~2 GB.
 # Without the organizer's S3 access, INGEST_ARGS="--profile serving --source local
 # --raw-dir /app/tests/fixtures/raw" loads the hand-made fixture instead.

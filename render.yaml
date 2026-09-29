@@ -65,3 +65,10 @@ services:
         value: us-east-2
       - key: INGEST_ARGS
         value: --profile serving --sample-customers 5000 --since 2025-06-17
+      # The first boot's load on this 512 MB instance: DuckDB's cap plus the Python process (about 170 MB) must fit, and
+      # each DuckDB thread holds its own CSV buffers. With the image's 400MB and every core the load was killed for memory
+      # (2026-09-29); measurements in docs/operations.md, "Deploy (container)".
+      - key: DUCKDB_THREADS
+        value: "1"
+      - key: DUCKDB_MEMORY_LIMIT
+        value: 192MB
