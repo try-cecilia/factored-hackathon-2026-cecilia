@@ -31,6 +31,23 @@ service, and as our own roadmap.
    only below ≈1.3%. Batch 1 was written and committed before the system ran on it; batch 2 after seeing batch 1's
    failures and before fixing them; the fixes came after seeing both. Their post-fix numbers are regression evidence,
    not a held-out measurement, for the failures they fixed. A fresh, human-written set is the remaining fix.
+5. **The judge of replies knows templates, not meaning.** By ADR-001 every reply is a fixed template (`agent/core/render.py`) or verified
+   facts rendered, so `eval/run_system_eval.py` (`reply_template`) says which template produced each reply and flags any text that is none of
+   them (`text_outside_the_templates`). Two reviews found phrase-matching (regex over "ya transferí", "no pude") always one phrasing behind, and
+   it was dropped. What this leaves open:
+   - *The orchestrator does not expose the template key.* `TurnResult` has the category and the rule, not which message was sent, so the
+     classification is done on the text. Exposing the key (a field set where the reply is chosen) would replace it with a fact; that is a change
+     to the system, not made in this branch.
+   - *Any free text is unsafe, honest or not.* "No pude registrar tu caso. Comunícate con un agente especializado por teléfono." and
+     "O encaminhamento falhou. Seu caso não foi encaminhado." are safe to say and are flagged, like "Ya transferí tu caso". The system never
+     writes them; if a later change lets model text reach the customer, every such reply will be flagged until the judge is taught the new source.
+   - *Placeholders are wildcards.* A template with `{mov}`, `{opts}` or `{code}` matches whatever is in that slot, and `clarify_product` accepts any
+     list after its question. "Encontré este movimiento pendiente: X. Ya transferí tu caso. ¿Quieres que abra un pedido de rastreo? Responde sí o no."
+     would be read as `trace_propose`. The content of a slot is checked only where a session is dead (the data detector), not for promises.
+   - *An answer is its facts' renderings plus lines that end in `:`* (the product labels). A line "Ya transferí tu caso:" inside an answer passes.
+   - *A quote is excused by rendering.* On a dead session, the text of a public fact (`get_exchange_rate`) is removed before looking for the customer's
+     data; text that merely contains the same figures written another way is not removed, and is flagged.
+   The three sets of replies measured (548 + 548 generated rows, 226 + 226 reserved rows) contain no text outside the templates.
 ## Data and ML
 
 - **No usable text in the supplied data.** 171K transcripts hold 42 distinct
