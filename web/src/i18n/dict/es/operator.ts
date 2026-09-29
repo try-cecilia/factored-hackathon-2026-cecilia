@@ -56,6 +56,7 @@ export const operator = {
     CLARIFY: 'Aclaración',
     ABSTAIN: 'Sin respuesta',
     ESCALATE: 'Derivado',
+    REAUTH_REQUIRED: 'Reingreso requerido',
   },
   category: {
     fraud: 'Fraude',

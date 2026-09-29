@@ -35,6 +35,7 @@ const dispositionKeys = {
   CLARIFY: 'operator.disposition.CLARIFY',
   ABSTAIN: 'operator.disposition.ABSTAIN',
   ESCALATE: 'operator.disposition.ESCALATE',
+  REAUTH_REQUIRED: 'operator.disposition.REAUTH_REQUIRED',
 } as const satisfies Record<string, MessageKey>
 
 const named = (keys: Record<string, MessageKey>, t: Translate, key: string | null | undefined) =>

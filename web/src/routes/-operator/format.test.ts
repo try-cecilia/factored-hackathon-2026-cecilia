@@ -45,3 +45,13 @@ test('each failure status maps to a key, and a failed action reads differently f
   assert.equal(explainKey(409), 'operator.errors.conflict')
   assert.equal(explainKey(500), 'operator.errors.generic')
 })
+
+test('every disposition a turn can end with has a name in both languages, never the raw code', () => {
+  // AUTO_RESOLVE, CLARIFY, ABSTAIN and ESCALATE come from agent/policy/router.py; REAUTH_REQUIRED from agent/core/orchestrator.py.
+  for (const code of ['AUTO_RESOLVE', 'CLARIFY', 'ABSTAIN', 'ESCALATE', 'REAUTH_REQUIRED']) {
+    for (const locale of ['es', 'pt'] as const) assert.notEqual(dispositionName(translator(locale), code), code, `${code} in ${locale}`)
+  }
+  assert.equal(dispositionName(translator('es'), 'REAUTH_REQUIRED'), 'Reingreso requerido')
+  assert.equal(dispositionName(translator('pt'), 'REAUTH_REQUIRED'), 'Novo acesso necessário')
+  assert.equal(dispositionName(translator('es'), 'SOMETHING_NEW'), 'SOMETHING_NEW')
+})

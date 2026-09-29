@@ -58,6 +58,7 @@ export const operator: Like<typeof es> = {
     CLARIFY: 'Esclarecimento',
     ABSTAIN: 'Sem resposta',
     ESCALATE: 'Encaminhado',
+    REAUTH_REQUIRED: 'Novo acesso necessário',
   },
   category: {
     fraud: 'Fraude',
