@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-09-29T14:26:05Z",
-  "code_version": "e6b9eb7",
-  "pytest": "pytest: 29 passed in 6.78s.",
+  "generated_at": "2026-09-29T14:34:10Z",
+  "code_version": "c1ce6aa",
+  "pytest": "pytest: 41 passed in 11.21s.",
   "criteria": [
     {
       "id": "contracts",
@@ -37,6 +37,12 @@
           "test": "test_contracts_a_missing_required_column_fails_the_load",
           "status": "PASS",
           "evidence": "sin la columna obligatoria `amount` la carga falla ('missing required columns') y la tabla no cambia",
+          "detail": ""
+        },
+        {
+          "test": "test_contracts_a_value_that_would_be_rounded_to_fit_its_type_is_quarantined_not_stored_rounded",
+          "status": "PASS",
+          "evidence": "amount='200000.005' en un CSV real: error type_cast:amount, fila en cuarentena y no se guarda como 200000.01; '54.500' se acepta",
           "detail": ""
         },
         {
@@ -96,7 +102,67 @@
         {
           "test": "test_lineage_a_broken_chain_is_detected",
           "status": "PASS",
-          "evidence": "se rompe la cadena de 5 maneras (fila sin run, run no exitoso, archivo sin hash, bytes cambiados, archivo borrado) y verify() lo dice",
+          "evidence": "se rompe la cadena de 5 maneras (fila sin run, run no exitoso, archivo sin hash, bytes cambiados, archivo borrado) y verify() lo dice; sin raw_dir, además, exige sha256 hex de 64, tamaño, URI, versión de contrato y de código, modo y horas no vacíos (10 casos negativos)",
+          "detail": ""
+        },
+        {
+          "test": "test_lineage_an_incomplete_record_fails_verification_even_without_the_raw_files[UPDATE _source_files SET sha256 = NULL WHERE table_name = 'customers'-malformed sha256]",
+          "status": "PASS",
+          "evidence": "sha256 = NULL -> verify() sin raw_dir: customers: customers.csv in run 20260929T143403Z-f3db62 has a missing or malformed sha256",
+          "detail": ""
+        },
+        {
+          "test": "test_lineage_an_incomplete_record_fails_verification_even_without_the_raw_files[UPDATE _source_files SET sha256 = 'abc123' WHERE table_name = 'customers'-malformed sha256]",
+          "status": "PASS",
+          "evidence": "sha256 = 'abc123' -> verify() sin raw_dir: customers: customers.csv in run 20260929T143403Z-53d3a4 has a missing or malformed sha256",
+          "detail": ""
+        },
+        {
+          "test": "test_lineage_an_incomplete_record_fails_verification_even_without_the_raw_files[UPDATE _source_files SET sha256 = upper(sha256) WHERE table_name = 'customers'-malformed sha256]",
+          "status": "PASS",
+          "evidence": "sha256 = upper(sha256) -> verify() sin raw_dir: customers: customers.csv in run 20260929T143404Z-b4c121 has a missing or malformed sha256",
+          "detail": ""
+        },
+        {
+          "test": "test_lineage_an_incomplete_record_fails_verification_even_without_the_raw_files[UPDATE _source_files SET n_bytes = NULL WHERE table_name = 'customers'-n_bytes]",
+          "status": "PASS",
+          "evidence": "n_bytes = NULL -> verify() sin raw_dir: customers: customers.csv in run 20260929T143404Z-96491d has a missing or malformed n_bytes",
+          "detail": ""
+        },
+        {
+          "test": "test_lineage_an_incomplete_record_fails_verification_even_without_the_raw_files[UPDATE _source_files SET source_uri = '' WHERE table_name = 'customers'-source_uri]",
+          "status": "PASS",
+          "evidence": "source_uri = '' -> verify() sin raw_dir: customers: customers.csv in run 20260929T143404Z-eb33f0 has a missing or malformed source_uri",
+          "detail": ""
+        },
+        {
+          "test": "test_lineage_an_incomplete_record_fails_verification_even_without_the_raw_files[UPDATE _ingestion_log SET contract_version = NULL WHERE table_name = 'customers'-contract_version]",
+          "status": "PASS",
+          "evidence": "contract_version = NULL -> verify() sin raw_dir: customers: run 20260929T143404Z-5e9e5e does not record contract_version",
+          "detail": ""
+        },
+        {
+          "test": "test_lineage_an_incomplete_record_fails_verification_even_without_the_raw_files[UPDATE _ingestion_log SET contract_version = '  ' WHERE table_name = 'customers'-contract_version]",
+          "status": "PASS",
+          "evidence": "contract_version = '  ' -> verify() sin raw_dir: customers: run 20260929T143405Z-d568de does not record contract_version",
+          "detail": ""
+        },
+        {
+          "test": "test_lineage_an_incomplete_record_fails_verification_even_without_the_raw_files[UPDATE _ingestion_log SET code_version = NULL WHERE table_name = 'customers'-code_version]",
+          "status": "PASS",
+          "evidence": "code_version = NULL -> verify() sin raw_dir: customers: run 20260929T143405Z-8ab8b6 does not record code_version",
+          "detail": ""
+        },
+        {
+          "test": "test_lineage_an_incomplete_record_fails_verification_even_without_the_raw_files[UPDATE _ingestion_log SET finished_at = NULL WHERE table_name = 'customers'-finished_at]",
+          "status": "PASS",
+          "evidence": "finished_at = NULL -> verify() sin raw_dir: customers: run 20260929T143405Z-2cfcee does not record finished_at",
+          "detail": ""
+        },
+        {
+          "test": "test_lineage_an_incomplete_record_fails_verification_even_without_the_raw_files[UPDATE _ingestion_log SET mode = NULL WHERE table_name = 'customers'-mode]",
+          "status": "PASS",
+          "evidence": "mode = NULL -> verify() sin raw_dir: customers: run 20260929T143405Z-721ec4 does not record mode",
           "detail": ""
         },
         {
@@ -156,7 +222,13 @@
         {
           "test": "test_learned_the_committed_report_is_what_the_code_and_data_produce",
           "status": "PASS",
-          "evidence": "build_report() sobre los CSV del repo reproduce el reporte versionado (variante, τ, aciertos de dev y test, guarda, hashes de datos)",
+          "evidence": "build_report() sobre los CSV del repo reproduce las 1148 cifras del reporte JSON versionado y el texto completo del Markdown (solo se excluyen la hora de generación y la versión de sklearn); hashes de datos == los de los archivos",
+          "detail": ""
+        },
+        {
+          "test": "test_learned_altering_any_published_metric_makes_the_comparison_fail",
+          "status": "PASS",
+          "evidence": "cada una de las 1148 cifras del reporte (incluidos macro-F1 aprendido, exactitud PT y exactitud sin frases de plantilla), alterada de a una, hace que la comparación falle en exactamente esa ruta",
           "detail": ""
         },
         {

@@ -1,19 +1,19 @@
 # Validación de buenas prácticas de datos y ML (auto-generado)
 
-Generado por `make validate-data-ml` (`python -m eval.validate_data_ml`) el 2026-09-29T14:26:05Z sobre el código `e6b9eb7`.
+Generado por `make validate-data-ml` (`python -m eval.validate_data_ml`) el 2026-09-29T14:34:10Z sobre el código `c1ce6aa`.
 Rúbrica: «Buena práctica de datos y ML: contratos, calidad, linaje, política de frescura, y al menos un componente aprendido
-contra una línea base, sin fuga de datos». Resultado global: **PASS**. pytest: 29 passed in 6.78s.
+contra una línea base, sin fuga de datos». Resultado global: **PASS**. pytest: 41 passed in 11.21s.
 
 Cada fila es una prueba de `tests/test_data_ml_validation.py`: hermética (warehouse de prueba de `tests/fixtures`, sin S3 ni claves), y falla si la
 frase del documento que cita deja de ser cierta. Las cifras de la evidencia salen de la propia prueba, no se escriben a mano.
 
 | Criterio | Resultado | Pruebas | Comando |
 |---|---|---|---|
-| Contratos | **PASS** | 8/8 | `python -m pytest tests/test_data_ml_validation.py -k test_contracts_ -q` |
+| Contratos | **PASS** | 9/9 | `python -m pytest tests/test_data_ml_validation.py -k test_contracts_ -q` |
 | Calidad | **PASS** | 2/2 | `python -m pytest tests/test_data_ml_validation.py -k test_quality_ -q` |
-| Linaje | **PASS** | 3/3 | `python -m pytest tests/test_data_ml_validation.py -k test_lineage_ -q` |
+| Linaje | **PASS** | 13/13 | `python -m pytest tests/test_data_ml_validation.py -k test_lineage_ -q` |
 | Política de frescura | **PASS** | 4/4 | `python -m pytest tests/test_data_ml_validation.py -k test_freshness_ -q` |
-| Componente aprendido contra una línea base | **PASS** | 4/4 | `python -m pytest tests/test_data_ml_validation.py -k test_learned_ -q` |
+| Componente aprendido contra una línea base | **PASS** | 5/5 | `python -m pytest tests/test_data_ml_validation.py -k test_learned_ -q` |
 | Sin fuga de datos | **PASS** | 8/8 | `python -m pytest tests/test_data_ml_validation.py -k test_leakage_ -q` |
 
 ### Contratos: PASS
@@ -27,6 +27,7 @@ Afirma: docs/data_quality.md (Pipeline, pasos 2-5), data/contracts.py.
 | a violating row is quarantined with its reason and appears in the report | PASS | 2 de 5 filas del lote malo en _quarantine_transactions con motivo (rule:status_enum, cast:amount); checks de error fallidos en el reporte JSON y en _dq_results; las 3 válidas se cargaron |
 | over the quarantine threshold the load stops and the previous state stays | PASS | lote con 40% en cuarentena (umbral 1%): PipelineError, tabla servida idéntica (mismo md5), carga 'failed' en _ingestion_log, `python -m data.pipeline` sale con error y el reporte dice status=failed |
 | a missing required column fails the load | PASS | sin la columna obligatoria `amount` la carga falla ('missing required columns') y la tabla no cambia |
+| a value that would be rounded to fit its type is quarantined not stored rounded | PASS | amount='200000.005' en un CSV real: error type_cast:amount, fila en cuarentena y no se guarda como 200000.01; '54.500' se acepta |
 | a truncated file cannot replace the rows it cuts off | PASS | un archivo cortado a mitad de la última fila: con el umbral por defecto la carga se detiene; aun tolerando todo, sus 5 filas van a cuarentena (con su archivo de origen) y la tabla servida queda idéntica |
 | the documented severities are the ones the code assigns | PASS | tabla de severidades de docs/data_quality.md == severidades que asignan measure/pydantic_sample/quarantine; muestra pydantic = 1000 |
 | each documented deviation is still measured as a warning | PASS | 2 desvíos del contrato: cada uno es una regla `warn` medida en cada carga y está en docs/data_quality.md |
@@ -47,7 +48,17 @@ Afirma: docs/data_quality.md (Pipeline paso 8), data/lineage.py.
 | Prueba | Resultado | Evidencia |
 |---|---|---|
 | every served row traces to a run a file and its hash | PASS | 5 tablas servidas: fila -> run -> contrato/código -> archivo -> SHA-256 (recalculado del disco, 7 archivos); `python -m data.lineage --verify` sin problemas |
-| a broken chain is detected | PASS | se rompe la cadena de 5 maneras (fila sin run, run no exitoso, archivo sin hash, bytes cambiados, archivo borrado) y verify() lo dice |
+| a broken chain is detected | PASS | se rompe la cadena de 5 maneras (fila sin run, run no exitoso, archivo sin hash, bytes cambiados, archivo borrado) y verify() lo dice; sin raw_dir, además, exige sha256 hex de 64, tamaño, URI, versión de contrato y de código, modo y horas no vacíos (10 casos negativos) |
+| an incomplete record fails verification even without the raw files[UPDATE  source files SET sha256 = NULL WHERE table name = 'customers'-malformed sha256] | PASS | sha256 = NULL -> verify() sin raw_dir: customers: customers.csv in run 20260929T143403Z-f3db62 has a missing or malformed sha256 |
+| an incomplete record fails verification even without the raw files[UPDATE  source files SET sha256 = 'abc123' WHERE table name = 'customers'-malformed sha256] | PASS | sha256 = 'abc123' -> verify() sin raw_dir: customers: customers.csv in run 20260929T143403Z-53d3a4 has a missing or malformed sha256 |
+| an incomplete record fails verification even without the raw files[UPDATE  source files SET sha256 = upper(sha256) WHERE table name = 'customers'-malformed sha256] | PASS | sha256 = upper(sha256) -> verify() sin raw_dir: customers: customers.csv in run 20260929T143404Z-b4c121 has a missing or malformed sha256 |
+| an incomplete record fails verification even without the raw files[UPDATE  source files SET n bytes = NULL WHERE table name = 'customers'-n bytes] | PASS | n_bytes = NULL -> verify() sin raw_dir: customers: customers.csv in run 20260929T143404Z-96491d has a missing or malformed n_bytes |
+| an incomplete record fails verification even without the raw files[UPDATE  source files SET source uri = '' WHERE table name = 'customers'-source uri] | PASS | source_uri = '' -> verify() sin raw_dir: customers: customers.csv in run 20260929T143404Z-eb33f0 has a missing or malformed source_uri |
+| an incomplete record fails verification even without the raw files[UPDATE  ingestion log SET contract version = NULL WHERE table name = 'customers'-contract version] | PASS | contract_version = NULL -> verify() sin raw_dir: customers: run 20260929T143404Z-5e9e5e does not record contract_version |
+| an incomplete record fails verification even without the raw files[UPDATE  ingestion log SET contract version = '  ' WHERE table name = 'customers'-contract version] | PASS | contract_version = '  ' -> verify() sin raw_dir: customers: run 20260929T143405Z-d568de does not record contract_version |
+| an incomplete record fails verification even without the raw files[UPDATE  ingestion log SET code version = NULL WHERE table name = 'customers'-code version] | PASS | code_version = NULL -> verify() sin raw_dir: customers: run 20260929T143405Z-8ab8b6 does not record code_version |
+| an incomplete record fails verification even without the raw files[UPDATE  ingestion log SET finished at = NULL WHERE table name = 'customers'-finished at] | PASS | finished_at = NULL -> verify() sin raw_dir: customers: run 20260929T143405Z-2cfcee does not record finished_at |
+| an incomplete record fails verification even without the raw files[UPDATE  ingestion log SET mode = NULL WHERE table name = 'customers'-mode] | PASS | mode = NULL -> verify() sin raw_dir: customers: run 20260929T143405Z-721ec4 does not record mode |
 | a corrected partition shows which file and hash each row came from | PASS | tras una partición corregida, la fila corregida apunta al run y al hash de raw_late y las demás a los del primer run |
 
 ### Política de frescura: PASS
@@ -68,7 +79,8 @@ Afirma: EVALUATION.md §2, eval/reports/intent_classifier.md.
 | Prueba | Resultado | Evidencia |
 |---|---|---|
 | beats the keyword baseline on the same test split with intervals | PASS | test n=85: aprendido 84.7% [75.6–90.8] vs palabras clave 62.4% [51.7–71.9]; diferencia pareada +22.4 pts [+9.4, +35.3], McNemar p=0.001878; piso mayoritaria 17.6% [11.0–27.1] |
-| the committed report is what the code and data produce | PASS | build_report() sobre los CSV del repo reproduce el reporte versionado (variante, τ, aciertos de dev y test, guarda, hashes de datos) |
+| the committed report is what the code and data produce | PASS | build_report() sobre los CSV del repo reproduce las 1148 cifras del reporte JSON versionado y el texto completo del Markdown (solo se excluyen la hora de generación y la versión de sklearn); hashes de datos == los de los archivos |
+| altering any published metric makes the comparison fail | PASS | cada una de las 1148 cifras del reporte (incluidos macro-F1 aprendido, exactitud PT y exactitud sin frases de plantilla), alterada de a una, hace que la comparación falle en exactamente esa ruta |
 | the deployed model is the one that was selected and reported | PASS | eval/models/intent_clf.joblib da las mismas probabilidades que el modelo reentrenado (356 frases, tol 1e-9); meta: char+word, τ=0.55, mismo hash de entrenamiento |
 | the paired statistics agree with a hand worked case | PASS | diferencia pareada y McNemar exacto comprobados a mano en un caso de 10 ítems (4 a favor, 1 en contra, p = 12/32); el bootstrap es reproducible con semilla |
 
