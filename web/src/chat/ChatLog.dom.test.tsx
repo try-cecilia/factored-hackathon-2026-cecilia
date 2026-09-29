@@ -125,10 +125,17 @@ describe('ChatLog', () => {
 
   it('a message the API already has (409) offers to load the conversation, with the honest text', async () => {
     const props = setup([user('hola', { delivery: 'processed', failure: 'already_processed' })])
-    expect(screen.getByText(/Cargar la conversación muestra su respuesta/)).toBeTruthy()
+    expect(screen.getByText(/Cargar la conversación muestra su respuesta si todavía está guardada/)).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Reintentar' })).toBeNull()
     await userEvent.setup().click(screen.getByRole('button', { name: 'Cargar la conversación' }))
     expect(props.onReload).toHaveBeenCalledOnce()
+  })
+
+  it('a message whose answer the API no longer has says so and offers nothing to click', () => {
+    setup([user('hola', { delivery: 'processed', failure: 'answer_gone' })])
+    expect(screen.getByText(/ya no está guardada y no se puede mostrar/)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Cargar la conversación' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Reintentar' })).toBeNull()
   })
 
   it('a refused send (rate limit) can be retried, but not once the session has ended', () => {

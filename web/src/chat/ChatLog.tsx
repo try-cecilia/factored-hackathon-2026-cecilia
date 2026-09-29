@@ -112,7 +112,7 @@ function UserView({ entry, time, canRetry, onRetry, onReload }: {
         status={entry.delivery}
         detail={detail}
         onRetry={canRetry ? () => onRetry(entry.id) : undefined}
-        onReload={onReload}
+        onReload={entry.failure === 'answer_gone' ? undefined : onReload}
       />
     ) : undefined
   const tone = entry.delivery === 'failed' ? 'failed' : entry.delivery === 'uncertain' ? 'uncertain' : undefined

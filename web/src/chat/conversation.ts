@@ -3,7 +3,7 @@
 import { resolveMessage } from '../ui/messages/disposition.ts'
 import type { DeliveryState } from '../ui/loaders/delivery.ts'
 import { parseOptions, type Options } from './format.ts'
-import type { HistoryEntry, Reply, SendFailure } from './types.ts'
+import type { HistoryCase, HistoryEntry, Reply, SendFailure } from './types.ts'
 
 export type UserEntry = {
   id: number
@@ -15,8 +15,9 @@ export type UserEntry = {
   delivery: DeliveryState
   failure?: FailureKind
 }
-/** Why a message did not go through. `ended`: the session was over, so nothing was sent. */
-export type FailureKind = Exclude<SendFailure, 'session_expired'> | 'ended'
+/** Why a message did not go through. `ended`: the session was over, so nothing was sent. `answer_gone`: the API has the message
+ * but no longer has its reply (the idempotency table dropped it and the reload does not bring it back). */
+export type FailureKind = Exclude<SendFailure, 'session_expired'> | 'ended' | 'answer_gone'
 export type AssistantEntry = { id: number; role: 'assistant'; reply: Reply; at: number }
 /** An event of the conversation, not a message. */
 export type NoteEntry = { id: number; role: 'note'; note: 'restored'; at: number }
@@ -39,6 +40,7 @@ export function fromHistory(turns: HistoryEntry[], firstId: number, now: number)
 export function deliveryOf(failure: FailureKind): DeliveryState {
   switch (failure) {
     case 'already_processed':
+    case 'answer_gone':
       return 'processed'
     case 'rate_limited':
     case 'busy':
@@ -49,7 +51,7 @@ export function deliveryOf(failure: FailureKind): DeliveryState {
   }
 }
 
-export type DeliveryDetailKey = 'uncertain' | 'timeout' | 'rateLimited' | 'busy' | 'unexpected' | 'processed' | 'ended'
+export type DeliveryDetailKey = 'uncertain' | 'timeout' | 'rateLimited' | 'busy' | 'unexpected' | 'processed' | 'processedGone' | 'ended'
 
 export function deliveryDetailKey(failure: FailureKind): DeliveryDetailKey {
   switch (failure) {
@@ -59,6 +61,8 @@ export function deliveryDetailKey(failure: FailureKind): DeliveryDetailKey {
       return 'rateLimited'
     case 'already_processed':
       return 'processed'
+    case 'answer_gone':
+      return 'processedGone'
     default:
       return failure
   }
@@ -145,7 +149,7 @@ export function shortCaseId(ticketId: string): string {
   return UUID.exec(ticketId)?.[1] ?? ticketId
 }
 
-export type CaseRef = { ticketId: string; category: string; at: number }
+export type CaseRef = HistoryCase
 
 /** The cases the conversation has opened, newest first. A case is a handoff that came with a number. */
 export function casesOf(entries: readonly Entry[]): CaseRef[] {
@@ -158,6 +162,13 @@ export function casesOf(entries: readonly Entry[]): CaseRef[] {
     found.push({ ticketId: entry.reply.ticket_id, category: entry.reply.category, at: entry.at })
   }
   return found
+}
+
+/** The cases the API kept for the session (they outlive the bounded turns) and the ones this page saw open, newest first, once each. */
+export function mergeCases(kept: readonly CaseRef[], seen: readonly CaseRef[]): CaseRef[] {
+  const byId = new Map<string, CaseRef>()
+  for (const c of [...kept, ...seen]) if (!byId.has(c.ticketId)) byId.set(c.ticketId, c)
+  return [...byId.values()].sort((a, b) => b.at - a.at)
 }
 
 /** A case a person has not decided yet can still change; the rest is final. */

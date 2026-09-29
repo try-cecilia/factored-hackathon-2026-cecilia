@@ -13,7 +13,8 @@ const scenarios = [
   { id: 'a', path: 'normal', customer_id: 'CLI-FIX0001', language: 'es', fault: null, turns: ['hola'], expect: [null], title: { en: 'Balance', es: 'Consulta de saldo' }, look_for: { en: 'x', es: 'y' }, test_pin: '123456' },
 ]
 
-let history: unknown = turns
+let history: unknown = { turns, cases: [{ ticket_id: '55d09c14-2235-4c3c-8967-ccac61db9c50', category: 'theft', at: 1_760_000_001 }] }
+const goodHistory = history
 let historyStatus = 200
 let demo = false
 let app: Awaited<ReturnType<typeof startCustomerApp>>
@@ -71,11 +72,11 @@ describe('the customer chat page', () => {
   })
 
   test('a conversation that cannot be read does not break the page', async () => {
-    history = { not: 'a list' }
+    history = { not: 'a history' }
     const res = await app.get('/chat', cookie)
     assert.equal(res.status, 200)
     assert.match(await res.text(), /No pude recuperar la conversación anterior\./)
-    history = turns
+    history = goodHistory
   })
 
   test('a session the API says is over goes back to sign in', async () => {

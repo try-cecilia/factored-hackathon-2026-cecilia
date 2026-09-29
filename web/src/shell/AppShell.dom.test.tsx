@@ -28,6 +28,7 @@ const session: Session = { customer_id: 'CLI-FIX0001', session_ref: 's1', segmen
 const ticket = '55d09c14-2235-4c3c-8967-ccac61db9c50'
 const withCase: HistoryResult = {
   ok: true,
+  cases: [],
   turns: [
     { role: 'user', text: 'Me clonaron la tarjeta', at: 1 },
     { role: 'assistant', at: 2, reply: { trace_id: 'abc12345', disposition: 'ESCALATE', response_text: 'Voy a transferir tu caso.', language: 'es', category: 'theft', ticket_id: ticket, latency_ms: 0 } },
@@ -46,7 +47,7 @@ function phone(matches: boolean) {
 
 function shell(props: { history?: HistoryResult; scenarios?: typeof scenarios | null; locale?: 'es' | 'pt' } = {}): ReactElement {
   return (
-    <ConversationProvider sessionRef="s1" initial={props.history ?? { ok: true, turns: [] }}>
+    <ConversationProvider sessionRef="s1" initial={props.history ?? { ok: true, cases: [], turns: [] }}>
       <AppShell session={session} scenarios={props.scenarios ?? null}><p>La página</p></AppShell>
     </ConversationProvider>
   )

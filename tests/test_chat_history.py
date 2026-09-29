@@ -42,14 +42,14 @@ def history(client, tok):
 
 def test_a_new_session_has_an_empty_history(client):
     response = history(client, token(client))
-    assert response.status_code == 200 and response.json() == []
+    assert response.status_code == 200 and response.json() == {"turns": [], "cases": []}
 
 
 def test_history_returns_the_turns_as_rendered_oldest_first(client):
     tok = token(client)
     first = chat(client, tok, CLONED).json()
     second = chat(client, tok, BALANCE).json()
-    turns = history(client, tok).json()
+    turns = history(client, tok).json()["turns"]
     assert [t["role"] for t in turns] == ["user", "assistant", "user", "assistant"]
     assert [t["text"] for t in turns if t["role"] == "user"] == [CLONED, BALANCE]
     assert turns[1]["text"] == first["response_text"] and turns[3]["text"] == second["response_text"]
@@ -62,14 +62,14 @@ def test_history_carries_no_internals_even_in_the_demo(client, monkeypatch):
     monkeypatch.setenv("DEMO_MODE", "1")
     tok = token(client)
     assert "why" in chat(client, tok, CLONED).json()  # the live reply does explain itself in the sandbox...
-    for turn in history(client, tok).json():  # ...the history never does
+    for turn in history(client, tok).json()["turns"]:  # ...the history never does
         assert not INTERNALS & set(turn), turn
 
 
 def test_the_customers_words_come_back_with_card_numbers_masked(client):
     tok = token(client)
     chat(client, tok, "Me clonaron la tarjeta 4111 1111 1111 1111")
-    user = history(client, tok).json()[0]
+    user = history(client, tok).json()["turns"][0]
     assert "4111 1111 1111 1111" not in user["text"] and "4111111111111111" not in user["text"]
     assert "1111" in user["text"]  # the last four stay, as in the ticket's copy
 
@@ -79,9 +79,9 @@ def test_another_session_cannot_read_it_not_even_the_same_customers(client):
     chat(client, mine, CLONED)
     same_customer = token(client)
     other_customer = token(client, "CLI-FIX0004")
-    assert history(client, same_customer).json() == []
-    assert history(client, other_customer).json() == []
-    assert len(history(client, mine).json()) == 2  # and it was not disturbed
+    assert history(client, same_customer).json()["turns"] == []
+    assert history(client, other_customer).json()["turns"] == []
+    assert len(history(client, mine).json()["turns"]) == 2  # and it was not disturbed
 
 
 @pytest.mark.parametrize("headers", [{}, {"X-Session-Token": "not-a-real-token"}, {"X-Session-Token": "0" * 24}])
@@ -120,7 +120,7 @@ def test_a_replayed_turn_is_not_recorded_twice(client):
     first = chat(client, tok, CLONED, key="msg-0001-aaaa")
     replay = chat(client, tok, CLONED, key="msg-0001-aaaa")
     assert replay.headers["Idempotent-Replayed"] == "true" and replay.json() == first.json()
-    assert len(history(client, tok).json()) == 2
+    assert len(history(client, tok).json()["turns"]) == 2
 
 
 def test_a_session_that_ended_before_the_turn_records_nothing(client):
@@ -134,14 +134,14 @@ def test_limited_mode_is_flagged_in_the_reply_and_in_the_history(client):
     limited = chat(client, tok, BALANCE).json()
     handoff = chat(client, tok, CLONED).json()
     assert limited["degraded"] is True and handoff["degraded"] is False
-    assert [t["degraded"] for t in history(client, tok).json() if t["role"] == "assistant"] == [True, False]
+    assert [t["degraded"] for t in history(client, tok).json()["turns"] if t["role"] == "assistant"] == [True, False]
 
 
 def test_the_history_is_bounded(client):
     tok = token(client)
     for _ in range(MAX_TRANSCRIPT // 2 + 3):
         chat(client, tok, BALANCE)
-    assert len(history(client, tok).json()) == MAX_TRANSCRIPT
+    assert len(history(client, tok).json()["turns"]) == MAX_TRANSCRIPT
 
 
 def test_the_history_survives_a_restart_and_an_older_conversation_still_loads(tmp_path):
@@ -220,3 +220,27 @@ def test_a_turn_of_a_session_that_is_over_saves_nothing(tmp_path):
     assert orch.handle_message(tok, BALANCE).disposition == "REAUTH_REQUIRED"
     assert _rows(db) == 0
 
+
+def test_the_cases_of_a_session_outlive_the_bounded_history(client):
+    """After more turns than the history keeps, a case opened in the first one is still in the sidebar's list."""
+    tok = token(client)
+    ticket = chat(client, tok, CLONED).json()["ticket_id"]
+    for _ in range(MAX_TRANSCRIPT // 2 + 5):
+        chat(client, tok, BALANCE)
+    body = history(client, tok).json()
+    assert len(body["turns"]) == MAX_TRANSCRIPT and all(t.get("ticket_id") != ticket for t in body["turns"])  # the turn itself is gone
+    assert [c["ticket_id"] for c in body["cases"]] == [ticket]
+    assert body["cases"][0]["category"] == "theft" and body["cases"][0]["at"] > 0
+
+
+def test_the_case_index_is_the_sessions_own_and_never_carries_anything_else(client):
+    mine = token(client)
+    chat(client, mine, CLONED)
+    assert history(client, token(client)).json()["cases"] == []
+    assert set(history(client, mine).json()["cases"][0]) == {"ticket_id", "category", "at"}
+    client.delete("/auth/session", headers={"X-Session-Token": mine})
+    assert history(client, mine).status_code == 401
+
+
+def test_a_conversation_saved_before_the_index_existed_still_loads():
+    assert _Conversation(**{"messages": [], "requests": [], "language": "es", "transcript": []}).case_index == []

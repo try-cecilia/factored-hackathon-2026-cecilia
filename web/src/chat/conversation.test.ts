@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
   caseCategoryKey, casesOf, caseTone, chosenOption, classifyReply, deliveryDetailKey, deliveryOf, fromHistory, isNo, isOpenCase, isYes,
-  proposalState, shortCaseId, splitCaseNews, type Entry,
+  mergeCases, proposalState, shortCaseId, splitCaseNews, type Entry,
 } from './conversation.ts'
 import { parseOptions } from './format.ts'
 import type { Reply } from './types.ts'
@@ -115,4 +115,11 @@ test('case status: open ones can still change, tones follow the meaning, unknown
 test('a case number is shortened in lists only when it is a long id', () => {
   assert.equal(shortCaseId('55d09c14-2235-4c3c-8967-ccac61db9c50'), '55d09c14')
   assert.equal(shortCaseId('T-0123456789'), 'T-0123456789')
+})
+
+test('a message whose answer the API dropped is "received" with its own honest text, and cases merge newest first, once each', () => {
+  assert.equal(deliveryOf('answer_gone'), 'processed')
+  assert.equal(deliveryDetailKey('answer_gone'), 'processedGone')
+  const merged = mergeCases([{ ticketId: 'A', category: 'theft', at: 1 }, { ticketId: 'B', category: 'fraud', at: 3 }], [{ ticketId: 'A', category: 'theft', at: 9 }, { ticketId: 'C', category: 'x', at: 2 }])
+  assert.deepEqual(merged.map((c) => c.ticketId), ['B', 'C', 'A'])
 })

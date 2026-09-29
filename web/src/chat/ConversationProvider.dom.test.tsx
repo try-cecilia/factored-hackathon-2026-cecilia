@@ -15,7 +15,7 @@ const reply = (over: Partial<Reply> = {}): Reply => ({
   trace_id: 'abc12345', disposition: 'AUTO_RESOLVE', response_text: 'Tu saldo es 10 USD.', language: 'es', category: 'resolved', ticket_id: null, latency_ms: 1, ...over,
 })
 const ok = (r: Reply = reply()): SendResult => ({ ok: true, reply: r })
-const empty: HistoryResult = { ok: true, turns: [] }
+const empty: HistoryResult = { ok: true, turns: [], cases: [] }
 
 function Probe() {
   const c = useConversation()
@@ -29,7 +29,7 @@ function Probe() {
       <output data-testid="history-failed">{String(c.historyFailed)}</output>
       <ol>
         {c.entries.map((e) => (
-          <li key={e.id} data-role={e.role} data-delivery={e.role === 'user' ? e.delivery : undefined}>
+          <li key={e.id} data-role={e.role} data-delivery={e.role === 'user' ? e.delivery : undefined} data-failure={e.role === 'user' ? e.failure : undefined}>
             {e.role === 'user' ? e.text : e.role === 'assistant' ? e.reply.response_text : e.note}
           </li>
         ))}
@@ -52,7 +52,7 @@ beforeEach(() => {
 
 describe('ConversationProvider', () => {
   it('starts from what the API kept, so a reload shows the conversation', () => {
-    mount({ ok: true, turns: [{ role: 'user', text: 'hola', at: 1 }, { role: 'assistant', reply: reply(), at: 2 }] })
+    mount({ ok: true, cases: [], turns: [{ role: 'user', text: 'hola', at: 1 }, { role: 'assistant', reply: reply(), at: 2 }] })
     expect(items('user')[0].textContent).toBe('hola')
     expect(items('assistant')[0].textContent).toBe('Tu saldo es 10 USD.')
     expect(items('note')).toHaveLength(1)
@@ -88,7 +88,7 @@ describe('ConversationProvider', () => {
 
   it('a 409 leaves the message as already processed, and reloading brings the API\'s conversation back', async () => {
     server.sendMessage.mockResolvedValue({ ok: false, failure: 'already_processed' })
-    server.getHistory.mockResolvedValue({ ok: true, turns: [{ role: 'user', text: 'hola', at: 1 }, { role: 'assistant', reply: reply({ response_text: 'La respuesta guardada.' }), at: 2 }] })
+    server.getHistory.mockResolvedValue({ ok: true, cases: [], turns: [{ role: 'user', text: 'hola', at: 1 }, { role: 'assistant', reply: reply({ response_text: 'La respuesta guardada.' }), at: 2 }] })
     mount()
     const user = userEvent.setup()
     await user.click(screen.getByText('send'))
@@ -109,7 +109,7 @@ describe('ConversationProvider', () => {
   it('the cases are the handoffs with a number; each is asked for its status, once', async () => {
     const t = '55d09c14-2235-4c3c-8967-ccac61db9c50'
     server.getCase.mockResolvedValue({ ok: true, case: { ticket_id: t, status: 'claimed', message: null } })
-    mount({ ok: true, turns: [{ role: 'user', text: 'x', at: 1 }, { role: 'assistant', reply: reply({ disposition: 'ESCALATE', category: 'theft', ticket_id: t }), at: 2 }] })
+    mount({ ok: true, cases: [], turns: [{ role: 'user', text: 'x', at: 1 }, { role: 'assistant', reply: reply({ disposition: 'ESCALATE', category: 'theft', ticket_id: t }), at: 2 }] })
     await waitFor(() => expect(document.querySelector(`[data-case="${t}"]`)?.textContent).toBe('claimed'))
     expect(server.getCase).toHaveBeenCalledTimes(1)
   })
@@ -118,14 +118,14 @@ describe('ConversationProvider', () => {
     const t = 'T-0123456789'
     server.getCase.mockResolvedValue({ ok: true, case: { ticket_id: t, status: 'open', message: null } })
     server.sendMessage.mockResolvedValue(ok(reply({ response_text: 'Novedad de tu caso: un agente ya lo tomó.\n\nTu saldo es 10.' })))
-    mount({ ok: true, turns: [{ role: 'user', text: 'x', at: 1 }, { role: 'assistant', reply: reply({ disposition: 'ESCALATE', category: 'theft', ticket_id: t }), at: 2 }] })
+    mount({ ok: true, cases: [], turns: [{ role: 'user', text: 'x', at: 1 }, { role: 'assistant', reply: reply({ disposition: 'ESCALATE', category: 'theft', ticket_id: t }), at: 2 }] })
     await waitFor(() => expect(server.getCase).toHaveBeenCalledTimes(1))
     await userEvent.setup().click(screen.getByText('send'))
     await waitFor(() => expect(server.getCase).toHaveBeenCalledTimes(2))
   })
 
   it('a conversation that could not be read says so, and reloading brings it', async () => {
-    server.getHistory.mockResolvedValue({ ok: true, turns: [{ role: 'user', text: 'hola', at: 1 }] })
+    server.getHistory.mockResolvedValue({ ok: true, cases: [], turns: [{ role: 'user', text: 'hola', at: 1 }] })
     mount({ ok: false, failure: 'unavailable' })
     expect(screen.getByTestId('history-failed').textContent).toBe('true')
     await userEvent.setup().click(screen.getByText('reload'))
@@ -136,7 +136,7 @@ describe('ConversationProvider', () => {
   it('another session starts another conversation, and an answer that arrives for the old one is ignored', async () => {
     let finish: (r: SendResult) => void = () => {}
     server.sendMessage.mockReturnValue(new Promise<SendResult>((resolve) => { finish = resolve }))
-    const view = mount({ ok: true, turns: [{ role: 'user', text: 'vieja', at: 1 }] }, 's1')
+    const view = mount({ ok: true, cases: [], turns: [{ role: 'user', text: 'vieja', at: 1 }] }, 's1')
     await userEvent.setup().click(screen.getByText('send'))
     view.rerender(<ConversationProvider sessionRef="s2" initial={empty}><Probe /></ConversationProvider>)
     expect(items('user')).toHaveLength(0)
@@ -151,7 +151,7 @@ describe('ConversationProvider', () => {
       const promise = new Promise<T>((resolve) => { done = resolve })
       return { promise, done }
     }
-    const turns = (text: string): HistoryResult => ({ ok: true, turns: [{ role: 'user', text, at: 1 }, { role: 'assistant', reply: reply({ response_text: `Respuesta a ${text}` }), at: 2 }] })
+    const turns = (text: string): HistoryResult => ({ ok: true, cases: [], turns: [{ role: 'user', text, at: 1 }, { role: 'assistant', reply: reply({ response_text: `Respuesta a ${text}` }), at: 2 }] })
 
     it('a reload started in one session and answered in another is dropped', async () => {
       const a = late<HistoryResult>()
@@ -179,7 +179,7 @@ describe('ConversationProvider', () => {
 
     it('the status of a case asked in one session does not fill the same case of the next', async () => {
       const t = 'T-0123456789'
-      const withCase: HistoryResult = { ok: true, turns: [{ role: 'user', text: 'x', at: 1 }, { role: 'assistant', reply: reply({ disposition: 'ESCALATE', category: 'theft', ticket_id: t }), at: 2 }] }
+      const withCase: HistoryResult = { ok: true, cases: [], turns: [{ role: 'user', text: 'x', at: 1 }, { role: 'assistant', reply: reply({ disposition: 'ESCALATE', category: 'theft', ticket_id: t }), at: 2 }] }
       const a = late<unknown>()
       const b = late<unknown>()
       server.getCase.mockReturnValueOnce(a.promise).mockReturnValueOnce(b.promise)
@@ -191,6 +191,49 @@ describe('ConversationProvider', () => {
       expect(document.querySelector(`[data-case="${t}"]`)?.textContent).toBe('loading')
       await act(async () => b.done({ ok: true, case: { ticket_id: t, status: 'open', message: null } }))
       expect(document.querySelector(`[data-case="${t}"]`)?.textContent).toBe('open')
+    })
+  })
+
+  describe('the cases and the 409 do not depend on the bounded history', () => {
+    const t = '55d09c14-2235-4c3c-8967-ccac61db9c50'
+
+    it('a case the history no longer has a turn for is still listed, from the API\'s own index', async () => {
+      server.getCase.mockResolvedValue({ ok: true, case: { ticket_id: t, status: 'open', message: null } })
+      mount({ ok: true, turns: [{ role: 'user', text: 'reciente', at: 5 }], cases: [{ ticketId: t, category: 'theft', at: 1 }] })
+      await waitFor(() => expect(document.querySelector(`[data-case="${t}"]`)?.textContent).toBe('open'))
+      expect(server.getCase).toHaveBeenCalledTimes(1)
+    })
+
+    it('a reload brings the index back too, and a case opened by hand is not lost by it', async () => {
+      server.getCase.mockResolvedValue({ ok: true, case: { ticket_id: t, status: 'open', message: null } })
+      server.getHistory.mockResolvedValue({ ok: true, turns: [], cases: [{ ticketId: t, category: 'theft', at: 1 }] })
+      mount()
+      await userEvent.setup().click(screen.getByText('reload'))
+      await waitFor(() => expect(document.querySelector(`[data-case="${t}"]`)).not.toBeNull())
+    })
+
+    it('a 409 whose answer the API no longer has says so after the reload, instead of promising it', async () => {
+      server.sendMessage.mockResolvedValue({ ok: false, failure: 'already_processed' })
+      server.getHistory.mockResolvedValue({ ok: true, turns: [{ role: 'user', text: 'otra cosa', at: 1 }], cases: [] })
+      mount()
+      const user = userEvent.setup()
+      await user.click(screen.getByText('send'))
+      await waitFor(() => expect(items('user')[0].getAttribute('data-failure')).toBe('already_processed'))
+      await user.click(screen.getByText('reload'))
+      await waitFor(() => expect(items('user').map((e) => e.getAttribute('data-failure'))).toContain('answer_gone'))
+      expect(items('user').map((e) => e.textContent)).toEqual(['otra cosa', 'hola'])
+    })
+
+    it('a 409 whose answer the reload finds is simply shown', async () => {
+      server.sendMessage.mockResolvedValue({ ok: false, failure: 'already_processed' })
+      server.getHistory.mockResolvedValue({ ok: true, turns: [{ role: 'user', text: 'hola', at: 1 }, { role: 'assistant', reply: reply({ response_text: 'La guardada.' }), at: 2 }], cases: [] })
+      mount()
+      const user = userEvent.setup()
+      await user.click(screen.getByText('send'))
+      await waitFor(() => expect(items('user')[0].getAttribute('data-failure')).toBe('already_processed'))
+      await user.click(screen.getByText('reload'))
+      await waitFor(() => expect(items('assistant')[0]?.textContent).toBe('La guardada.'))
+      expect(items('user').map((e) => e.getAttribute('data-failure'))).toEqual([null])
     })
   })
 })

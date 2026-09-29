@@ -201,7 +201,8 @@ service, and as our own roadmap.
 - **Chat history keeps figures.** `GET /chat/history` returns the session's last 40 turns as the customer saw them, rendered
   reply included (balances, movements). They live in the conversation state, which the API keeps for 24 hours after a
   session ends (`ConversationStore.RETENTION_SECONDS`) so a restart or a refresh resumes it. Only the live session's token
-  reads it, and logging out clears it; a session that only expires leaves the text in the state until that purge. The
+  reads it, and logging out clears it (the copy in the API's memory expires with the same window and is dropped when the retention job
+  purges its row, and a turn of a session that is over writes nothing back); a session that only expires leaves the text in the state until that purge. The
   customer's words are stored with card numbers masked, as in the ticket. Production needs encryption at rest and a
   retention period the bank chooses (or expiry with the session). The demo's "Why?" is not stored: after a reload the
   earlier answers have no explanation.

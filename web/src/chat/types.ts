@@ -35,8 +35,11 @@ export type Reply = {
 /** One turn of the conversation as the API kept it: what the customer wrote and what was rendered for them. `at` is ms since the epoch. */
 export type HistoryEntry = { role: 'user'; text: string; at: number } | { role: 'assistant'; reply: Reply; at: number }
 
+/** A handoff of the session, kept by the API apart from the bounded turns. `at` is ms since the epoch. */
+export type HistoryCase = { ticketId: string; category: string; at: number }
+
 export type HistoryResult =
-  | { ok: true; turns: HistoryEntry[] }
+  | { ok: true; turns: HistoryEntry[]; cases: HistoryCase[] }
   | { ok: false; failure: 'session_expired' | 'unavailable' }
 
 export type SendFailure =

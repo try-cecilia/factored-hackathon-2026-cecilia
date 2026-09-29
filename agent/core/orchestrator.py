@@ -79,6 +79,7 @@ MAX_PROMPT_CHARS = int(os.environ.get("LLM_MAX_PROMPT_CHARS") or 24_000)  # ~6K 
 logger = logging.getLogger(__name__)
 turn_logger = logging.getLogger("cecilai.turn")  # one line per turn: ids, outcome, timings, nothing the customer wrote
 MAX_HISTORY_MESSAGES = 8
+MAX_CASE_INDEX = 100  # cases of one session the sidebar can list (a session opens a handful; this only bounds the row)
 MAX_TRANSCRIPT = 40  # rendered turns kept for the customer to read again (20 exchanges); the model never sees them
 MAX_CONVERSATIONS = 10_000
 DEGRADED_MIN_CONFIDENCE = 0.6
@@ -120,6 +121,7 @@ class _Conversation:
     pending_choice: list[dict] | None = None  # the pending movements listed on the last turn, to pick one by number
     cases: dict[str, str] = field(default_factory=dict)  # legacy notices, retained when loading older conversations
     transcript: list[dict] = field(default_factory=list)  # what the customer saw, as rendered: card numbers masked, no model data
+    case_index: list[dict] = field(default_factory=list)  # the session's handoffs (ticket_id, category, at), not bounded by the transcript
 
 
 class ConversationStore:
@@ -204,6 +206,9 @@ class ConversationStore:
                                 "disposition": result.disposition, "category": result.category, "language": result.language,
                                 "ticket_id": result.ticket_id, "degraded": result.degraded})
         del conv.transcript[:-MAX_TRANSCRIPT]
+        if result.disposition == "ESCALATE" and result.ticket_id and all(c["ticket_id"] != result.ticket_id for c in conv.case_index):
+            conv.case_index.append({"ticket_id": result.ticket_id, "category": result.category, "at": now})
+            del conv.case_index[:-MAX_CASE_INDEX]
 
     def clear_transcript(self, key: str) -> None:
         """Forget what was shown (logout): the figures in it are not kept for the rest of the retention window."""
@@ -403,6 +408,11 @@ class Orchestrator:
         """The session's rendered conversation, oldest first. Raises InvalidSession/ExpiredSession for a bad token."""
         session = self.session_store.validate(session_token)
         return [dict(turn) for turn in self.conversations.get(session.ref).transcript]
+
+    def case_index(self, session_token: str) -> list[dict]:
+        """The cases this session opened, oldest first: they outlive the turns that opened them."""
+        session = self.session_store.validate(session_token)
+        return [dict(case) for case in self.conversations.get(session.ref).case_index]
 
     def _session_is_live(self, session_token: str) -> bool:
         try:

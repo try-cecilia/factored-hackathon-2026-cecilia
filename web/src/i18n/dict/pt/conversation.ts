@@ -37,7 +37,8 @@ export const conversation: Like<typeof es> = {
     rateLimited: 'Você está enviando mensagens muito rápido. Espere um minuto e tente de novo.',
     busy: 'Ainda estou respondendo a sua mensagem anterior. Espere um momento e tente de novo.',
     unexpected: 'Recebi uma resposta que não consegui mostrar. Tentar de novo é seguro: se já a processei, ela não se repete.',
-    processed: 'O serviço já recebeu esta mensagem. Carregar a conversa mostra a resposta.',
+    processed: 'O serviço já recebeu esta mensagem. Carregar a conversa mostra a resposta se ela ainda estiver guardada.',
+    processedGone: 'O serviço recebeu esta mensagem, mas a resposta já não está guardada e não pode ser mostrada. Perguntar de novo.',
     ended: 'A sessão terminou antes de enviar a mensagem.',
   },
   history: {
