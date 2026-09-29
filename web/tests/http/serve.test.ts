@@ -39,11 +39,11 @@ after(() => server.kill())
 // fetch() would decode the body and hide the header it came with: a raw request keeps both as sent.
 async function raw(path: string, acceptEncoding?: string, method = 'GET') {
   const { request } = await import('node:http')
-  return new Promise<{ headers: Record<string, string | string[] | undefined>; body: Buffer }>((done, fail) => {
+  return new Promise<{ status: number; headers: Record<string, string | string[] | undefined>; body: Buffer }>((done, fail) => {
     const req = request(`${base}${path}`, { method, headers: acceptEncoding === undefined ? {} : { 'accept-encoding': acceptEncoding } }, (res) => {
       const chunks: Buffer[] = []
       res.on('data', (c: Buffer) => chunks.push(c))
-      res.on('end', () => done({ headers: res.headers, body: Buffer.concat(chunks) }))
+      res.on('end', () => done({ status: res.statusCode ?? 0, headers: res.headers, body: Buffer.concat(chunks) }))
     })
     req.on('error', fail)
     req.end()
@@ -78,6 +78,26 @@ describe('serve.mjs compresses the build\'s text files when asked', () => {
     const head = await raw(`/assets/${script}`, 'gzip', 'HEAD')
     assert.equal(head.headers['content-encoding'], 'gzip')
     assert.equal(head.body.length, 0)
+  })
+
+  test('the weights decide: gzip at q=1 wins over brotli at q=0.1', async () => {
+    const res = await raw(`/assets/${script}`, 'gzip;q=1, br;q=0.1')
+    assert.equal(res.headers['content-encoding'], 'gzip')
+    assert.ok(gunzipSync(res.body).equals(original))
+    const star = await raw(`/assets/${script}`, 'br;q=0.2, *;q=0.5')
+    assert.equal(star.headers['content-encoding'], 'gzip')
+  })
+
+  test('refusing every coding, identity included, is a 406, not the file as it is', async () => {
+    for (const header of ['identity;q=0, gzip;q=0, br;q=0', '*;q=0']) {
+      const res = await raw(`/assets/${script}`, header)
+      assert.equal(res.status, 406, header)
+      assert.equal(res.headers['content-encoding'], undefined)
+      assert.match(String(res.headers.vary), /accept-encoding/i)
+    }
+    const identityOnly = await raw(`/assets/${script}`, 'identity;q=0.5, gzip;q=0, br;q=0')
+    assert.equal(identityOnly.status, 200)
+    assert.equal(identityOnly.headers['content-encoding'], undefined)
   })
 
   test('fonts and images go as they are: they are compressed already', async () => {

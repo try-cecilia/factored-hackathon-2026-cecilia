@@ -39,17 +39,25 @@ const SECURITY = { 'x-content-type-options': 'nosniff', 'x-frame-options': 'DENY
 // Images and fonts are compressed already.
 const COMPRESSIBLE = new Set(['.js', '.mjs', '.css', '.html', '.json', '.svg', '.txt', '.map'])
 
-/** br, then gzip, then none, as Accept-Encoding allows (a `q=0` refuses one; `*` stands for those not named). */
-function encodingFor(header) {
+/**
+ * The coding to send, from Accept-Encoding (RFC 9110, 12.5.3): the highest weight wins, and between equal weights br, then gzip,
+ * then the file as it is. `*` stands for the codings not named; identity is acceptable unless refused by name or by `*;q=0`, and
+ * below any coding the browser asked for. Without the header, the file as it is. null: nothing offered is acceptable (406).
+ */
+function encodingFor(header, offered) {
+  if (header === undefined) return 'identity'
   const weights = new Map()
-  for (const part of String(header ?? '').toLowerCase().split(',')) {
+  for (const part of String(header).toLowerCase().split(',')) {
     const [name, ...params] = part.split(';').map((p) => p.trim())
     if (!name) continue
     const q = params.find((p) => p.startsWith('q='))
-    weights.set(name, q ? Number(q.slice(2)) : 1)
+    const weight = q ? Number(q.slice(2)) : 1
+    weights.set(name, Number.isFinite(weight) ? weight : 0)
   }
-  const accepts = (name) => (weights.get(name) ?? weights.get('*') ?? 0) > 0
-  return accepts('br') ? 'br' : accepts('gzip') ? 'gzip' : null
+  const weightOf = (coding) => weights.get(coding) ?? weights.get('*') ?? (coding === 'identity' ? 0.001 : 0)
+  let best = null
+  for (const coding of offered) if (weightOf(coding) > 0 && (best === null || weightOf(coding) > weightOf(best))) best = coding
+  return best
 }
 
 // Compressed while it is sent, never buffered whole. Brotli at quality 5: most of its gain over gzip for a fraction of the CPU of
@@ -98,7 +106,12 @@ const server = createServer(async (req, res) => {
     const file = req.method === 'GET' || req.method === 'HEAD' ? staticFile(pathname) : null
     if (file) {
       const compressible = COMPRESSIBLE.has(extname(file))
-      const encoding = compressible ? encodingFor(req.headers['accept-encoding']) : null
+      const chosen = encodingFor(req.headers['accept-encoding'], compressible ? ['br', 'gzip', 'identity'] : ['identity'])
+      if (chosen === null) {
+        res.writeHead(406, { ...SECURITY, 'content-type': 'text/plain; charset=utf-8', vary: 'accept-encoding' })
+        return res.end('Not Acceptable')
+      }
+      const encoding = chosen === 'identity' ? null : chosen
       res.writeHead(200, {
         ...SECURITY, 'content-type': TYPES[extname(file)] ?? 'application/octet-stream',
         'cache-control': pathname.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'public, max-age=300',
