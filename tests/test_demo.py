@@ -206,7 +206,7 @@ def test_the_data_quality_page_describes_the_warehouse_being_served(client):
     assert tables["customers"]["partitions"] is None  # one flat file, not daily partitions
     last = tables["customers"]["last_load"]
     assert (last["mode"], last["rows_staged"], last["rows_deduplicated"], last["rows_quarantined"]) == ("full", 6, 1, 0)
-    assert last["contract_version"] == "2.0.0" and last["params"]["sample_customers"] is None
+    assert last["contract_version"] == "2.1.0" and last["params"]["sample_customers"] is None
     assert (tables["transactions"]["loads"], tables["transactions"]["failed_loads"]) == (1, 0)
     assert dq["freshness"] == {"as_of": "2024-01-16", "loaded_at": dq["freshness"]["loaded_at"], "slo_hours": 36,
                                "enforced": False}
@@ -271,7 +271,7 @@ def test_the_data_quality_page_carries_the_complete_dataset_run_and_the_contract
     assert {(c["table"], c["check"], c["failed"], c["total"]) for c in full["failed_checks"]} == {
         (c["table"], c["check"], c["failed"], c["total"]) for c in report["checks"] if c["passed"] is False}
     assert full["tables"]["transactions"]["rows_staged"] == report["tables"]["transactions"]["rows_staged"]
-    assert dq["contract"]["version"] == "2.0.0"
+    assert dq["contract"]["version"] == "2.1.0"
     assert [(d["table"], d["column"]) for d in dq["contract"]["deviations"]] == [
         ("call_transcripts", "duration_seconds"), ("call_center_interactions", "reason_category")]
 
