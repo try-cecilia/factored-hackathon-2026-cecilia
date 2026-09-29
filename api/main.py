@@ -420,7 +420,7 @@ def capacity() -> dict:
                                         "address": chat_ip_limiter.limit},
                        "login_per_min": login_limiter.limit, "turn_budget_seconds": turn_budget_seconds(),
                        "llm_session_budget_usd": default_orchestrator.session_budget.limit_usd},
-            "state": middleware.stats.snapshot(),
+            "state": middleware.stats.snapshot(), "failures": observability.failure_counts(),
             "rate_limiter_keys": {"session": len(chat_limiter), "customer": len(chat_customer_limiter), "address": len(chat_ip_limiter)}}
 
 

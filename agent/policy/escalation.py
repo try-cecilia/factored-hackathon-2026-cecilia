@@ -118,7 +118,6 @@ NEXT_STEP = {
     "tool_failure": "Answer from the core system manually; report the failing lookup.",
     "llm_unavailable": "Answer manually; the assistant was down.",
     "turn_timeout": "Answer manually; the assistant ran out of time before it could look anything up.",
-    "internal_error": "Answer manually; the assistant failed on this request (see the trace).",
     "trace_unmatched": "Check the movement with payments operations or the sending bank: nothing of the customer's is pending.",
     "trace_unverified": "Open the trace manually and give the customer its number: the tracing service did not confirm it.",
     "trace_review": "Review the movement (see pending_action.review_reason) and approve or reject the trace the customer asked for.",

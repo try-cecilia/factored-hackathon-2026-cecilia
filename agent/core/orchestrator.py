@@ -75,7 +75,8 @@ MODEL_VIEW = {
 MAX_TOOL_CALLS_PER_TURN = 2
 TOOL_RETRY = RetryPolicy(max_attempts=2, base_s=0.05, cap_s=0.25)  # every tool here is a read: repeating one is harmless
 MAX_PROMPT_CHARS = int(os.environ.get("LLM_MAX_PROMPT_CHARS") or 24_000)  # ~6K tokens; the fixed prompt is ~2.1K tokens
-logger = logging.getLogger("cecilai.turn")
+logger = logging.getLogger(__name__)
+turn_logger = logging.getLogger("cecilai.turn")  # one line per turn: ids, outcome, timings, nothing the customer wrote
 MAX_HISTORY_MESSAGES = 8
 MAX_CONVERSATIONS = 10_000
 DEGRADED_MIN_CONFIDENCE = 0.6
@@ -301,28 +302,39 @@ class Orchestrator:
         try:
             with turn_deadline() as deadline, observability.recording() as recorder:
                 try:
-                    result = self._with_case_news(session_token, self._handle(session_token, text, trace_id, trace))
-                except Exception as exc:  # noqa: BLE001 - whatever broke, the customer gets a fixed reply, not a 500
-                    result = self._safe_failure(session_token, text, trace_id, trace, exc)
+                    result = self._handle(session_token, text, trace_id, trace)
+                except Exception as exc:  # noqa: BLE001 - whatever broke, the customer gets a handoff, never a crash
+                    result = self._unexpected_failure(session_token, text, trace_id, trace, exc)
+                result = self._with_case_news(session_token, result)
                 trace["stages"] = recorder.spans
                 trace["turn_budget_left_ms"] = round(deadline.remaining() * 1000)
         finally:
             current_trace_id.reset(ctx_token)
             try:
                 self.conversations.save(session_ref(session_token))  # even on a crash: what the turn changed is kept
-            except Exception:  # noqa: BLE001 - a failed save loses the history, never the reply
-                logger.error("conversation not saved (%s)", "state store", extra={"fields": {"trace_id": trace_id}})
+            except Exception as exc:  # noqa: BLE001 - a failed save loses the history, never the reply
+                self._record_failed("conversation_save", trace_id, exc)
         result.latency_ms = (time.perf_counter() - start) * 1000
-        default_trace_log.write({**trace, **{k: v for k, v in asdict(result).items() if k not in ("verified_facts",)},
-                                 "verified_tools": [f["tool"] for f in result.verified_facts]})
+        try:
+            default_trace_log.write({**trace, **{k: v for k, v in asdict(result).items() if k not in ("verified_facts",)},
+                                     "verified_tools": [f["tool"] for f in result.verified_facts]})
+        except Exception as exc:  # noqa: BLE001 - a record that cannot be written must not take the customer's answer with it
+            self._record_failed("trace_write", trace_id, exc)
         self._log_turn(result, trace)
         return result
+
+    @staticmethod
+    def _record_failed(kind: str, trace_id: str, exc: Exception) -> None:
+        """A record we could not write after the effects happened: counted (/admin/capacity) and logged by type, never by message."""
+        observability.count_failure(kind)
+        logger.error("%s failed (%s)", kind, type(exc).__name__,
+                     extra={"fields": {"trace_id": trace_id, "kind": kind, "error_type": type(exc).__name__}})
 
     @staticmethod
     def _log_turn(result: TurnResult, trace: dict) -> None:
         """One log line per turn: ids, outcome and timings. Never the customer's words, a reply or a customer id."""
         stages = {sp["stage"]: sp["ms"] for sp in trace.get("stages", [])}
-        logger.info("turn disposition=%s category=%s rule=%s latency_ms=%.1f llm_calls=%d", result.disposition, result.category,
+        turn_logger.info("turn disposition=%s category=%s rule=%s latency_ms=%.1f llm_calls=%d", result.disposition, result.category,
                     result.policy_rule, result.latency_ms, result.llm_calls,
                     extra={"fields": {"trace_id": result.trace_id, "disposition": result.disposition, "category": result.category,
                                       "policy_rule": result.policy_rule, "ticket_id": result.ticket_id,
@@ -330,32 +342,29 @@ class Orchestrator:
                                       "provider": result.provider, "model": result.model, "cost_usd": result.cost_usd,
                                       "stages_ms": stages}})
 
-    def _safe_failure(self, token: str, text: str, trace_id: str, trace: dict, exc: Exception) -> TurnResult:
-        """A turn that failed in our own code. The customer is handed to a person if a ticket can be filed and read back;
-        if not, told plainly that nothing was registered, with the code to quote. Nothing is answered from what was
-        computed before the failure, and only the exception's type is kept: its message may quote customer data."""
+    def _unexpected_failure(self, session_token: str, text: str, trace_id: str, trace: dict, exc: Exception) -> TurnResult:
+        """Something outside the tool calls broke (the profile lookup, the ownership check, the model client): the same
+        safe fallback as a failed tool, a handoff to a person that says nothing about the request. Only the exception's
+        type is kept, in the log, the trace and the ticket: its message can quote what the customer wrote."""
         error_type = type(exc).__name__
         logger.error("turn failed (%s)", error_type, extra={"fields": {"trace_id": trace_id, "error_type": error_type}})
-        decision = router.internal_error(error_type)
-        trace.update({"rule": decision.rule, "error_type": error_type})
         lang = detect_language(text).language
+        trace.update({"rule": "unexpected_failure", "error_type": error_type})
         try:
-            session = self.session_store.validate(token)
+            session = self.session_store.validate(session_token)
         except (InvalidSession, ExpiredSession):
-            return TurnResult(trace_id, "REAUTH_REQUIRED", render.MSG["reauth"][lang], lang, "session", "session:invalid")
-        except Exception:  # noqa: BLE001 - the store is what failed
-            session = None
-        if session is not None:
-            try:
-                ticket = escalation.escalate(decision, session.customer_id, session.ref, mask_card_numbers(text), lang, [], [], [],
-                                             session.attributes, trace_id)
-                if escalation.default_queue.get(ticket.ticket_id) is not None:
-                    return TurnResult(trace_id, Disposition.ESCALATE.value, render.MSG["escalate"][lang], lang, decision.category,
-                                      decision.rule, ticket.ticket_id)
-            except Exception:  # noqa: BLE001 - unfiled: say so below
-                pass
-        return TurnResult(trace_id, Disposition.ESCALATE.value, render.MSG["escalate_unverified"][lang].format(code=trace_id[:8]),
-                          lang, decision.category, f"{decision.rule}|handoff_unverified")
+            return TurnResult(trace_id, "REAUTH_REQUIRED", render.MSG["reauth"][lang], lang, "session", "session:expired_during_failure")
+        except Exception:  # noqa: BLE001 - the session store is what failed: nothing can be filed
+            return TurnResult(trace_id, Disposition.ESCALATE.value, render.MSG["escalate_unverified"][lang].format(code=trace_id[:8]),
+                              lang, "tool_failure", "unexpected_failure|handoff_unverified")
+        try:
+            conv = self.conversations.get(session.ref)
+            error = ToolError(f"unexpected failure: {error_type}")
+            return self._escalate(router.after_tool(error), session, conv, mask_card_numbers(text), conv.language, trace_id,
+                                  [{"tool": "turn", "success": False, "error_type": error_type}], [], {})
+        except Exception:  # noqa: BLE001 - even the handoff path failed: say so, with the code to quote
+            return TurnResult(trace_id, Disposition.ESCALATE.value, render.MSG["escalate_unverified"][lang].format(code=trace_id[:8]),
+                              lang, "tool_failure", "unexpected_failure|handoff_unverified")
 
     def _with_case_news(self, session_token: str, result: TurnResult) -> TurnResult:
         """What a person did with this customer's tickets since they last heard: said once, by code, ahead of the reply."""

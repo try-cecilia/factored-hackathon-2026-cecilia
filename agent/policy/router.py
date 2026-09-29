@@ -126,12 +126,6 @@ def turn_timeout() -> Decision:
                     open_questions=["Answer manually; the automated assistant ran out of time."], rule="turn_timeout")
 
 
-def internal_error(error_type: str) -> Decision:
-    """The turn failed in our own code. Only the exception's type is kept: its message may quote what the customer wrote."""
-    return Decision(Disposition.ESCALATE, f"The assistant failed while handling the request ({error_type}).", "internal_error",
-                    open_questions=["Answer manually; read the trace for the failure."], rule=f"internal_error:{error_type}")
-
-
 # --- the one action: tracing a pending movement (D3) ------------------------------------------------------------
 
 _YES = {"si", "sim", "si si", "sim sim", "dale", "ok dale", "si dale", "dale si", "confirmo", "confirmar", "si confirmo",

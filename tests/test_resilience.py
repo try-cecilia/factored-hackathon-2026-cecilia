@@ -351,10 +351,10 @@ def test_an_unexpected_failure_inside_a_turn_is_a_handoff_and_leaks_nothing(monk
     monkeypatch.setattr(orch_mod.router, "pre_llm", boom)
     orch, tok = orchestrator(FakeLLMClient([]))
     r = orch.handle_message(tok, "¿saldo?")
-    assert_handed_over(r, "internal_error", "internal_error:RuntimeError")
+    assert_handed_over(r, "tool_failure")
     record = lines("TRACE_LOG_PATH")[-1]
-    assert record["error_type"] == "RuntimeError" and "5000000001" not in json.dumps(record)
-    assert "5000000001" not in json.dumps(lines("HUMAN_QUEUE_PATH")[-1]["reason"])
+    assert record["error_type"] == "RuntimeError" and record["rule"] == "unexpected_failure" and "5000000001" not in json.dumps(record)
+    assert "5000000001" not in json.dumps(lines("HUMAN_QUEUE_PATH")[-1])  # nor in the ticket, its reason or its actions
 
 
 def test_an_unexpected_failure_with_the_queue_also_down_still_answers_with_a_code(monkeypatch):

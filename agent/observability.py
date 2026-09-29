@@ -20,6 +20,7 @@ import logging
 import os
 import re
 import secrets
+import threading
 import time
 import uuid
 from typing import Any, Iterator
@@ -108,6 +109,24 @@ def recording() -> Iterator[StageRecorder]:
         yield rec
     finally:
         current_stages.reset(token)
+
+
+# --- failures of what we only record ---------------------------------------------------------------------------------
+
+_failures: dict[str, int] = {}
+_failures_lock = threading.Lock()
+
+
+def count_failure(kind: str) -> None:
+    """A record we could not write (a trace, a conversation): the reply already went out, so the failure is counted here
+    and read at /admin/capacity, next to the structured log line the caller writes."""
+    with _failures_lock:
+        _failures[kind] = _failures.get(kind, 0) + 1
+
+
+def failure_counts() -> dict[str, int]:
+    with _failures_lock:
+        return dict(_failures)
 
 
 # --- logs ---------------------------------------------------------------------------------------------------------

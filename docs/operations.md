@@ -282,7 +282,7 @@ One test per way a turn can fail (`tests/test_resilience.py`). In every row the 
 | the tracing service stays down | 3 attempts; the customer is never told a trace exists | `action:trace_unverified` (handoff) |
 | the ticket write lands but reports failure | not filed twice | `escalate` |
 | the queue cannot be written | 3 attempts; the customer is told nothing was registered and gets the 8-character code | `…|handoff_unverified` |
-| our own code raises (any exception in a turn) | a handoff if a ticket can be filed and read back, otherwise the unverified message with the code; the exception text is never kept | `internal_error:<type>` |
+| our own code raises (any exception in a turn) | a handoff if a ticket can be filed and read back, otherwise the unverified message with the code; the exception text is never kept | `tool_failure` (trace rule `unexpected_failure`, `error_type`) |
 | the state store cannot save the conversation | the reply is still returned | |
 | an exception outside a turn | HTTP 500 that says only `internal error` and carries the request id | |
 
@@ -331,7 +331,7 @@ the rest.
 - **Handoffs with `llm_unavailable`:** read the attempts in the trace: `circuit_open` (a provider failed twice in a row and
   is skipped for 30 s), `turn_budget_exhausted` (the model was too slow for the turn) or
   `session_budget_exhausted` / `daily_budget_exhausted` (a spend cap, see `/admin/llm_budget`).
-- **`handoff_unverified` or `internal_error:<type>`:** the ticket queue or our own code failed; the customer got a code.
+- **`handoff_unverified` or `unexpected_failure` in the trace rule:** the ticket queue or our own code failed; the customer got a code.
   The trace has `error_type` (never the message); the log line `turn failed (<type>)` carries the same trace id.
 - **`trace_unverified`:** the tracing service did not confirm after 3 attempts (`trace_service` stage, `attempts`); a person
   opens the trace by hand.
