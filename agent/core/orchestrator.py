@@ -22,6 +22,7 @@ rule that fired, LLM attempts/usage, tool calls and cost.
 from __future__ import annotations
 
 import json
+import logging
 import threading
 import time
 import uuid
@@ -64,6 +65,8 @@ MODEL_VIEW = {
     "trace_opened": "[Se abrió el pedido de rastreo que el cliente confirmó]",
     "trace_cancelled": "[El cliente no quiso abrir el pedido de rastreo; no se abrió nada]",
 }
+logger = logging.getLogger(__name__)
+
 MAX_TOOL_CALLS_PER_TURN = 2
 MAX_HISTORY_MESSAGES = 8
 MAX_CONVERSATIONS = 10_000
@@ -262,14 +265,36 @@ class Orchestrator:
         trace: dict[str, Any] = {"trace_id": trace_id, "ts": ts, "prompt_version": prompts.PROMPT_VERSION,
                                  "llm_steps": [], "model_route": "not_called"}
         try:
-            result = self._with_case_news(session_token, self._handle(session_token, text, trace_id, trace))
+            try:
+                result = self._handle(session_token, text, trace_id, trace)
+            except Exception as exc:  # noqa: BLE001 - whatever broke, the customer gets a handoff, never a crash
+                result = self._unexpected_failure(session_token, text, trace_id, trace, exc)
+            result = self._with_case_news(session_token, result)
         finally:
             current_trace_id.reset(ctx_token)
             self.conversations.save(session_ref(session_token))  # even on a crash: what the turn changed is kept
         result.latency_ms = (time.perf_counter() - start) * 1000
-        default_trace_log.write({**trace, **{k: v for k, v in asdict(result).items() if k not in ("verified_facts",)},
-                                 "verified_tools": [f["tool"] for f in result.verified_facts]})
+        try:
+            default_trace_log.write({**trace, **{k: v for k, v in asdict(result).items() if k not in ("verified_facts",)},
+                                     "verified_tools": [f["tool"] for f in result.verified_facts]})
+        except Exception:  # noqa: BLE001 - a record that cannot be written must not take the customer's answer with it
+            logger.exception("trace record for %s could not be written", trace_id)
         return result
+
+    def _unexpected_failure(self, session_token: str, text: str, trace_id: str, trace: dict, exc: Exception) -> TurnResult:
+        """Something outside the tool calls broke (the profile lookup, the ownership check, the model client): the same
+        safe fallback as a failed tool, a handoff to a person that says nothing about the request."""
+        logger.exception("turn %s failed", trace_id)
+        try:
+            session = self.session_store.validate(session_token)
+        except (InvalidSession, ExpiredSession):
+            return TurnResult(trace_id, "REAUTH_REQUIRED", render.MSG["reauth"][detect_language(text).language],
+                              detect_language(text).language, "session", "session:expired_during_failure")
+        conv = self.conversations.get(session.ref)
+        error = ToolError(f"unexpected failure: {type(exc).__name__}: {exc}")
+        trace["rule"] = "unexpected_failure"
+        return self._escalate(router.after_tool(error), session, conv, mask_card_numbers(text), conv.language, trace_id,
+                              [{"tool": "turn", "success": False, "error_type": type(exc).__name__, "error": str(exc)}], [], {})
 
     def _with_case_news(self, session_token: str, result: TurnResult) -> TurnResult:
         """What a person did with this customer's tickets since they last heard: said once, by code, ahead of the reply."""
@@ -279,7 +304,12 @@ class Orchestrator:
             return result
         conv = self.conversations.get(session.ref)
         news = []
-        for ticket in escalation.default_queue.for_customer(session.customer_id):
+        try:
+            tickets = escalation.default_queue.for_customer(session.customer_id)
+        except Exception:  # noqa: BLE001 - the notices are a courtesy: with the queue unreadable, the answer still goes out
+            logger.exception("could not read the customer's tickets")
+            return result
+        for ticket in tickets:
             ticket_id = ticket["ticket_id"]
             state = default_desk.state(ticket_id)
             line = render.case_update(state["status"], result.language, default_traces.get(state["trace_id"] or ""))
@@ -401,7 +431,7 @@ class Orchestrator:
                               "degraded:classifier_out_of_scope", **meta)
         mentions_product = any(ch.isdigit() for ch in text) or any(
             normalize(w) in normalize(text) for w in ("ahorro", "corriente", "credito", "debito", "prestamo", "hipotec",
-                                                      "poupanca", "cartao", "emprestimo", "financiamento"))
+                                                      "poupanca", "corrente", "cartao", "emprestimo", "financiamento"))
         if reading.intent == "balance_inquiry" and not mentions_product:
             result = account_tools.get_account_summary(session.customer_id)
             facts = [{"tool": "get_account_summary", "args": {}, "result": result}]
