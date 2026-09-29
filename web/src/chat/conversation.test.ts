@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
   caseCategoryKey, casesOf, caseTone, chosenOption, classifyReply, deliveryDetailKey, deliveryOf, fromHistory, isNo, isOpenCase, isYes,
-  mergeCases, proposalState, shortCaseId, splitCaseNews, type Entry,
+  mergeCases, proposalState, sessionNotice, shortCaseId, splitCaseNews, type Entry,
 } from './conversation.ts'
 import { parseOptions } from './format.ts'
 import type { Reply } from './types.ts'
@@ -122,4 +122,15 @@ test('a message whose answer the API dropped is "received" with its own honest t
   assert.equal(deliveryDetailKey('answer_gone'), 'processedGone')
   const merged = mergeCases([{ ticketId: 'A', category: 'theft', at: 1 }, { ticketId: 'B', category: 'fraud', at: 3 }], [{ ticketId: 'A', category: 'theft', at: 9 }, { ticketId: 'C', category: 'x', at: 2 }])
   assert.deepEqual(merged.map((c) => c.ticketId), ['B', 'C', 'A'])
+})
+
+test('the session countdown shows nothing until two minutes are left, then the minutes, then that it is over', () => {
+  assert.equal(sessionNotice(900), null)
+  assert.equal(sessionNotice(121), null)
+  assert.equal(sessionNotice(120), 2)
+  assert.equal(sessionNotice(61), 2)
+  assert.equal(sessionNotice(60), 1)
+  assert.equal(sessionNotice(1), 1)
+  assert.equal(sessionNotice(0), 0)
+  assert.equal(sessionNotice(-5), 0)
 })

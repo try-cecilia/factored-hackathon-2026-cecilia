@@ -1,9 +1,4 @@
-import type { Locale } from './locales.ts'
-import { es } from './es.ts'
-import { pt } from './pt.ts'
 import type { Messages } from './types.ts'
-
-const dictionaries: Record<Locale, Messages> = { es, pt }
 
 /** Dotted path of every string in the dictionary: `common.close`, `loaders.thinking.label`... */
 type Path<T, Prefix extends string = ''> = {
@@ -14,8 +9,11 @@ export type MessageKey = Path<Messages>
 export type Params = Record<string, string | number>
 export type Translate = (key: MessageKey, params?: Params) => string
 
-export function lookup(locale: Locale, key: string): string | undefined {
-  let node: unknown = dictionaries[locale]
+/** The texts a page has: the namespaces of its areas (`areas.ts`), in its language. */
+export type Dictionary = Partial<Messages>
+
+export function lookup(messages: Dictionary, key: string): string | undefined {
+  let node: unknown = messages
   for (const part of key.split('.')) {
     if (typeof node !== 'object' || node === null) return undefined
     node = (node as Record<string, unknown>)[part]
@@ -29,10 +27,11 @@ export function format(template: string, params?: Params): string {
   return template.replace(/\{(\w+)\}/g, (whole, name: string) => (name in params ? String(params[name]) : whole))
 }
 
-export function translate(locale: Locale, key: MessageKey, params?: Params): string {
-  return format(lookup(locale, key) ?? lookup('es', key) ?? key, params)
+/** A key outside the loaded areas comes out as the key itself: visible, and caught by `areas.test.ts`. */
+export function translate(messages: Dictionary, key: MessageKey, params?: Params): string {
+  return format(lookup(messages, key) ?? key, params)
 }
 
-export function translator(locale: Locale): Translate {
-  return (key, params) => translate(locale, key, params)
+export function translator(messages: Dictionary): Translate {
+  return (key, params) => translate(messages, key, params)
 }

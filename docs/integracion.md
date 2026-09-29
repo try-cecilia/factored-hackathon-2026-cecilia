@@ -275,6 +275,14 @@ cliente se entere del resultado se cubre con `GET /case/{id}` y con un aviso en 
 
 **Punto de sustitución.** `HumanQueue.enqueue/get` y `TicketDesk.act/state`.
 
+**Lo que la consola recibe de la cola.** `loadQueue` (`web/src/server/operator.functions.ts`) lee `/admin/human_queue` y
+devuelve al navegador `QueueRow` (`web/src/server/queue-row.ts`), no el ticket: `ticket_id`, `created_at`, `category`,
+`priority`, `queue`, `customer_id`, `country`, `language`, `request` y del desk solo `status`, `operator` y `version`. Es
+lo que usan la tabla, sus filtros, las pestañas y los contadores del sidebar, y la cola se relee cada 30 s. La evidencia,
+los hechos verificados, las acciones, las preguntas abiertas, la acción pendiente y el historial del desk viajan solo con
+el caso abierto (`loadTicket`, `/admin/tickets/{id}`). Una columna o un filtro que necesite otro campo lo agrega a
+`QueueRow` y a `toQueueRow`; `queue-row.test.ts` falla si la fila empieza a llevar algo del caso.
+
 **En producción.** El sistema de casos del banco. Necesita: alta idempotente por `ticket_id`; transiciones con
 concurrencia optimista por versión; adjuntar evidencia; y la retención que fije el banco (aquí 90 días es un sustituto).
 Cómo se asignan colas y prioridades reales: **por definir con el banco**.
@@ -423,7 +431,12 @@ modo limitado.
   el azul queda para el anillo de foco y los puntos de "no leído".
 - *Casos.* La sección lista los casos de la sesión (las derivaciones que llegaron con número, del índice `cases` del historial más los de esta página) y el estado de cada
   uno, consultado con `GET /case/{id}` (otra vez cada 45 s mientras un caso siga abierto y la página esté visible, y
-  cuando una respuesta trae una novedad). El título sale de la categoría de la derivación (`cases.category.*`).
+  cuando una respuesta trae una novedad). El título sale de la categoría de la derivación (`cases.category.*`). "Ver caso" en el
+  mensaje de derivación y la fila del caso en el sidebar abren la vista del caso (`web/src/shell/CaseView.tsx`): un diálogo
+  modal desde la derecha (pantalla completa en un teléfono) con el motivo, la fecha, el estado, qué está pasando y qué sigue
+  según el estado, la última novedad que redacta la API (en el idioma de la conversación) y el número; al abrirse y con
+  "Actualizar el estado" vuelve a pedir `GET /case/{id}`. La API no guarda un historial de novedades por caso, así que la
+  vista no lo muestra.
 - *Mensajes.* Cada respuesta se dibuja con el componente del kit que pide su disposición (`resolveMessage`): AUTO_RESOLVE,
   respuesta (con "¿Por qué?" solo si la API mandó `why`, o sea, en la demo); CLARIFY, aclaración con opciones, o la
   propuesta de rastreo con Sí/No (`category=confirm_action`); ABSTAIN, rechazo con sugerencias; ESCALATE con número de
@@ -495,7 +508,9 @@ espera (puntos y pasos) y el chat sin demo.
 ### UI kit, i18n y galería
 
 **Cómo usar el kit.** Los componentes viven en `web/src/ui/` y salen de un solo punto:
-`import { Button, DataTable, Sidebar, AnswerMessage, Toast } from '../ui'`. Son presentacionales (reciben props, no llaman a
+`import { Button, DataTable, Sidebar, AnswerMessage, Toast } from '../ui'`. Lo que hoy solo dibuja la galería (`Progress`,
+`SidebarMenu`, `DataInAnswer`) no está en ese punto y se importa de su archivo: todo módulo del barrel, con su CSS, viaja en el
+bundle inicial de la app. Un componente que empiece a usar la app se agrega al `index.ts` de su área. Son presentacionales (reciben props, no llaman a
 la API), no dibujan bordes (solo el botón `outline` y el anillo de foco) y consumen únicamente variables de
 `web/src/tokens.css`; cada uno trae su CSS al lado, con clases `ui-*` que no chocan con las de `styles.css`. Las áreas son
 `Button` e `IconButton`; `loaders/` (`Spinner`, `ThinkingDots`, `CheckingSteps`, `Skeleton`, `Progress`, `DeliveryStatus`,
@@ -518,11 +533,29 @@ Colombia: sin voseo ni tuteo imperativo (infinitivos y construcciones nominales:
    dinámicos van como `{nombre}`).
 2. Escribir su traducción en `web/src/i18n/dict/pt/<área>.ts`. Está tipado contra el español: si falta una clave o sobra
    una, `make web-typecheck` falla.
-3. Usarlo: `const t = useT()` y `t('shell.customer', { id })`. Fuera de React, `translate(locale, clave, params)`. El título
-   de una ruta usa `headTitle(matches, clave)`. Una clave inexistente no compila.
+3. Usarlo: `const t = useT()` y `t('shell.customer', { id })`. Fuera de React, `translate(messages, clave, params)`, con el
+   diccionario que da el loader raíz. El título de una ruta usa `headTitle(matches, clave)`, que lee ese mismo diccionario.
+   Una clave inexistente no compila.
+
+**Diccionarios por área.** Ninguna página descarga todos los textos: cada una carga, en su idioma, los espacios de claves
+(`common`, `shell`, `operator`...) de su área, y nada más. Las áreas y sus espacios están en `web/src/i18n/areas.ts`: cliente
+(`/`, `/login`, `/chat`), operador (`/operador/...`), monitoreo (lo que suman `/operador/monitoreo` y `/operador/trazas`) y
+galería (`/dev/ui`, que carga los diccionarios completos en su propio chunk). El loader raíz (`routes/__root.tsx`) resuelve el
+idioma y el área de la ruta, y el diccionario viaja en sus datos: el HTML del servidor y la hidratación usan el mismo, y los
+componentes de carga y de error de una ruta lo tienen aunque su loader falle. Se vuelve a cargar al cambiar de idioma y al
+entrar a una página cuya área no está cargada (de la cola al monitoreo), antes de dibujarla. Por eso:
+
+- Una clave nueva en un espacio que ya existe no pide nada más.
+- Un espacio nuevo es un archivo en cada `dict/`, una línea en `es.ts` y `pt.ts`, una entrada por idioma en `sources` de
+  `areas.ts` y su nombre en la lista de cada área que lo use. Si una pantalla usa una clave de un espacio que su área no carga,
+  en pantalla aparece la clave tal cual; `web/src/i18n/areas.test.ts` sigue los imports de las rutas de cada área y falla antes.
+- Una ruta nueva fuera de esos prefijos es del área cliente: si es de otra, agregarla en `areasOf` y en `areas.test.ts`.
+
+El costo: el diccionario del área va dentro del HTML de cada página (unos 6,5 kB en gzip para `/chat` o la cola) en vez de
+un JS que el navegador guarda en caché; a cambio, el JS inicial ya no trae los textos de las otras áreas ni del otro idioma.
 
 `make web-test` comprueba además que las dos lenguas tengan las mismas claves y los mismos marcadores, y que el español no
-tenga voseo. Un área nueva se agrega como un archivo en cada `dict/` y una línea en `es.ts` y `pt.ts`.
+tenga voseo.
 
 **Galería.** `/dev/ui` muestra cada componente en todas sus variantes y estados, para cotejarlos contra los artboards de
 Paper; con `?both=1` dibuja el kit entero en español y en portugués. Existe con `make serve-web` (desarrollo) o con un

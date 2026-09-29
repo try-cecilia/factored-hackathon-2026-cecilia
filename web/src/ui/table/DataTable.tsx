@@ -1,4 +1,4 @@
-import type { KeyboardEvent, MouseEvent, ReactNode } from 'react'
+import { memo, useCallback, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
 import { useT } from '../../i18n/context'
 import { Skeleton } from '../loaders/Skeleton'
 import { BulkActionBar, type BulkAction } from './BulkActionBar'
@@ -78,19 +78,7 @@ export function DataTable<Row>({
   const allState = selectAllState(visibleIds, selected)
   const showEmpty = !loading && rows.length === 0 && empty !== undefined
 
-  function onRowKeyDown(event: KeyboardEvent<HTMLTableRowElement>, row: Row) {
-    if (event.target !== event.currentTarget) return
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault()
-      onRowClick?.(row)
-    }
-  }
-
-  function onRowActivate(event: MouseEvent<HTMLTableRowElement>, row: Row) {
-    // A click on a control inside the row (checkbox, link, menu button) is for that control.
-    if ((event.target as HTMLElement).closest(INTERACTIVE)) return
-    onRowClick?.(row)
-  }
+  const onToggle = useCallback((id: string) => onSelectionChange?.(toggleId(selected, id)), [onSelectionChange, selected])
 
   return (
     <div className={['ui-dt', `ui-dt--${density}`, className].filter(Boolean).join(' ')}>
@@ -164,41 +152,20 @@ export function DataTable<Row>({
                 ))
               : rows.map((row, index) => {
                   const id = getRowId(row)
-                  const isSelected = selected.includes(id)
-                  const isActive = activeRowId === id
                   return (
-                    <tr
+                    <TableRow
                       key={id}
-                      className={onRowClick ? 'ui-dt__row ui-dt__row--action' : 'ui-dt__row'}
-                      data-selected={isSelected || isActive ? '' : undefined}
-                      aria-current={isActive ? 'true' : undefined}
-                      data-state={forceHoverId === id ? 'hover' : undefined}
-                      tabIndex={onRowClick ? 0 : undefined}
-                      onClick={onRowClick ? (event) => onRowActivate(event, row) : undefined}
-                      onKeyDown={onRowClick ? (event) => onRowKeyDown(event, row) : undefined}
-                    >
-                      {selectable && (
-                        <td className="ui-dt__check">
-                          <RowCheckbox
-                            label={getRowLabel ? t('table.select.rowNamed', { name: getRowLabel(row) }) : t('table.select.row')}
-                            checked={isSelected}
-                            onChange={() => onSelectionChange(toggleId(selected, id))}
-                          />
-                        </td>
-                      )}
-                      {columns.map((column) => {
-                        const Cell = column.rowHeader ? 'th' : 'td'
-                        return (
-                          <Cell
-                            key={column.id}
-                            scope={column.rowHeader ? 'row' : undefined}
-                            className={cellClass(column)}
-                          >
-                            {column.cell(row, index)}
-                          </Cell>
-                        )
-                      })}
-                    </tr>
+                      row={row}
+                      index={index}
+                      id={id}
+                      columns={columns}
+                      selected={selectable ? selected.includes(id) : undefined}
+                      active={activeRowId === id}
+                      hover={forceHoverId === id}
+                      label={selectable && getRowLabel ? getRowLabel(row) : undefined}
+                      onRowClick={onRowClick}
+                      onToggle={selectable ? onToggle : undefined}
+                    />
                   )
                 })}
           </tbody>
@@ -226,6 +193,74 @@ export function DataTable<Row>({
     </div>
   )
 }
+
+type TableRowProps<Row> = {
+  row: Row
+  index: number
+  id: string
+  columns: readonly Column<Row>[]
+  /** Only with the checkbox column. */
+  selected: boolean | undefined
+  active: boolean
+  hover: boolean
+  label: string | undefined
+  onRowClick: ((row: Row) => void) | undefined
+  onToggle: ((id: string) => void) | undefined
+}
+
+/**
+ * One row, memoized: with the same row object, the same columns and the same callbacks it is not drawn again, so a refresh that
+ * brings the same data (the router keeps the references of what did not change) runs no cell. What changes over time in a cell
+ * (an age) must come in through the columns, which the caller rebuilds when it has to.
+ */
+function TableRowView<Row>({ row, index, id, columns, selected, active, hover, label, onRowClick, onToggle }: TableRowProps<Row>) {
+  const t = useT()
+
+  function onKeyDown(event: KeyboardEvent<HTMLTableRowElement>) {
+    if (event.target !== event.currentTarget) return
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      onRowClick?.(row)
+    }
+  }
+
+  function onActivate(event: MouseEvent<HTMLTableRowElement>) {
+    // A click on a control inside the row (checkbox, link, menu button) is for that control.
+    if ((event.target as HTMLElement).closest(INTERACTIVE)) return
+    onRowClick?.(row)
+  }
+
+  return (
+    <tr
+      className={onRowClick ? 'ui-dt__row ui-dt__row--action' : 'ui-dt__row'}
+      data-selected={selected || active ? '' : undefined}
+      aria-current={active ? 'true' : undefined}
+      data-state={hover ? 'hover' : undefined}
+      tabIndex={onRowClick ? 0 : undefined}
+      onClick={onRowClick ? onActivate : undefined}
+      onKeyDown={onRowClick ? onKeyDown : undefined}
+    >
+      {onToggle && (
+        <td className="ui-dt__check">
+          <RowCheckbox
+            label={label !== undefined ? t('table.select.rowNamed', { name: label }) : t('table.select.row')}
+            checked={selected ?? false}
+            onChange={() => onToggle(id)}
+          />
+        </td>
+      )}
+      {columns.map((column) => {
+        const Cell = column.rowHeader ? 'th' : 'td'
+        return (
+          <Cell key={column.id} scope={column.rowHeader ? 'row' : undefined} className={cellClass(column)}>
+            {column.cell(row, index)}
+          </Cell>
+        )
+      })}
+    </tr>
+  )
+}
+const TableRow = memo(TableRowView) as typeof TableRowView
 
 function cellClass<Row>(column: Column<Row>) {
   return [

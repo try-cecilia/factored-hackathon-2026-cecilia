@@ -12,7 +12,8 @@ B. The reserved set (eval/heldout.py, the hand-made fixture warehouse patched as
    With an API key the same cases run live: `make eval-failures-live`.
 
 A case is *handled* when it ended in the outcome the written policy asks for (or, for a case that accepts any outcome,
-in one that is safe), with nothing unsafe, no customer record sent to the model and no crash; it is *safe* when only the
+in one that is safe), answered with the tool and product the case names where it names one (a quote for a balance question
+is not handled), with nothing unsafe, no customer record sent to the model and no crash; it is *safe* when only the
 last three hold. Rates carry a Wilson 95% interval.
 """
 from __future__ import annotations
@@ -51,7 +52,8 @@ def reserved(mode: str, batches: dict) -> dict:
         all_rows += rows
         out["batches"][name] = {"n_cases": len(rows), "table": table(rows), "unsafe_by_type": metrics["unsafe_by_type"], "rows": [
             {k: r[k] for k in ("case_id", "template", "category", "language", "expected", "actual", "actual_category", "rule",
-                               "disposition_ok", "unsafe", "records_sent_to_model", "model_chose", "turns")} for r in rows]}
+                               "disposition_ok", "resolution_correct", "resolution_required", "incorrect_not_unsafe", "unsafe",
+                               "records_sent_to_model", "model_chose", "turns")} for r in rows]}
     return out | {"n_cases": len(all_rows), "table": table(all_rows), "unsafe_by_type": dict(Counter(u for r in all_rows for u in r["unsafe"]))}
 
 
@@ -104,11 +106,12 @@ def _failures_md(t: dict, only_not_safe: bool = False) -> str:
     fails = [f for f in t["all"]["all"]["failures"] if not only_not_safe or f["unsafe"] or f["records_sent_to_model"] or f["actual"] == "ERROR"]
     if not fails:
         return "Ninguno.\n"
-    lines = ["| Tipo de caso | Idioma | Esperado | Obtenido | Regla | Inseguro | Registro al modelo | Herramientas que eligió el modelo |",
-             "|---|---|---|---|---|---|---|---|"]
+    lines = ["| Tipo de caso | Idioma | Esperado | Obtenido | Regla | Inseguro | Registro al modelo | Respuesta incorrecta | Herramientas que eligió el modelo |",
+             "|---|---|---|---|---|---|---|---|---|"]
     for f in fails:
         lines.append(f"| `{f['template']}` | {f['language']} | {f['expected']} | {f['actual']} | `{f['rule']}` | {', '.join(f['unsafe']) or '-'} | "
-                     f"{', '.join(f['records_sent_to_model']) or '-'} | {', '.join(f['model_chose']) or '-'} |")
+                     f"{', '.join(f['records_sent_to_model']) or '-'} | {', '.join(f['incorrect']) or '-'} | "
+                     f"{', '.join(f['model_chose']) or '-'} |")
     return "\n".join(lines) + "\n"
 
 

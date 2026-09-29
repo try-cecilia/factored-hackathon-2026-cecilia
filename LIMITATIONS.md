@@ -24,12 +24,40 @@ service, and as our own roadmap.
 3. **Failure handling with a live model.** The reserved failure set (`eval/heldout/`, 226 cases) ran in full with the scripted
    ideal model and the deliberately bad one. With a live model only a small sample ran (Groq's `gpt-oss-120b`, 42 of the
    226 cases and 23 of the generated workload, one run: `eval/reports/LIVE_SAMPLE_GROQ.md`): 0 unsafe, but 3 of 42 not handled as the
-   policy asks, and intervals of 20-30 points. `make eval-failures-live` (or `eval-failures-local`) runs all of it.
+   policy asks, and intervals of 20-30 points. That run is not reproducible from artifacts: its selected ids and per-case rows were not
+   saved (the tables come from the console output). `eval/live_sample.py` versions the selection, the runner and the table for the next run. `make eval-failures-live` (or `eval-failures-local`) runs all of it.
 4. **The reserved set is small and no longer held out for what it found.** Five fixture customers, 17-31 cases per
    category and language: the 95% intervals are 10 to 40 points wide, and 0 unsafe in 226 bounds the true rate
    only below ≈1.3%. Batch 1 was written and committed before the system ran on it; batch 2 after seeing batch 1's
    failures and before fixing them; the fixes came after seeing both. Their post-fix numbers are regression evidence,
    not a held-out measurement, for the failures they fixed. A fresh, human-written set is the remaining fix.
+5. **The judge of replies reconstructs templates, from the outside.** By ADR-001 every reply is a fixed template (`agent/core/render.py`) or
+   verified facts rendered. Three reviews found that recognising phrases (regex over "ya transferí", "no pude") or matching templates with
+   wildcards is always one loophole behind, so `eval/run_system_eval.py` (`reply_template`) now rebuilds, exactly, the replies the system could
+   have sent at each turn, and any text that is none of them is `text_outside_the_templates`, unsafe by itself. It rebuilds from: the fixed
+   templates; `escalate_unverified` with the turn's own code (`trace_id[:8]`); `render.render_answer` over the turn's verified facts (with the
+   customer's catalog labels, or without them for the degraded mode and the baseline); `render.clarify` over the catalog; the trace replies from
+   the customer's movements and the run's trace requests; and the `case_*` notices only for a ticket of the customer whose desk state says so.
+   What this leaves open:
+   - *The orchestrator does not expose the template key or its parameters.* `TurnResult` has the category and the rule, not the message. The clean
+     fix is a system change, not made in this branch. Proposal: a field `TurnResult.reply = {"template": "<render.MSG key or 'answer'>", "params": {...}}`
+     set at each place that builds a reply (about 15 `TurnResult(...)` calls in `agent/core/orchestrator.py`, and `eval/baseline_bot.py`), never
+     serialised by the API; the judge would compare the text to `render.MSG[key][lang].format(**params)` and check each param against the turn's
+     data, instead of enumerating candidates. Impact: editing `agent/core/orchestrator.py` changes the policy fingerprint
+     (`eval/fingerprint.py`), so `make eval eval-adversarial eval-failures` must be re-run and the three committed reports regenerated; no
+     behaviour and no prompt change.
+   - *Any free text is unsafe, honest or not.* "No pude registrar tu caso. Comunícate con un agente especializado por teléfono." and
+     "O encaminhamento falhou. Seu caso não foi encaminhado." are safe to say and are flagged, like "Ya transferí tu caso". The system never
+     writes them; if a later change lets model text reach the customer, every such reply will be flagged until the judge is taught the new source.
+   - *The candidates are the customer's real data, not the turn's exact choice.* A `trace_propose` for a movement of the customer's that is not the
+     one the system picked passes; so does a `trace_choose` whose options are real movements in any order or subset; and a `case_*` notice passes for any
+     status a ticket of the customer has, not the one it should announce at that turn (with no operator acting in the scenarios there is none).
+   - *An answer is compared with `render_answer` over the facts the result itself reports.* A wrong fact rendered faithfully is not a text finding
+     (it is caught by the ownership and figure checks); and when the facts are missing from the result, a correct-looking answer is flagged.
+   - *A quote is excused by rendering.* On a dead session, the exact rendering of a public fact (`get_exchange_rate`) is removed before looking for the
+     customer's data; the same figures written another way are not removed, and are flagged.
+   The replies measured (548 generated rows in each of the ideal and adversarial runs, and 226 reserved rows in each) contain no text outside the
+   templates, trace replies included.
 ## Data and ML
 
 - **No usable text in the supplied data.** 171K transcripts hold 42 distinct

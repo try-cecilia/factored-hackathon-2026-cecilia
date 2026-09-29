@@ -523,7 +523,7 @@ are starting points, not tuned values.
 | Endpoint | Answers | Access |
 |---|---|---|
 | `/livez` | the process is up (no dependency is checked, so a broken warehouse gets no restart loop) | anyone |
-| `/readyz` | ready or not, with a yes/no per dependency, read fresh on every probe with a 2 s limit: `warehouse` (the file exists and a new read-only connection answers a query: a deleted or corrupt file is 503 at once), `state_store`, `data_dir_writable`. 503 when any fails; the reason stays in the logs | anyone; the Docker and Render health check |
+| `/readyz` | ready or not, with a yes/no per dependency, read fresh on every probe with a 2 s limit and one in-flight probe per dependency (a hung one is refused at once, not stacked): `warehouse` (the file exists and a new read-only connection answers a query: a deleted or corrupt file is 503 at once), `state_store`, `data_dir_writable`. 503 when any fails; the reason stays in the logs | anyone; the Docker and Render health check |
 | `/health` | the data as-of date, the configured providers, whether the daily model budget is spent, whether the classifier loaded | anyone |
 | `/metrics` | Prometheus text (below) | `Authorization: Bearer <METRICS_TOKEN>`, or the admin key (as a bearer or `X-Admin-Key`). The token opens nothing else. 503 with neither configured |
 | `/admin/ops`, `/admin/trace_log`, `/admin/drift`... | summaries and the records themselves, for a person | admin key |
@@ -535,7 +535,7 @@ does. Labels are bounded (no customer, session, ticket or message ever becomes a
 | Metric | What it tells you |
 |---|---|
 | `cecilai_turns_total{disposition,category}`, `cecilai_escalations_total{category}` | outcomes and escalations |
-| `cecilai_turn_latency_seconds`, `cecilai_stage_latency_seconds{stage}` (`llm`, `tools`, `policy_render`), `cecilai_tool_call_seconds{tool}` | latency, whole and by stage. The stages come from the trace's own `stages` spans when the orchestrator records them; otherwise from the model steps' latency, and for a chain where every provider failed from the sum of its attempts' durations (plus any `wait_ms` they record), so an outage counts as model time and not as policy time |
+| `cecilai_turn_latency_seconds`, `cecilai_stage_latency_seconds{stage}` (`llm`, `tools`, `policy_render`), `cecilai_tool_call_seconds{tool}` | latency, whole and by stage. The stages come from the trace's own `stages` spans when the orchestrator records them; otherwise from the model steps' latency, and for a chain where every provider failed from the sum of its attempts' durations, which leaves out the backoff waits between them (nothing records those): only with the spans is an outage's whole chain model time (`tests/test_metrics.py` runs the real client, its retries and waits, through the orchestrator) |
 | `cecilai_tool_calls_total{tool,outcome,error_type}` | tool calls, and why they failed (`MissingSlot`, `InvalidArgument`...) |
 | `cecilai_llm_attempts_total{provider,outcome,reason}`, `cecilai_model_refusals_total`, `cecilai_llm_unavailable_turns_total`, `cecilai_degraded_turns_total` | model errors, skips, refusals and the fallback |
 | `cecilai_llm_circuit_open{provider}`, `cecilai_llm_consecutive_failures{provider}`, `cecilai_llm_provider_configured{provider}` | circuit-breaker state |

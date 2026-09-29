@@ -1,10 +1,11 @@
-import { screen, within } from '@testing-library/react'
+import { act, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactElement, ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ConversationProvider } from '../chat/ConversationProvider'
 import type { HistoryResult } from '../chat/types'
 import type { Session } from '../server/auth.functions'
+import type { DemoKit } from '../server/demo.functions'
 import { renderWithI18n } from '../test/render'
 import { AppShell } from './AppShell'
 
@@ -45,14 +46,22 @@ function phone(matches: boolean, narrow = matches) {
   })) as unknown as typeof window.matchMedia
 }
 
-function shell(props: { history?: HistoryResult; scenarios?: typeof scenarios | null; locale?: 'es' | 'pt' } = {}): ReactElement {
+type Props = { history?: HistoryResult; scenarios?: typeof scenarios | null; kit?: Promise<DemoKit>; locale?: 'es' | 'pt' }
+
+function shell(props: Props = {}): ReactElement {
+  const kit = props.kit ?? Promise.resolve<DemoKit>(props.scenarios ? { enabled: true, scenarios: props.scenarios } : { enabled: false })
   return (
     <ConversationProvider sessionRef="s1" initial={props.history ?? { ok: true, cases: [], turns: [] }}>
-      <AppShell session={session} scenarios={props.scenarios ?? null}><p>La página</p></AppShell>
+      <AppShell session={session} kit={kit}><p>La página</p></AppShell>
     </ConversationProvider>
   )
 }
-const draw = (props: Parameters<typeof shell>[0] = {}) => renderWithI18n(shell(props), props.locale ?? 'es')
+// The demo's button and panel suspend on the kit: the first render is awaited inside act so they settle like in the browser.
+async function draw(props: Props = {}) {
+  let drawn: ReturnType<typeof renderWithI18n> | undefined
+  await act(async () => { drawn = renderWithI18n(shell(props), props.locale ?? 'es') })
+  return drawn as ReturnType<typeof renderWithI18n>
+}
 
 beforeEach(() => {
   phone(false)
@@ -63,7 +72,7 @@ afterEach(() => vi.restoreAllMocks())
 
 describe('AppShell', () => {
   it('the wide sidebar lists the chat and the cases of the conversation with where each stands', async () => {
-    draw({ history: withCase })
+    await draw({ history: withCase })
     const nav = screen.getByRole('navigation', { name: 'Principal' })
     expect(within(nav).getByRole('link', { name: 'Chat' }).getAttribute('aria-current')).toBe('page')
     const row = await within(nav).findByRole('button', { name: /Robo o clonación de tarjeta/ })
@@ -71,14 +80,14 @@ describe('AppShell', () => {
     expect(screen.getByText('1 abierto')).toBeTruthy()
   })
 
-  it('with no cases it says so instead of leaving the section empty', () => {
-    draw()
+  it('with no cases it says so instead of leaving the section empty', async () => {
+    await draw()
     expect(screen.getByText('Sin casos por ahora')).toBeTruthy()
   })
 
   it('collapses to a rail whose rows keep their names, and expands again', async () => {
     const user = userEvent.setup()
-    draw({ history: withCase })
+    await draw({ history: withCase })
     await user.click(screen.getByRole('button', { name: 'Contraer la barra lateral' }))
     const nav = screen.getByRole('navigation', { name: 'Principal' })
     expect(within(nav).getByRole('link', { name: 'Chat' })).toBeTruthy()
@@ -87,15 +96,15 @@ describe('AppShell', () => {
     expect(screen.queryByRole('button', { name: 'Expandir la barra lateral' })).toBeNull()
   })
 
-  it('the language switcher is in the bar, in both languages', () => {
-    draw()
+  it('the language switcher is in the bar, in both languages', async () => {
+    await draw()
     const group = screen.getByRole('group', { name: 'Idioma' })
     expect(within(group).getByRole('button', { name: 'Español' }).getAttribute('aria-pressed')).toBe('true')
     expect(within(group).getByRole('button', { name: 'Português' })).toBeTruthy()
   })
 
-  it('in Portuguese the shell speaks Portuguese', () => {
-    draw({ locale: 'pt', history: withCase })
+  it('in Portuguese the shell speaks Portuguese', async () => {
+    await draw({ locale: 'pt', history: withCase })
     expect(screen.getByRole('navigation', { name: 'Principal' })).toBeTruthy()
     expect(screen.getByText('Casos')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Recolher a barra lateral' })).toBeTruthy()
@@ -105,7 +114,7 @@ describe('AppShell', () => {
 
   it('signing out closes the session and goes to the sign-in page', async () => {
     logout.mockResolvedValue(undefined)
-    draw()
+    await draw()
     await userEvent.setup().click(screen.getByRole('button', { name: 'Salir' }))
     expect(logout).toHaveBeenCalledOnce()
     expect(navigate).toHaveBeenCalledWith({ to: '/login' })
@@ -113,23 +122,36 @@ describe('AppShell', () => {
 
   it('a sign-out that fails is told, not swallowed', async () => {
     logout.mockRejectedValue(new Error('down'))
-    draw()
+    await draw()
     await userEvent.setup().click(screen.getByRole('button', { name: 'Salir' }))
     expect(await screen.findByRole('alert')).toBeTruthy()
     expect(screen.getByText('No se pudo cerrar la sesión.')).toBeTruthy()
   })
 
-  it('the demo panel exists only when the sandbox does, and is marked as Demo', () => {
-    draw({ scenarios })
-    const panel = screen.getByRole('complementary', { name: 'Ayudas de demostración' })
+  it('the demo panel exists only when the sandbox does, and is marked as Demo', async () => {
+    await draw({ scenarios })
+    const panel = await screen.findByRole('complementary', { name: 'Ayudas de demostración' })
     expect(within(panel).getByText('Demo')).toBeTruthy()
     expect(within(panel).getByText('Consulta de saldo')).toBeTruthy()
   })
 
-  it('without the sandbox there is no demo panel and no Demo button', () => {
-    draw({ scenarios: null })
+  it('without the sandbox there is no demo panel and no Demo button', async () => {
+    const kit = Promise.resolve<DemoKit>({ enabled: false })
+    await draw({ kit })
     expect(screen.queryByRole('complementary', { name: 'Ayudas de demostración' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Demo' })).toBeNull()
+  })
+
+  it('the chat does not wait for the demo kit: the page is there while it is pending, and the demo comes when it arrives', async () => {
+    let arrive: (kit: DemoKit) => void = () => {}
+    await draw({ history: withCase, kit: new Promise<DemoKit>((resolve) => { arrive = resolve }) })
+    expect(screen.getByText('La página')).toBeTruthy()
+    expect(screen.getByText('Salir')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Demo' })).toBeNull()
+    arrive({ enabled: true, scenarios })
+    expect(await screen.findByRole('button', { name: 'Demo' })).toBeTruthy()
+    expect(await screen.findByRole('complementary', { name: 'Ayudas de demostración' })).toBeTruthy()
+    expect(screen.getByText('La página')).toBeTruthy()
   })
 
   describe('modal panels keep the keyboard inside', () => {
@@ -138,7 +160,7 @@ describe('AppShell', () => {
     it('the phone drawer: Tab and Shift+Tab wrap inside it, and the page behind is inert while it is open', async () => {
       phone(true)
       const user = userEvent.setup()
-      const { container } = draw({ history: withCase, scenarios })
+      const { container } = await draw({ history: withCase, scenarios })
       const side = container.querySelector('#shell-side') as HTMLElement
       const main = container.querySelector('.shell__main') as HTMLElement
       expect(main.hasAttribute('inert')).toBe(false)
@@ -159,9 +181,10 @@ describe('AppShell', () => {
     it('the demo panel on a narrow screen: same containment, and neither the sidebar nor the page can be reached', async () => {
       phone(false, true)
       const user = userEvent.setup()
-      const { container } = draw({ scenarios })
+      const { container } = await draw({ scenarios })
+      await user.click(await screen.findByRole('button', { name: 'Demo' }))
       const demo = container.querySelector('#shell-demo') as HTMLElement
-      await user.click(screen.getByRole('button', { name: 'Demo' }))
+      await screen.findByRole('complementary', { name: 'Ayudas de demostración' })
       expect(demo.hasAttribute('inert')).toBe(false)
       expect((container.querySelector('.shell__main') as HTMLElement).hasAttribute('inert')).toBe(true)
       expect((container.querySelector('#shell-side') as HTMLElement).hasAttribute('inert')).toBe(true)
@@ -173,9 +196,9 @@ describe('AppShell', () => {
       expect(inside(demo)).toBe(true)
     })
 
-    it('with the panel closed nothing is inert', () => {
+    it('with the panel closed nothing is inert', async () => {
       phone(true)
-      const { container } = draw({ scenarios })
+      const { container } = await draw({ scenarios })
       expect((container.querySelector('.shell__main') as HTMLElement).hasAttribute('inert')).toBe(false)
     })
   })
@@ -185,7 +208,7 @@ describe('AppShell', () => {
 
     it('the sidebar is a drawer: out of reach until the menu button opens it, and Escape closes it and gives the focus back', async () => {
       const user = userEvent.setup()
-      const { container } = draw({ history: withCase })
+      const { container } = await draw({ history: withCase })
       const side = container.querySelector('#shell-side') as HTMLElement
       expect(side.hasAttribute('inert')).toBe(true)
       const menu = screen.getByRole('button', { name: 'Abrir el menú' })
@@ -201,7 +224,7 @@ describe('AppShell', () => {
 
     it('choosing a case closes the drawer', async () => {
       const user = userEvent.setup()
-      const { container } = draw({ history: withCase })
+      const { container } = await draw({ history: withCase })
       await user.click(screen.getByRole('button', { name: 'Abrir el menú' }))
       await user.click(await screen.findByRole('button', { name: /Robo o clonación de tarjeta/ }))
       expect((container.querySelector('#shell-side') as HTMLElement).hasAttribute('inert')).toBe(true)
@@ -209,7 +232,7 @@ describe('AppShell', () => {
 
     it('the scrim closes it too', async () => {
       const user = userEvent.setup()
-      const { container } = draw()
+      const { container } = await draw()
       await user.click(screen.getByRole('button', { name: 'Abrir el menú' }))
       await user.click(container.querySelector('.shell__scrim') as HTMLElement)
       expect((container.querySelector('#shell-side') as HTMLElement).hasAttribute('inert')).toBe(true)

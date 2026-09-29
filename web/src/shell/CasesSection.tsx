@@ -10,6 +10,7 @@ const STATUSES = ['open', 'claimed', 'approved', 'rejected', 'handed_back', 'sta
 export function statusLabel(t: Translate, row: CaseRow): string {
   if (row.state.state === 'loading') return t('cases.loading')
   if (row.state.state === 'error') return t('cases.unavailable')
+  if (row.state.state === 'not_found') return t('cases.notFound')
   const status = row.state.status
   return t(`cases.status.${(STATUSES as readonly string[]).includes(status) ? (status as (typeof STATUSES)[number]) : 'unknown'}`)
 }

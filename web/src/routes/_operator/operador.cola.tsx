@@ -1,12 +1,14 @@
 import { createFileRoute, getRouteApi, Link, Outlet, useNavigate, useParams, useRouter } from '@tanstack/react-router'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useI18n, useT } from '../../i18n/context'
 import { headTitle } from '../../i18n/head'
-import type { MessageKey } from '../../i18n/translate'
-import type { Ticket } from '../../server/operator.functions'
+import type { Locale } from '../../i18n/locales'
+import type { MessageKey, Translate } from '../../i18n/translate'
+import type { DeskStatus, QueueRow } from '../../server/operator.functions'
 import { Button, DataTable, PriorityChip, StatusIndicator, type Column, type SortState, type StatusTone } from '../../ui'
 import type { Priority } from '../../ui'
 import { ageShort, categoryName, statusKey, when } from '../-operator/format'
+import { useMinute } from '../-operator/now'
 import {
   countryOptions, distinct, filterTickets, filtersOf, hasFilters, inScope, isClosed, localeOf, orderTickets, pageSlice, tabCounts, validateSearch, type QueueSearch, type StatusTab,
 } from '../-operator/queue'
@@ -22,7 +24,7 @@ export const Route = createFileRoute('/_operator/operador/cola')({
 
 const layout = getRouteApi('/_operator')
 
-const tones: Record<Ticket['desk']['status'], StatusTone> = {
+const tones: Record<DeskStatus, StatusTone> = {
   open: 'open',
   claimed: 'info',
   approved: 'success',
@@ -38,11 +40,27 @@ const TABS: { key: StatusTab; search: QueueSearch['estado']; label: MessageKey }
   { key: 'decided', search: 'decididos', label: 'operator.queue.tabs.decided' },
 ]
 const PRIORITIES = ['Critical', 'High', 'Medium', 'Low'] as const
+const NO_ROWS: QueueRow[] = []
+const rowId = (r: QueueRow) => r.ticket_id
+
+function makeColumns(t: Translate, locale: Locale, now: number): Column<QueueRow>[] {
+  return [
+    { id: 'priority', header: t('operator.queue.columns.priority'), width: 68, sortable: true, cell: (r) => <PriorityChip priority={r.priority.toLowerCase() as Priority} /> },
+    { id: 'ticket', header: t('operator.queue.columns.ticket'), width: 76, mono: true, rowHeader: true, sortable: true, cell: (r) => r.ticket_id.slice(0, 8) },
+    { id: 'queue', header: t('operator.queue.columns.queue'), width: 132, mono: true, muted: true, truncate: true, sortable: true, cell: (r) => r.queue },
+    { id: 'request', header: t('operator.queue.columns.request'), truncate: true, sortable: true, cell: (r) => <span title={categoryName(t, r.category)}>{r.request}</span> },
+    { id: 'locale', header: t('operator.queue.columns.locale'), width: 64, mono: true, muted: true, sortable: true, cell: (r) => localeOf(r) },
+    { id: 'age', header: t('operator.queue.columns.age'), width: 52, align: 'end', mono: true, muted: true, sortable: true, cell: (r) => <span title={t('operator.queue.ageTitle', { date: when(r.created_at, locale) })}>{ageShort(r.created_at, now)}</span> },
+    { id: 'status', header: t('operator.queue.columns.status'), width: 108, sortable: true, cell: (r) => <StatusIndicator tone={tones[r.desk.status]}>{t(statusKey[r.desk.status])}</StatusIndicator> },
+    { id: 'operator', header: t('operator.queue.columns.operator'), width: 92, mono: true, truncate: true, sortable: true, cell: (r) => r.desk.operator ?? '—' },
+  ]
+}
 
 function Queue() {
   const t = useT()
   const { locale } = useI18n()
-  const result = layout.useLoaderData()
+  // A refresh that brings the same queue keeps the same objects, so the rows that did not change are not drawn again (DataTable).
+  const result = layout.useLoaderData({ structuralSharing: true })
   const { view } = Route.useRouteContext()
   const search = Route.useSearch()
   const navigate = useNavigate()
@@ -64,7 +82,7 @@ function Queue() {
     return () => document.removeEventListener('keydown', onKey)
   }, [])
 
-  const tickets = useMemo(() => (result.ok ? result.data : []), [result])
+  const tickets = result.ok ? result.data : NO_ROWS
   const filters = filtersOf(search, q)
   const me = view.operator
   const scope = useMemo(() => inScope(tickets, filters, me), [tickets, filters.view, filters.queue, filters.priority, filters.country, filters.language, filters.q, me]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -77,7 +95,8 @@ function Queue() {
   // Any change of what is being looked at goes back to the first page.
   const scopeKey = JSON.stringify([filters, sort])
   const [paged, setPaged] = useState({ key: scopeKey, page: 1 })
-  const shown = pageSlice(rows, paged.key === scopeKey ? paged.page : 1, PAGE_SIZE)
+  const page = paged.key === scopeKey ? paged.page : 1
+  const shown = useMemo(() => pageSlice(rows, page, PAGE_SIZE), [rows, page])
 
   const set = (patch: Partial<QueueSearch>) => void navigate({ search: (prev: QueueSearch) => ({ ...prev, ...patch }) as never, replace: true })
   const clear = () => {
@@ -87,16 +106,12 @@ function Queue() {
 
   const title = search.cola ?? t(search.vista === 'mias' ? 'operator.queue.title.mine' : search.vista === 'sin-asignar' ? 'operator.queue.title.unassigned' : 'operator.queue.title.all')
 
-  const columns: Column<Ticket>[] = [
-    { id: 'priority', header: t('operator.queue.columns.priority'), width: 68, sortable: true, cell: (r) => <PriorityChip priority={r.priority.toLowerCase() as Priority} /> },
-    { id: 'ticket', header: t('operator.queue.columns.ticket'), width: 76, mono: true, rowHeader: true, sortable: true, cell: (r) => r.ticket_id.slice(0, 8) },
-    { id: 'queue', header: t('operator.queue.columns.queue'), width: 132, mono: true, muted: true, truncate: true, sortable: true, cell: (r) => r.queue },
-    { id: 'request', header: t('operator.queue.columns.request'), truncate: true, sortable: true, cell: (r) => <span title={categoryName(t, r.category)}>{r.request}</span> },
-    { id: 'locale', header: t('operator.queue.columns.locale'), width: 64, mono: true, muted: true, sortable: true, cell: (r) => localeOf(r) },
-    { id: 'age', header: t('operator.queue.columns.age'), width: 52, align: 'end', mono: true, muted: true, sortable: true, cell: (r) => <span title={t('operator.queue.ageTitle', { date: when(r.created_at, locale) })}>{ageShort(r.created_at)}</span> },
-    { id: 'status', header: t('operator.queue.columns.status'), width: 108, sortable: true, cell: (r) => <StatusIndicator tone={tones[r.desk.status]}>{t(statusKey[r.desk.status])}</StatusIndicator> },
-    { id: 'operator', header: t('operator.queue.columns.operator'), width: 92, mono: true, truncate: true, sortable: true, cell: (r) => r.desk.operator ?? '—' },
-  ]
+  const now = useMinute()
+  const columns = useMemo(() => makeColumns(t, locale, now), [t, locale, now])
+  const openTicket = useCallback(
+    (r: QueueRow) => void navigate({ to: '/operador/cola/$ticketId', params: { ticketId: r.ticket_id }, search: ((prev: QueueSearch) => prev) as never }),
+    [navigate],
+  )
 
   const orderLabel = sort
     ? t('operator.queue.order.by', { column: `${columns.find((c) => c.id === sort.key)?.header ?? ''} ${t(sort.direction === 'asc' ? 'operator.queue.order.asc' : 'operator.queue.order.desc')}` })
@@ -152,10 +167,10 @@ function Queue() {
               caption={t('operator.queue.caption')}
               rows={shown.rows}
               columns={columns}
-              getRowId={(r) => r.ticket_id}
+              getRowId={rowId}
               sort={sort}
               onSortChange={setSort}
-              onRowClick={(r) => void navigate({ to: '/operador/cola/$ticketId', params: { ticketId: r.ticket_id }, search: ((prev: QueueSearch) => prev) as never })}
+              onRowClick={openTicket}
               activeRowId={ticketId}
               empty={empty}
               pagination={{ page: shown.page, pageSize: PAGE_SIZE, total: rows.length, onPageChange: (next) => setPaged({ key: scopeKey, page: next }) }}

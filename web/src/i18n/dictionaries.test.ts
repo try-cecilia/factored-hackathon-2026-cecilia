@@ -36,19 +36,21 @@ test('the Spanish is neutral: no voseo in the UI copy', () => {
 })
 
 test('translate interpolates and reports a missing param instead of printing undefined', () => {
-  assert.equal(translate('es', 'shell.customer', { id: 'C-0007' }), 'Cliente C-0007')
-  assert.equal(translate('pt', 'shell.customer', { id: 'C-0007' }), 'Cliente C-0007')
+  assert.equal(translate(es, 'shell.customer', { id: 'C-0007' }), 'Cliente C-0007')
+  assert.equal(translate(pt, 'shell.customer', { id: 'C-0007' }), 'Cliente C-0007')
   assert.equal(format('Hola {name} ({n})', { name: 'Ana', n: 2 }), 'Hola Ana (2)')
   assert.equal(format('Hola {name}', {}), 'Hola {name}')
 })
 
 test('translator binds a language and lookup ignores keys that are not strings', () => {
-  const t = translator('pt')
+  const t = translator(pt)
   assert.equal(t('shell.signOut'), 'Sair')
-  assert.equal(translator('es')('shell.signOut'), 'Salir')
-  assert.equal(lookup('es', 'shell'), undefined)
-  assert.equal(lookup('es', 'shell.nope'), undefined)
-  assert.equal(lookup('es', 'shell.signOut.deeper'), undefined)
+  assert.equal(translator(es)('shell.signOut'), 'Salir')
+  assert.equal(lookup(es, 'shell'), undefined)
+  assert.equal(lookup(es, 'shell.nope'), undefined)
+  assert.equal(lookup(es, 'shell.signOut.deeper'), undefined)
+  // A key of an area the page did not load comes out as itself.
+  assert.equal(translator({ common: es.common })('shell.signOut'), 'shell.signOut')
 })
 
 test('the Spanish has no imperative addressed to the reader ("Ingresa", "Espera"...): infinitives and nouns instead', () => {

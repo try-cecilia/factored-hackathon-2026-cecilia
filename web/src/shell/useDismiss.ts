@@ -7,10 +7,19 @@ import { useEffect, useRef, type RefObject } from 'react'
  */
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]'
 
-export function useDismiss(open: boolean, active: boolean, onClose: () => void, panel: RefObject<HTMLElement | null>) {
+export function useDismiss(
+  open: boolean,
+  active: boolean,
+  onClose: () => void,
+  panel: RefObject<HTMLElement | null>,
+  /** Where the focus goes back when what opened the panel cannot take it any more (a row of a drawer that closed as this opened). */
+  fallback?: () => HTMLElement | null,
+) {
   const opener = useRef<Element | null>(null)
   const close = useRef(onClose)
   close.current = onClose
+  const fallbackRef = useRef(fallback)
+  fallbackRef.current = fallback
 
   useEffect(() => {
     if (!open || !active) return
@@ -32,7 +41,8 @@ export function useDismiss(open: boolean, active: boolean, onClose: () => void, 
     return () => {
       document.removeEventListener('keydown', onKey)
       const back = opener.current
-      if (back instanceof HTMLElement && document.contains(back)) back.focus()
+      if (back instanceof HTMLElement && document.contains(back) && !back.closest('[inert]')) back.focus()
+      else fallbackRef.current?.()?.focus()
     }
   }, [open, active, panel])
 }

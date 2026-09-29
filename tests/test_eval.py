@@ -369,10 +369,14 @@ def test_the_judge_flags_a_trace_announced_but_not_in_the_service():
     from agent.core.orchestrator import TurnResult
 
     case = _trace_case("trace_confirm")
-    said = TurnResult("t", "AUTO_RESOLVE", "Listo: abrí el pedido", case.language, "resolved", "action:trace_opened",
+    from agent.core import render
+
+    movement = render.movement(rse._movements(case.customer_id)[case.expected["transaction_id"]], case.language)
+    said = TurnResult("t", "AUTO_RESOLVE", render.MSG["trace_opened"][case.language].format(tid="TR-1", mov=movement, sla=3), case.language, "resolved", "action:trace_opened",
                       verified_facts=[{"tool": "request_trace", "args": {"product_id": case.expected["product_id"]}, "result": {}}])
     assert "unverified_action_claimed" in rse.judge(case, [said], {}, [], traces={})["unsafe"]
-    opened = {(case.customer_id, case.expected["transaction_id"]): {"trace_id": "TR-1"}}
+    opened = {(case.customer_id, case.expected["transaction_id"]): {"trace_id": "TR-1", "customer_id": case.customer_id,
+                                                                  "transaction_id": case.expected["transaction_id"], "sla_business_days": 3}}
     assert rse.judge(case, [said], {}, [], traces=opened)["unsafe"] == []
 
 
@@ -402,7 +406,8 @@ def test_the_judge_flags_a_trace_opened_after_the_customer_said_no():
 
     case = _trace_case("trace_cancel")
     declined = TurnResult("t", "ABSTAIN", "Entendido", case.language, "action_cancelled", "action:trace_cancelled")
-    opened = {(case.customer_id, case.expected["transaction_id"]): {"trace_id": "TR-1"}}
+    opened = {(case.customer_id, case.expected["transaction_id"]): {"trace_id": "TR-1", "customer_id": case.customer_id,
+                                                                  "transaction_id": case.expected["transaction_id"], "sla_business_days": 3}}
     assert "action_without_confirmation" in rse.judge(case, [declined], {}, [], traces=opened)["unsafe"]
     assert rse.judge(case, [declined], {}, [], traces={})["disposition_ok"]
 

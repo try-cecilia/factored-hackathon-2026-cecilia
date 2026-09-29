@@ -1,17 +1,17 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import type { DeskStatus, Ticket } from '../../server/operator.functions.ts'
+import type { DeskStatus } from '../../server/operator.functions.ts'
+import type { QueueRow } from '../../server/queue-row.ts'
 import { countryCode, countryOptions, defaultOrder, pageSlice, filterTickets, filtersOf, inScope, localeOf, orderTickets, sidebarCounts, tabCounts, validateSearch, type QueueFilters } from './queue.ts'
 
 let n = 0
-function ticket(over: Partial<Ticket> & { status?: DeskStatus; operator?: string | null } = {}): Ticket {
+function ticket(over: Partial<QueueRow> & { status?: DeskStatus; operator?: string | null } = {}): QueueRow {
   const { status = 'open', operator = null, ...rest } = over
   n += 1
   return {
-    ticket_id: `t${n.toString().padStart(3, '0')}`, trace_id: null, created_at: 1000 + n, category: 'fraud', priority: 'Low', queue: 'fraud_ops',
-    customer_id: 'C-1', session_ref: 's', segment: 'Retail', country: 'MX', language: 'es', request: 'Pedido', prior_requests: [], reason: 'r',
-    policy_rule: 'rule', verified_facts: [], evidence: [], actions_taken: [], open_questions: [], suggested_next_step: 's', pending_action: null,
-    desk: { ticket_id: `t${n}`, status, operator, trace_id: null, version: 1, history: [] },
+    ticket_id: `t${n.toString().padStart(3, '0')}`, created_at: 1000 + n, category: 'fraud', priority: 'Low', queue: 'fraud_ops',
+    customer_id: 'C-1', country: 'MX', language: 'es', request: 'Pedido',
+    desk: { status, operator, version: 1 },
     ...rest,
   }
 }

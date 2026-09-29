@@ -33,7 +33,7 @@ const REFRESH_MS = 30_000
 
 function OperatorLayout() {
   const { view } = Route.useRouteContext()
-  const queue = Route.useLoaderData()
+  const queue = Route.useLoaderData({ structuralSharing: true })
   const router = useRouter()
   const watching = useRouterState({ select: (s) => /^\/operador\/(cola|trazas)/.test(s.location.pathname) })
 

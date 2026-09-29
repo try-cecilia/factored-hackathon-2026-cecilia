@@ -1,7 +1,7 @@
 import { screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { I18nProvider } from '../../i18n/context'
-import { renderWithI18n } from '../../test/render'
+import { dictionaries, renderWithI18n } from '../../test/render'
 import { DataTable } from '../../ui'
 import { pageSlice } from './queue'
 
@@ -17,7 +17,7 @@ describe('the queue table when a refresh leaves fewer pages than the one being r
     const { rerender } = renderWithI18n(<Table rows={numbers(26)} page={2} />)
     expect(screen.getByText('Mostrando 26–26 de 26')).toBeTruthy()
     expect(screen.getAllByRole('row')).toHaveLength(2)
-    rerender(<I18nProvider locale="es"><Table rows={numbers(25)} page={2} /></I18nProvider>)
+    rerender(<I18nProvider locale="es" messages={dictionaries.es}><Table rows={numbers(25)} page={2} /></I18nProvider>)
     expect(screen.getByText('Mostrando 1–25 de 25')).toBeTruthy()
     expect(screen.getAllByRole('row')).toHaveLength(26)
   })

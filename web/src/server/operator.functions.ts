@@ -1,8 +1,9 @@
 import { createServerFn } from '@tanstack/react-start'
 import { adminRead, operatorAct, type Result } from './operator-api'
 import { operatorSessionState, takeFlash } from './operator-session'
+import { toQueueRow, type QueueRow } from './queue-row'
 
-export type { Result }
+export type { QueueRow, Result }
 
 // `unknown` does not cross the server-function boundary; the JSON the API sends does.
 export type Json = string | number | boolean | null | Json[] | { [key: string]: Json }
@@ -81,9 +82,13 @@ const idOf = (input: unknown, label: string) => {
   return value
 }
 
+// Rows, not tickets: see QueueRow.
 export const loadQueue = createServerFn({ method: 'GET' })
   .validator(autoOf)
-  .handler(({ data: auto }) => adminRead<Ticket[]>('/admin/human_queue?limit=200', !auto))
+  .handler(async ({ data: auto }): Promise<Result<QueueRow[]>> => {
+    const result = await adminRead<Ticket[]>('/admin/human_queue?limit=200', !auto)
+    return result.ok ? { ok: true, data: result.data.map(toQueueRow) } : result
+  })
 
 export const loadTicket = createServerFn({ method: 'GET' })
   .validator((input: unknown) => ({ id: idOf(input, 'ticket_id'), auto: autoOf(input as { auto?: boolean } | undefined) }))

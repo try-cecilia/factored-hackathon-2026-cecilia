@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { I18nProvider } from '../../i18n/context'
+import { dictionaries } from '../../test/render'
 import type { DeskStatus, Result, Ticket } from '../../server/operator.functions'
 import { readAgain, guarded } from './reload'
 import { TicketRoute } from './TicketRoute'
@@ -36,7 +37,7 @@ function mount(read: () => Promise<Result<Ticket>>, { guard = true } = {}) {
     },
   })
   const router = createRouter({ routeTree: root.addChildren([route]), history: createMemoryHistory({ initialEntries: [`/cola/${ID}`] }) })
-  render(<I18nProvider locale="es"><RouterProvider router={router} /></I18nProvider>)
+  render(<I18nProvider locale="es" messages={dictionaries.es}><RouterProvider router={router} /></I18nProvider>)
   return { router, act }
 }
 
@@ -111,7 +112,7 @@ function mountWithLayout(read: () => Promise<Result<Ticket>>, whoAmI: () => Prom
     },
   })
   const router = createRouter({ routeTree: root.addChildren([layout.addChildren([route])]), history: createMemoryHistory({ initialEntries: [`/cola/${ID}`] }) })
-  render(<I18nProvider locale="es"><RouterProvider router={router} /></I18nProvider>)
+  render(<I18nProvider locale="es" messages={dictionaries.es}><RouterProvider router={router} /></I18nProvider>)
   return { router }
 }
 

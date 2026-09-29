@@ -204,3 +204,15 @@ export function caseCategoryKey(category: string): string {
   if (KNOWN_CATEGORIES.has(category)) return category
   return PENDING.has(category) ? 'pending' : 'other'
 }
+
+const WARN_SECONDS = 120
+
+/**
+ * What the session's countdown shows with `seconds` left: `null` while there is time (no notice), the minutes of the notice once
+ * two are left (2, then 1), and 0 when it is over.
+ */
+export function sessionNotice(seconds: number): number | null {
+  if (seconds <= 0) return 0
+  if (seconds > WARN_SECONDS) return null
+  return Math.max(1, Math.ceil(seconds / 60))
+}

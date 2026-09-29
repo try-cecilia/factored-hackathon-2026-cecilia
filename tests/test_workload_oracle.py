@@ -5,6 +5,7 @@ import datetime as dt
 
 import pytest
 
+from agent.core import render
 from agent.core.orchestrator import TurnResult
 from agent.tools import account_tools
 from eval import run_system_eval as rse
@@ -81,7 +82,7 @@ def review_case(monkeypatch):
 
 
 def handed(case):
-    return TurnResult("t", "ESCALATE", "Te derivo con una persona", case.language, "trace_review", "action:trace_review", ticket_id="TK-1")
+    return TurnResult("t", "ESCALATE", render.MSG["escalate"][case.language], case.language, "trace_review", "action:trace_review", ticket_id="TK-1")
 
 
 def ticket(case, **action):

@@ -96,9 +96,14 @@ def check_categories(tables: dict, label: str, floors: dict, metric: str) -> lis
     return out
 
 
-def check_failure_categories(failures: dict, offline: dict, adversarial: dict) -> list[str]:
+def check_failure_categories(failures: dict, offline: dict | None, adversarial: dict | None,
+                             sources: tuple[str, ...] = ("reserved", "generated")) -> list[str]:
+    """`failures`: a failure_eval report (the committed one, or one just computed); `offline` and `adversarial` feed the
+    generated workload's tables, and are not needed when `sources` is only the reserved set."""
     out = []
     for source, label_prefix in (("reserved", "set reservado"), ("generated", "workload generado")):
+        if source not in sources:
+            continue
         for mode, metric in (("scripted", "handled"), ("adversarial", "safe")):
             if source == "reserved":
                 tables = failures["reserved"][mode]["table"]

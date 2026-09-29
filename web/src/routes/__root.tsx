@@ -1,12 +1,27 @@
-import { createRootRoute, HeadContent, Outlet, Scripts } from '@tanstack/react-router'
-import { I18nProvider } from '../i18n/context'
+import { createRootRoute, HeadContent, Outlet, rootRouteId, Scripts } from '@tanstack/react-router'
+import { areasOf, covers, loadMessages, type Area } from '../i18n/areas'
+import { RootI18n } from '../i18n/root'
 import { htmlLang } from '../i18n/locales'
 import { getLocale } from '../server/locale.functions'
 import stylesheet from '../styles.css?url'
 
 export const Route = createRootRoute({
-  // Once per page load: switching language calls router.invalidate(), which runs this again.
-  loader: async () => ({ locale: await getLocale() }),
+  // The language and the texts of the page's areas in it (i18n/areas.ts): they travel in this data, so the server's HTML and the
+  // hydration use the same dictionary. Once per page load; again when the language changes (router.invalidate()), and when a page
+  // needs an area that is not loaded yet (from the queue to the monitor), before that page is drawn.
+  beforeLoad: ({ location, matches }) => {
+    const loaded = matches.find((match) => match.routeId === rootRouteId)?.loaderData as { areas?: Area[] } | undefined
+    return { textsMissing: !covers(loaded?.areas, areasOf(location.pathname)) }
+  },
+  loader: {
+    handler: async ({ location }) => {
+      const locale = await getLocale()
+      const areas = areasOf(location.pathname)
+      return { locale, areas, messages: await loadMessages(areas, locale) }
+    },
+    staleReloadMode: 'blocking',
+  },
+  shouldReload: ({ context }) => context.textsMissing,
   staleTime: Infinity,
   head: () => ({
     meta: [
@@ -29,7 +44,7 @@ function RootDocument() {
     <html lang={htmlLang[locale]}>
       <head><HeadContent /></head>
       <body>
-        <I18nProvider locale={locale}><Outlet /></I18nProvider>
+        <RootI18n><Outlet /></RootI18n>
         <Scripts />
       </body>
     </html>

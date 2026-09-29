@@ -16,8 +16,12 @@ async function scenarios(): Promise<ApiScenario[] | null> {
   }
 }
 
+export type DemoKit = { enabled: false } | { enabled: true; scenarios: DemoScenario[] }
+
 export const getDemoKit = createServerFn({ method: 'GET' }).handler(
-  async (): Promise<{ enabled: false } | { enabled: true; scenarios: DemoScenario[] }> => {
+  async (): Promise<DemoKit> => {
+    // DEMO_MODE=0 given to the web too (the compose passes the API's): the sandbox is off, so there is nothing to ask.
+    if (process.env.DEMO_MODE === '0') return { enabled: false }
     const all = await scenarios()
     if (!all) return { enabled: false }
     // The sandbox PINs stay on the server: starting a scenario signs in there.
