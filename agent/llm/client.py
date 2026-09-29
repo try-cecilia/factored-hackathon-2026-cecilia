@@ -79,6 +79,25 @@ class Provider:
     call: Callable[..., tuple] | None = None  # None: OpenAI-compatible chat.completions
 
 
+def _recover_failed_tool_call(exc: Exception, tools: list[dict[str, Any]] | None) -> dict[str, Any] | None:
+    """Groq validates the model's tool call against our schema server-side and answers 400 tool_use_failed when it
+    sent `null` for a slot the customer left unfilled (allowing null in the schema is rejected by Groq's metaschema
+    check). The rejected call comes back in `failed_generation`: recover it when it names an offered tool. The
+    orchestrator still sanitizes its arguments and drops nulls, so this only saves the turn from a needless failure."""
+    body = getattr(exc, "body", None)
+    body = body.get("error", body) if isinstance(body, dict) else None
+    if not body or body.get("code") != "tool_use_failed":
+        return None
+    try:
+        call = json.loads(body.get("failed_generation") or "")
+        name, args = call["name"], call.get("arguments") or {}
+    except (ValueError, KeyError, TypeError, AttributeError):
+        return None
+    if not isinstance(args, dict) or name not in {t["function"]["name"] for t in tools or []}:
+        return None
+    return {"id": "recovered", "name": name, "arguments": json.dumps(args, ensure_ascii=False)}
+
+
 def openai_compatible_call(sdk, p: Provider, messages, tools, temperature: float, timeout: float) -> tuple:
     kwargs: dict[str, Any] = {"model": p.model, "messages": messages, "temperature": temperature}
     if p.per_request_timeout:
@@ -86,7 +105,13 @@ def openai_compatible_call(sdk, p: Provider, messages, tools, temperature: float
     if tools:
         kwargs["tools"] = tools
         kwargs["tool_choice"] = "auto"
-    completion = sdk.chat.completions.create(**kwargs)
+    try:
+        completion = sdk.chat.completions.create(**kwargs)
+    except Exception as exc:  # noqa: BLE001 - only Groq's tool_use_failed is recovered; anything else propagates
+        recovered = _recover_failed_tool_call(exc, tools)
+        if recovered is None:
+            raise
+        return None, [recovered], Usage(), p.model, exc
     if getattr(completion.choices[0], "finish_reason", None) == "length":
         raise IncompleteResponse(f"{p.model} hit its output limit")
     msg = completion.choices[0].message
