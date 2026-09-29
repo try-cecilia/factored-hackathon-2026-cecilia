@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { DeskStatus, Ticket } from '../../server/operator.functions.ts'
-import { defaultOrder, filterTickets, filtersOf, inScope, orderTickets, sidebarCounts, tabCounts, validateSearch, type QueueFilters } from './queue.ts'
+import { countryCode, defaultOrder, filterTickets, filtersOf, inScope, localeOf, orderTickets, sidebarCounts, tabCounts, validateSearch, type QueueFilters } from './queue.ts'
 
 let n = 0
 function ticket(over: Partial<Ticket> & { status?: DeskStatus; operator?: string | null } = {}): Ticket {
@@ -82,4 +82,13 @@ test('search params drop what is not known and map to filters', () => {
   assert.deepEqual(filtersOf({ vista: 'mias', estado: 'decididos', cola: 'fraud_ops' }, '  hola '), {
     view: 'mine', queue: 'fraud_ops', tab: 'decided', priority: undefined, country: undefined, language: undefined, q: 'hola',
   })
+})
+
+test('the locale column shows the country code and the language', () => {
+  assert.equal(countryCode('México'), 'MX')
+  assert.equal(countryCode('Argentina'), 'AR')
+  assert.equal(countryCode('Atlántida'), 'Atlántida')
+  assert.equal(countryCode(null), null)
+  assert.equal(localeOf(ticket({ country: 'Colombia', language: 'es' })), 'CO·ES')
+  assert.equal(localeOf(ticket({ country: null, language: 'pt' })), 'PT')
 })

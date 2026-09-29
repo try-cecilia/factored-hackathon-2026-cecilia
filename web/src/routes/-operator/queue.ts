@@ -152,7 +152,14 @@ export function orderTickets(tickets: readonly Ticket[], sort: SortState): Ticke
   })
 }
 
-export const localeOf = (t: Ticket) => [t.country, t.language.toUpperCase()].filter(Boolean).join('·')
+const COUNTRY_CODES: Record<string, string> = {
+  argentina: 'AR', brasil: 'BR', brazil: 'BR', chile: 'CL', colombia: 'CO', méxico: 'MX', mexico: 'MX', perú: 'PE', peru: 'PE', uruguay: 'UY',
+}
+
+/** The API sends the country's name ("México"); the table has room for its code. A country it does not know stays as it came. */
+export const countryCode = (country: string | null) => (country ? COUNTRY_CODES[country.toLowerCase()] ?? country : null)
+
+export const localeOf = (t: Ticket) => [countryCode(t.country), t.language.toUpperCase()].filter(Boolean).join('·')
 
 export const distinct = (tickets: readonly Ticket[], pick: (t: Ticket) => string | null) =>
   [...new Set(tickets.map(pick).filter((v): v is string => Boolean(v)))].sort()
