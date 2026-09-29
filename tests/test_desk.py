@@ -11,6 +11,7 @@ import os
 import pytest
 from fastapi.testclient import TestClient
 
+from agent.core import render
 from agent.core.orchestrator import Orchestrator
 from agent.policy.desk import Conflict, DeskError, NotFound, default_desk
 from agent.policy.escalation import default_queue
@@ -224,3 +225,21 @@ def test_the_case_endpoint_shows_a_customer_only_their_own_ticket(monkeypatch):
     assert client.get(f"/case/{ticket_id}", headers={"X-Session-Token": other}).status_code == 404
     assert client.get(f"/case/{ticket_id}", headers={"X-Session-Token": "not-a-session"}).status_code == 401
     assert client.get(f"/case/{ticket_id}").status_code == 401
+
+
+def test_the_case_status_speaks_the_language_the_customer_is_writing_in_now_not_the_one_the_ticket_was_filed_in():
+    """Nothing tells the API a UI language: the web's selector only sets a cookie for the pages. The reply language is read from the
+    customer's own words on each turn and kept for the session, and both the news in the chat and GET /case/{id} use it. The ticket
+    keeps the language it was filed in, and it is not what the customer is reading now."""
+    ticket_id, orch, tok = file_ticket_in_session()
+    assert default_queue.get(ticket_id)["language"] == "es"
+    default_desk.act(ticket_id, "claim", "ana")
+    assert "ya lo tomó" in orch.case_status(tok, ticket_id)["message"]
+
+    news = orch.handle_message(tok, "quanto eu tenho de saldo na minha conta?")
+    assert news.language == "pt" and news.response_text.startswith(render.case_update("claimed", "pt"))  # the chat's news agrees
+    status = orch.case_status(tok, ticket_id)
+    assert status["message"] == render.case_update("claimed", "pt") and "ya lo tomó" not in status["message"]
+
+    orch.handle_message(tok, "ok")  # no language signal: the session keeps the last one, and so does the case
+    assert orch.case_status(tok, ticket_id)["message"] == render.case_update("claimed", "pt")

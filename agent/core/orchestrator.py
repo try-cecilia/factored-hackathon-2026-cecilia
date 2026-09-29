@@ -494,6 +494,7 @@ class Orchestrator:
 
     def case_status(self, session_token: str, ticket_id: str) -> dict | None:
         """The status of one of this customer's tickets, worded as the chat would; None if it is not theirs.
+        The language is the session's (the one the customer last wrote in, as for the news in the chat), not the ticket's.
         Raises InvalidSession/ExpiredSession for a bad token."""
         session = self.session_store.validate(session_token)
         ticket = escalation.default_queue.get(ticket_id)
