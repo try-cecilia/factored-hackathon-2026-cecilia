@@ -2,10 +2,99 @@
 
 ## Local development
 
-Python stays at the repository root. `web/` is a separate TanStack Start
-package with its own pnpm lockfile. Use Python 3.11, Node 24 and pnpm 10.33.2.
-`make setup` installs Python dependencies; `make web-setup` installs frontend
-dependencies. Activate `.venv` or pass `PY=.venv/bin/python` to each Make command.
+### One command: `make up`
+
+Needs Docker with Compose v2 and Python 3 (only to write `.env`). No account, no S3 bucket and no model key:
+
+```bash
+make up          # writes .env with fresh secrets if there is none, builds both images, starts API + web, waits until healthy
+# web: http://127.0.0.1:3000   API and the chat page: http://127.0.0.1:8000   (DEMO_MODE=1, the fixture warehouse)
+make down        # stops it and drops its volumes
+```
+
+`make env` (run by `make up`) copies `.env.example` to `.env` with a random `DEMO_IDP_SECRET`, `ADMIN_API_KEY`,
+`METRICS_TOKEN`, `GRAFANA_ADMIN_PASSWORD` and an `OPERATOR_KEYS` entry, the fixture warehouse (`tests/fixtures/raw`, 5
+customers, no bucket) and `DEMO_MODE=1` so the guided scenarios and test PINs work. An existing `.env` is left alone. With no
+model key the assistant runs in degraded mode: plain balances from verified data, everything else goes to a person, and no
+model is called. Ports are published on `127.0.0.1` only.
+
+Everything the stack needs runs in it. The cloud services the project can use are options, never requirements, and each has
+a local equivalent:
+
+| Optional cloud service | Local equivalent in the compose stack | Command |
+|---|---|---|
+| The organizer's S3 bucket | The fixture warehouse (default), or your own CSVs mounted read-only and ingested at first boot | `make up` · `make up-dataset RAW_DIR=/path/to/data/raw` |
+| A model provider's API (Anthropic, Groq, Together) | No key: degraded mode. Or a local model through Ollama (OpenAI-compatible) | `make up-llm-local` · `make up-llm-host` |
+| A metrics SaaS | Prometheus with the alert rules, and Grafana with a provisioned dashboard | `make monitoring-up` |
+| Render | The same images, from the same compose file | `make up` |
+
+**Your local dataset.** `make up-dataset RAW_DIR=/path/to/data/raw` mounts that folder read-only at `/app/data/raw` (it needs
+`branches.csv`, `customers.csv`, `daily_exchange_rates.csv`, `products.csv`, `transactions/` and, optionally, `complaints/`),
+ingests it on the first boot with `--source local` (by default the 5,000-customer, 12-month sample the Render deploy uses;
+`INGEST_ARGS="--profile serving"` in the environment loads everything, with `DUCKDB_MEMORY_LIMIT=2GB` and about 2 GB for the
+container) and keeps the warehouse in the volume, so later boots do not ingest again. To switch datasets run `make down`
+first: it drops the volume. Measured here with the fixture folder as `RAW_DIR`: a read-only mount, one ingestion, and no second
+one after `docker compose restart api`. The 900 MB dataset itself was not run in this checkout.
+
+**Monitoring.** `make monitoring-up` adds Prometheus (`http://127.0.0.1:9090`, scraping `/metrics` with `METRICS_TOKEN`, loading
+`ops/alerts.yml`) and Grafana (`http://127.0.0.1:3001`, login `admin` and `GRAFANA_ADMIN_PASSWORD` from `.env`, the
+"cecilai: the assistant in production" dashboard already provisioned; Grafana's telemetry and update checks are off).
+
+**A local model.** Two ways, both through the API's `local` provider (`LLM_PROVIDERS=local`, `LOCAL_LLM_BASE_URL`,
+`LOCAL_LLM_MODEL`; the provider's code is the resilience branch's, this stack only wires it):
+
+| Variant | Command | When | Notes |
+|---|---|---|---|
+| (a) Ollama in the compose stack | `make up-llm-local` (`GPU=1` on Linux with an NVIDIA GPU) | Linux/GPU, or patience | A one-shot `ollama-pull` downloads `LOCAL_LLM_MODEL` into the `ollama` volume; follow it with `docker compose -f ops/docker-compose.yml --profile llm-local logs -f ollama-pull`. **On macOS Docker runs on CPU only, with no Metal: `gpt-oss:20b` would be very slow.** |
+| (b) Ollama on the host | `ollama serve`, then `make up-llm-host` | macOS (Metal) or any host that already has Ollama | The API reaches it at `http://host.docker.internal:11434/v1` (`extra_hosts: host-gateway` makes that work on Linux too; there Ollama must listen beyond loopback: `OLLAMA_HOST=0.0.0.0`) |
+
+Memory and disk, as Ollama publishes them and **not measured here** (check each model's page before relying on a number):
+
+| `LOCAL_LLM_MODEL` | Download | Memory to run it | Use |
+|---|---|---|---|
+| `gpt-oss:20b` (the default) | about 14 GB | about 16 GB free RAM or VRAM | the closest to the hosted models; the Docker image adds about 5 GB |
+| `qwen3:8b`, `llama3.1:8b` | about 5 GB | about 8 GB | a laptop with 16-24 GB of RAM; both take tools |
+| `qwen3:4b`, `llama3.2:3b` | about 2-2.5 GB | about 4 GB | a small machine; tool calling is weaker, expect more escalations |
+
+A model must support tool calling: the assistant only asks it to pick one of the read-only tools. Any answer it gets wrong falls
+to the same checks as a hosted model's, and a model that does not answer at all falls to degraded mode.
+What was verified in this checkout: the profile boots, `ollama-pull` downloads a model (tested with `qwen3:0.6b`, 0.5 GB), the
+API container reaches `http://ollama:11434/v1/models` and has `LLM_PROVIDERS=local` and `LOCAL_LLM_*` set; `docker compose
+config` resolves every profile. Chatting through the `local` provider waits for that provider's code. The heavy profile is not
+started in CI.
+
+**Checked end to end.** `make compose-e2e` builds both images, starts API + web + Prometheus + Grafana on the fixture,
+runs the smoke test, checks that the web reaches the API, the security headers, the access checks, `/metrics` (with and without
+its token), that Prometheus scrapes the API and loaded every alert rule, that Grafana holds the dashboard and its 20 queries are
+valid, and that the container's retention loop ran and audited itself; then it removes the stack. The same script is the CI job
+`compose`. Measured on a 2026-09 laptop (Docker with OrbStack, fast network): `docker compose build --no-cache` of both images
+42 s; stack healthy in about 10 s after that; the whole script 27 s on a warm cache. Pulling the base images is not included.
+
+### Setup, reproducibly
+
+| Point | Code | Test | Command |
+|---|---|---|---|
+| Python dependencies pinned to exact versions, every wheel checked by sha256 | `requirements.in` / `requirements-tracking.in` compiled to `requirements.txt` / `requirements-tracking.txt` (`uv pip compile --universal --generate-hashes`), installed with `pip install --require-hashes` | `tests/test_setup.py` (locks match their pins, drift and a missing hash are caught) | `make lock` · `make lock-check` · `make setup` |
+| Runtime versions declared once | `.python-version` (3.11), `.node-version` (24), `web/package.json` (`engines`, `packageManager` pnpm 10.33.2); the Dockerfiles use the same | `tests/test_setup.py` (they agree) | `cat .python-version .node-version` |
+| Node dependencies | `web/pnpm-lock.yaml`, `pnpm install --frozen-lockfile` | CI job `web` | `make web-setup` |
+| `.env.example` lists every setting the code reads | `.env.example` | `tests/test_setup.py` scans the code for `os.environ` reads and fails on a missing one; an empty `X_PATH=` that would replace a default is rejected | `pytest tests/test_setup.py` |
+| One command for the whole stack | `Makefile` (`up`), `ops/docker-compose.yml`, `ops/bootstrap_env.py`, `ops/Dockerfile`, `ops/Dockerfile.web` | `tests/test_setup.py` (compose structure, defaults, ports on 127.0.0.1, images unprivileged); `ops/compose_e2e.sh` | `make up` · `make compose-e2e` |
+| CI validates it | `.github/workflows/ci.yml`: parallel jobs `python`, `web`, `alerts`, `container`, `web-image`, `compose` | `tests/test_setup.py` (the jobs, their limits, the hash-checked install) | the same commands, locally |
+
+Measured on the same laptop: a fresh virtualenv with `pip install --require-hashes -r requirements-tracking.txt` (serving
+lock plus mlflow, 2,918 lines of lock) took 32 s; the serving lock alone is what the API image installs. The hermetic suite
+(`make test`, 681 tests) takes 40-50 s. The Docker base images (`python:3.11-slim`, `node:24-slim`) are tags, not digests, so a rebuild
+can pick up a newer patch release of them (LIMITATIONS.md).
+
+**CI hooks.** Other branches add checks without rewriting the workflow: `make gate` runs whatever `eval.gate` checks (per-category
+floors included), and `ops/ci_optional.sh <target>` runs a Makefile target only if this checkout defines it (the `python` job
+calls it for `validate-data-ml`).
+
+### Without Docker
+
+Python stays at the repository root. `web/` is a separate TanStack Start package with its own pnpm lockfile. Use Python 3.11,
+Node 24 and pnpm 10.33.2. `make setup` installs the locked Python dependencies; `make web-setup` installs the frontend's.
+Activate `.venv` or pass `PY=.venv/bin/python` to each Make command.
 
 For an offline run, build the fixture warehouse in a temporary directory.
 This leaves any existing warehouse in place and needs no S3 or model calls:
@@ -54,8 +143,10 @@ It reports the backend's response as-is, including the current backend's
 `status: ok` when `data_as_of` says data is unavailable.
 
 The new frontend is a setup skeleton. Authentication and chat are still in the
-existing Python UI. The container and Render deployment below continue to
-serve Python; deploying the TanStack server requires a separate hosting setup.
+existing Python UI. `ops/Dockerfile.web` builds it into an image (locked install, build, then a runtime with only its
+production dependencies, unprivileged, served by `web/serve.mjs`; `AGENT_API_URL` is read at run time) and the compose stack
+runs it. The container and Render deployment below continue to serve Python; hosting the TanStack server in production is
+still a separate setup (LIMITATIONS.md).
 
 ## Deploy (container)
 
@@ -82,13 +173,18 @@ then serves on `$PORT`.
   a later boot could serve, and the next boot loads again.
 - For the full dataset, set `INGEST_ARGS="--profile serving"` and give the container ~2 GB.
 - Without `DEMO_IDP_SECRET` every login is refused (fails closed).
-- Without `ADMIN_API_KEY`, `/admin/*` returns 503.
+- Without `ADMIN_API_KEY`, `/admin/*` returns 503; without `OPERATOR_KEYS`, acting on a ticket does; without `METRICS_TOKEN` and
+  `ADMIN_API_KEY`, `/metrics` does.
+- The sandbox's test credentials (`DEMO_PUBLIC_CUSTOMERS`, `/demo/*`, `/admin/demo_pin`) exist only with `DEMO_MODE=1`; the
+  entrypoint picks the sandbox customers only then.
+- A retention loop runs beside the API (`python -m ops.retention --loop`, every `RETENTION_INTERVAL_HOURS`, 24 by default,
+  0 = off): see "Data retention".
 - The app runs as a non-root user. The container starts as root only so the
   entrypoint can hand `/app/data` to that user (a platform may mount the disk
   owned by root), then drops to it with `setpriv`.
-- The healthcheck is `/health`: the data as-of date, the configured LLM
-  providers, whether the daily model budget is exhausted and whether the
-  classifier loaded.
+- The healthcheck is `/readyz`: the warehouse, the state store and the data directory all answer (yes/no only). `/livez` is
+  the bare process check, and `/health` keeps reporting the data as-of date, the configured LLM providers, whether the daily
+  model budget is exhausted and whether the classifier loaded.
 - Without the organizer's S3 access, `INGEST_ARGS="--profile serving --source
   local --raw-dir /app/tests/fixtures/raw"` loads the hand-made fixture (5
   customers) that ships in the image.
@@ -104,8 +200,9 @@ boot would (a partial build, a stale WAL) and checks the next boot loads again.
 
 `render.yaml` is the Blueprint: one Docker web service on a paid instance
 (`0.5c-512mb`; the free one sleeps and has no disk), a 1 GB disk at
-`/app/data/warehouse`, `DEMO_MODE=1`, generated secrets for the test IdP and the
-admin key, and the caps below.
+`/app/data/warehouse`, `DEMO_MODE=1`, generated secrets for the test IdP, the
+admin key and the metrics token, its health check on `/readyz`, HSTS on, and the caps below. Render is one place to run the
+image, not a requirement: `make up` runs the same image locally.
 1. In Render: New > Blueprint, pick the repository and branch. When asked, fill
    `ANTHROPIC_API_KEY` (a key with a spend limit set at the provider), optionally
    `GROQ_API_KEY`, and the organizer's `AWS_*` and `DATASET_BUCKET`. Without those
@@ -180,60 +277,201 @@ Scaling path:
 
 ## Monitoring
 
-Every turn writes a trace (`traces.jsonl`) with the disposition, the policy
-rule, LLM attempts, token usage (including cached tokens), latency and cost. Every
-tool call writes an audit record. Signals to alert on, from those records:
+Every turn writes a trace (`traces.jsonl`) with the disposition, the policy rule, LLM attempts, token usage (including cached
+tokens), latency and cost; every tool call writes an audit record. Both feed `GET /metrics`, a Prometheus endpoint, and
+`ops/alerts.yml` turns the thresholds below into alert rules. Nothing here has run against production traffic: the thresholds
+are starting points, not tuned values.
 
-| Signal | Why | Starting threshold |
+| Endpoint | Answers | Access |
 |---|---|---|
-| `category=security` escalations/hour | injection or enumeration attempts | > 5/h per customer, or any spike |
-| `handoff_unverified` in `policy_rule` | a ticket that did not read back: the customer was told to call | any |
-| `reference_to_foreign_product` escalations | explicit attempts to read another customer's product | any spike |
-| CLARIFY rate and `MissingSlot`/`InvalidArgument` share | drift in how well the model understands requests | ±50% week over week |
-| model refusals (`ModelRefusal` in LLM attempts) | provider safety classifiers declining banking requests | any sustained |
-| `llm_unavailable` + `circuit_open` attempts | provider outage | any sustained |
-| escalation rate by category | drift in data quality (e.g. `data_unavailable`) or demand | ±50% week over week |
-| p95 turn latency | UX and budget | > 8 s |
-| cost per safe resolution | unit economics | budget-dependent |
-| `_dq_results` failed errors, `_ingestion_log` failures | pipeline health | any |
+| `/livez` | the process is up (no dependency is checked, so a broken warehouse gets no restart loop) | anyone |
+| `/readyz` | ready or not, with a yes/no per dependency: `warehouse`, `state_store`, `data_dir_writable`. 503 when any fails; the reason stays in the logs | anyone; the Docker and Render health check |
+| `/health` | the data as-of date, the configured providers, whether the daily model budget is spent, whether the classifier loaded | anyone |
+| `/metrics` | Prometheus text (below) | `Authorization: Bearer <METRICS_TOKEN>`, or the admin key (as a bearer or `X-Admin-Key`). The token opens nothing else. 503 with neither configured |
+| `/admin/ops`, `/admin/trace_log`, `/admin/drift`... | summaries and the records themselves, for a person | admin key |
 
-Production would ship these to a metrics stack (e.g. OpenTelemetry → Grafana)
-instead of reading JSONL. The field names are already stable for that.
+**What `/metrics` exposes** (`agent/metrics.py`). Events are counted where they happen; state is read at scrape time, and a state
+source that cannot be read is skipped and counted in `cecilai_scrape_errors_total{source}`, so a scrape never fails because one
+does. Labels are bounded (no customer, session, ticket or message ever becomes a label; a test scans a scrape for them).
+
+| Metric | What it tells you |
+|---|---|
+| `cecilai_turns_total{disposition,category}`, `cecilai_escalations_total{category}` | outcomes and escalations |
+| `cecilai_turn_latency_seconds`, `cecilai_stage_latency_seconds{stage}` (`llm`, `tools`, `policy_render`), `cecilai_tool_call_seconds{tool}` | latency, whole and by stage |
+| `cecilai_tool_calls_total{tool,outcome,error_type}` | tool calls, and why they failed (`MissingSlot`, `InvalidArgument`...) |
+| `cecilai_llm_attempts_total{provider,outcome,reason}`, `cecilai_model_refusals_total`, `cecilai_llm_unavailable_turns_total`, `cecilai_degraded_turns_total` | model errors, skips, refusals and the fallback |
+| `cecilai_llm_circuit_open{provider}`, `cecilai_llm_consecutive_failures{provider}`, `cecilai_llm_provider_configured{provider}` | circuit-breaker state |
+| `cecilai_llm_tokens_total{provider,model,kind}`, `cecilai_llm_cost_usd_total`, `cecilai_llm_unpriced_calls_total`, `cecilai_llm_budget_*` | tokens, cost and the daily budget |
+| `cecilai_rate_limit_hits_total{limiter}`, `cecilai_logins_total{result}` | limits that fired (`chat`, `login`, `auth_failures`) and login outcomes |
+| `cecilai_http_requests_total{method,route,status}`, `cecilai_http_request_seconds{route}` | HTTP, by route template (never the concrete path) |
+| `cecilai_data_age_hours`, `cecilai_data_freshness_slo_hours`, `cecilai_data_freshness_enforced`, `cecilai_data_as_of_timestamp_seconds` | the age of the data against its SLO |
+| `cecilai_dq_failed_error_checks`, `cecilai_ingestion_failed_tables` | pipeline health, from `_dq_results` and `_ingestion_log` |
+| `cecilai_retention_*` | when the last purge ran, what it dropped, what failed |
+| `cecilai_handoff_unverified_total`, `cecilai_foreign_product_references_total` | the two runbook signals that are single events |
+
+**Signals, alerts and starting thresholds.** One rule per row, in `ops/alerts.yml`; `tests/test_alerts.py` fails if this
+table and the file list different alerts.
+
+| Signal | Why | Alert | Starting threshold |
+|---|---|---|---|
+| `category=security` escalations | injection or enumeration attempts | `CecilaiSecurityEscalations` | more than 5 in an hour, in total (a label per customer would be unbounded: find the customer in the traces) |
+| `handoff_unverified` in `policy_rule` | a ticket that did not read back: the customer was told to call | `CecilaiHandoffUnverified` | any, in 15 minutes |
+| `reference_to_foreign_product` escalations | explicit attempts to read another customer's product | `CecilaiForeignProductReferences` | more than 3 in an hour |
+| CLARIFY rate | drift in how well the model understands requests | `CecilaiClarifyRateShifted` | ±50% against the same day last week, over 100 turns, for 1 h |
+| `MissingSlot`/`InvalidArgument` share of tool calls | the same, seen from the tools | `CecilaiToolArgumentErrorsShifted` | ±50% week over week, for 1 h |
+| model refusals | provider safety classifiers declining banking requests | `CecilaiModelRefusals` | any, for 30 minutes |
+| no provider answers | provider outage | `CecilaiLlmUnavailable` | any `llm_unavailable` turn for 10 minutes |
+| circuit breaker open | a provider is being skipped | `CecilaiCircuitOpen` | open for 5 minutes, for a provider with a key |
+| escalation rate by category | drift in data quality (`data_unavailable`) or demand | `CecilaiEscalationRateShifted` | ±50% week over week per category, over 20 escalations a day |
+| p95 turn latency | UX and budget | `CecilaiTurnLatencyP95High` | above 8 s for 10 minutes |
+| cost per safe resolution | unit economics | `CecilaiCostPerSafeResolutionHigh` | above USD 0.01 (about 3x the measured 0.0029); set your own |
+| daily model budget | degraded mode is coming or here | `CecilaiLlmBudgetNearlyGone`, `CecilaiLlmBudgetExhausted` | 80% spent; exhausted |
+| `_dq_results` failed errors, `_ingestion_log` failures | pipeline health | `CecilaiQualityChecksFailing`, `CecilaiIngestionFailed` | any, for 10 minutes |
+| data older than its SLO | stale answers | `CecilaiDataStale` | age above `FRESHNESS_SLO_HOURS` for 15 minutes, only with `FRESHNESS_ENFORCE=1` (the static dataset never fires it) |
+| the API stops answering | availability | `CecilaiDown`, `CecilaiServerErrors` | no scrape for 2 minutes; more than 5% 5xx for 10 minutes |
+| a gauge's source is broken | the alerts on it cannot fire | `CecilaiScrapeSourceFailing` | any, for 15 minutes |
+| retention stopped | expired records pile up | `CecilaiRetentionNotRunning`, `CecilaiRetentionFailing` | no purge in twice the interval; a store that could not be pruned |
+| someone guessing keys | brute force on admin, metrics or operator keys | `CecilaiKeyGuessing`, `CecilaiLoginLockouts` | any address over its failed-attempt limit; more than 10 customer lockouts in 15 minutes |
+
+**Table: point, code, test, command.**
+
+| Point | Code | Test | Command |
+|---|---|---|---|
+| Prometheus metrics, latency by stage, breakers, budget, freshness | `agent/metrics.py`, the hooks in `agent/tools/audit.py`, `GET /metrics` in `api/main.py` | `tests/test_metrics.py` (a real turn is counted; state gauges; a failing source; no PII in labels; access) | `curl -H "Authorization: Bearer $METRICS_TOKEN" http://127.0.0.1:8000/metrics` |
+| Liveness apart from readiness | `api/observability.py`, `/livez`, `/readyz` | `tests/test_metrics.py` (readiness names the failing dependency and leaks no reason; liveness stays up) | `curl http://127.0.0.1:8000/readyz` |
+| Alert rules for the thresholds above | `ops/alerts.yml` | `tests/test_alerts.py` (well formed, only exposed metrics and labels, runbook anchors exist, same list as this table); `ops/alerts_test.yml` (promtool unit tests: 9 scenarios, including the labels and annotations each alert carries) | `make alerts-check` |
+| A scraper and a dashboard, locally | `ops/prometheus.yml`, `ops/grafana/`, the `monitoring` profile | `tests/test_alerts.py` (the dashboard queries only exposed metrics); `ops/compose_e2e.sh` (Prometheus sees the API up, loaded every rule, Grafana holds the dashboard, its 20 queries are accepted) | `make monitoring-up` · `make compose-e2e` |
+
+What is not covered: the week-over-week rules need eight days of series, so they are checked for syntax and metric names but not
+unit-tested; alerts go nowhere until an Alertmanager or a webhook is added (Prometheus only evaluates them here); and the
+records still contain customer data, so redaction before exporting them anywhere remains to be done (LIMITATIONS.md).
 
 While the demo is live, `GET /admin/ops` (with `X-Admin-Key`) summarizes the
 last 1,000 turns (`?limit=` up to 5,000): dispositions, escalations by
 category, the top rules, degraded-mode turns, `llm_unavailable`,
 `handoff_unverified`, traces opened, model calls, cost and unpriced turns,
 p50/p95 latency, the models that answered and the day's model budget. Check
-it once a day during the judging window, alongside `/health`.
+it once a day during the judging window, alongside `/readyz`.
 `GET /admin/trace_log` returns the turns' trace records themselves, oldest
 first (`?limit=`, default 500, up to 5,000), which is what the red-team
 report is built from (`docs/red_team.md`).
 
 ## Access control
 
+Four roles, by the credential presented: **anonymous** (nothing), **customer** (a session token from `/auth/session`),
+**operator** (an operator key: the only role that may act on a ticket) and **admin** (the admin key: reads queues, traces,
+audit and metrics, never acts). They are separate credentials, not a ladder: the admin key does not open `/chat`, an operator key
+does not read the audit log, and a session token is neither.
+
+The matrix below is `api/access.py` (`python -m api.access` prints it; a test keeps this table equal to it). The service
+**refuses to start** if a route has no row, a row has no route, or a route declared as needing a key does not depend on it.
+`tests/test_access_matrix.py` then calls every row as each of the four roles, each with only its own credential, and compares
+whether the door held with the row; it fails the moment a route is added without a policy.
+
+| Endpoint | anonymous | customer | operator | admin | Notes |
+|---|---|---|---|---|---|
+| `GET /` | yes | yes | yes | yes | the chat page; it holds no data |
+| `GET /health` | yes | yes | yes | yes | data as-of date, configured providers, budget flag, classifier loaded |
+| `GET /livez` | yes | yes | yes | yes | the process is up |
+| `GET /readyz` | yes | yes | yes | yes | the warehouse, the state store and the data directory answer; yes/no only |
+| `POST /auth/session` | yes | yes | yes | yes | customer id + PIN; limited per client address, locked after 5 failures |
+| `DELETE /auth/session` | yes | yes | yes | yes | logout: always 204, an unknown token is a no-op |
+| `GET /auth/session` | - | yes | - | - |  |
+| `POST /chat` | - | yes | - | - | the session token is in the body; a dead one gets REAUTH_REQUIRED |
+| `GET /case/{ticket_id}` | - | yes | - | - | only the session's own tickets |
+| `POST /admin/tickets/{ticket_id}/{action}` | - | - | yes | - | claim, approve, reject, release; the actor is the key's name |
+| `GET /metrics` | - | - | - | yes | admin key, or the METRICS_TOKEN a scraper holds (which opens only this) |
+| `GET /admin/human_queue` | - | - | - | yes |  |
+| `GET /admin/tickets/{ticket_id}` | - | - | - | yes |  |
+| `GET /admin/audit_log` | - | - | - | yes |  |
+| `GET /admin/trace_log` | - | - | - | yes |  |
+| `GET /admin/traces/{trace_id}` | - | - | - | yes |  |
+| `GET /admin/ops` | - | - | - | yes |  |
+| `GET /admin/drift` | - | - | - | yes |  |
+| `POST /admin/drift/snapshot` | - | - | - | yes |  |
+| `GET /admin/experiments` | - | - | - | yes |  |
+| `GET /admin/llm_budget` | - | - | - | yes |  |
+| `GET /admin/data_quality` | - | - | - | yes |  |
+| `GET /demo/customers` | yes | yes | yes | yes | demo only. publishes test PINs for the sandbox accounts |
+| `GET /demo/scenarios` | yes | yes | yes | yes | demo only. guided scenarios, with test PINs |
+| `GET /demo/data_quality` | yes | yes | yes | yes | demo only. aggregates only |
+| `POST /demo/fault` | - | yes | - | - | demo only. acts on the caller's own session |
+| `POST /demo/tickets` | - | yes | - | - | demo only. the session's own tickets |
+| `POST /demo/traces` | - | yes | - | - | demo only. the session's own trace requests |
+| `GET /admin/demo_pin/{customer_id}` | - | - | - | yes | demo only. derives any customer's test PIN |
+| `GET /openapi.json` | yes | yes | yes | yes | with EXPOSE_API_DOCS=1. EXPOSE_API_DOCS=1 |
+| `GET /docs` | yes | yes | yes | yes | with EXPOSE_API_DOCS=1. EXPOSE_API_DOCS=1 |
+| `GET /docs/oauth2-redirect` | yes | yes | yes | yes | with EXPOSE_API_DOCS=1. EXPOSE_API_DOCS=1 |
+| `GET /redoc` | yes | yes | yes | yes | with EXPOSE_API_DOCS=1. EXPOSE_API_DOCS=1 |
+
+Other controls:
+
 | Surface | Control |
 |---|---|
 | `/auth/session` | customer_id + test PIN (HMAC under a server secret), lockout after 5 failures per 15 min, 10 req/min per client address by default (30 in the Render Blueprint, where every guided scenario opens a session; `CLIENT_IP_HEADER` behind Render), generic error messages |
+| admin, metrics and operator keys | failed attempts count per client address (10 a minute, `OPERATOR_AUTH_FAILS_PER_MIN`): past that even the right key is refused with 429 until the window passes, and each failure is an audit event (`admin_auth_failed`, `metrics_auth_failed`, `operator_auth_failed`) |
+| secrets | every comparison (admin key, metrics token, PIN) goes through one constant-time function (`agent/session/secure_compare.py`). The old `hmac.compare_digest` on `str` raised on non-ASCII input, so a header or a PIN of Unicode digits was a 500; both are a 401 now (tested) |
+| demo surfaces | `/demo/*`, `/admin/demo_pin` and the sandbox's published test PINs exist only with `DEMO_MODE=1` (a 404 to every role otherwise, tested for every row); `/chat` shows no policy rule outside it; `/demo/tickets` and `/demo/traces` now require a live session |
+| API schema | `/openapi.json`, `/docs` and `/redoc` are off unless `EXPOSE_API_DOCS=1` |
+| headers | on every answer: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Permissions-Policy`, `Cache-Control: no-store`, a `Content-Security-Policy` (`default-src 'none'` for the API; the chat page may run only its own inline script, pinned by hash) and, with `SECURITY_HSTS=1` (Render), `Strict-Transport-Security` |
+| CORS | none by default: the frontend calls the API from its server. `CORS_ALLOWED_ORIGINS` lists exact origins for GET, POST and DELETE with `X-Session-Token`; a wildcard or a loose value stops the service from starting; the admin and operator keys are never an allowed header |
 | model spend | `LLM_DAILY_BUDGET_USD` per UTC day, then degraded mode; plus the spend limit on the provider key |
 | `/chat` | bearer session token (15 min TTL), 20 msgs/min per session, 1,000 chars max |
 | customer data | ownership enforced in every tool against the session's customer; account numbers leave the tool layer as last-4 only |
-| `/admin/*` | `X-Admin-Key` (constant-time compare), disabled if unset |
 | tickets / traces | carry `session_ref` (hash), never the token |
-| secrets | `.env` / platform secret store; `.env` is git-ignored; nothing is baked into the image |
+| secrets at rest | `.env` / platform secret store; `.env` is git-ignored; nothing is baked into the image |
+
+**Table: point, code, test, command.**
+
+| Point | Code | Test | Command |
+|---|---|---|---|
+| Endpoint x role matrix, applied at startup | `api/access.py` (`POLICY`, `check_app`), called at the end of `api/main.py` | `tests/test_access_matrix.py`: one test per row and role, a scratch app proving a route without a row stops the service, the guard check, key separation | `pytest tests/test_access_matrix.py` |
+| Demo surfaces off by default | `require_demo` in `api/demo.py`, the gates in `api/main.py`, the entrypoint | `test_demo_surfaces_do_not_exist_without_demo_mode` (every demo row, every role), `tests/test_security.py` | `pytest tests/test_security.py` |
+| CORS and security headers | `api/security.py` | `tests/test_security.py` (headers on success, refusal and unknown routes; CSP hash equals the page's script; CORS allows only listed origins and never the keys; loose origins refused) | `curl -sI http://127.0.0.1:8000/livez` |
+| Constant-time comparison | `agent/session/secure_compare.py`, used by `require_admin`, `require_metrics` and `IdentityService.login` | `test_secrets_are_compared_with_a_constant_time_function`, the non-ASCII tests | `pytest tests/test_access_matrix.py -k secret` |
+| Guessing limits | `_refuse_if_guessing` in `api/main.py` | `test_guessing_an_admin_key_is_limited_and_audited`, `tests/test_operator_auth.py` | `pytest tests/test_operator_auth.py` |
 
 ## Data retention
 
-| Data | Retention | Mechanism |
-|---|---|---|
-| session tokens | 15 min TTL, memory only | `SessionStore` |
-| conversation history | memory only, LRU, last 8 messages | `ConversationStore` |
-| traces, tool audit log | 30 days | `make retention` (`ops/retention.py`), run daily |
-| escalation tickets (local queue) | 90 days here | in production they live in the bank's case system under its regulatory schedule |
-| warehouse | replaced on each full ingestion; lineage kept in `_ingestion_log` | pipeline |
+One policy table (`rules()` in `ops/retention.py`) covers everything the service writes to disk. Every period is an environment
+variable (`RETENTION_*_DAYS`; 0 keeps forever).
 
-The records contain customer data, so PII redaction before export and
-encryption at rest remain to be done (LIMITATIONS.md).
+| Data | Where | Kept for | Mechanism |
+|---|---|---|---|
+| traces | `traces.jsonl` (`TRACE_LOG_PATH`) | 30 days | records older than that are dropped |
+| audit log, including each purge's own event | `audit_log.jsonl` | 30 days | same |
+| shadow-model log | `shadow_log.jsonl` | 30 days | same |
+| escalation tickets (local queue) | `human_queue.jsonl` | 90 days here | a stand-in: in production they live in the bank's case system under its regulatory schedule |
+| a ticket's operator events | `ticket_events.jsonl` | with the ticket | all of a ticket's events go together, once it has left the queue and its last event is older than 90 days (dropping them one by one would change its state and version) |
+| trace requests | `trace_requests.jsonl` | 90 days | dropped by their own age |
+| sessions | `sessions` in `STATE_DB_PATH` (SQLite) | 15 minutes | expired ones are deleted at each purge (and on use, and when the store is full); only a hash of the token is stored |
+| conversation history | `conversations` in SQLite | 1 day | older ones deleted at each purge (and at startup) |
+| case notices | `case_notifications` in SQLite | with the ticket | deleted once their ticket is gone |
+| leftovers of a killed process | `*.tmp`, `*.building` next to the data | 1 day | deleted |
+| warehouse | `bank.duckdb` | replaced on each full ingestion | lineage kept in `_ingestion_log` |
+| reports | `quality_report.json`, `traffic_baseline.json` | one file, overwritten each run | they hold aggregates and no customer data, so nothing accumulates; the eval reports are committed artifacts, not runtime data |
+
+**How it runs.** `python -m ops.retention` applies the policy once (`--dry-run` counts and changes nothing); `--loop` applies it
+now and then every `RETENTION_INTERVAL_HOURS`. The container's entrypoint starts the loop beside the API (24 h by default, 0 =
+off), so the same schedule holds on Render (a Render cron job cannot mount the web service's disk, which is why it is not one),
+in the compose stack and in any Docker run. `make retention` runs it by hand.
+- **Idempotent.** A second run drops nothing and does not rewrite a file. A JSONL file is rewritten only when something in it
+  expired, aside and swapped in whole, and lines appended meanwhile are carried over. A line it cannot read (not JSON, no
+  timestamp) is kept: retention never destroys what it cannot parse. One store failing does not stop the others.
+- **Audited.** Each run appends a `retention_purge` event to the audit log with the counts dropped per data type, the stores that
+  failed and the policy periods (no customer data), and writes `retention_status.json`, which `/metrics` reads
+  (`cecilai_retention_last_run_timestamp_seconds`...). A loop that stopped is the alert `CecilaiRetentionNotRunning`.
+
+The records contain customer data, so PII redaction before export and encryption at rest remain to be done (LIMITATIONS.md).
+
+**Table: point, code, test, command.**
+
+| Point | Code | Test | Command |
+|---|---|---|---|
+| Policy by data type | `rules()` in `ops/retention.py`, the `RETENTION_*` settings in `.env.example` | `tests/test_retention.py`: expired records go and current ones stay for every store (parametrized), a ticket's events go together, sessions, conversations and case notices, leftovers, periods from the environment, 0 keeps forever | `python -m ops.retention --dry-run` |
+| Idempotent | `_rewrite_jsonl` | `test_second_run_drops_and_rewrites_nothing`, `test_a_line_it_cannot_read_is_kept`, `test_lines_appended_while_it_rewrites_are_carried_over` | `pytest tests/test_retention.py` |
+| The purge is itself audited | `_record` | `test_the_purge_records_itself_in_the_audit_log_and_the_status_file`, `test_one_failing_store_does_not_stop_the_rest` | `curl -H "X-Admin-Key: $ADMIN_API_KEY" "http://127.0.0.1:8000/admin/audit_log?limit=500"` |
+| Scheduled | `loop()`, `ops/entrypoint.sh`, `RETENTION_INTERVAL_HOURS` | `test_the_loop_runs_every_interval_and_survives_a_failed_cycle`; `tests/test_setup.py` (the entrypoint starts it); the CI jobs `container` and `compose` check that it ran and audited itself | `make retention` · `make compose-e2e` |
 
 ## Runbook (short)
 
@@ -250,6 +488,15 @@ encryption at rest remain to be done (LIMITATIONS.md).
   (bump `CONTRACT_VERSION`, document it in `CONTRACT_DEVIATIONS`).
 - **Security escalation spike:** pull traces by `session_ref` at
   `/admin/traces/{id}` and revoke sessions.
+- **Not ready (`/readyz` 503):** the response says which dependency: `warehouse` (the DuckDB file is missing or corrupt: a first
+  load that failed leaves none, and the next boot loads again), `state_store` (`STATE_DB_PATH`) or `data_dir_writable` (the disk
+  is full or mounted read-only). The instance is kept out of rotation and not restarted (`/livez` stays up); read the logs for
+  the reason, which the public answer does not give.
+- **Someone guessing keys** (`CecilaiKeyGuessing`): the audit log has an `admin_auth_failed`, `metrics_auth_failed` or
+  `operator_auth_failed` event per failure with the origin. Behind Render that is the address in `CF-Connecting-IP`. Rotate the
+  key if it could have leaked; a guess at line speed is already stopped by the limit.
+- **Retention not running:** `docker logs` for `retention` lines, then `python -m ops.retention --dry-run` on the container;
+  `retention_status.json` and the last `retention_purge` audit event say when it last ran and what failed.
 - **Daily model budget exhausted** (`/health` says so): the demo keeps working
   in degraded mode until 00:00 UTC. Check `/admin/llm_budget` and the traces
   for abuse; raise `LLM_DAILY_BUDGET_USD` only if the traffic is legitimate.
