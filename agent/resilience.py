@@ -16,6 +16,7 @@ import contextlib
 import contextvars
 import os
 import random
+import threading
 import time
 from dataclasses import dataclass
 from typing import Any, Callable, Iterator, TypeVar
@@ -167,14 +168,24 @@ def handoff_deadline() -> Iterator[Deadline]:
         current_handoff.reset(token)
 
 
-@contextlib.contextmanager
-def acquire_within(lock: Any, seconds: float) -> Iterator[None]:
-    """Hold `lock` for the block, waiting at most `seconds` for it (TimeoutError otherwise). The one place a bounded wait
-    for a writer's lock lives: a lock between processes (a `flock` on the file) replaces `lock` here, with the same
-    timeout, without changing the callers."""
-    if not lock.acquire(timeout=max(0.0, seconds)):
-        raise TimeoutError("could not take the write lock within the handoff budget")
-    try:
-        yield
-    finally:
-        lock.release()
+def run_bounded(fn: Callable[[], T], seconds: float) -> T:
+    """Run `fn` and return its result, or raise TimeoutError if it has not finished after `seconds`. For work that is safe to
+    leave running (a read): it finishes on its own daemon thread and its result is dropped. The context (the trace id) is
+    carried over. Never use it for a write, whose outcome the caller must know: see HumanQueue.enqueue."""
+    box: dict[str, Any] = {}
+    ctx = contextvars.copy_context()
+
+    def run() -> None:
+        try:
+            box["result"] = ctx.run(fn)
+        except BaseException as exc:  # noqa: BLE001 - handed to the caller's thread as it was
+            box["error"] = exc
+
+    worker = threading.Thread(target=run, daemon=True, name="bounded")
+    worker.start()
+    worker.join(max(0.0, seconds))
+    if worker.is_alive():
+        raise TimeoutError(f"did not finish within {seconds:.2f}s")
+    if "error" in box:
+        raise box["error"]
+    return box["result"]

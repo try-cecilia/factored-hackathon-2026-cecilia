@@ -94,3 +94,55 @@ def test_every_sdk_client_is_built_over_the_deadline_transport():
         sdk = factory("test-key", 5)
         http = getattr(sdk, "_client", None)
         assert isinstance(getattr(http, "_transport", None), c.DeadlineTransport), name
+
+
+# --- the limit covers the headers too --------------------------------------------------------------------------------
+
+class SlowHeaders(BaseHTTPRequestHandler):
+    """Answers with its status line and headers a few bytes at a time (30 ms apart, 0.9 s in all): each read is in time."""
+
+    def do_POST(self):
+        self.server.active += 1
+        try:
+            self.rfile.read(int(self.headers["Content-Length"]))
+            head = b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nX-Padding: " + b"a" * 20 + b"\r\nContent-Length: 2\r\n\r\n{}"
+            for i in range(0, len(head), 3):
+                self.wfile.write(head[i:i + 3])
+                self.wfile.flush()
+                time.sleep(0.03)
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            self.server.disconnected += 1
+        finally:
+            self.server.active -= 1
+
+    def log_message(self, *a):
+        pass
+
+
+@pytest.fixture
+def slow_headers():
+    server = ThreadingHTTPServer(("127.0.0.1", 0), SlowHeaders)
+    server.daemon_threads = True
+    server.active = server.disconnected = 0
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    yield server
+    server.shutdown()
+    server.server_close()
+
+
+@pytest.mark.parametrize("provider", ["local", "anthropic", "groq", "together"])
+def test_a_server_that_dribbles_its_headers_cannot_outlast_the_calls_limit(slow_headers, monkeypatch, provider):
+    base = f"http://127.0.0.1:{slow_headers.server_address[1]}"
+    monkeypatch.setenv("LLM_PROVIDERS", provider)
+    monkeypatch.setenv("LOCAL_LLM_BASE_URL", base + "/v1")
+    for var, key in (("ANTHROPIC", "ANTHROPIC_API_KEY"), ("GROQ", "GROQ_API_KEY"), ("TOGETHER", "TOGETHER_API_KEY")):
+        monkeypatch.setenv(key, "test-key")
+        monkeypatch.setenv(f"{var}_BASE_URL", base)
+    client = LLMClient(sleep=lambda s: None, timeout_s=5, total_budget_s=0.1, max_attempts_per_provider=1, breaker_threshold=100)
+    with pytest.raises(LLMUnavailable):  # a first call loads the SDK's lazy modules: not what is timed
+        client.chat([{"role": "user", "content": "hi"}])
+    t0 = time.perf_counter()
+    with pytest.raises(LLMUnavailable):
+        client.chat([{"role": "user", "content": "hi"}])
+    assert time.perf_counter() - t0 < 0.3, "the 0.9 s of dribbled headers outlasted the 0.1 s budget"
+    assert wait_until(lambda: slow_headers.active == 0)  # and the connection was closed, not left to finish

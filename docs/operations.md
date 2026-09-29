@@ -322,11 +322,11 @@ its evidence. The full suite is `make test PY=.venv/bin/python`; the files below
 | Point | What is guaranteed | Code | Test | Command |
 |---|---|---|---|---|
 | Traces | one id per turn from the HTTP request to the ticket; time and outcome per stage; logs without customer data | `api/middleware.py`, `agent/observability.py`, `agent/core/orchestrator.py` | `tests/test_tracing.py` (13), `tests/test_record_failures.py` (7), `tests/test_llm_error_privacy.py` (9) | `pytest tests/test_tracing.py tests/test_record_failures.py tests/test_llm_error_privacy.py -q` |
-| Bounded retries | capped attempts, jittered capped backoff, one time budget per turn, retryable errors only, no unkeyed repeat of a write | `agent/resilience.py`, `agent/llm/client.py`, `agent/tools/traces.py`, `agent/policy/escalation.py` | `tests/test_retry.py` (13), `tests/test_resilience.py` (24), `tests/test_turn_deadline.py` (7), `tests/test_call_cancellation.py` (3), `tests/test_handoff_budget.py` (5), `tests/test_local_llm.py` (11) | `pytest tests/test_retry.py tests/test_resilience.py tests/test_turn_deadline.py tests/test_call_cancellation.py tests/test_handoff_budget.py tests/test_local_llm.py -q` |
+| Bounded retries | capped attempts, jittered capped backoff, one time budget per turn, retryable errors only, no unkeyed repeat of a write | `agent/resilience.py`, `agent/llm/client.py`, `agent/tools/traces.py`, `agent/policy/escalation.py` | `tests/test_retry.py` (13), `tests/test_resilience.py` (24), `tests/test_turn_deadline.py` (7), `tests/test_call_cancellation.py` (7), `tests/test_handoff_budget.py` (9), `tests/test_handoff_lock.py` (5), `tests/test_local_llm.py` (11) | `pytest tests/test_retry.py tests/test_resilience.py tests/test_turn_deadline.py tests/test_call_cancellation.py tests/test_handoff_budget.py tests/test_handoff_lock.py tests/test_local_llm.py -q` |
 | Safe fallback | every failure ends in a fixed reply or a handoff: never an invented answer, never a half-done action | `agent/core/orchestrator.py`, `agent/policy/router.py` | `tests/test_resilience.py` | `pytest tests/test_resilience.py -q` |
 | Capacity limits | body size, concurrency with a queue and 503, rate limits with 429, per-session and daily cost caps, prompt and output caps | `api/middleware.py`, `api/main.py`, `agent/llm/budget.py`, `agent/core/orchestrator.py` | `tests/test_capacity.py` (21) | `pytest tests/test_capacity.py -q`; `make loadtest-http PY=.venv/bin/python` |
 
-All four run in the hermetic target `make test-resilience` (115 tests, about 19 s, no S3, no keys, no network beyond 127.0.0.1).
+All four run in the hermetic target `make test-resilience` (128 tests, about 24 s, no S3, no keys, no network beyond 127.0.0.1).
 
 ### Traces: what one turn leaves behind
 
@@ -386,21 +386,32 @@ The turn has one clock (`TURN_BUDGET_SECONDS`, default 30, in `agent/resilience.
 the model client and every retry draw on. It is checked before every lookup and before the one action (opening a trace),
 and after each lookup: what finishes after it is not used. A model call has a limit on its whole duration, not only on each
 read, and it is cancelled for real: `DeadlineTransport` (`agent/llm/client.py`) is the transport of every SDK client and of the
-local provider, caps each phase's timeout to what is left and cuts the body and closes the connection when the limit passes, on
-the turn's own thread, so a server that keeps sending pieces leaves no thread and no open connection
-(`tests/test_call_cancellation.py` counts both against a server that never stops). The degraded balance answer obeys the same
-clock as any lookup.
+local provider, and enforces the limit at the network layer, on every connect, read and write, so the connection, the headers
+and the body are all covered (a server that dribbles its headers a few bytes at a time is cut like one that dribbles its body):
+each wait is capped to what is left, and a read that returns after the limit raises and closes the connection. It runs on the
+turn's own thread, so a cancelled call leaves no thread and no open connection (`tests/test_call_cancellation.py` counts both, for
+the local provider, anthropic, groq and together, against servers that never stop and that dribble headers). The degraded balance
+answer obeys the same clock as any lookup.
 
-**The handoff has a budget of its own** (`HANDOFF_BUDGET_SECONDS`, 3 s) that covers all of it: the evidence, the wait for the
-write lock (`acquire_within`, with a timeout), the write and the read-back. Past it nothing is written, so a ticket never lands
-after the customer was told it did not, and the customer gets the message that says nothing was registered, with a code. Because
-the turn's budget and the handoff's are separate, a turn out of time can still hand over.
+**The handoff has a budget of its own** (`HANDOFF_BUDGET_SECONDS`, 3 s) that covers all of it, each step with an effective limit:
+
+| Step | Limit | Past the budget |
+|---|---|---|
+| evidence for the ticket (a read) | `run_bounded`: given up at the budget, left to finish in the background | the ticket goes without evidence, with a note |
+| the write lock (`agent/filelock.py`, between processes) | `locked(path, timeout=)`: a `flock` tried without blocking until the budget | no write begins: nothing lands late |
+| the write | never cut off half way; if it has begun and outlasts the budget, `HandoffInFlight` carries the ticket id | the reply is `handoff_unverified` **with that id** (the ticket lands under it), never "no ticket" |
+| the read-back | `run_bounded`, and the clock is checked again after it | a ticket confirmed late is not claimed as filed: `handoff_unverified` with its id |
+
+The customer of an unverified handoff is told nothing was registered and given the 8-character code. A turn out of time can
+still hand over because the turn's budget and the handoff's are separate. `HumanQueue.enqueue` is not behind the unbounded
+wrapper of `serialize_policy_writers` any more: it takes the lock itself, inside the budget (the desk's writer still is wrapped).
 
 **One budget for the request.** Once a chat holds a slot it works for at most `TURN_BUDGET_SECONDS` + `HANDOFF_BUDGET_SECONDS`
 (33 s by default; `request_budget_seconds()`, shown at `/admin/capacity`). Before that come the wait for a slot
 (`CHAT_QUEUE_WAIT_SECONDS`, 5 s) and the read of the body (`REQUEST_BODY_TIMEOUT_SECONDS`, 10 s), each with its own limit.
-The bound is checked with a slow model and a held lock (`tests/test_handoff_budget.py`). What cannot be cancelled is a local
-DuckDB read already running; it is short, and its result is discarded if the budget passed. A write with neither `idempotent=True` nor an idempotency key is attempted once, whatever the error.
+The bound is checked with a slow model and a held lock (`tests/test_handoff_budget.py`). Two things are not cancelled: a local
+DuckDB read already running (short; its result is discarded if the budget passed) and a ticket write that has already begun (it
+is finished rather than cut in half, and the turn does not wait for it: see the handoff table). A write with neither `idempotent=True` nor an idempotency key is attempted once, whatever the error.
 `tests/test_retry.py` proves each bound with injected faults (attempt caps, the backoff range, no sleep after the last
 attempt, no wait past the deadline, permanent errors not retried, the write rule).
 
@@ -422,7 +433,8 @@ One test per way a turn can fail (`tests/test_resilience.py`). In every row the 
 | the turn's time ran out after the model answered | nothing is looked up; a handoff | `turn_timeout` |
 | a lookup finishes after the budget | its result is not used; a handoff | `turn_timeout` |
 | the model is down and the budget is spent, or the degraded lookup ends after it | the degraded balance is neither run nor used; a handoff | `llm_unavailable` (trace `degraded_skipped`) |
-| the handoff's own budget is spent (a held lock, slow evidence) | nothing is written late; the customer is told nothing was registered, with the code | `…|handoff_unverified` |
+| the handoff's own budget is spent (a held lock, a `flock` held by another process, slow evidence or read-back) | nothing is written late; the customer is told nothing was registered, with the code | `…|handoff_unverified` |
+| a ticket write that has begun outlasts the handoff's budget | the ticket lands as that very ticket; the reply is `handoff_unverified` carrying its id | `…|handoff_unverified` (`ticket_id` set) |
 | the customer's yes arrives with the budget spent | no trace is opened; the handoff carries the proposal, so a person can approve it | `turn_timeout` (ticket with `pending_action`) |
 | a provider dribbles its answer past the model's budget | cut off at the budget; the turn falls back like any model failure | `llm_unavailable` |
 | a tool is down | 2 attempts, then a handoff; a `ToolError` that is an answer is not retried | `tool_failure` / `data_unavailable` |

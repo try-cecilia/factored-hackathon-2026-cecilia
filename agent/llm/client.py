@@ -39,47 +39,84 @@ call_limit: contextvars.ContextVar[float | None] = contextvars.ContextVar("call_
 
 class DeadlineTransport:
     """Marks an httpx transport that puts a limit on a whole model call, not only on each read (the SDKs' timeouts are per
-    read, so a server that keeps sending pieces never trips them). The limit comes from `call_limit`; each phase's timeout
-    is capped to what is left, and the body is cut, and its connection closed, when the limit passes. The call runs on the
-    caller's own thread, so cancelling it needs no extra thread and leaves nothing behind. Built by `deadline_transport`
-    for whichever httpx the client uses: the SDKs ship their own (`httpx2`), the local provider uses `httpx`."""
+    read, so a server that keeps sending pieces, of the headers or of the body, never trips them). The limit comes from
+    `call_limit` and is enforced at the network layer, on every connect, read and write: each wait is capped to what is
+    left, and a read that returns after the limit raises, which makes the client close the connection. Headers and body
+    are both covered because both arrive through those reads. The call runs on the caller's own thread, so cancelling it
+    needs no extra thread and leaves nothing behind. Built by `deadline_transport` for whichever httpx the client uses:
+    the SDKs ship their own (`httpx2`, over `httpcore2`), the local provider uses `httpx` (over `httpcore`)."""
 
 
 def deadline_transport(mod: Any) -> Any:
-    class Stream(mod.SyncByteStream):
-        def __init__(self, inner, limit: float):
-            self._inner, self._limit = inner, limit
-
-        def __iter__(self):
-            for chunk in self._inner:
-                yield chunk
-                if time.perf_counter() > self._limit:
-                    raise mod.ReadTimeout("the call's time limit passed while its answer was still arriving")
-
-        def close(self) -> None:
-            self._inner.close()
+    import importlib
 
     class Transport(DeadlineTransport, mod.BaseTransport):
         def __init__(self) -> None:
             self._inner = mod.HTTPTransport(limits=mod.Limits(max_connections=200, max_keepalive_connections=50))
+            core = importlib.import_module(type(self._inner._pool).__module__.partition(".")[0])  # httpcore or httpcore2
+            self._inner._pool._network_backend = _limited_backend(core, self._inner._pool._network_backend)
 
         def handle_request(self, request):
             limit = call_limit.get()
-            if limit is None:
-                return self._inner.handle_request(request)
-            left = limit - time.perf_counter()
-            if left <= 0:
+            if limit is not None and limit - time.perf_counter() <= 0:
                 raise mod.ConnectTimeout("the call's time limit had passed before it started")
-            timeout = request.extensions.get("timeout") or {}
-            request.extensions["timeout"] = {k: min(timeout.get(k) or left, left) for k in ("connect", "read", "write", "pool")}
-            response = self._inner.handle_request(request)
-            return mod.Response(response.status_code, headers=response.headers, stream=Stream(response.stream, limit),
-                                extensions=response.extensions)
+            return self._inner.handle_request(request)
 
         def close(self) -> None:
             self._inner.close()
 
     return Transport()
+
+
+def _limited_backend(core: Any, inner: Any) -> Any:
+    """`inner` (an httpcore network backend) with the call's limit enforced on every connect, read and write."""
+
+    def cap(timeout: float | None) -> float | None:
+        limit = call_limit.get()
+        if limit is None:
+            return timeout
+        left = limit - time.perf_counter()
+        if left <= 0:
+            raise core.ReadTimeout("the call's time limit passed")
+        return left if timeout is None else min(timeout, left)
+
+    def check() -> None:
+        limit = call_limit.get()
+        if limit is not None and time.perf_counter() > limit:
+            raise core.ReadTimeout("the call's time limit passed while its answer was still arriving")
+
+    class Stream(core.NetworkStream):
+        def __init__(self, stream):
+            self._stream = stream
+
+        def read(self, max_bytes, timeout=None):
+            data = self._stream.read(max_bytes, cap(timeout))
+            check()  # a piece that arrived in time but after the limit is dropped, and the connection with it
+            return data
+
+        def write(self, buffer, timeout=None):
+            self._stream.write(buffer, cap(timeout))
+
+        def close(self):
+            self._stream.close()
+
+        def start_tls(self, ssl_context, server_hostname=None, timeout=None):
+            return Stream(self._stream.start_tls(ssl_context, server_hostname, cap(timeout)))
+
+        def get_extra_info(self, info):
+            return self._stream.get_extra_info(info)
+
+    class Backend(core.NetworkBackend):
+        def connect_tcp(self, host, port, timeout=None, local_address=None, socket_options=None):
+            return Stream(inner.connect_tcp(host, port, cap(timeout), local_address, socket_options))
+
+        def connect_unix_socket(self, path, timeout=None, socket_options=None):
+            return Stream(inner.connect_unix_socket(path, cap(timeout), socket_options))
+
+        def sleep(self, seconds):
+            inner.sleep(seconds)
+
+    return Backend()
 
 
 def _sdk_http_client(sdk: Any) -> Any:
