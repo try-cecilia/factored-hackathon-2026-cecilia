@@ -1,5 +1,6 @@
 import '@tanstack/react-start/server-only'
 import { deleteCookie, getCookie, setCookie } from '@tanstack/react-start/server'
+import { cookiePolicy } from './cookie-policy.ts'
 import { ABSOLUTE_MS, IDLE_MS, SessionStore, type OperatorSession } from './operator-store.ts'
 
 // The operator's keys never reach the browser: not in JS, not in a cookie. The browser holds an opaque id in an
@@ -11,9 +12,11 @@ const holder = globalThis as { __cecilaiOperatorStore?: SessionStore }
 const idleSeconds = Number(process.env.OPERATOR_IDLE_SECONDS)
 const store = (holder.__cecilaiOperatorStore ??= new SessionStore(Date.now, idleSeconds >= 10 ? idleSeconds * 1000 : IDLE_MS))
 
-const secure = process.env.NODE_ENV === 'production'
-const name = secure ? '__Host-cecilai_operator' : 'cecilai_operator'
-const options = { httpOnly: true, secure, sameSite: 'strict', path: '/' } as const
+// Secure and the __Host- prefix follow the console's public origin (cookie-policy.ts), so a plain-http local run still gets a cookie.
+const cookie = () => {
+  const { secure, name } = cookiePolicy()
+  return { name: name('cecilai_operator'), options: { httpOnly: true, secure, sameSite: 'strict', path: '/' } as const }
+}
 
 export type { OperatorSession }
 export type SessionState = { status: 'active'; session: OperatorSession } | { status: 'expired' } | { status: 'anonymous' }
@@ -24,6 +27,7 @@ export type SessionState = { status: 'active'; session: OperatorSession } | { st
  * cookie: the winner's Set-Cookie may already be in the browser, and a deletion arriving after it would orphan that session.
  */
 export function startOperatorSession(adminKey: string, operatorKey?: string, operator?: string): boolean {
+  const { name, options } = cookie()
   if (store.take(getCookie(name)) === 'already') return false
   setCookie(name, store.start(adminKey, operatorKey, operator), { ...options, maxAge: ABSOLUTE_MS / 1000 })
   return true
@@ -31,7 +35,7 @@ export function startOperatorSession(adminKey: string, operatorKey?: string, ope
 
 /** `touch: false` for the console's automatic refresh: it must not count as the operator being there. */
 export function operatorSessionState(touch: boolean): SessionState {
-  const id = getCookie(name)
+  const id = getCookie(cookie().name)
   if (!id) return { status: 'anonymous' }
   const found = store.lookup(id, touch)
   if (found.status === 'active') return found
@@ -48,13 +52,14 @@ export function getOperatorSession(touch: boolean): OperatorSession | null {
 
 /** Adds the operator key under a new id and a new cookie; the read-only cookie the browser held stops working. */
 export function elevateOperatorSession(operatorKey: string, operator?: string) {
+  const { name, options } = cookie()
   const id = store.elevate(getCookie(name), operatorKey, operator)
   if (id) setCookie(name, id, { ...options, maxAge: ABSOLUTE_MS / 1000 })
   return id !== null
 }
 
 /** The id in the request's cookie (what identifies the session this request used), or undefined. */
-export const operatorSessionId = () => getCookie(name)
+export const operatorSessionId = () => getCookie(cookie().name)
 
 /**
  * Ends a session on the server, by id, and sends nothing to the browser. What an API error does to a session: the id
@@ -64,19 +69,26 @@ export const operatorSessionId = () => getCookie(name)
 export const invalidateOperatorSession = (id: string | undefined) => store.end(id)
 
 export function endOperatorSession() {
+  const { name, options } = cookie()
   store.end(getCookie(name))
   deleteCookie(name, options)
 }
 
 // A one-shot message for the page a form post redirects to ("that key is not valid"). It is a fixed code such as
 // `operator_401`, never anything the operator typed.
-const flashName = secure ? '__Host-cecilai_operator_flash' : 'cecilai_operator_flash'
-const flashOptions = { httpOnly: true, secure, sameSite: 'strict', path: '/', maxAge: 60 } as const
+const flash = () => {
+  const { secure, name } = cookiePolicy()
+  return { name: name('cecilai_operator_flash'), options: { httpOnly: true, secure, sameSite: 'strict', path: '/', maxAge: 60 } as const }
+}
 
-export const setFlash = (code: string) => setCookie(flashName, code, flashOptions)
+export const setFlash = (code: string) => {
+  const { name, options } = flash()
+  setCookie(name, code, options)
+}
 
 export function takeFlash() {
-  const code = getCookie(flashName)
-  if (code) deleteCookie(flashName, flashOptions)
+  const { name, options } = flash()
+  const code = getCookie(name)
+  if (code) deleteCookie(name, options)
   return code && /^[a-z]+_[a-z0-9]+$/.test(code) ? code : null
 }

@@ -37,7 +37,7 @@ before(async () => {
 })
 after(() => app.close())
 
-const cookie = { Cookie: `__Host-cecilai_session=${TOKEN}` }
+const cookie = { Cookie: `cecilai_session=${TOKEN}` }
 
 describe('the customer chat page', () => {
   test('without a session it goes to sign in, and comes back to the chat', async () => {

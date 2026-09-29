@@ -1,12 +1,20 @@
 import '@tanstack/react-start/server-only'
 import { deleteCookie, getCookie, setCookie } from '@tanstack/react-start/server'
+import { cookiePolicy } from './cookie-policy.ts'
 
-const secure = process.env.NODE_ENV === 'production'
-const name = secure ? '__Host-cecilai_session' : 'cecilai_session'
-const options = { httpOnly: true, secure, sameSite: 'lax', path: '/' } as const
+const cookie = () => {
+  const { secure, name } = cookiePolicy()
+  return { name: name('cecilai_session'), options: { httpOnly: true, secure, sameSite: 'lax', path: '/' } as const }
+}
 
-export const getSessionToken = () => getCookie(name)
+export const getSessionToken = () => getCookie(cookie().name)
 
-export const setSessionToken = (token: string, maxAge: number) => setCookie(name, token, { ...options, maxAge })
+export const setSessionToken = (token: string, maxAge: number) => {
+  const { name, options } = cookie()
+  setCookie(name, token, { ...options, maxAge })
+}
 
-export const clearSessionToken = () => deleteCookie(name, options)
+export const clearSessionToken = () => {
+  const { name, options } = cookie()
+  deleteCookie(name, options)
+}
