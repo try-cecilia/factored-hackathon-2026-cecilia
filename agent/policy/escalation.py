@@ -107,11 +107,13 @@ class HumanQueue:
             tries += 1
             # Between processes and threads, and never past the budget: the wait for the lock is what is left of it.
             with locked(self.path, timeout=budget.remaining()), open(self.path, "a", encoding="utf-8") as f:
-                with guard:  # begins only if the caller is still waiting: either it sees the write begun, or the write never begins
+                # A retry first looks for the ticket, under the file's lock (so a write that landed is seen, and nobody else
+                # appends meanwhile) but outside `guard`: that lookup is I/O, and the caller needs `guard` to give up on time.
+                if tries > 1 and self.get(ticket.ticket_id) is not None:
+                    return
+                with guard:  # the last look before the write: it begins only if the budget is left and the caller still waits
                     if budget.expired or state["given_up"]:
                         raise TimeoutError("handoff budget spent before the ticket could be written")
-                    if tries > 1 and self.get(ticket.ticket_id) is not None:
-                        return
                     state["begun"] = True
                 f.write(json.dumps(asdict(ticket), default=str, ensure_ascii=False) + "\n")
 
