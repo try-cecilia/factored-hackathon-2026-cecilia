@@ -177,10 +177,9 @@ lectura y trazas. Cómo se configuran las claves:
   `loadTrace` en `web/src/server/operator.functions.ts`).
 - *Probarlo sin datos reales ni claves de modelo:* `python -m ops.seed_operator_demo --dir /tmp/cecilai-operator-demo`
   arma un warehouse mínimo, genera claves nuevas y llena la cola y las trazas con turnos de verdad; imprime las claves y
-  deja `operator-demo.env` para cargar antes de `uvicorn`. Las capturas del recorrido están en `docs/demo/operador-kit-*.png`.
+  deja `operator-demo.env` para cargar antes de `uvicorn`.
 
-- *Cómo está armada la pantalla.* Es el diseño aprobado de Paper (artboards "Operator · Queue" y "Operator · Ticket states", copias en
-  `docs/demo/paper-operator-*.jpg`) sobre el kit: sidebar compacto con las vistas (Todos abiertos, Míos, Sin asignar), las siete colas
+- *Cómo está armada la pantalla.* Es el diseño aprobado de Paper (artboards "Operator · Queue" y "Operator · Ticket states") sobre el kit: sidebar compacto con las vistas (Todos abiertos, Míos, Sin asignar), las siete colas
   con su cantidad de casos pendientes y los registros (monitoreo y trazas); tabla compacta (`DataTable`) con orden por columna, pestañas
   de estado, filtros de prioridad, país e idioma, búsqueda (`Ctrl`/`Cmd` + `K`) y paginación de 25; y el detalle del caso en un panel
   tonal a la derecha. Los filtros viven en la URL de `/operador/cola` (`vista=mias|sin-asignar`, `cola`, `estado=abiertos|tomados|decididos`,
@@ -191,7 +190,7 @@ lectura y trazas. Cómo se configuran las claves:
   `monitor.ts`; lo que viene de la API (pedido del cliente, motivos, próximos pasos) se muestra tal cual, sin traducir.
 
 **Cómo se verifica.** `tests/test_operators.py`, `tests/test_operator_auth.py` (incluye `/admin/operator/me`) y, para la consola,
-`make web-test web-typecheck web-build` más el recorrido con capturas de `docs/demo/operador-kit-*.png` (`LIMITATIONS.md` dice qué
+`make web-test web-typecheck web-build` más un recorrido en navegador (`LIMITATIONS.md` dice qué
 no cubre).
 
 ---
@@ -522,8 +521,8 @@ idempotencia, lectura del historial, la lógica de la conversación, cada varian
 el shell con su rail y su cajón, y pruebas HTTP contra el build: `/chat` con y sin sesión, la conversación ya en el HTML, ES y PT,
 el token que no sale del servidor, el panel de demo que solo existe con la demo), `tests/test_chat_history.py` y
 `tests/test_access_matrix.py` (API: el historial, que otra sesión no lo lee, y su fila en la matriz) y `make web-build`. El
-flujo completo se recorrió en el navegador, en español y portugués, en escritorio y móvil, con `make serve-all-fixture`; las
-capturas están en `docs/demo/cliente-*.png`: inicio y login (ES y PT), chat vacío, respuesta con "¿Por qué?", aclaración,
+flujo completo se recorrió en el navegador, en español y portugués, en escritorio y móvil, con `make serve-all-fixture`:
+inicio y login (ES y PT), chat vacío, respuesta con "¿Por qué?", aclaración,
 rechazo, caso derivado con el sidebar de casos, recarga con la conversación, propuesta y resultado del rastreo, modo limitado,
 chat en portugués, rail, tablet, móvil (chat, cajón y demo), límite de mensajes, sesión terminada, entrega sin confirmar,
 espera (puntos y pasos) y el chat sin demo.
@@ -584,7 +583,7 @@ tenga voseo.
 Paper; con `?both=1` dibuja el kit entero en español y en portugués. Existe con `make serve-web` (desarrollo) o con un
 build arrancado con `UI_GALLERY=1`; en cualquier otro build responde 404 y su código va en un chunk aparte que el
 cliente nunca descarga. Los estados que solo se alcanzan con el puntero o el teclado (hover, pressed, focus) se dibujan
-con la prop `forceState`. Las capturas de la galería contra Paper están en `docs/demo/ui-kit-*.png`.
+con la prop `forceState`.
 
 Las pantallas del cliente extendieron el kit sin tocar sus variantes de Paper: `DeliveryStatus` suma los estados *sin
 confirmar* y *recibido* (con `detail` y `onReload`), `UserMessage` acepta la línea de entrega y el tinte del mensaje que no

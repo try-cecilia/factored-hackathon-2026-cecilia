@@ -138,7 +138,7 @@ service, and as our own roadmap.
   BFF. La cola se lee entera (las últimas 200 entradas del archivo), se filtra, ordena y pagina en el navegador (25 por página) y se refresca por sondeo cada 30 s, sin
   notificaciones. Tomar, aprobar, rechazar y devolver actúan con un clic, sin diálogo de confirmación, como en el diseño aprobado. El motivo que escribe la persona solo se guarda al rechazar (es lo que la API registra). El diseño muestra una insignia "Demo · synthetic data" que la consola no dibuja: la API no informa si corre en modo demo. La web tiene pocos tests (`make web-test`: el formulario de ingreso, el plazo de la sesión, y pruebas HTTP contra el build de
   producción de CSRF, redirecciones y rotación de sesión, y tests de DOM del panel del caso —sus cuatro estados, el 409 y la marca de evidencia— y de la tabla; el CI no los corre): el resto se verificó con `typecheck`, `build` y un
-  recorrido en navegador (`docs/demo/operador-kit-*.png`, en español y portugués, con datos sintéticos de `ops.seed_operator_demo`); con el modelo
+  recorrido en navegador (en español y portugués, con datos sintéticos de `ops.seed_operator_demo`); con el modelo
   de clientes y un banco real quedaría por probar la carga y la accesibilidad con lector de pantalla.
 - `/demo/customers` publishes test PINs for a few sandbox accounts, like any
   sandbox's test login. It exists only with `DEMO_MODE=1` (a 404 otherwise, as does `/admin/demo_pin`).
@@ -220,7 +220,7 @@ service, and as our own roadmap.
   be written, the customer still gets the answer and the failure is logged. Both were chosen without the bank's
   policy; the bank may want the second to fail closed too.
 - **Web UI kit: checked against Paper by eye and by measurement, not by pixel diff.** The gallery at `/dev/ui`
-  (`docs/demo/ui-kit-*.png`) was compared with each Paper artboard; values come from Paper's `get_jsx` and
+  was compared with each Paper artboard; values come from Paper's `get_jsx` and
   `get_computed_styles`. Where Paper draws only one state, the rest was designed in the same language and is listed in
   `docs/integracion.md`: the open "Why?" panel, the failed action result, the hover and selected quick replies, and the
   failed step and error toast of the loaders. Paper draws no "delivered" message state and no skeleton avatar in tables,
