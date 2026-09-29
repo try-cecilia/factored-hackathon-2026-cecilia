@@ -13,13 +13,20 @@ name: ci
 # Checks that other branches add (per-category floors in eval.gate) come in through `make` targets: `make gate` runs whatever
 # eval.gate checks. The versioned evidence is regenerated on purpose (`make evidence`, `make eval ...`), never by a CI run.
 
+# Triggers: a push to main (verifies each commit that lands), every pull request whatever its base branch (a branch with an open PR
+# runs once, not once per event), and by hand on a branch without a PR. Only a pull request run is cancelled by a newer one, and
+# only by one of the same PR. A concurrency group holds one active and one pending run, and a third run cancels the pending one
+# even without cancel-in-progress, so every run that is not a PR gets its own group (run_id): each commit of main is verified,
+# and a manual run never replaces a push.
 on:
   push:
+    branches: [main]
   pull_request:
+  workflow_dispatch:
 
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   python:
