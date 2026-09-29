@@ -1,4 +1,5 @@
 import '@tanstack/react-start/server-only'
+import { isSameOrigin } from './origin-check.ts'
 import { loginFromForm, operatorKeyFromForm, type KeyProbe } from './operator-login.ts'
 import { probeAdminKey, probeOperatorKey } from './operator-api'
 import { endOperatorSession, getOperatorSession, setFlash, startOperatorSession } from './operator-session'
@@ -13,7 +14,11 @@ const see = (to: string) => new Response(null, { status: 303, headers: { Locatio
 
 const readForm = (request: Request) => request.formData().catch(() => null)
 
+// A post that does not prove it came from one of our pages is refused before it reads a body or touches a cookie.
+const foreign = () => new Response('Forbidden', { status: 403, headers: { 'Cache-Control': 'no-store' } })
+
 export async function handleLogin(request: Request) {
+  if (!isSameOrigin(request)) return foreign()
   const form = await readForm(request)
   if (!form) return see('/operador/login')
   const outcome = await loginFromForm(form, { admin, operator })
@@ -26,6 +31,7 @@ export async function handleLogin(request: Request) {
 }
 
 export async function handleAddKey(request: Request) {
+  if (!isSameOrigin(request)) return foreign()
   const form = await readForm(request)
   const session = getOperatorSession(true)
   if (!form || !session) return see('/operador/login')
@@ -39,7 +45,8 @@ export async function handleAddKey(request: Request) {
   return see(outcome.to)
 }
 
-export async function handleLogout() {
+export async function handleLogout(request: Request) {
+  if (!isSameOrigin(request)) return foreign()
   endOperatorSession()
   return see('/operador/login')
 }

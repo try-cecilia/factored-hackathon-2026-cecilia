@@ -23,8 +23,8 @@ web-build:        ## build the TanStack Start client and server
 web-typecheck:    ## check frontend TypeScript
 	$(PNPM) --dir web typecheck
 
-web-test:         ## frontend unit tests (node:test): operator login form and keys staying on the server
-	$(PNPM) --dir web test
+web-test:         ## frontend tests (node:test): unit tests, then HTTP tests against the production build
+	$(PNPM) --dir web test:all
 
 serve-all:       ## run serve and serve-web; stop both when either exits
 	AGENT_API_URL="$(AGENT_API_URL)" $(PNPM) --dir web exec concurrently --kill-others --kill-timeout 5000 --names api,web \
