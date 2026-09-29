@@ -35,7 +35,9 @@ export function operatorSessionState(touch: boolean): SessionState {
   if (!id) return { status: 'anonymous' }
   const found = store.lookup(id, touch)
   if (found.status === 'active') return found
-  deleteCookie(name, options) // a cookie for a session that is gone (idle, over the cap, or the server restarted)
+  // The session behind this id is gone (idle, over the cap, replaced, or the server restarted). The cookie is left alone:
+  // responses cross on the wire, and a deletion arriving after the Set-Cookie of a newer login would erase that session
+  // from the browser and orphan it on the server. It is cleared only by an explicit logout, or overwritten by a login.
   return { status: 'expired' }
 }
 

@@ -96,3 +96,52 @@ describe('a session id is never reused when the session gains rights or is repla
     })
   }
 })
+
+describe('a request that carries a dead session id never deletes the session cookie', () => {
+  const deletesSession = (response: Response) => response.headers.getSetCookie().some((c) => /cecilai_operator=/.test(c) && !/flash/.test(c) && /=;|Max-Age=0|Expires=Thu, 01 Jan 1970/i.test(c))
+  const pages = ['/operador/login', '/operador/cola', '/operador/monitoreo', '/operador/trazas', '/operador/cola/abcd1234']
+
+  test('consumed and unknown ids are treated as "no session" and left alone', async () => {
+    const consumed = sessionCookie(await post('/operador/sesion', { admin_key: ADMIN }))!
+    await post('/operador/sesion', { admin_key: ADMIN }, consumed) // consumes it
+    const [name] = consumed.split('=')
+    for (const cookie of [consumed, `${name}=never-issued-0123456789-abcdefghijklmnop`]) {
+      for (const page of pages) {
+        const res = await app.send(page, { headers: { Cookie: cookie } })
+        assert.equal(deletesSession(res), false, `${page} cleared the cookie for ${cookie.slice(0, 30)}…: ${res.headers.getSetCookie().join(' | ')}`)
+      }
+    }
+  })
+
+  test('POST, 303, GET in the order that used to lose the winner: the browser keeps the new session', async () => {
+    for (const landing of ['/operador/login', '/operador/cola']) {
+      const old = sessionCookie(await post('/operador/sesion', { admin_key: ADMIN }))!
+      const answers = await Promise.all([post('/operador/sesion', { admin_key: ADMIN }, old), post('/operador/sesion', { admin_key: ADMIN }, old)])
+      const winner = answers.find((r) => sessionCookie(r) !== null)!
+      const loser = answers.find((r) => sessionCookie(r) === null)!
+
+      const browser = cookieJar()
+      const [oldName, oldValue] = old.split('=')
+      browser.apply(new Response(null, { headers: { 'Set-Cookie': `${oldName}=${oldValue}; Path=/` } }))
+      // The loser's 303 arrives first and the browser follows it with the cookie it still has, the old one...
+      browser.apply(loser)
+      const follow = await app.send(landing, { headers: { Cookie: browser.header() } })
+      // ...then the winner's Set-Cookie lands, and only after it the answer to that GET.
+      browser.apply(winner)
+      browser.apply(follow)
+
+      assert.equal(browser.session(), sessionCookie(winner), `${landing}: the browser still holds the winning session`)
+      assert.ok(await opensConsole(app, browser.session()!))
+      const out = await app.send('/operador/salir', { method: 'POST', headers: { ...SAME_ORIGIN, Cookie: browser.header() } })
+      browser.apply(out)
+      assert.equal(browser.session(), null)
+      assert.equal(await opensConsole(app, sessionCookie(winner)!), false)
+    }
+  })
+
+  test('an explicit logout still clears the cookie', async () => {
+    const cookie = sessionCookie(await post('/operador/sesion', { admin_key: ADMIN }))!
+    const out = await app.send('/operador/salir', { method: 'POST', headers: { ...SAME_ORIGIN, Cookie: cookie } })
+    assert.equal(deletesSession(out), true)
+  })
+})
