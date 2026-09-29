@@ -10,9 +10,21 @@ const DISPOSITIONS: readonly string[] = ['AUTO_RESOLVE', 'CLARIFY', 'ABSTAIN', '
 const inFlight = new Set<string>()
 
 export type ChatTransport = {
-  post: (token: string, message: string) => Promise<{ status: number; json: () => Promise<unknown> }>
+  // `key` goes to the API as Idempotency-Key: the same key means the same message, whatever number of tries.
+  post: (token: string, message: string, key: string) => Promise<{ status: number; json: () => Promise<unknown> }>
   // Says why a request that never got an answer failed: `timeout` (it may have been processed) or not.
   failureOf: (error: unknown) => SendResult | null
+}
+
+export const KEY_PATTERN = /^[A-Za-z0-9_-]{8,64}$/
+
+export function parseSend(input: unknown): { message: string; key: string } {
+  const { message, key } = (input ?? {}) as Record<string, unknown>
+  if (typeof message !== 'string') throw new Error('message must be text')
+  const trimmed = message.trim()
+  if (trimmed.length === 0 || trimmed.length > 1000) throw new Error('message must be 1-1000 characters')
+  if (typeof key !== 'string' || !KEY_PATTERN.test(key)) throw new Error('key must be 8-64 letters, digits, - or _')
+  return { message: trimmed, key }
 }
 
 export type ChatSession = { token: string | undefined; clear: () => void }
@@ -35,13 +47,13 @@ function parseReply(body: unknown): Reply | null {
   return reply
 }
 
-export async function sendChat(session: ChatSession, transport: ChatTransport, message: string): Promise<SendResult> {
+export async function sendChat(session: ChatSession, transport: ChatTransport, message: string, key: string): Promise<SendResult> {
   const token = session.token
   if (!token) return { ok: false, failure: 'session_expired' }
   if (inFlight.has(token)) return { ok: false, failure: 'busy' }
   inFlight.add(token)
   try {
-    const response = await transport.post(token, message)
+    const response = await transport.post(token, message, key)
     if (response.status === 401) {
       session.clear()
       return { ok: false, failure: 'session_expired' }

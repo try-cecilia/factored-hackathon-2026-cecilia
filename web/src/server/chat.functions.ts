@@ -1,32 +1,30 @@
 import { createServerFn } from '@tanstack/react-start'
 import type { CaseResult, SendResult } from '../chat/types'
 import { AgentApiError, agentFetch } from './agent-api'
-import { sendChat } from './chat-core'
+import { parseSend, sendChat } from './chat-core'
 import { clearSessionToken, getSessionToken } from './session-cookie'
 
 // The model call can take up to LLM_TOTAL_BUDGET_SECONDS (25 s by default) on the API side.
 const CHAT_TIMEOUT_MS = 35_000
 
-function parseMessage(input: unknown): { message: string } {
-  const { message } = (input ?? {}) as Record<string, unknown>
-  if (typeof message !== 'string') throw new Error('message must be text')
-  const trimmed = message.trim()
-  if (trimmed.length === 0 || trimmed.length > 1000) throw new Error('message must be 1-1000 characters')
-  return { message: trimmed }
-}
-
 export const sendMessage = createServerFn({ method: 'POST' })
-  .validator(parseMessage)
+  .validator(parseSend)
   .handler(({ data }): Promise<SendResult> =>
     sendChat(
       { token: getSessionToken(), clear: clearSessionToken },
       {
-        post: (token, message) =>
-          agentFetch('/chat', { method: 'POST', body: { session_token: token, message }, timeoutMs: CHAT_TIMEOUT_MS }),
+        post: (token, message, key) =>
+          agentFetch('/chat', {
+            method: 'POST',
+            body: { session_token: token, message },
+            headers: { 'Idempotency-Key': key },
+            timeoutMs: CHAT_TIMEOUT_MS,
+          }),
         failureOf: (error) =>
           error instanceof AgentApiError ? { ok: false, failure: error.reason === 'timeout' ? 'timeout' : 'unavailable' } : null,
       },
       data.message,
+      data.key,
     ),
   )
 

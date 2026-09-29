@@ -1,0 +1,158 @@
+"""POST /chat with an Idempotency-Key: a retry after a lost answer gets the stored reply and does not run the turn
+again, so it cannot file a second ticket or confirm a second action. Fixture: CLI-FIX0001 reports a cloned card
+(a handoff), CLI-FIX0004 has one pending transfer."""
+from __future__ import annotations
+
+import threading
+
+import pytest
+from fastapi.testclient import TestClient
+
+from api import idempotency, main
+from tests.test_api import login
+
+CLONED = "Me clonaron la tarjeta"
+ADMIN = {"X-Admin-Key": "test-admin-key"}
+
+
+@pytest.fixture
+def client(monkeypatch):
+    monkeypatch.setattr(main, "login_limiter", main.RateLimiter(50, 60))
+    monkeypatch.setattr(main, "chat_limiter", main.RateLimiter(50, 60))
+    monkeypatch.setattr(idempotency, "default", idempotency.IdempotencyStore())
+    return TestClient(main.app)
+
+
+def token(client, cid="CLI-FIX0001") -> str:
+    return login(client, cid=cid).json()["token"]
+
+
+def chat(client, tok, message, key=None):
+    headers = {"Idempotency-Key": key} if key else {}
+    return client.post("/chat", json={"session_token": tok, "message": message}, headers=headers)
+
+
+def tickets(client) -> int:
+    return len(client.get("/admin/human_queue?limit=200", headers=ADMIN).json())
+
+
+def test_a_retry_with_the_same_key_gets_the_same_reply_and_files_no_second_ticket(client):
+    tok = token(client)
+    before = tickets(client)
+    first = chat(client, tok, CLONED, key="msg-0001-aaaa")
+    assert first.status_code == 200 and first.json()["ticket_id"]
+    retry = chat(client, tok, CLONED, key="msg-0001-aaaa")
+    assert retry.status_code == 200 and retry.json() == first.json()
+    assert retry.headers["Idempotent-Replayed"] == "true" and "Idempotent-Replayed" not in first.headers
+    assert tickets(client) == before + 1
+
+
+def test_without_a_key_or_with_another_one_the_turn_runs_again(client):
+    tok = token(client)
+    before = tickets(client)
+    assert chat(client, tok, CLONED).status_code == 200
+    assert chat(client, tok, CLONED).status_code == 200
+    assert chat(client, tok, CLONED, key="msg-0002-aaaa").status_code == 200
+    assert chat(client, tok, CLONED, key="msg-0003-aaaa").status_code == 200
+    assert tickets(client) == before + 4
+
+
+def test_the_same_key_with_another_text_is_refused_and_runs_nothing(client):
+    tok = token(client)
+    before = tickets(client)
+    assert chat(client, tok, "¿Cuál es mi saldo?", key="msg-0004-aaaa").status_code == 200
+    refused = chat(client, tok, CLONED, key="msg-0004-aaaa")
+    assert refused.status_code == 422
+    assert tickets(client) == before
+
+
+def test_a_key_only_replays_inside_its_own_session(client):
+    before = tickets(client)
+    a, b = token(client), token(client)
+    ra = chat(client, a, CLONED, key="msg-0005-aaaa")
+    rb = chat(client, b, CLONED, key="msg-0005-aaaa")
+    assert ra.json()["ticket_id"] != rb.json()["ticket_id"]
+    assert tickets(client) == before + 2
+
+
+def test_a_replay_does_not_count_against_the_chat_limit(client, monkeypatch):
+    monkeypatch.setattr(main, "chat_limiter", main.RateLimiter(1, 60))
+    tok = token(client)
+    assert chat(client, tok, "¿Cuál es mi saldo?", key="msg-0006-aaaa").status_code == 200
+    assert chat(client, tok, "¿Cuál es mi saldo?", key="msg-0006-aaaa").status_code == 200  # replay
+    assert chat(client, tok, "¿Cuál es mi saldo?", key="msg-0007-aaaa").status_code == 429  # a new turn
+
+
+def test_a_confirmation_retried_with_its_key_opens_one_trace(client, monkeypatch, tmp_path):
+    monkeypatch.setenv("TRACE_REQUESTS_PATH", str(tmp_path / "trace_requests.jsonl"))
+    tok = token(client, "CLI-FIX0004")
+    # The proposal needs the model to pick the tool; the yes that follows is decided in code, never by the model.
+    from agent.core.orchestrator import default_orchestrator
+    from eval.fake_llm import FakeLLMClient, tool_call_response
+
+    fake = FakeLLMClient([tool_call_response("request_trace", {})])
+    monkeypatch.setattr(default_orchestrator, "_llm", lambda: fake)
+    assert chat(client, tok, "hice una transferencia que todavía no llega").json()["category"] == "confirm_action"
+    yes = chat(client, tok, "sí", key="msg-0008-aaaa")
+    retry = chat(client, tok, "sí", key="msg-0008-aaaa")
+    assert yes.json()["category"] == "resolved"
+    assert retry.json() == yes.json()
+    lines = (tmp_path / "trace_requests.jsonl").read_text().splitlines()
+    assert len(lines) == 1
+
+
+@pytest.mark.parametrize("key", ["short", "x" * 65, "bad key with spaces!"])
+def test_a_malformed_key_is_a_422(client, key):
+    assert chat(client, token(client), "hola", key=key).status_code == 422
+
+
+def test_an_expired_session_reply_is_not_kept(client):
+    first = chat(client, "not-a-real-token", "hola", key="msg-0009-aaaa")
+    assert first.json()["disposition"] == "REAUTH_REQUIRED"
+    assert idempotency.default.count() == 0
+
+
+def test_entries_expire_after_the_ttl(monkeypatch):
+    now = [1000.0]
+    monkeypatch.setattr(idempotency.time, "time", lambda: now[0])
+    store = idempotency.IdempotencyStore(ttl_seconds=600)
+    with store.guard("ref", "key-00000001", "hola") as slot:
+        assert slot.replay is None
+        slot.save('{"a": 1}')
+    with store.guard("ref", "key-00000001", "hola") as slot:
+        assert slot.replay == '{"a": 1}'
+    now[0] += 601
+    with store.guard("ref", "key-00000001", "hola") as slot:
+        assert slot.replay is None
+
+
+def test_a_retry_that_arrives_while_the_first_still_runs_waits_for_its_answer():
+    store = idempotency.IdempotencyStore()
+    started, release, seen = threading.Event(), threading.Event(), []
+
+    def first():
+        with store.guard("ref", "key-00000002", "hola") as slot:
+            started.set()
+            release.wait(5)
+            slot.save('{"n": 1}')
+
+    def retry():
+        started.wait(5)
+        with store.guard("ref", "key-00000002", "hola") as slot:
+            seen.append(slot.replay)
+
+    t1, t2 = threading.Thread(target=first), threading.Thread(target=retry)
+    t1.start(); t2.start()
+    started.wait(5)
+    assert seen == []  # the retry is waiting, not running a second turn
+    release.set()
+    t1.join(5); t2.join(5)
+    assert seen == ['{"n": 1}']
+
+
+def test_a_stored_reply_survives_a_restart_when_state_is_on_disk(tmp_path):
+    db = str(tmp_path / "state.db")
+    with idempotency.IdempotencyStore(db_path=db).guard("ref", "key-00000003", "hola") as slot:
+        slot.save('{"kept": true}')
+    with idempotency.IdempotencyStore(db_path=db).guard("ref", "key-00000003", "hola") as slot:
+        assert slot.replay == '{"kept": true}'

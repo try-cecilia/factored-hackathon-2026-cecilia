@@ -36,14 +36,14 @@ from agent.core.orchestrator import default_orchestrator
 from agent.llm.budget import default_budget
 from agent.llm.client import default_providers
 from agent.policy import intent_guard
-from agent.session.auth import ExpiredSession, InvalidSession, default_store
+from agent.session.auth import ExpiredSession, InvalidSession, default_store, session_ref
 from agent.session.identity import AuthError, IdentityUnavailable, LockedOut, default_identity, derive_test_pin
 from agent.session.operators import OperatorDirectory
 from agent.tools import account_tools
 from agent.tools.audit import default_audit_log, default_trace_log
 from agent.policy.desk import Conflict, DeskError, NotFound, default_desk
 from agent.policy.escalation import default_queue
-from api import demo
+from api import demo, idempotency
 from ops.drift import recent_rows, report as drift_report, save_baseline as save_drift_baseline
 
 app = FastAPI(title="LATAM Bank — Account/Payment Inquiries Agent", version="2.0.0")
@@ -218,7 +218,26 @@ def end_session(x_session_token: str | None = Header(default=None)) -> Response:
 
 
 @app.post("/chat", response_model=ChatResponse)
-def chat(req: ChatRequest) -> ChatResponse:
+def chat(req: ChatRequest, response: Response, idempotency_key: str | None = Header(default=None)) -> ChatResponse:
+    """One turn. With an Idempotency-Key, a retry of the same message returns the stored reply instead of a new turn."""
+    if idempotency_key is None:
+        return _chat_turn(req)
+    if not idempotency.KEY_PATTERN.match(idempotency_key):
+        raise HTTPException(422, "Idempotency-Key must be 8-64 characters of letters, digits, - or _")
+    try:
+        with idempotency.default.guard(session_ref(req.session_token), idempotency_key, req.message) as slot:
+            if slot.replay is not None:  # a replay is not a new turn: it does not count against the chat limit
+                response.headers["Idempotent-Replayed"] = "true"
+                return ChatResponse.model_validate_json(slot.replay)
+            reply = _chat_turn(req)
+            if reply.disposition != "REAUTH_REQUIRED":  # a dead session is answered afresh after signing in again
+                slot.save(reply.model_dump_json())
+            return reply
+    except idempotency.KeyReused:
+        raise HTTPException(422, "Idempotency-Key was already used with a different message") from None
+
+
+def _chat_turn(req: ChatRequest) -> ChatResponse:
     if not chat_limiter.allow(req.session_token):
         raise HTTPException(429, "rate limit exceeded for this session")
     r = demo.orchestrator_for(req.session_token).handle_message(req.session_token, req.message)

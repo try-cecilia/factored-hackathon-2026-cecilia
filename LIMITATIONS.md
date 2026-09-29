@@ -105,10 +105,10 @@ service, and as our own roadmap.
   ids, 8+ digit numbers, emails and document numbers, because the system
   must mask those even when the customer types them.
 - No WAF or bot protection beyond per-session and per-IP rate limits.
-- **Web chat: no idempotency on `POST /chat`.** The front sends one turn at a time and the BFF refuses a second
-  send from the same session while one runs, but after a timeout the customer may retry a message the API did
-  process. Opening a trace is idempotent per customer; a duplicated handoff would file a second ticket. Closing
-  it needs an idempotency key in the API.
+- **Web chat: retries rely on a short-lived key.** Each message travels with an `Idempotency-Key` and the API keeps
+  the reply for `IDEMPOTENCY_TTL_SECONDS` (10 minutes), so a retry after a lost answer does not file a second ticket
+  or confirm twice. A retry after that window, or after the state file is lost, runs the turn again. Replies are kept
+  in the single-writer SQLite state like sessions (no multi-replica design).
 - **Web chat: the conversation does not survive a login.** An expired session ends its conversation with it (the
   API keys it by session), so signing in again starts from zero; there is no "stay signed in" because the API
   has no refresh endpoint. Case status is read on demand ("Actualizar estado"), not pushed.

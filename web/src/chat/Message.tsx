@@ -7,7 +7,7 @@ import type { CaseStatus, Reply, SendFailure, Why } from './types'
 export type Entry =
   | { id: number; role: 'user'; text: string; at: Date }
   | { id: number; role: 'assistant'; reply: Reply; at: Date }
-  | { id: number; role: 'error'; failure: SendFailure; text: string; at: Date }
+  | { id: number; role: 'error'; failure: SendFailure; text: string; key: string; at: Date }
 
 const time = new Intl.DateTimeFormat('es', { hour: '2-digit', minute: '2-digit' })
 
@@ -78,8 +78,10 @@ export function Thinking() {
 }
 
 const failureCopy: Record<Exclude<SendFailure, 'session_expired'>, string> = {
-  unavailable: 'No pude comunicarme con el servicio en este momento. Tu mensaje no se envió.',
-  timeout: 'Tardó demasiado en responder y no pude confirmar si tu mensaje llegó. Mirá la conversación antes de reintentar.',
+  // After a dropped connection or a timeout nobody knows whether the message arrived. Retrying is safe: the message
+  // travels with the same key, and the API answers a repeated key with the first reply instead of running it again.
+  unavailable: 'No pude confirmar si el servicio recibió tu mensaje. Podés reintentar: si ya lo recibió, no se repite.',
+  timeout: 'Tardó demasiado en responder y no pude confirmar si tu mensaje llegó. Podés reintentar: si ya lo recibió, no se repite.',
   rate_limited: 'Estás enviando mensajes muy rápido. Esperá un minuto y volvé a intentar.',
   busy: 'Todavía estoy respondiendo tu mensaje anterior. Esperá un momento y volvé a intentar.',
   unexpected: 'Recibí una respuesta que no pude mostrar. Probá de nuevo en un momento.',

@@ -299,7 +299,7 @@ Sirve para desarrollar y mostrar el front; no dice nada de cómo se comporta un 
 
 | Función de servidor | Llamada a la API | Qué devuelve al navegador |
 |---|---|---|
-| `sendMessage` | `POST /chat` con `session_token` (lo agrega el servidor), plazo de 35 s | La respuesta (`disposition`, texto, idioma, `category`, `ticket_id`, y `why` solo en demo) o un motivo de fallo |
+| `sendMessage` | `POST /chat` con `session_token` (lo agrega el servidor) y `Idempotency-Key` (un UUID por mensaje, que el cliente conserva en los reintentos), plazo de 35 s | La respuesta (`disposition`, texto, idioma, `category`, `ticket_id`, y `why` solo en demo) o un motivo de fallo |
 | `getCase` | `GET /case/{ticket_id}` | Estado del caso y el texto de novedad, o `not_found` |
 | `getDemoKit`, `startScenario`, `applyDemoFault`, `getDemoTickets` | `/demo/*` | Solo con `DEMO_MODE=1`; los PIN de prueba se quedan en el servidor |
 
@@ -311,19 +311,25 @@ que el código de la API evalúa (nunca el modelo). Una aclaración se dibuja co
 
 | Situación | Qué pasa |
 |---|---|
-| Sesión vencida (`REAUTH_REQUIRED`, o cookie ausente) | El BFF borra la cookie y el chat va a `/login?redirect=/chat&motivo=expired`, con aviso; al ingresar vuelve al chat (la conversación empieza de cero) |
+| Sesión vencida (`REAUTH_REQUIRED`, HTTP 401 o cookie ausente) | El BFF borra la cookie y el chat va a `/login?redirect=/chat&motivo=expired`, con aviso; al ingresar vuelve al chat (la conversación empieza de cero) |
 | 429 | Aviso en la conversación y botón "Reintentar"; no se reenvía solo |
-| API caída (conexión rechazada, 5xx) | "Tu mensaje no se envió" y "Reintentar" |
-| Plazo agotado | "No pude confirmar si tu mensaje llegó": el reintento es manual y el aviso pide mirar la conversación antes |
+| API caída, conexión cortada o plazo agotado | Resultado incierto: "No pude confirmar si el servicio recibió tu mensaje", con "Reintentar" manual. El reintento es seguro porque viaja con la misma clave: si la API ya lo procesó, devuelve la misma respuesta y no crea otro ticket ni confirma dos veces |
 | Respuesta que no calza con el contrato | "Recibí una respuesta que no pude mostrar" y "Reintentar" |
 | Doble envío | Un turno a la vez: el compositor se bloquea mientras envía, y el BFF rechaza un segundo envío de la misma sesión mientras el primero corre |
 
+**Idempotencia de `POST /chat`.** Con la cabecera `Idempotency-Key` (8 a 64 caracteres: letras, dígitos, `-` o `_`), la API
+(`api/idempotency.py`) guarda la respuesta por (sesión, clave) durante `IDEMPOTENCY_TTL_SECONDS` (600 por defecto) en el
+mismo SQLite de sesiones y conversaciones (`STATE_DB_PATH`, o memoria). La misma clave devuelve la misma respuesta con
+`Idempotent-Replayed: true`, sin volver a correr el turno y sin gastar cupo del límite de mensajes; un reintento que llega
+mientras el primero corre espera su respuesta. La misma clave con otro texto es un 422. No se guardan las respuestas de
+sesión vencida ni los errores. Sin la cabecera, el comportamiento es el de siempre.
+
 **Punto de sustitución.** El BFF solo conoce `POST /chat` y `GET /case/{id}`; con el core real el contrato no cambia.
 
-**En producción.** Falta una clave de idempotencia en `POST /chat` (hoy, tras un plazo agotado, un reintento puede procesar
-el mensaje dos veces), y un `POST /auth/session/refresh` para ofrecer "Seguir conectado" antes de que venza.
+**En producción.** Falta un `POST /auth/session/refresh` para ofrecer "Seguir conectado" antes de que venza.
 
-**Cómo se verifica.** `make web-typecheck`, `make web-test` (formato de las aclaraciones) y `make web-build`; el flujo
+**Cómo se verifica.** `make web-typecheck`, `make web-test` (formato de las aclaraciones, envío, 401, clave de idempotencia),
+`tests/test_idempotency.py` (API) y `make web-build`; el flujo
 completo se probó en el navegador con `make serve-all-fixture`, y las capturas están en `docs/demo/web-*.png`
 (login, chat vacío, propuesta de rastreo, escalamiento con número de caso, sesión vencida y su aviso previo, aclaración,
 límite de tasa, API caída, plazo agotado, escenario en portugués, móvil, respuesta inesperada, chat sin `DEMO_MODE`).

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Session } from '../server/auth.functions'
 import { sendMessage } from '../server/chat.functions'
 import { Composer, type ComposerHandle } from './Composer'
+import { newMessageKey } from './key'
 import { DemoPanel } from './DemoPanel'
 import { AssistantMessage, ErrorMessage, Thinking, UserMessage, type Entry } from './Message'
 import { ClockIcon, LockIcon, OfflineIcon } from './icons'
@@ -98,20 +99,20 @@ export function ChatView({ session, scenarios }: { session: Session; scenarios: 
   }, [])
 
   // One turn at a time: the ref answers a second click before React has re-rendered.
-  const deliver = useCallback(async (text: string): Promise<Reply | null> => {
+  const deliver = useCallback(async (text: string, key: string): Promise<Reply | null> => {
     if (pendingRef.current) return null
     pendingRef.current = true
     setPending(true)
     try {
-      const result = await sendMessage({ data: { message: text } })
+      const result = await sendMessage({ data: { message: text, key } })
       if (result.ok) {
         push({ role: 'assistant', reply: result.reply })
         return result.reply
       }
       if (result.failure === 'session_expired') goToLogin()
-      else push({ role: 'error', failure: result.failure, text })
+      else push({ role: 'error', failure: result.failure, text, key })
     } catch {
-      push({ role: 'error', failure: 'unexpected', text })
+      push({ role: 'error', failure: 'unexpected', text, key })
     } finally {
       pendingRef.current = false
       setPending(false)
@@ -123,13 +124,13 @@ export function ChatView({ session, scenarios }: { session: Session; scenarios: 
   const send = useCallback((text: string) => {
     if (pendingRef.current) return Promise.resolve(null)
     push({ role: 'user', text })
-    return deliver(text)
+    return deliver(text, newMessageKey())
   }, [push, deliver])
 
   const retry = useCallback((entry: Extract<Entry, { role: 'error' }>) => {
     if (pendingRef.current) return
     setEntries((all) => all.filter((e) => e.id !== entry.id))
-    void deliver(entry.text)
+    void deliver(entry.text, entry.key) // the same key: a message that did arrive is not run again
   }, [deliver])
 
   const last = entries.at(-1)

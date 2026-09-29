@@ -13,6 +13,7 @@ type RequestOptions = {
   body?: unknown
   token?: string
   timeoutMs?: number
+  headers?: Record<string, string>
 }
 
 function clientIp() {
@@ -20,8 +21,8 @@ function clientIp() {
   return (trusted && getRequestHeader(trusted)) || getRequestIP()
 }
 
-export async function agentFetch(path: string, { method = 'GET', body, token, timeoutMs = 5_000 }: RequestOptions = {}) {
-  const headers = new Headers({ Accept: 'application/json' })
+export async function agentFetch(path: string, { method = 'GET', body, token, timeoutMs = 5_000, headers: extra }: RequestOptions = {}) {
+  const headers = new Headers({ Accept: 'application/json', ...extra })
   const ip = clientIp()
   if (ip) headers.set('X-Client-IP', ip)
   if (token) headers.set('X-Session-Token', token)
