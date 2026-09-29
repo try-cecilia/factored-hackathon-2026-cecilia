@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -25,6 +26,7 @@ from data.contracts import PRIMARY_KEYS
 from data.pipeline import TABLES, _LAST_LOADS, file_sha256, get_connection
 
 SERVING = tuple(t.name for t in TABLES if t.profile == "serving")
+SHA256 = re.compile(r"[0-9a-f]{64}")
 LOAD_COLUMNS = ("run_id", "mode", "contract_version", "code_version", "params", "started_at", "finished_at")
 
 
@@ -87,6 +89,22 @@ def trace_row(con, table: str, key: str | list[str]) -> dict | None:
             "source_uri": file["source_uri"] if file else None, "load": _load(con, run_id, table)}
 
 
+def _incomplete_load(load: dict) -> list[str]:
+    """What a load's row must say for it to explain the rows it produced: the contract and the code that ran, and when."""
+    empty = lambda v: v is None or not str(v).strip()  # noqa: E731
+    return [c for c in ("mode", "contract_version", "code_version", "started_at", "finished_at") if empty(load.get(c))]
+
+
+def _incomplete_file(file: dict) -> list[str]:
+    """What a recorded source file must say: where it was, how big, and a well-formed SHA-256 of its bytes."""
+    bad = [c for c in ("source_uri",) if file.get(c) is None or not str(file[c]).strip()]
+    if file.get("n_bytes") is None or file["n_bytes"] < 0:
+        bad.append("n_bytes")
+    if not SHA256.fullmatch(str(file.get("sha256") or "")):
+        bad.append("sha256")
+    return bad
+
+
 def verify(con, raw_dir: Path | None = None, tables: tuple[str, ...] = SERVING) -> list[str]:
     """Every way the chain from served rows to source bytes is broken; an empty list means it holds."""
     problems, present = [], _present(con)
@@ -103,12 +121,18 @@ def verify(con, raw_dir: Path | None = None, tables: tuple[str, ...] = SERVING) 
             problems.append(f"{name}: {missing} row(s) without _run_id, _source_file or _ingested_at")
         for run_id, source_file in con.execute(f"SELECT DISTINCT _run_id, _source_file FROM {name} "
                                                "WHERE _run_id IS NOT NULL AND _source_file IS NOT NULL").fetchall():
-            if _load(con, run_id, name) is None:
+            load = _load(con, run_id, name)
+            if load is None:
                 problems.append(f"{name}: rows name run {run_id}, which is not a successful load of the table")
                 continue
+            if incomplete := _incomplete_load(load):
+                problems.append(f"{name}: run {run_id} does not record {', '.join(incomplete)}")
             file = next((f for f in _files(con, run_id, name) if f["source_file"] == source_file), None)
             if file is None:
                 problems.append(f"{name}: rows name {source_file} in run {run_id}, but no file with a hash was recorded")
+                continue
+            if incomplete := _incomplete_file(file):
+                problems.append(f"{name}: {source_file} in run {run_id} has a missing or malformed {', '.join(incomplete)}")
             elif raw_dir is not None:
                 path = Path(raw_dir).resolve() / source_file
                 if not path.exists():

@@ -64,7 +64,10 @@ Per table, inside one transaction:
    `python -m data.lineage` (per-table summary), `--row transactions TXN-1` (the
    load and file behind one row) and `--verify --raw-dir data/raw` (exit 1 if a
    row has no lineage, names a run that did not succeed or a file with no
-   recorded hash, or if a file on disk no longer has the recorded hash). A
+   recorded hash, if a load lacks its contract or code version or its times, if
+   a file's record lacks its size, URI or a 64-hex SHA-256 (all of this without
+   needing the raw files), or, with `--raw-dir`, if a file on disk no longer
+   has the recorded hash). A
    warehouse loaded before `_source_files` existed fails `--verify` until it
    is ingested again.
 

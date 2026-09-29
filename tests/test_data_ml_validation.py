@@ -376,7 +376,33 @@ def test_lineage_a_broken_chain_is_detected(fresh_db, own_raw, record_property):
     assert any("other bytes" in p for p in problems())
     source.unlink()
     assert any("no longer under" in p for p in problems())
-    record_property("evidence", "se rompe la cadena de 5 maneras (fila sin run, run no exitoso, archivo sin hash, bytes cambiados, archivo borrado) y verify() lo dice")
+    record_property("evidence", "se rompe la cadena de 5 maneras (fila sin run, run no exitoso, archivo sin hash, bytes cambiados, archivo borrado) y verify() lo dice; "
+                                "sin raw_dir, además, exige sha256 hex de 64, tamaño, URI, versión de contrato y de código, modo y horas no vacíos (10 casos negativos)")
+
+
+@pytest.mark.parametrize("statement, expected", [
+    ("UPDATE _source_files SET sha256 = NULL WHERE table_name = 'customers'", "malformed sha256"),
+    ("UPDATE _source_files SET sha256 = 'abc123' WHERE table_name = 'customers'", "malformed sha256"),
+    ("UPDATE _source_files SET sha256 = upper(sha256) WHERE table_name = 'customers'", "malformed sha256"),
+    ("UPDATE _source_files SET n_bytes = NULL WHERE table_name = 'customers'", "n_bytes"),
+    ("UPDATE _source_files SET source_uri = '' WHERE table_name = 'customers'", "source_uri"),
+    ("UPDATE _ingestion_log SET contract_version = NULL WHERE table_name = 'customers'", "contract_version"),
+    ("UPDATE _ingestion_log SET contract_version = '  ' WHERE table_name = 'customers'", "contract_version"),
+    ("UPDATE _ingestion_log SET code_version = NULL WHERE table_name = 'customers'", "code_version"),
+    ("UPDATE _ingestion_log SET finished_at = NULL WHERE table_name = 'customers'", "finished_at"),
+    ("UPDATE _ingestion_log SET mode = NULL WHERE table_name = 'customers'", "mode"),
+])
+def test_lineage_an_incomplete_record_fails_verification_even_without_the_raw_files(fresh_db, statement, expected, record_property):
+    build_fixture_warehouse()
+    con = duckdb.connect(str(fresh_db))
+    try:
+        assert lineage.verify(con) == []  # no raw_dir: presence and format only
+        con.execute(statement)
+        found = lineage.verify(con)
+    finally:
+        con.close()
+    assert found and all(p.startswith("customers:") for p in found) and any(expected in p for p in found), found
+    record_property("evidence", f"{statement.split(' SET ')[1].split(' WHERE')[0]} -> verify() sin raw_dir: {found[0]}")
 
 
 def test_lineage_a_corrected_partition_shows_which_file_and_hash_each_row_came_from(fresh_db, own_raw, record_property):
