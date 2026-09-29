@@ -112,7 +112,9 @@ included. `ops/ci_optional.sh <target>` (runs a Makefile target only if this che
 branch adds later. The `web` job also runs `pnpm test:all` (node:test, vitest on the DOM, and the HTTP tests against the production build).
 
 **Verifying does not write.** `make gate` and `make validate-data-ml` only check: they leave every versioned file as it was, and the
-`python` job fails if the suite or the gate rewrote one (`git status --porcelain`). The evidence in `docs/evidence/` is regenerated
+`python` job fails if any step rewrote one (`git status --porcelain`, its last step). The classifier evaluation
+(`python -m eval.evaluate_intent_classifier --out-dir DIR`) writes its model and report to a temporary directory in CI; `make train-eval`
+without `--out-dir` is what regenerates the versioned ones. The evidence in `docs/evidence/` is regenerated
 on purpose with `make evidence` (its date and commit are those of the run), and the evaluation reports with `make eval
 eval-adversarial eval-failures`. `validate-data-ml` warns, without failing, when the committed `data_ml_validation.json` lists
 different tests than the ones that ran: that is when to run `make evidence`.

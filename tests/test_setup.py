@@ -205,10 +205,35 @@ def test_the_ci_python_job_covers_the_data_ml_validation_and_the_resilience_test
     resilience = re.search(r"^test-resilience:.*\n\t\$\(PY\) -m pytest (.*) -q\n", makefile, re.M).group(1).split()
     assert resilience and all((ROOT / f).exists() and f.startswith("tests/") for f in resilience)
     assert re.search(r"^test:.*\n\t\$\(PY\) -m pytest tests/ -q\n", makefile, re.M)  # the whole folder, so the files above run
-    steps = WORKFLOW["jobs"]["python"]["steps"]
-    runs = [str(step.get("run", "")) for step in steps]
-    order = {key: next(i for i, run in enumerate(runs) if key in run) for key in ("make test", "make gate", "git status --porcelain", "evaluate_intent_classifier")}
-    assert order["make test"] < order["make gate"] < order["git status --porcelain"] < order["evaluate_intent_classifier"]
+
+
+def test_the_ci_python_job_ends_with_the_clean_tree_check_and_every_step_that_writes_writes_elsewhere():
+    """A step that rewrites a versioned file must not run after the check that says none did: the evaluation of the classifier
+    (it rewrites its report and its model) writes to a temporary directory, and the check is the last step."""
+    runs = [str(step.get("run", "")) for step in WORKFLOW["jobs"]["python"]["steps"]]
+    order = {key: next(i for i, run in enumerate(runs) if key in run) for key in ("make test", "make gate", "evaluate_intent_classifier")}
+    assert order["make test"] < order["make gate"] and order["evaluate_intent_classifier"] < len(runs) - 1
+    assert "git status --porcelain" in runs[-1]  # last: whatever ran before it left the tree as it found it
+    for run in runs:
+        for line in run.splitlines():
+            if "eval.evaluate_intent_classifier" in line:
+                assert "--out-dir" in line, line
+            assert not re.search(r"\bmake (evidence|eval|eval-adversarial|eval-failures|train-eval|workload|analysis|ingest)\b", line), line
+
+
+def test_the_classifier_evaluation_can_write_its_outputs_elsewhere_and_leaves_the_versioned_ones_alone(tmp_path, monkeypatch):
+    from eval import evaluate_intent_classifier as eic
+
+    watched = [eic.MODEL_OUT, eic.META_OUT, eic.REPORT_JSON, eic.REPORT_MD]
+    before = [p.read_bytes() for p in watched]
+    monkeypatch.setattr(eic, "track", lambda report: None)
+    for name in ("MODEL_OUT", "META_OUT", "REPORT_JSON", "REPORT_MD"):  # main() repoints the module's paths: put them back afterwards
+        monkeypatch.setattr(eic, name, getattr(eic, name))
+    eic.main(["--out-dir", str(tmp_path)])
+    assert sorted(p.name for p in tmp_path.iterdir()) == sorted(p.name for p in watched)
+    assert [p.read_bytes() for p in watched] == before  # the committed model and reports are untouched
+    report = json.loads((tmp_path / "intent_classifier.json").read_text(encoding="utf-8"))
+    assert report["test"]["learned"]["accuracy"]["rate"] > report["test"]["baseline_keywords"]["accuracy"]["rate"]
 
 
 def test_the_ci_installs_from_the_hash_checked_lock():
