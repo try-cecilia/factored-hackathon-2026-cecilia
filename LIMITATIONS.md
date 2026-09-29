@@ -42,6 +42,11 @@ service, and as our own roadmap.
   - no MXN products at all.
 
   Details in docs/data_quality.md.
+- **Customers and products are one snapshot each.** The dictionary announces
+  monthly snapshots, but only one file per table was delivered, and some
+  `last_updated` values fall after the data's as-of date. Balances and statuses
+  are therefore the latest state, not what was true when a past contact or
+  transaction happened, so they are never used as historical features.
 - **No fraud model.** `fraud_score`/`is_fraud` are shown to the human reviewer
   as evidence but don't drive automated decisions. This workflow escalates
   fraud; it doesn't adjudicate it.

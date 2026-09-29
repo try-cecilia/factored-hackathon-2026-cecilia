@@ -67,3 +67,24 @@ def test_a_check_waits_for_the_tables_it_reads():
     con.execute("CREATE TABLE transactions (transaction_id VARCHAR, transaction_date TIMESTAMP, process_date DATE, "
                 "product_id VARCHAR, customer_id VARCHAR)")
     assert _results(con, "transactions") == {}
+
+
+def test_reason_category_outside_the_dictionary_is_flagged():
+    from data.contracts import DOMAIN_RULES
+    con = duckdb.connect()
+    con.execute("CREATE TABLE t (reason_category VARCHAR)")
+    con.execute("INSERT INTO t VALUES ('Queja'), ('Retención'), ('Técnico')")
+    pred = next(p for n, p, sev in DOMAIN_RULES["call_center_interactions"]
+                if n == "reason_category_in_dictionary" and sev == "warn")
+    assert con.execute(f"SELECT count(*) FROM t WHERE NOT ({pred})").fetchone()[0] == 1
+
+
+def test_integer_columns_accept_700_point_0_and_reject_700_point_5():
+    from data.quality import build_typed_staging
+    con = duckdb.connect()
+    con.execute("CREATE TABLE raw (customer_id VARCHAR, credit_score VARCHAR)")
+    con.execute("INSERT INTO raw VALUES ('A', '700.0'), ('B', '700.5'), ('C', '700'), ('D', NULL), ('E', 'abc')")
+    build_typed_staging(con, "raw", "typed", "customers")
+    got = {r[0]: (r[1], "cast:credit_score" in r[2]) for r in
+           con.execute("SELECT customer_id, credit_score, _row_errors FROM typed").fetchall()}
+    assert got == {"A": (700, False), "B": (701, True), "C": (700, False), "D": (None, False), "E": (None, True)}
