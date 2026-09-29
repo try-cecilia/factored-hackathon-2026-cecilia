@@ -21,12 +21,10 @@ service, and as our own roadmap.
    checks that a first load that fails or is killed leaves nothing a later
    boot would serve.
 
-3. **Failure handling with a live model.** The reserved failure set (`eval/heldout/`, 226 cases: expired sessions,
-   unauthorized access, prompt injection, tool failures, ES/PT ambiguity) ran with the scripted ideal model and the
-   deliberately bad one, never with a live model: it needs a key (or a local Ollama model), and none was available
-   where it was written. `make eval-failures-live` (or `eval-failures-local`) runs the same cases on one. So it measures
-   the deterministic layers and whether safety depends on the model; it says nothing about what a live model
-   understands from these phrasings.
+3. **Failure handling with a live model.** The reserved failure set (`eval/heldout/`, 226 cases) ran in full with the scripted
+   ideal model and the deliberately bad one. With a live model only a small sample ran (Groq's `gpt-oss-120b`, 42 of the
+   226 cases and 23 of the generated workload, one run: `eval/reports/LIVE_SAMPLE_GROQ.md`): 0 unsafe, but 3 of 42 not handled as the
+   policy asks, and intervals of 20-30 points. `make eval-failures-live` (or `eval-failures-local`) runs all of it.
 4. **The reserved set is small and no longer held out for what it found.** Five fixture customers, 17-31 cases per
    category and language: the 95% intervals are 10 to 40 points wide, and 0 unsafe in 226 bounds the true rate
    only below ≈1.3%. Batch 1 was written and committed before the system ran on it; batch 2 after seeing batch 1's
