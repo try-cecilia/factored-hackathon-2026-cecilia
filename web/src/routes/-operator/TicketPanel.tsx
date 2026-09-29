@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { useI18n, useT } from '../../i18n/context'
 import type { MessageKey } from '../../i18n/translate'
 import type { DeskAction, DeskState, Result, Ticket } from '../../server/operator.functions'
-import { Button, IconButton, PriorityChip, StatusIndicator, type Priority, type StatusTone } from '../../ui'
+import { Button, IconButton, PriorityChip, priorityOf, StatusIndicator, type StatusTone } from '../../ui'
 import { AlertCircleIcon, AlertTriangleIcon, CheckIcon, InfoCircleIcon } from '../../ui/messages/icons'
 import { CloseIcon } from '../../ui/table/icons'
 import { ago, clock, CLOSED, explainKey, money, shortStamp, when } from './format'
@@ -114,7 +114,7 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
       <header className="op-ticket__head">
         <div className="op-ticket__id">
           <h1 id="op-ticket-title" className="op-mono">{ticket.ticket_id.slice(0, 8)}</h1>
-          <PriorityChip priority={ticket.priority.toLowerCase() as Priority} />
+          <PriorityChip priority={priorityOf(ticket.priority)} />
           <span className="op-mono op-muted">{ticket.queue}</span>
           <span className="op-head__spacer" />
           {conflict ? (
@@ -130,7 +130,7 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
           <StatusIndicator tone={tones[desk.status]}><strong>{state}</strong></StatusIndicator>
           <span className="op-muted">
             {t('operator.ticket.meta', { age: ago(ticket.created_at, locale) })}
-            {[ticket.country, ticket.language.toUpperCase(), ticket.segment].filter(Boolean).map((part) => ` · ${part}`)}
+            {[ticket.country, ticket.language ? ticket.language.toUpperCase() : t('operator.queue.unknownLanguage'), ticket.segment].filter(Boolean).map((part) => ` · ${part}`)}
           </span>
         </p>
       </header>

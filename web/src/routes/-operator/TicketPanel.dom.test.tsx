@@ -270,3 +270,23 @@ describe('the texts of the case', () => {
     expect(summary).toContain('Próximo passo: Revisar a movimentação')
   })
 })
+
+// A case that arrives without a priority or a language is drawn, and says so: the header does not break and does not invent them.
+describe('a case without priority or language', () => {
+  it.each([['es', 'Desconocida', 'Desconocido'], ['pt', 'Desconhecida', 'Desconhecido']] as const)('is drawn and marked (%s)', (locale, priority, language) => {
+    const incomplete = ticket('open', { priority: undefined, language: undefined })
+    renderWithI18n(<TicketPanel ticket={incomplete} view={{ canAct: true, operator: 'ana.ruiz' }} act={vi.fn()} reload={vi.fn(async () => true)} />, locale)
+    expect(screen.getByText(priority).className).toContain('ui-priority--unknown')
+    expect(screen.getByText(new RegExp(`MX · ${language}`))).toBeTruthy()
+    expect(screen.getByText(incomplete.request)).toBeTruthy()
+  })
+
+  it('the summary does not print "undefined"', async () => {
+    const user = userEvent.setup()
+    renderWithI18n(<TicketPanel ticket={ticket('claimed', { priority: null }, { operator: 'ana.ruiz', version: 1 })} view={{ canAct: true, operator: 'ana.ruiz' }} act={vi.fn()} reload={vi.fn(async () => true)} />)
+    await user.click(screen.getByRole('button', { name: /Copiar resumen/ }))
+    const summary = await navigator.clipboard.readText()
+    expect(summary).toContain('Prioridad: Desconocida')
+    expect(summary).not.toContain('undefined')
+  })
+})

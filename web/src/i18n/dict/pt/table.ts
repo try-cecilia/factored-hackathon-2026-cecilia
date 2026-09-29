@@ -27,6 +27,7 @@ export const table: Like<typeof es> = {
     high: 'Alta',
     medium: 'Média',
     low: 'Baixa',
+    unknown: 'Desconhecida',
   },
   sample: {
     titles: {

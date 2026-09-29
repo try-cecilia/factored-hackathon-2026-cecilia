@@ -26,7 +26,7 @@ export function ticketSummary(ticket: Ticket, t: Translate): string {
   const flagged = ticket.evidence.filter(isFlagged).map((e) => e.id).filter(Boolean)
   return [
     t('operator.ticket.summary.title', { id: ticket.ticket_id.slice(0, 8), queue: ticket.queue }),
-    t('operator.ticket.summary.priority', { priority: ticket.priority }),
+    t('operator.ticket.summary.priority', { priority: ticket.priority || t('table.priority.unknown') }),
     t('operator.ticket.summary.status', { status: `${t(statusKey[ticket.desk.status])}${ticket.desk.operator ? ` (${ticket.desk.operator})` : ''}` }),
     `${categoryName(t, ticket.category)} · v${ticket.desk.version}`,
     t('operator.ticket.summary.request', { request: ticket.request }),

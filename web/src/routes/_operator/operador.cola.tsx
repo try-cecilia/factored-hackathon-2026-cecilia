@@ -5,8 +5,7 @@ import { headTitle } from '../../i18n/head'
 import type { Locale } from '../../i18n/locales'
 import type { MessageKey, Translate } from '../../i18n/translate'
 import type { DeskStatus, QueueRow } from '../../server/operator.functions'
-import { Button, DataTable, PriorityChip, StatusIndicator, type Column, type SortState, type StatusTone } from '../../ui'
-import type { Priority } from '../../ui'
+import { Button, DataTable, PriorityChip, priorityOf, StatusIndicator, type Column, type SortState, type StatusTone } from '../../ui'
 import { ageShort, categoryName, statusKey, when } from '../-operator/format'
 import { useMinute } from '../-operator/now'
 import {
@@ -45,11 +44,11 @@ const rowId = (r: QueueRow) => r.ticket_id
 
 function makeColumns(t: Translate, locale: Locale, now: number): Column<QueueRow>[] {
   return [
-    { id: 'priority', header: t('operator.queue.columns.priority'), width: 68, sortable: true, cell: (r) => <PriorityChip priority={r.priority.toLowerCase() as Priority} /> },
+    { id: 'priority', header: t('operator.queue.columns.priority'), width: 68, sortable: true, cell: (r) => <PriorityChip priority={priorityOf(r.priority)} /> },
     { id: 'ticket', header: t('operator.queue.columns.ticket'), width: 76, mono: true, rowHeader: true, sortable: true, cell: (r) => r.ticket_id.slice(0, 8) },
     { id: 'queue', header: t('operator.queue.columns.queue'), width: 132, mono: true, muted: true, truncate: true, sortable: true, cell: (r) => r.queue },
     { id: 'request', header: t('operator.queue.columns.request'), truncate: true, sortable: true, cell: (r) => <span title={categoryName(t, r.category)}>{r.request}</span> },
-    { id: 'locale', header: t('operator.queue.columns.locale'), width: 64, mono: true, muted: true, sortable: true, cell: (r) => localeOf(r) },
+    { id: 'locale', header: t('operator.queue.columns.locale'), width: 64, mono: true, muted: true, sortable: true, cell: (r) => localeOf(r, t('operator.queue.unknownLanguage')) },
     { id: 'age', header: t('operator.queue.columns.age'), width: 52, align: 'end', mono: true, muted: true, sortable: true, cell: (r) => <span title={t('operator.queue.ageTitle', { date: when(r.created_at, locale) })}>{ageShort(r.created_at, now)}</span> },
     { id: 'status', header: t('operator.queue.columns.status'), width: 108, sortable: true, cell: (r) => <StatusIndicator tone={tones[r.desk.status]}>{t(statusKey[r.desk.status])}</StatusIndicator> },
     { id: 'operator', header: t('operator.queue.columns.operator'), width: 92, mono: true, truncate: true, sortable: true, cell: (r) => r.desk.operator ?? '—' },

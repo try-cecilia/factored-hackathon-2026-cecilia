@@ -139,6 +139,7 @@ export const operator: Like<typeof es> = {
       descriptionNone: 'A fila está vazia.',
     },
     loadFailed: 'Não foi possível carregar a fila',
+    unknownLanguage: 'Desconhecido',
     demo: 'Dados de demonstração',
   },
   ticket: {

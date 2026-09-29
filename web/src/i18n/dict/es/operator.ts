@@ -137,6 +137,7 @@ export const operator = {
       descriptionNone: 'La cola está vacía.',
     },
     loadFailed: 'No se pudo cargar la cola',
+    unknownLanguage: 'Desconocido',
     demo: 'Datos de demostración',
   },
   ticket: {

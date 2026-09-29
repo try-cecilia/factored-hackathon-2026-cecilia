@@ -38,13 +38,14 @@ export type Ticket = {
   trace_id: string | null
   created_at: number
   category: string
-  priority: string
+  // A case that reaches the console without them (an old or incomplete record) must still be drawn: both may be missing.
+  priority?: string | null
   queue: string
   customer_id: string
   session_ref: string
   segment: string | null
   country: string | null
-  language: string
+  language?: string | null
   request: string
   prior_requests: string[]
   reason: string
