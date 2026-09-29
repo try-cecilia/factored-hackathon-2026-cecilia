@@ -79,6 +79,18 @@ def test_lineage_times_are_utc_whatever_the_machine_time_zone(fresh_db, monkeypa
     assert abs((now - finished).total_seconds()) < 300 and abs((now - ingested).total_seconds()) < 300
 
 
+def test_duckdb_threads_follow_the_environment(fresh_db, monkeypatch):
+    """The Render instance loads on one thread: each DuckDB thread holds its own CSV read buffers."""
+    from data.pipeline import get_connection
+
+    monkeypatch.setenv("DUCKDB_THREADS", "1")
+    con = get_connection()
+    try:
+        assert int(con.execute("SELECT current_setting('threads')").fetchone()[0]) == 1
+    finally:
+        con.close()
+
+
 def test_late_arriving_partition_updates_in_place_and_is_idempotent(fresh_db):
     build_fixture_warehouse()
     before = q(fresh_db, "SELECT count(*) FROM transactions")[0][0]

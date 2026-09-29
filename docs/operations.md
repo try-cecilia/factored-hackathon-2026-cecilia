@@ -194,6 +194,12 @@ First boot ingests `INGEST_ARGS`. The default is a deterministic 5,000-customer
 sample with the last 12 months of transactions: about 14 MB, 20 s of load
 after download, DuckDB capped at 400 MB. It picks sandbox demo customers,
 then serves on `$PORT`.
+- **On a 512 MB instance** (the Render Blueprint) the load runs with `DUCKDB_THREADS=1` and `DUCKDB_MEMORY_LIMIT=192MB`.
+  The process holds about 170 MB of its own on top of DuckDB's cap, and every DuckDB thread keeps its own CSV buffers
+  (about 30 MB each), so the thread count, not only the cap, decides whether reading the year's 366 daily files fits. With
+  the image's 400MB and every core, the first boot on Render was killed for memory (2026-09-29). Measured on the same
+  sample (Windows working set, peak): 567 MB with 400MB and every core (and DuckDB itself ran out reading the daily files),
+  432 MB with one thread and 256MB, 362 MB with one thread and 192MB; the last two load the same rows and checks.
 - Daily files download 24 at a time: the whole dataset's 4,388 (1.1 GB) took
   78 s from Argentina, where one at a time they took hours.
 - The load's quality report is written next to the warehouse, on the same

@@ -110,6 +110,10 @@ def duckdb_path() -> str:
 def get_connection(read_only: bool = False) -> duckdb.DuckDBPyConnection:
     con = duckdb.connect(duckdb_path(), read_only=read_only)
     con.execute(f"SET memory_limit='{os.environ.get('DUCKDB_MEMORY_LIMIT', '2GB')}'")
+    # Each thread holds its own CSV read buffers (about 30 MB each): on a small instance the thread count, not the
+    # memory limit, decides whether reading hundreds of daily files fits. Unset, DuckDB uses every core it sees.
+    if os.environ.get("DUCKDB_THREADS"):
+        con.execute(f"SET threads={int(os.environ['DUCKDB_THREADS'])}")
     con.execute("SET preserve_insertion_order=false")
     # Lineage times are plain TIMESTAMPs; without this DuckDB writes UTC times in the machine's own zone.
     con.execute("SET TimeZone = 'UTC'")

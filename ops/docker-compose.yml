@@ -25,6 +25,7 @@ services:
       # volume: later boots do not ingest again.
       - INGEST_ARGS=${INGEST_ARGS:---profile serving --source local --raw-dir /app/tests/fixtures/raw}
       - DUCKDB_MEMORY_LIMIT=${DUCKDB_MEMORY_LIMIT:-400MB}
+      - DUCKDB_THREADS=${DUCKDB_THREADS:-}
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
       - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
       - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-2}
