@@ -1,0 +1,15 @@
+/* Data in a reply (Paper "UI · Chat messages" · Data in chat): tonal panel, 40px rows, even rows lifted to paper. */
+.ui-data {
+  display: grid; grid-template-columns: minmax(0, 1fr) max-content; column-gap: 12px; margin: 0; padding: 6px; list-style: none;
+  border-radius: var(--radius-xl); background: var(--color-fill-subtle);
+}
+.ui-data--leading { grid-template-columns: minmax(44px, max-content) minmax(0, 1fr) max-content; }
+/* Rows share the panel's columns (subgrid) so the numbers line up whatever the labels are. */
+.ui-data__row { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; align-items: center; min-height: 40px; padding: 0 10px; border-radius: var(--radius-control); }
+.ui-data__row:nth-child(even) { background: var(--color-paper); }
+.ui-data__leading { color: var(--color-ink-70); font-size: var(--text-compact-sm); line-height: 16px; }
+.ui-data__label { min-width: 0; color: var(--color-ink-app); font-size: var(--text-compact-md); font-weight: var(--font-weight-semibold); line-height: 16px; overflow-wrap: anywhere; }
+.ui-data__value {
+  color: var(--color-ink-app); font-size: var(--text-compact-md); font-variant-numeric: tabular-nums; font-weight: var(--font-weight-semibold);
+  line-height: 16px; text-align: right; white-space: nowrap;
+}

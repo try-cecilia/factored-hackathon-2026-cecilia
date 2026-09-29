@@ -1,0 +1,13 @@
+/* Case card of the handoff (Paper "UI · Chat messages" · Handoff): tonal panel, blue dot, blue link. */
+.ui-handoff { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: var(--radius-xl); background: var(--color-fill-subtle); }
+.ui-handoff__dot { flex-shrink: 0; width: 8px; height: 8px; border-radius: var(--radius-pill); background: var(--color-cecil-blue); }
+.ui-handoff__info { display: flex; flex: 1 1 0; flex-direction: column; gap: 1px; min-width: 0; }
+.ui-handoff__title { color: var(--color-ink-app); font-size: var(--text-compact-md); font-weight: var(--font-weight-semibold); line-height: 16px; }
+.ui-handoff__status { color: var(--color-ink-70); font-size: var(--text-compact-sm); line-height: 16px; }
+.ui-handoff__id { font-family: var(--font-mono); letter-spacing: 0; }
+.ui-handoff__link {
+  flex-shrink: 0; padding: 0; border: 0; border-radius: var(--radius-compact); background: none; color: var(--color-cecil-blue); font: inherit;
+  font-size: var(--text-compact-md); font-weight: var(--font-weight-semibold); line-height: 16px; cursor: pointer;
+}
+.ui-handoff__link:hover { text-decoration: underline; }
+.ui-handoff__link:focus-visible { outline: none; box-shadow: var(--ring-focus); }

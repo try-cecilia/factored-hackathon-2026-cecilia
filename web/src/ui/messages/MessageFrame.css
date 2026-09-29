@@ -1,0 +1,22 @@
+/* Assistant message shell (Paper "UI · Chat messages"): text sits open on the page, no bubble, no border. */
+.ui-msg { display: flex; align-items: flex-start; gap: 12px; }
+.ui-msg__avatar {
+  display: flex; flex-shrink: 0; align-items: flex-end; justify-content: center; width: 32px; height: 32px; overflow: clip;
+  border-radius: var(--radius-control); background: var(--color-sky-300);
+}
+.ui-msg__avatar img { display: block; flex-shrink: 0; width: 36px; height: 36px; }
+.ui-msg__body { display: flex; flex: 1 1 0; flex-direction: column; gap: 10px; min-width: 0; }
+.ui-msg__body--tight { gap: 8px; }
+.ui-msg__head { display: flex; align-items: baseline; gap: 8px; }
+.ui-msg__name { color: var(--color-ink-app); font-size: var(--text-compact-md); font-weight: var(--font-weight-bold); line-height: 16px; }
+.ui-msg__time { color: var(--color-ink-70); font-size: var(--text-compact-xs); line-height: 14px; }
+.ui-msg__text {
+  color: var(--color-ink-app); font-size: var(--text-sm); letter-spacing: -0.01em; line-height: 155%; overflow-wrap: anywhere;
+}
+.ui-msg__text > p { margin: 0; }
+.ui-msg__text > p + p { margin-top: 8px; }
+
+/* Tonal callout inside a message (action result, could-not-verify): the tint is the meaning, there is no stroke. */
+.ui-msg-tint { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: var(--radius-xl); }
+.ui-msg-tint--success { background: color-mix(in srgb, var(--color-success) 9%, transparent); }
+.ui-msg-tint--danger { background: color-mix(in srgb, var(--color-danger) 8%, transparent); }

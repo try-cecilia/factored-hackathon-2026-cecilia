@@ -1,0 +1,2 @@
+/* Paper does not draw the whole conversation; 20px between messages is the spacing of the chat page. */
+.ui-msglist { display: flex; flex-direction: column; gap: 20px; }

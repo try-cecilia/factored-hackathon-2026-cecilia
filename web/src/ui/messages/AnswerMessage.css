@@ -1,0 +1,22 @@
+/* Answer actions and the "Why?" panel. Filled chip, no stroke; the panel is a tonal block like the other message cards. */
+.ui-answer__actions { display: flex; align-items: center; gap: 2px; }
+.ui-answer__why {
+  display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 8px; border: 0; border-radius: var(--radius-compact);
+  background: var(--color-fill-subtle); color: var(--color-ink-70); font: inherit; font-size: var(--text-compact-sm);
+  font-weight: var(--font-weight-semibold); line-height: 16px; cursor: pointer; transition: background-color 0.12s ease;
+}
+.ui-answer__why svg { color: color-mix(in srgb, var(--color-ink) 60%, transparent); /* Paper draws the glyph at #00000099 */ }
+.ui-answer__why:hover { background: var(--color-fill-muted); }
+.ui-answer__why[aria-expanded='true'] { background: var(--color-fill-muted); }
+.ui-answer__why:focus-visible { outline: none; box-shadow: var(--ring-focus); }
+.ui-answer__copy { color: color-mix(in srgb, var(--color-ink) 60%, transparent); }
+
+.ui-answer__panel {
+  display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 0; padding: 12px 14px;
+  border-radius: var(--radius-xl); background: var(--color-fill-subtle); font-size: var(--text-compact-sm); line-height: 16px;
+}
+.ui-answer__panel[hidden] { display: none; }
+/* Each fact is a dt/dd pair wrapped in a div; the wrapper disappears so the pairs share the two columns. */
+.ui-answer__fact { display: contents; }
+.ui-answer__panel dt { color: var(--color-ink-70); }
+.ui-answer__panel dd { margin: 0; color: var(--color-ink-app); font-weight: var(--font-weight-semibold); overflow-wrap: anywhere; }

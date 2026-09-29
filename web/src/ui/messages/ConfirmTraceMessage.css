@@ -1,0 +1,16 @@
+/* Confirm-trace card (Paper "UI · Chat messages" · Confirm trace): tonal panel; the buttons are the kit's Button. */
+.ui-confirm { display: flex; flex-direction: column; gap: 8px; padding: 14px; border-radius: var(--radius-xl); background: var(--color-fill-subtle); }
+.ui-confirm__row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.ui-confirm__title { color: var(--color-ink-app); font-size: var(--text-compact-md); font-weight: var(--font-weight-semibold); line-height: 16px; }
+.ui-confirm__amount {
+  color: var(--color-ink-app); font-size: var(--text-compact-lg); font-variant-numeric: tabular-nums; font-weight: var(--font-weight-bold);
+  letter-spacing: -0.02em; line-height: 18px; white-space: nowrap;
+}
+.ui-confirm__detail { margin: 0; color: var(--color-ink-70); font-size: var(--text-compact-sm); line-height: 16px; }
+.ui-confirm__actions { position: relative; display: flex; align-items: center; gap: 8px; padding-top: 4px; }
+.ui-confirm__outcome {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 32px; color: var(--color-ink-70); font-size: var(--text-compact-sm);
+  font-weight: var(--font-weight-semibold); line-height: 16px;
+}
+.ui-confirm__outcome:empty { position: absolute; width: 0; min-height: 0; overflow: hidden; }
+.ui-confirm__outcome[data-outcome='sent'] { color: var(--color-success); }

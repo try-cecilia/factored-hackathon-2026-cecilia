@@ -1,0 +1,13 @@
+/* User message (Paper "UI · Chat messages" · User): the tail corner is 4px, the rest 16px. */
+.ui-user { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.ui-user__bubble {
+  max-width: min(440px, 100%); padding: 10px 14px; border-radius: 16px 16px 4px 16px; background: var(--color-fill-muted);
+  color: var(--color-ink-app); font-size: var(--text-sm); letter-spacing: -0.01em; line-height: 150%;
+  overflow-wrap: anywhere; white-space: pre-wrap;
+}
+.ui-user__time { color: var(--color-ink-70); font-size: var(--text-compact-xs); line-height: 14px; }
+/* The time is only hidden visually where there is a pointer to reveal it; touch screens always show it. */
+@media (hover: hover) {
+  .ui-user__time { opacity: 0; transition: opacity 0.12s ease; }
+  .ui-user:hover .ui-user__time, .ui-user[data-state='hover'] .ui-user__time { opacity: 1; }
+}
