@@ -2,10 +2,11 @@ import { createFileRoute, Link, useRouter } from '@tanstack/react-router'
 import { useEffect } from 'react'
 import { loadMonitor } from '../../server/operator.functions'
 import { ago, categoryLabel, dispositionLabel, ms, usd, when } from '../-operator/format'
+import { isAutomatic, refreshQuietly } from '../-operator/refresh'
 import { Bars, Loaded, Stat } from '../-operator/ui'
 
 export const Route = createFileRoute('/_operator/operador/monitoreo')({
-  loader: () => loadMonitor(),
+  loader: () => loadMonitor({ data: { auto: isAutomatic() } }),
   head: () => ({ meta: [{ title: 'Monitoreo · Cecilai' }] }),
   component: Monitor,
 })
@@ -25,7 +26,7 @@ function Monitor() {
 
   useEffect(() => {
     const timer = setInterval(() => {
-      if (document.visibilityState === 'visible') router.invalidate()
+      if (document.visibilityState === 'visible') void refreshQuietly(router)
     }, 60_000)
     return () => clearInterval(timer)
   }, [router])

@@ -1,6 +1,6 @@
 import { createServerFn } from '@tanstack/react-start'
 import { adminRead, operatorAct, type Result } from './operator-api'
-import { getOperatorSession, takeFlash } from './operator-session'
+import { operatorSessionState, takeFlash } from './operator-session'
 
 export type { Result }
 
@@ -53,14 +53,24 @@ export type Ticket = {
   desk: DeskState
 }
 
-export type OperatorView = { operator: string | null; canAct: boolean; flash: string | null }
+export type OperatorView =
+  | { status: 'active'; operator: string | null; canAct: boolean; flash: string | null }
+  | { status: 'expired' } // there was a session and it is gone: idle too long, over its cap, or the server restarted
+  | { status: 'anonymous' }
 
 const clean = (value: unknown) => (typeof value === 'string' ? value.trim() : '')
 
-export const getOperatorView = createServerFn({ method: 'GET' }).handler(async (): Promise<OperatorView | null> => {
-  const session = getOperatorSession()
-  return session ? { operator: session.operator ?? null, canAct: Boolean(session.operatorKey), flash: takeFlash() } : null
-})
+// `auto` marks a call made by the console's own background refresh: it reads, but does not count as the operator being
+// there, so an abandoned tab lets its session expire. Clicks, navigation and actions leave it out.
+const autoOf = (input: { auto?: boolean } | undefined) => Boolean(input?.auto)
+
+export const getOperatorView = createServerFn({ method: 'GET' })
+  .validator(autoOf)
+  .handler(async ({ data: auto }): Promise<OperatorView> => {
+    const state = operatorSessionState(!auto)
+    if (state.status !== 'active') return { status: state.status }
+    return { status: 'active', operator: state.session.operator ?? null, canAct: Boolean(state.session.operatorKey), flash: takeFlash() }
+  })
 
 /** The one-shot message a form post left for the login page. */
 export const getFlash = createServerFn({ method: 'GET' }).handler(async () => takeFlash())
@@ -71,11 +81,13 @@ const idOf = (input: unknown, label: string) => {
   return value
 }
 
-export const loadQueue = createServerFn({ method: 'GET' }).handler(() => adminRead<Ticket[]>('/admin/human_queue?limit=200'))
+export const loadQueue = createServerFn({ method: 'GET' })
+  .validator(autoOf)
+  .handler(({ data: auto }) => adminRead<Ticket[]>('/admin/human_queue?limit=200', !auto))
 
 export const loadTicket = createServerFn({ method: 'GET' })
-  .validator((input: unknown) => idOf(input, 'ticket_id'))
-  .handler(({ data }) => adminRead<Ticket>(`/admin/tickets/${data}`))
+  .validator((input: unknown) => ({ id: idOf(input, 'ticket_id'), auto: autoOf(input as { auto?: boolean } | undefined) }))
+  .handler(({ data }) => adminRead<Ticket>(`/admin/tickets/${data.id}`, !data.auto))
 
 export const actOnTicket = createServerFn({ method: 'POST' })
   .validator((input: unknown) => {
@@ -155,16 +167,19 @@ export type Monitor = {
   experiments: Result<Experiments>
 }
 
-export const loadMonitor = createServerFn({ method: 'GET' }).handler(async (): Promise<Monitor> => {
-  const [ops, budget, drift, quality, experiments] = await Promise.all([
-    adminRead<Ops>('/admin/ops'),
-    adminRead<Budget>('/admin/llm_budget'),
-    adminRead<Drift>('/admin/drift'),
-    adminRead<DataQuality>('/admin/data_quality'),
-    adminRead<Experiments>('/admin/experiments'),
-  ])
-  return { ops, budget, drift, quality, experiments }
-})
+export const loadMonitor = createServerFn({ method: 'GET' })
+  .validator(autoOf)
+  .handler(async ({ data: auto }): Promise<Monitor> => {
+    const touch = !auto
+    const [ops, budget, drift, quality, experiments] = await Promise.all([
+      adminRead<Ops>('/admin/ops', touch),
+      adminRead<Budget>('/admin/llm_budget', touch),
+      adminRead<Drift>('/admin/drift', touch),
+      adminRead<DataQuality>('/admin/data_quality', touch),
+      adminRead<Experiments>('/admin/experiments', touch),
+    ])
+    return { ops, budget, drift, quality, experiments }
+  })
 
 export type TraceRow = {
   trace_id: string
@@ -210,16 +225,19 @@ const ROW_KEYS = ['trace_id', 'ts', 'disposition', 'category', 'policy_rule', 'l
   'provider', 'model', 'llm_calls', 'latency_ms', 'cost_usd', 'model_route'] as const
 const DETAIL_KEYS = [...ROW_KEYS, 'prompt_version', 'cohort', 'session_ref', 'intent_reading', 'usage', 'verified_tools'] as const
 
-export const loadTraceLog = createServerFn({ method: 'GET' }).handler(async (): Promise<Result<TraceRow[]>> => {
-  const result = await adminRead<TraceRow[]>('/admin/trace_log?limit=200')
-  return result.ok ? { ok: true, data: result.data.map((r) => pick(r, ROW_KEYS)).reverse() } : result
-})
+export const loadTraceLog = createServerFn({ method: 'GET' })
+  .validator(autoOf)
+  .handler(async ({ data: auto }): Promise<Result<TraceRow[]>> => {
+    const result = await adminRead<TraceRow[]>('/admin/trace_log?limit=200', !auto)
+    return result.ok ? { ok: true, data: result.data.map((r) => pick(r, ROW_KEYS)).reverse() } : result
+  })
 
 export const loadTrace = createServerFn({ method: 'GET' })
-  .validator((input: unknown) => idOf(input, 'trace_id'))
+  .validator((input: unknown) => ({ id: idOf(input, 'trace_id'), auto: autoOf(input as { auto?: boolean } | undefined) }))
   .handler(async ({ data }): Promise<Result<TraceDetail>> => {
     const result = await adminRead<TraceDetail & { tool_audit?: (ToolAudit & Record<string, Json>)[]; llm_steps?: unknown[] }>(
-      `/admin/traces/${data}`,
+      `/admin/traces/${data.id}`,
+      !data.auto,
     )
     if (!result.ok) return result
     const tools = (result.data.tool_audit ?? []).map((a) => pick(a, ['tool_name', 'success', 'error_type', 'duration_ms'] as const))

@@ -100,7 +100,8 @@
 .op-list-pane { min-width: 0; border-right: 1px solid var(--op-line); background: var(--op-paper); }
 .op-detail-pane { min-width: 0; padding: clamp(16px, 3vw, 32px); background: var(--op-soft); }
 .op-pane-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 20px 20px 12px; }
-.op-list-pane .op-notice, .op-list-pane .op-empty { margin: 8px 20px; }
+.op-list-pane .op-notice, .op-list-pane .op .op-notice-info { margin-top: 20px; border-color: var(--op-line-strong); color: var(--op-ink-80); background: var(--op-soft); }
+.op-empty { margin: 8px 20px; }
 .op-page { padding: clamp(16px, 3vw, 32px); background: var(--op-soft); min-height: calc(100vh - 65px); }
 .op-page .op-pane-head { padding: 0 0 20px; }
 .op-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
@@ -152,10 +153,13 @@
 .op-buttons { display: flex; flex-wrap: wrap; gap: 10px; }
 .op-needkey p { margin-bottom: 8px; }
 .op-notice { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; padding: 14px 16px; border: 1px solid var(--op-danger); border-radius: var(--radius-xl, 12px); background: var(--op-paper); color: var(--op-danger); }
+.op .op-notice-info { margin-top: 20px; border-color: var(--op-line-strong); color: var(--op-ink-80); background: var(--op-soft); }
 .op-empty { padding: 28px 20px; border: 1px dashed var(--op-line-strong); border-radius: var(--radius-xl, 12px); color: var(--op-muted); text-align: center; }
 .op-empty-title { color: var(--op-ink); font-weight: 600; }
-.op-list-pane .op-empty { margin-top: 16px; }
-.op-detail-pane > .op-empty { margin-top: 12vh; }
+.op-list-pane .op .op-notice-info { margin-top: 20px; border-color: var(--op-line-strong); color: var(--op-ink-80); background: var(--op-soft); }
+.op-empty { margin-top: 16px; }
+.op-detail-pane > .op .op-notice-info { margin-top: 20px; border-color: var(--op-line-strong); color: var(--op-ink-80); background: var(--op-soft); }
+.op-empty { margin-top: 12vh; }
 
 /* Tablas y datos */
 .op-table-wrap { overflow-x: auto; }

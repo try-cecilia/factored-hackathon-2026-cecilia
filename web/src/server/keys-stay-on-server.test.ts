@@ -47,3 +47,15 @@ test('every password form posts to a server route', () => {
     assert.match(text, /<form[^>]*method="post"[^>]*action="\/operador\/(sesion|clave)"/s, `${rel(file)}: password inputs need a native form post`)
   }
 })
+
+test('the automatic refresh goes through refreshQuietly, so it does not keep a session alive', () => {
+  for (const file of client) {
+    const text = readFileSync(file, 'utf8')
+    const timers = [...text.matchAll(/setInterval\(([\s\S]{0,240})/g)]
+    for (const [, body] of timers) {
+      assert.match(body, /refreshQuietly\(/, `${rel(file)}: a timer must refresh with refreshQuietly`)
+      assert.doesNotMatch(body, /\.invalidate\(/, `${rel(file)}: a timer must not call router.invalidate() directly`)
+    }
+    if (timers.length) assert.match(text, /isAutomatic\(\)/, `${rel(file)}: its loader must pass isAutomatic() to the server`)
+  }
+})

@@ -3,10 +3,11 @@ import { useEffect, useRef, useState } from 'react'
 import { actOnTicket, loadTicket, type DeskAction, type DeskState, type Ticket } from '../../server/operator.functions'
 import { ago, CLOSED, categoryLabel, explain, label, priorityLabel, statusLabel, when } from '../-operator/format'
 import { OperatorKeyForm } from '../-operator/OperatorKeyForm'
+import { isAutomatic } from '../-operator/refresh'
 import { KeyValues, Notice, Panel } from '../-operator/ui'
 
 export const Route = createFileRoute('/_operator/operador/cola/$ticketId')({
-  loader: ({ params }) => loadTicket({ data: { ticket_id: params.ticketId } }),
+  loader: ({ params }) => loadTicket({ data: { ticket_id: params.ticketId, auto: isAutomatic() } }),
   head: () => ({ meta: [{ title: 'Caso · Cecilai' }] }),
   component: TicketPage,
 })

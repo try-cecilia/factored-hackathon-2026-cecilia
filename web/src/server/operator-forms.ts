@@ -27,7 +27,7 @@ export async function handleLogin(request: Request) {
 
 export async function handleAddKey(request: Request) {
   const form = await readForm(request)
-  const session = getOperatorSession()
+  const session = getOperatorSession(true)
   if (!form || !session) return see('/operador/login')
   const outcome = await operatorKeyFromForm(form, operator)
   if (!outcome.ok) {

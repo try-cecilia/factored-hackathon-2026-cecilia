@@ -2,6 +2,7 @@ import { createFileRoute, Link, Outlet, useRouter } from '@tanstack/react-router
 import { useEffect, useMemo } from 'react'
 import { loadQueue, type Ticket } from '../../server/operator.functions'
 import { ago, CLOSED, categoryLabel, label, PRIORITY_ORDER, priorityLabel, statusLabel } from '../-operator/format'
+import { isAutomatic, refreshQuietly } from '../-operator/refresh'
 import { Empty, Notice } from '../-operator/ui'
 
 type Filter = 'abiertos' | 'cerrados' | 'todos'
@@ -16,7 +17,7 @@ export const Route = createFileRoute('/_operator/operador/cola')({
   validateSearch: (search: Record<string, unknown>): { estado?: Filter } => ({
     estado: search.estado === 'cerrados' || search.estado === 'todos' ? search.estado : undefined,
   }),
-  loader: () => loadQueue(),
+  loader: () => loadQueue({ data: { auto: isAutomatic() } }),
   head: () => ({ meta: [{ title: 'Cola · Cecilai' }] }),
   component: Queue,
 })
@@ -42,7 +43,7 @@ function Queue() {
 
   useEffect(() => {
     const timer = setInterval(() => {
-      if (document.visibilityState === 'visible') router.invalidate()
+      if (document.visibilityState === 'visible') void refreshQuietly(router)
     }, REFRESH_MS)
     return () => clearInterval(timer)
   }, [router])

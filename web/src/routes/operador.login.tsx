@@ -4,13 +4,13 @@ import { sameOriginPath } from '../server/safe-path'
 import operatorStylesheet from '../styles/operator.css?url'
 
 export const Route = createFileRoute('/operador/login')({
-  validateSearch: (search: Record<string, unknown>): { redirect?: string } => {
+  validateSearch: (search: Record<string, unknown>): { redirect?: string; motivo?: 'vencida' } => {
     const target = sameOriginPath(search.redirect)
-    return target ? { redirect: target } : {}
+    return { ...(target && { redirect: target }), ...(search.motivo === 'vencida' && { motivo: 'vencida' as const }) }
   },
   beforeLoad: async ({ search }) => {
-    const view = await getOperatorView().catch(() => null)
-    if (view) throw redirect({ href: search.redirect ?? '/operador/cola' })
+    const view = await getOperatorView({ data: { auto: false } }).catch(() => null)
+    if (view?.status === 'active') throw redirect({ href: search.redirect ?? '/operador/cola' })
   },
   loader: () => getFlash().catch(() => null),
   head: () => ({
@@ -37,7 +37,7 @@ const unavailable = 'No se pudo completar el ingreso. Probá de nuevo.'
 // without JavaScript.
 function OperatorLogin() {
   const flash = Route.useLoaderData()
-  const { redirect: target } = Route.useSearch()
+  const { redirect: target, motivo } = Route.useSearch()
   const error = flash ? messages[flash] ?? unavailable : null
 
   return (
@@ -50,6 +50,9 @@ function OperatorLogin() {
           Con la clave de lectura ves la cola y el monitoreo. Para tomar, aprobar, rechazar o devolver casos sumá tu clave
           de operador. Se envían una sola vez al servidor y no se guardan ni vuelven al navegador.
         </p>
+        {motivo === 'vencida' && !error && (
+          <p className="op-notice op-notice-info" role="status">Tu sesión venció por inactividad. Ingresá de nuevo para seguir.</p>
+        )}
         <form className="op-form" method="post" action="/operador/sesion" autoComplete="off">
           {target && <input type="hidden" name="redirect" value={target} />}
           <label>

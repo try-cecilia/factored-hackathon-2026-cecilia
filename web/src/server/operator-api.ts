@@ -16,9 +16,9 @@ async function call<T>(path: string, headers: Record<string, string>, method: 'G
   return { ok: true, data: (await response.json()) as T }
 }
 
-/** A read with the session's admin key. A rejected key ends the session: it was rotated or revoked. */
-export async function adminRead<T>(path: string): Promise<Result<T>> {
-  const session = getOperatorSession()
+/** A read with the session's admin key; `touch` is false for the automatic refresh. A rejected key ends the session. */
+export async function adminRead<T>(path: string, touch: boolean): Promise<Result<T>> {
+  const session = getOperatorSession(touch)
   if (!session) return { ok: false, status: 0 }
   const result = await call<T>(path, { 'X-Admin-Key': session.adminKey }, 'GET')
   if (!result.ok && result.status === 401) endOperatorSession()
@@ -27,7 +27,7 @@ export async function adminRead<T>(path: string): Promise<Result<T>> {
 
 /** An action with the session's operator key. A rejected key is dropped so the UI asks for it again. */
 export async function operatorAct<T>(path: string, body: unknown): Promise<Result<T>> {
-  const session = getOperatorSession()
+  const session = getOperatorSession(true) // an action is always the person
   if (!session) return { ok: false, status: 0 }
   if (!session.operatorKey) return { ok: false, status: 403 }
   const result = await call<T>(path, { 'X-Operator-Key': session.operatorKey }, 'POST', body)

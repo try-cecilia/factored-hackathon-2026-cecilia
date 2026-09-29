@@ -2,11 +2,14 @@ import { createFileRoute, Link, Outlet, redirect } from '@tanstack/react-router'
 import { getOperatorView } from '../server/operator.functions'
 import operatorStylesheet from '../styles/operator.css?url'
 import { OperatorKeyForm } from './-operator/OperatorKeyForm'
+import { isAutomatic } from './-operator/refresh'
 
 export const Route = createFileRoute('/_operator')({
   beforeLoad: async ({ location }) => {
-    const view = await getOperatorView()
-    if (!view) throw redirect({ to: '/operador/login', search: { redirect: location.href } })
+    const view = await getOperatorView({ data: { auto: isAutomatic() } })
+    if (view.status !== 'active') {
+      throw redirect({ to: '/operador/login', search: { redirect: location.href, motivo: view.status === 'expired' ? 'vencida' : undefined } })
+    }
     return { view }
   },
   head: () => ({

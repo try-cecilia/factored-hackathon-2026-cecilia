@@ -112,6 +112,7 @@ lectura y trazas. Cómo se configuran las claves:
   `httpOnly` + `SameSite=Strict` (y `Secure` con prefijo `__Host-` en producción). La sesión vence a los 30 minutos sin
   actividad de la persona (el refresco automático de la cola y del monitoreo **no** cuenta como actividad) o a las 8
   horas, y se descarta si la API rechaza la clave (rotada o revocada). Al vencer, la consola vuelve al ingreso con un aviso.
+  `OPERATOR_IDLE_SECONDS` (en el servidor de la web, por defecto 1800, mínimo 10) acorta esa ventana para probar el vencimiento.
 - *Alternativa descartada y por qué.* Una cookie sellada con las claves adentro evita el estado en el servidor, pero
   pone las claves (cifradas) en el navegador, exige un secreto de sellado que rotar y no permite cerrar una sesión robada
   desde el servidor. **Costo de la elección:** las sesiones viven en la memoria de un solo proceso, así que un reinicio

@@ -1,10 +1,11 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { loadTrace } from '../../server/operator.functions'
 import { categoryLabel, dispositionLabel, label, ms, usd, when } from '../-operator/format'
+import { isAutomatic } from '../-operator/refresh'
 import { KeyValues, Notice, Panel, Stat } from '../-operator/ui'
 
 export const Route = createFileRoute('/_operator/operador/trazas/$traceId')({
-  loader: ({ params }) => loadTrace({ data: { trace_id: params.traceId } }),
+  loader: ({ params }) => loadTrace({ data: { trace_id: params.traceId, auto: isAutomatic() } }),
   head: () => ({ meta: [{ title: 'Traza · Cecilai' }] }),
   component: TracePage,
 })
