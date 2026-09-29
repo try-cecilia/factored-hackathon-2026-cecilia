@@ -3,7 +3,7 @@
 # organizer's data, a model provider's API, Render) are options, never requirements.
 #
 #   api         the Python service. Default data: the hand-made fixture warehouse. No model key: degraded mode, which is safe.
-#   web         the frontend (TanStack Start build, served by web/serve.mjs); it waits for a ready API
+#   web         the frontend (TanStack Start build, served by web/serve.mjs, in production mode); it waits for a ready API
 #   prometheus  profile "monitoring": scrapes the API's /metrics and loads ops/alerts.yml
 #   grafana     profile "monitoring": a provisioned dashboard over that Prometheus
 #   ollama      profile "llm-local": a local model server (OpenAI-compatible API). CPU only unless the GPU file is added
@@ -123,6 +123,13 @@ services:
       - "127.0.0.1:${WEB_PORT:-3000}:3000"
     environment:
       - AGENT_API_URL=http://api:8000
+      # The image runs NODE_ENV=production, where the operator console refuses every form post without the origin the browser
+      # sees. Unset (or empty) it is the published port on this machine; tests/test_setup.py fails if the web reads a setting
+      # that is not passed here.
+      - WEB_PUBLIC_ORIGIN=${WEB_PUBLIC_ORIGIN:-http://127.0.0.1:${WEB_PORT:-3000}}
+      - TRUSTED_CLIENT_IP_HEADER
+      - OPERATOR_IDLE_SECONDS
+      - UI_GALLERY
     depends_on:
       api:
         condition: service_healthy

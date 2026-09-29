@@ -10,7 +10,7 @@ AGENT_API_URL ?= http://127.0.0.1:$(API_PORT)
 
 .PHONY: gate validate-data-ml lineage operator-labels retention test-resilience loadtest loadtest-fixture loadtest-http setup ingest ingest-demo analysis train-eval workload eval eval-adversarial eval-failures eval-failures-live eval-failures-local eval-live live-smoke test serve docker-build all mlflow-ui
 .PHONY: web-setup serve-web web-build web-typecheck web-test serve-fixture serve-all-fixture serve-all
-.PHONY: env up down clean-volumes monitoring-up up-llm-local up-llm-host up-dataset lock lock-check alerts-check compose-e2e
+.PHONY: env env-check env-fill evidence up down clean-volumes monitoring-up up-llm-local up-llm-host up-dataset lock lock-check alerts-check compose-e2e
 COMPOSE = docker compose -f ops/docker-compose.yml --env-file .env
 GPU_FILE = $(if $(GPU),-f ops/docker-compose.gpu.yml)
 # The model-serving choices below only set what the API is told; the `local` provider itself is agent/llm/client.py's
@@ -56,21 +56,27 @@ lock-check:       ## fail if a lock file no longer matches its .in (the CI runs 
 env:              ## create .env from .env.example with generated secrets (leaves an existing one alone)
 	$(PY) ops/bootstrap_env.py
 
-up: env           ## the whole stack (API + web) in Docker on the fixture warehouse: http://127.0.0.1:3000 and :8000
+env-check:        ## list what .env.example has and .env lacks (names only, never values) and warn if INGEST_ARGS would read S3; never fails
+	$(PY) -m ops.env_check
+
+env-fill:         ## append to .env the settings it lacks, with generated secrets; nothing already there changes, no value is printed
+	$(PY) -m ops.env_check --fill
+
+up: env env-check ## the whole stack (API + web) in Docker on the fixture warehouse: http://127.0.0.1:3000 and :8000
 	$(COMPOSE) up --build --wait
 
-monitoring-up: env ## the same plus Prometheus (alert rules) and Grafana (provisioned dashboard): :9090 and :3001
+monitoring-up: env env-check ## the same plus Prometheus (alert rules) and Grafana (provisioned dashboard): :9090 and :3001
 	$(COMPOSE) --profile monitoring up --build --wait
 
-up-llm-local: env ## the stack plus a local model (Ollama in Docker, CPU unless GPU=1; LOCAL_LLM_MODEL, default gpt-oss:20b)
+up-llm-local: env env-check ## the stack plus a local model (Ollama in Docker, CPU unless GPU=1; LOCAL_LLM_MODEL, default gpt-oss:20b)
 	$(LOCAL_IN_COMPOSE) $(COMPOSE) $(GPU_FILE) --profile llm-local up --build --wait api web ollama
 	$(LOCAL_IN_COMPOSE) $(COMPOSE) $(GPU_FILE) --profile llm-local up -d ollama-pull
 	@echo "the model downloads in the background: docker compose -f ops/docker-compose.yml --profile llm-local logs -f ollama-pull"
 
-up-llm-host: env  ## the stack using an Ollama already running on this machine (macOS: Metal speed): ollama serve, then this
+up-llm-host: env env-check  ## the stack using an Ollama already running on this machine (macOS: Metal speed): ollama serve, then this
 	$(LOCAL_ON_HOST) $(COMPOSE) up --build --wait
 
-up-dataset: env   ## the stack on your local CSVs (RAW_DIR=/path/to/data/raw), read-only, no S3; first boot ingests them
+up-dataset: env env-check   ## the stack on your local CSVs (RAW_DIR=/path/to/data/raw), read-only, no S3; first boot ingests them
 	@test -n "$(RAW_DIR)" || { echo "usage: make up-dataset RAW_DIR=/path/to/data/raw   (INGEST_ARGS to change what is ingested)"; exit 1; }
 	@if docker volume inspect cecilai-local_warehouse >/dev/null 2>&1; then echo "note: a warehouse already exists in the volume, so nothing is ingested from RAW_DIR. To load it: make clean-volumes, then this again."; fi
 	RAW_DIR="$(RAW_DIR)" INGEST_ARGS="$${INGEST_ARGS:---profile serving --source local --raw-dir /app/data/raw --sample-customers 5000 --since 2025-06-17}" \
@@ -135,12 +141,15 @@ EVAL_MODELS ?= anthropic:claude-sonnet-5,anthropic:claude-haiku-4-5,groq:openai/
 eval-live:        ## live models compared on one 132-case sample (3 per case type and language), 3 repeats each (a model without its API key is skipped)
 	$(PY) -m eval.run_system_eval --split test --system proposed --llm live --repeats 3 --limit 132 --models $(EVAL_MODELS)
 
-gate:            ## compuerta de calidad: pisos de seguridad y evidencia vigente, más la validación de datos y ML (la corre el CI)
+gate:            ## compuerta de calidad: pisos de seguridad y evidencia vigente, más la validación de datos y ML; no deja archivos modificados (la corre el CI)
 	$(PY) -m eval.gate
 	$(MAKE) validate-data-ml
 
-validate-data-ml: ## contratos, calidad, linaje, frescura, clasificador vs línea base y fuga: PASS/FAIL por criterio -> docs/evidence/data_ml_validation.md
+validate-data-ml: ## contratos, calidad, linaje, frescura, clasificador vs línea base y fuga: PASS/FAIL por criterio; no escribe nada (avisa si la evidencia versionada quedó vieja)
 	$(PY) -m eval.validate_data_ml
+
+evidence:         ## regenera la evidencia versionada: docs/evidence/data_ml_validation.{md,json} con la fecha y el commit de hoy (paso explícito; validate-data-ml y gate no escriben)
+	$(PY) -m eval.validate_data_ml --out-dir docs/evidence
 
 lineage:          ## the served warehouse traced back to its source files and their hashes (exit 1 if the chain is broken)
 	$(PY) -m data.lineage --verify --raw-dir data/raw
