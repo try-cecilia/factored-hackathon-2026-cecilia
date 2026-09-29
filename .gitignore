@@ -22,6 +22,10 @@ web/.tanstack/
 .env.*
 !.env.example
 
+# The organizer's documents stay out of git: the complete data dictionary carries their AWS keys, as compressed
+# text that no scan by shape can read. The three already tracked are clean (checked on 2026-09-29).
+*.pdf
+
 # Local remnants of the abandoned workspace migration
 .turbo/
 .venv-backups/

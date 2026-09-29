@@ -6,6 +6,9 @@
   (the generated workloads and any other set, such as the human one: customer ids, digits of real products),
   every per-case eval JSON (eval/reports/system_eval*.json, whatever its name), and the v2 demo video (dataset
   customers on screen). The generated ones are rebuilt with `make workload eval`.
+- Removes every PDF from every commit: the organizer's documents were committed once, and the complete data
+  dictionary carries their AWS keys as compressed text, which the scan below cannot read. A PDF that survives
+  fails the export.
 - Replaces the strings listed in REDACTIONS_FILE (git filter-repo format, "value==>***REMOVED***"), kept outside
   any repository: the organizer's bucket name and account id, which early commits carried.
 - Scans every blob of every commit by shape, not by known prefix (keys, tokens, JWTs, private keys, credential
@@ -24,7 +27,8 @@ import sys
 from pathlib import Path
 
 REMOVE = ["docs/demo/demo_app.webm"]
-REMOVE_GLOBS = ["eval/workload/*.jsonl", "eval/reports/system_eval*.json"]  # by pattern: a new case file or report too
+REMOVE_GLOBS = ["eval/workload/*.jsonl", "eval/reports/system_eval*.json",  # by pattern: a new case file or report too
+                "*.pdf"]  # any folder: fnmatch's * crosses "/"
 SHAPES = {
     "aws_access_key": r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b",
     "anthropic_key": r"sk-ant-[A-Za-z0-9_-]{10,}",
@@ -84,7 +88,9 @@ def main(src: Path, target: Path, redactions: Path) -> int:
         text = git("cat-file", "-p", sha, cwd=target)
         survived += sum(v in text for v in redacted)
     print(f"redacted values still present: {survived}")
-    return 1 if survived else 0
+    pdfs = sorted({path for path, _ in blobs.values() if path.lower().endswith(".pdf")})
+    print(f"PDF files still present: {len(pdfs)}" + "".join(f"\n    {p}" for p in pdfs))
+    return 1 if survived or pdfs else 0
 
 
 if __name__ == "__main__":
