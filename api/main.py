@@ -8,18 +8,23 @@
   user's address, safe only when nothing but the BFF can reach the API.
 - /admin/* require X-Admin-Key == ADMIN_API_KEY and are disabled (503) when
   no key is configured — they expose tickets, audit and traces, which carry
-  customer data.
+  customer data. Acting on a ticket takes an operator key instead, and /metrics
+  takes the admin key or a scraper's METRICS_TOKEN. api/access.py is the matrix of
+  who may call what; the service refuses to start if a route is not in it.
+- /livez says the process is up, /readyz that the warehouse and state store answer
+  (api/observability.py); /metrics is Prometheus text (agent/metrics.py).
 - Input size limits, per-session / per-customer / per-IP rate limits and a
   concurrency gate on /chat bound abuse and cost (api/middleware.py); every
   request gets a trace id, returned as X-Request-ID and traceparent. /demo/customers publishes test credentials only for the sandbox
   accounts listed in DEMO_PUBLIC_CUSTOMERS (like any sandbox's test login).
 - With DEMO_MODE=1 (the jury sandbox), api/demo.py adds guided scenarios, the
   bank view of the session's own tickets, fault buttons and a "why" on every
-  /chat reply.
+  /chat reply. Everything demo-only (/demo/*, /admin/demo_pin) is a 404 without it.
+- Responses carry security headers and there is no CORS unless CORS_ALLOWED_ORIGINS
+  names origins (api/security.py).
 """
 from __future__ import annotations
 
-import hmac
 import json
 import math
 import os
@@ -33,6 +38,8 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
+from agent import metrics
+from agent.filelock import serialize_policy_writers
 from agent.core.experiments import cohorts, read_log as read_shadow_log, summarize_shadow
 from agent import observability
 from agent.core.orchestrator import default_orchestrator
@@ -47,14 +54,26 @@ from agent.tools import account_tools
 from agent.tools.audit import default_audit_log, default_trace_log
 from agent.policy.desk import Conflict, DeskError, NotFound, default_desk
 from agent.policy.escalation import default_queue
-from api import demo, idempotency, middleware
+from api import access, demo, idempotency, middleware
+from api.observability import ObservabilityMiddleware, RouteTemplates, readiness
+from api.security import SecurityHeadersMiddleware, configure_cors, constant_time_equals
 from ops.drift import recent_rows, report as drift_report, save_baseline as save_drift_baseline
 
+serialize_policy_writers()  # the ticket queue and the desk append under the same lock as the retention purge (agent/filelock.py)
+
 observability.configure_logging()
-app = FastAPI(title="LATAM Bank — Account/Payment Inquiries Agent", version="2.0.0")
+# The API's schema and interactive docs are not published unless EXPOSE_API_DOCS=1 (development).
+_docs = os.environ.get("EXPOSE_API_DOCS") == "1"
+app = FastAPI(title="LATAM Bank — Account/Payment Inquiries Agent", version="2.0.0",
+              docs_url="/docs" if _docs else None, redoc_url="/redoc" if _docs else None,
+              openapi_url="/openapi.json" if _docs else None)
 app.add_middleware(middleware.RequestContextMiddleware)
 app.include_router(demo.router)
 STATIC = Path(__file__).parent / "static"
+# Outermost last: CORS answers a browser's preflight before anything else, then metrics see every request, headers go on every reply.
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(ObservabilityMiddleware, templates=RouteTemplates(app))
+configure_cors(app)
 
 
 class RateLimiter:
@@ -64,8 +83,8 @@ class RateLimiter:
     MAX_KEYS = 100_000
     SWEEP_EVERY = 1_000
 
-    def __init__(self, limit: int, window_s: float):
-        self.limit, self.window_s = limit, window_s
+    def __init__(self, limit: int, window_s: float, name: str = ""):
+        self.limit, self.window_s, self.name = limit, window_s, name
         self._hits: dict[str, deque] = defaultdict(deque)
         self._lock = threading.Lock()
         self._calls = 0
@@ -90,6 +109,8 @@ class RateLimiter:
                 self._sweep(now)
             q = self._prune(key, now)
             if len(q) >= self.limit:
+                if self.name:
+                    metrics.default.rate_limited.labels(self.name).inc()
                 return False
             q.append(now)
             return True
@@ -118,12 +139,12 @@ def too_many(limiter: "RateLimiter", key: str, detail: str) -> HTTPException:
     return HTTPException(429, detail, headers={"Retry-After": str(limiter.retry_after(key))})
 
 
-chat_limiter = RateLimiter(int(os.environ.get("CHAT_RATE_PER_MIN", "20")), 60)
-login_limiter = RateLimiter(int(os.environ.get("LOGIN_RATE_PER_MIN", "10")), 60)
+chat_limiter = RateLimiter(int(os.environ.get("CHAT_RATE_PER_MIN", "20")), 60, "chat")
+login_limiter = RateLimiter(int(os.environ.get("LOGIN_RATE_PER_MIN", "10")), 60, "login")
 # Across every session of one customer, and from one client address. Behind the BFF the address is the end user's only
 # when CLIENT_IP_HEADER is set; without it every user shares the BFF's, so the default is generous.
-chat_customer_limiter = RateLimiter(int(os.environ.get("CHAT_CUSTOMER_RATE_PER_MIN", "40")), 60)
-chat_ip_limiter = RateLimiter(int(os.environ.get("CHAT_IP_RATE_PER_MIN", "120")), 60)
+chat_customer_limiter = RateLimiter(int(os.environ.get("CHAT_CUSTOMER_RATE_PER_MIN", "40")), 60, "chat_customer")
+chat_ip_limiter = RateLimiter(int(os.environ.get("CHAT_IP_RATE_PER_MIN", "120")), 60, "chat_ip")
 
 
 class SessionRequest(BaseModel):
@@ -174,17 +195,53 @@ def client_ip(request: Request) -> str:
     return (header and request.headers.get(header)) or (request.client.host if request.client else "unknown")
 
 
-def require_admin(x_admin_key: str | None = Header(default=None)) -> None:
+# Failed admin, metrics and operator credentials count per client address: past the limit even the right key is refused until
+# the window passes, so a key cannot be guessed at line speed.
+operator_fail_limiter = RateLimiter(int(os.environ.get("OPERATOR_AUTH_FAILS_PER_MIN", "10")), 60, "auth_failures")
+
+
+def _refuse_if_guessing(request: Request, kind: str) -> str:
+    origin = client_ip(request)
+    if operator_fail_limiter.over(origin):
+        metrics.default.rate_limited.labels("auth_failures").inc()
+        default_audit_log.event(f"{kind}_auth_failed", origin=origin, reason="blocked")
+        raise too_many(operator_fail_limiter, origin, "too many failed attempts")
+    return origin
+
+
+def _bad_credential(origin: str, kind: str, detail: str) -> HTTPException:
+    operator_fail_limiter.record(origin)
+    default_audit_log.event(f"{kind}_auth_failed", origin=origin, reason="invalid")
+    return HTTPException(401, detail)
+
+
+def require_admin(request: Request, x_admin_key: str | None = Header(default=None)) -> None:
     expected = os.environ.get("ADMIN_API_KEY")
     if not expected:
         raise HTTPException(503, "admin endpoints disabled: ADMIN_API_KEY not configured")
-    if not x_admin_key or not hmac.compare_digest(x_admin_key, expected):
-        raise HTTPException(401, "invalid admin key")
+    origin = _refuse_if_guessing(request, "admin")
+    if not constant_time_equals(x_admin_key, expected):
+        raise _bad_credential(origin, "admin", "invalid admin key")
+
+
+def require_metrics(request: Request, authorization: str | None = Header(default=None),
+                    x_admin_key: str | None = Header(default=None)) -> None:
+    """A scraper's bearer METRICS_TOKEN, or the admin key (as a bearer or in X-Admin-Key). The token opens only this endpoint."""
+    keys = [k for k in (os.environ.get("METRICS_TOKEN"), os.environ.get("ADMIN_API_KEY")) if k]
+    if not keys:
+        raise HTTPException(503, "metrics disabled: neither METRICS_TOKEN nor ADMIN_API_KEY is configured")
+    origin = _refuse_if_guessing(request, "metrics")
+    scheme, _, bearer = (authorization or "").partition(" ")
+    presented = [x_admin_key, bearer.strip() if scheme.lower() == "bearer" else None]
+    ok = False
+    for candidate in presented:
+        for key in keys:  # every pair is compared, with no early exit
+            ok |= constant_time_equals(candidate, key)
+    if not ok:
+        raise _bad_credential(origin, "metrics", "invalid metrics credentials")
 
 
 OperatorDirectory.from_env()  # a bad OPERATOR_KEYS stops the service from starting, rather than failing at the first request
-
-operator_fail_limiter = RateLimiter(int(os.environ.get("OPERATOR_AUTH_FAILS_PER_MIN", "10")), 60)
 
 
 def require_operator(request: Request, x_operator_key: str | None = Header(default=None)) -> str:
@@ -193,15 +250,10 @@ def require_operator(request: Request, x_operator_key: str | None = Header(defau
     directory = OperatorDirectory.from_env()
     if not directory.enabled:
         raise HTTPException(503, "operator endpoints disabled: OPERATOR_KEYS not configured")
-    origin = client_ip(request)
-    if operator_fail_limiter.over(origin):
-        default_audit_log.event("operator_auth_failed", origin=origin, reason="blocked")
-        raise too_many(operator_fail_limiter, origin, "too many failed attempts")
+    origin = _refuse_if_guessing(request, "operator")
     name = directory.authenticate(x_operator_key)
     if name is None:
-        operator_fail_limiter.record(origin)
-        default_audit_log.event("operator_auth_failed", origin=origin, reason="invalid")
-        raise HTTPException(401, "invalid operator key")
+        raise _bad_credential(origin, "operator", "invalid operator key")
     return name
 
 
@@ -222,19 +274,45 @@ def health() -> dict:
             "intent_classifier_loaded": intent_guard.read("hola").model_available}
 
 
+@app.get("/livez")
+def livez() -> dict:
+    """The process is up and answering. Says nothing about its dependencies: a restart cannot fix those (see /readyz)."""
+    return {"status": "alive"}
+
+
+@app.get("/readyz")
+def readyz(response: Response) -> dict:
+    """Whether to send this instance traffic: the warehouse, the state store and the data directory all answer."""
+    checks = readiness()
+    ready = all(checks.values())
+    response.status_code = 200 if ready else 503
+    return {"status": "ready" if ready else "not_ready", "checks": checks}
+
+
+@app.get("/metrics", dependencies=[Depends(require_metrics)])
+def prometheus_metrics() -> Response:
+    """Prometheus text format (agent/metrics.py). Admin key, or the scraper's METRICS_TOKEN as a bearer."""
+    return Response(metrics.default.render(), media_type=metrics.CONTENT_TYPE)
+
+
 @app.post("/auth/session", response_model=SessionResponse)
 def create_session(req: SessionRequest, request: Request) -> SessionResponse:
     origin = client_ip(request)
     if not login_limiter.allow(origin):
+        metrics.default.logins.labels("rate_limited").inc()
         raise too_many(login_limiter, origin, "too many login attempts")
     try:
         s = default_identity.login(req.customer_id, req.pin)
     except IdentityUnavailable:
+        metrics.default.logins.labels("unavailable").inc()
         raise HTTPException(503, "identity service not configured") from None
     except LockedOut:
+        metrics.default.logins.labels("locked_out").inc()
         raise HTTPException(429, "too many failed attempts; try later") from None
     except AuthError:
+        metrics.default.logins.labels("invalid").inc()
         raise HTTPException(401, "invalid credentials") from None
+    metrics.default.logins.labels("ok").inc()
     return SessionResponse(token=s.token, session_ref=s.ref, expires_at=s.expires_at, expires_in=round(s.expires_at - s.issued_at))
 
 
@@ -344,7 +422,7 @@ def case_status(ticket_id: str, x_session_token: str | None = Header(default=Non
     return found
 
 
-@app.get("/demo/customers")
+@app.get("/demo/customers", dependencies=[Depends(demo.require_demo)])
 def demo_customers() -> list[dict]:
     ids = [c.strip() for c in os.environ.get("DEMO_PUBLIC_CUSTOMERS", "").split(",") if c.strip()]
     try:
@@ -490,7 +568,7 @@ def llm_budget() -> dict:
             "exhausted": default_budget.exhausted()}
 
 
-@app.get("/admin/demo_pin/{customer_id}", dependencies=[Depends(require_admin)])
+@app.get("/admin/demo_pin/{customer_id}", dependencies=[Depends(demo.require_demo), Depends(require_admin)])
 def demo_pin(customer_id: str) -> dict:
     return {"customer_id": customer_id, "test_pin": derive_test_pin(customer_id)}
 
@@ -503,3 +581,6 @@ def data_quality() -> dict:
     rep = json.loads(path.read_text(encoding="utf-8"))
     return {k: rep[k] for k in ("run_id", "contract_version", "summary", "tables", "contract_deviations") if k in rep} | {
         "failed_checks": [c for c in rep["checks"] if c["passed"] is False]}
+
+
+access.check_app(app)  # a route with no row in api/access.py stops the service from starting

@@ -104,12 +104,20 @@ service, and as our own roadmap.
   recorrido en navegador (`docs/demo/operador-*.png`, con datos sintéticos de `ops.seed_operator_demo`); con el modelo
   de clientes y un banco real quedaría por probar la carga y la accesibilidad con lector de pantalla.
 - `/demo/customers` publishes test PINs for a few sandbox accounts, like any
-  sandbox's test login. It must be empty (`DEMO_PUBLIC_CUSTOMERS=`) anywhere real.
+  sandbox's test login. It exists only with `DEMO_MODE=1` (a 404 otherwise, as does `/admin/demo_pin`).
 - `DEMO_MODE=1` turns on the jury sandbox: scenarios with those test PINs, a
   "Why?" that shows policy rules and what the model received, the session's
   own tickets, and buttons that expire the session or take the model down for
   it. Everything acts on the caller's own session, but it is a demo surface:
-  it must stay off anywhere real.
+  it must stay off anywhere real. It is off by default, in the image, in `.env.example`
+  and in the compose stack's defaults; `make up` turns it on locally on purpose.
+- **Access control is a matrix over shared keys.** `api/access.py` classifies every route by role and the service will not
+  start with an unclassified one, but the roles come from three kinds of shared secret in environment variables: one
+  admin key for every reader, one metrics token, and named operator keys. There is no per-reader identity for admin
+  reads, no rotation other than a redeploy, no MFA, and the counters that stop key guessing live in memory. `/health`
+  and `/readyz` are public by design (a probe must reach them) and say which providers are configured and which
+  dependency is down, as yes/no. The page's Content-Security-Policy allows inline styles, because the page styles elements
+  with `style` attributes. No CORS is configured: a browser app on another origin needs `CORS_ALLOWED_ORIGINS`.
 - Traces, audit logs and tickets contain customer data. Masking of account
   numbers is done, and card/account/ID numbers typed by the customer are
   masked in tickets. Still missing are field-level encryption at rest and
@@ -182,8 +190,34 @@ service, and as our own roadmap.
   real idempotency key.
 - **Ingestion runs at first boot** in the container. Production runs it on a
   schedule into persistent storage.
-- **Monitoring is JSONL plus admin endpoints.** The alert thresholds are
-  specified (docs/operations.md) but not wired to a metrics stack.
+- **Monitoring has metrics, rules and a dashboard, and no production traffic behind them.** `/metrics`, the alert rules
+  (`ops/alerts.yml`, checked and unit-tested with promtool) and a Grafana dashboard exist and run in the compose stack.
+  Prometheus only evaluates the alerts: no Alertmanager, pager or webhook is wired. The thresholds are the starting values
+  in docs/operations.md, untuned. The week-over-week drift rules need eight days of series and have no unit test. A
+  per-customer security threshold is not expressible (a label per customer is unbounded): the alert counts in total and
+  the customer is found in the traces. Counters are per process and reset on restart, so several replicas would need each
+  one scraped, which the single-writer design does not need yet.
+- **Retention is applied, not proven at scale.** The purge is tested for every store and runs daily in the container. It
+  holds a cross-process lock (`flock` on `<file>.lock`, `agent/filelock.py`) from reading a JSONL file to swapping it in, and
+  every writer of those files takes the same lock, so a record confirmed to its writer is not lost to it (tested with a write
+  landing exactly at the swap and with a writer in another process). What that does not cover: a process that appends
+  without taking the lock (a script of your own), and Windows, where the lock is a no-op. The ticket queue and the desk take
+  the lock through a wrapper installed at API start-up (`serialize_policy_writers`), not in their own code, because editing
+  `agent/policy/` invalidates the evaluation reports' policy fingerprint and those can only be regenerated against the full
+  warehouse; when those files are next changed on purpose they should call `append_line` themselves. SQLite gives freed pages back to
+  the file only on a `VACUUM`, which is not run. Backups, if any exist, are outside the policy. Ticket and event
+  retention (90 days) is a sandbox stand-in for the bank's regulatory schedule. The warehouse itself holds the customer
+  tables and is replaced, not pruned.
+- **Reproducible setup, with limits.** Python dependencies are locked with hashes and installed with `--require-hashes`; the
+  Docker base images (`python:3.11-slim`, `node:24-slim`, and the Prometheus, Grafana and Ollama images) are pinned by tag,
+  not by digest, so a rebuild can take a newer patch release of a base image. `make lock` needs `uv`. The web image runs
+  the build with `web/serve.mjs`, a small server of ours; it is tested in the compose stack and the CI, not under production
+  load or behind a real edge, and no production host for it is chosen. The stack was verified with Docker on macOS
+  (OrbStack) and never on Linux or Docker Desktop; the CI workflow has not been run on GitHub from here (its commands were run
+  locally; see the report).
+- **The local model is wired, not measured.** The compose stack can start Ollama and pass the API `LLM_PROVIDERS=local`, and the
+  profile was verified with a 0.5 GB model. No evaluation has run against any local model (`gpt-oss:20b` or a smaller one),
+  and on macOS Docker runs models on CPU only.
 - **Voice is not built.** 85% of account/payment contacts are phone calls; this
   system serves the 15% on text channels until speech-to-text and
   text-to-speech are added.

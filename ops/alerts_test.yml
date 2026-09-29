@@ -1,0 +1,170 @@
+# Unit tests for ops/alerts.yml, run by promtool (`make alerts-check`): series in, the alerts that must (or must not) fire out.
+# The week-over-week drift rules (CLARIFY rate, tool-argument errors, escalation rate) need eight days of series and are
+# not covered here: they are checked for syntax by `promtool check rules` and for the metrics they name by tests/test_alerts.py.
+rule_files:
+  - alerts.yml
+evaluation_interval: 1m
+
+tests:
+  - name: the API stops answering its scrape
+    interval: 1m
+    input_series:
+      - series: 'up{job="cecilai-api"}'
+        values: '1 1 0 0 0 0 0 0'
+    alert_rule_test:
+      - {eval_time: 2m, alertname: CecilaiDown, exp_alerts: []}   # one missed scrape is not an outage
+      - eval_time: 6m
+        alertname: CecilaiDown
+        exp_alerts:
+          - exp_labels: {severity: critical, signal: availability, job: cecilai-api}
+            exp_annotations:
+              summary: The API does not answer its scrape
+              description: Prometheus could not scrape /metrics for 2 minutes. Check /livez (process) and /readyz (warehouse, state store).
+              runbook: docs/operations.md#runbook-short
+
+  - name: a handoff that did not read back
+    interval: 1m
+    input_series:
+      - series: 'cecilai_handoff_unverified_total'
+        values: '0 0 0 1 1 1 1'
+    alert_rule_test:
+      - {eval_time: 2m, alertname: CecilaiHandoffUnverified, exp_alerts: []}
+      - eval_time: 4m
+        alertname: CecilaiHandoffUnverified
+        exp_alerts:
+          - exp_labels: {severity: critical, signal: handoff_unverified}
+            exp_annotations:
+              summary: A ticket did not read back and the customer was told to call
+              description: Find the turns by policy_rule ending in handoff_unverified at /admin/trace_log and file the tickets by hand.
+              runbook: docs/operations.md#runbook-short
+
+  - name: more than five security escalations in an hour
+    interval: 1m
+    input_series:
+      - series: 'cecilai_escalations_total{category="security"}'
+        values: '0+1x30'      # one a minute
+      - series: 'cecilai_escalations_total{category="fraud"}'
+        values: '0+10x30'     # a different category never counts
+    alert_rule_test:
+      - {eval_time: 4m, alertname: CecilaiSecurityEscalations, exp_alerts: []}
+      - eval_time: 20m
+        alertname: CecilaiSecurityEscalations
+        exp_alerts:
+          - exp_labels: {severity: warning, signal: security_escalations}
+            exp_annotations:
+              summary: More than 5 security escalations in an hour
+              description: Injection or enumeration attempts. Per customer it needs the traces (by session_ref at /admin/traces/{id}); a label per customer would be unbounded here.
+              runbook: docs/operations.md#runbook-short
+
+  - name: p95 turn latency above 8 seconds
+    interval: 1m
+    input_series:
+      # 100 turns a minute; 10% take longer than 8 s, so the p95 is above it
+      - {series: 'cecilai_turn_latency_seconds_bucket{le="5.0"}', values: '0+40x40'}
+      - {series: 'cecilai_turn_latency_seconds_bucket{le="8.0"}', values: '0+90x40'}
+      - {series: 'cecilai_turn_latency_seconds_bucket{le="12.0"}', values: '0+98x40'}
+      - {series: 'cecilai_turn_latency_seconds_bucket{le="+Inf"}', values: '0+100x40'}
+    alert_rule_test:
+      - {eval_time: 5m, alertname: CecilaiTurnLatencyP95High, exp_alerts: []}   # over the threshold, but not for 10 minutes yet
+      - eval_time: 25m
+        alertname: CecilaiTurnLatencyP95High
+        exp_alerts:
+          - exp_labels: {severity: warning, signal: latency}
+            exp_annotations:
+              summary: p95 turn latency above 8 seconds
+              description: See cecilai_stage_latency_seconds by stage (llm, tools, policy_render) to tell a slow provider from a slow lookup.
+              runbook: docs/operations.md#monitoring
+
+  - name: a breaker that stays open is an alert only for a configured provider
+    interval: 1m
+    input_series:
+      - {series: 'cecilai_llm_circuit_open{provider="groq"}', values: '1x10'}
+      - {series: 'cecilai_llm_provider_configured{provider="groq"}', values: '1x10'}
+      - {series: 'cecilai_llm_circuit_open{provider="together"}', values: '1x10'}
+      - {series: 'cecilai_llm_provider_configured{provider="together"}', values: '0x10'}   # no key: skipped anyway
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: CecilaiCircuitOpen
+        exp_alerts:
+          - exp_labels: {severity: warning, signal: llm_outage, provider: groq}
+            exp_annotations:
+              summary: The circuit breaker of groq has been open for 5 minutes
+              description: The provider failed repeatedly and is being skipped. The next provider in LLM_PROVIDERS carries the traffic.
+              runbook: docs/operations.md#runbook-short
+
+  - name: the daily model budget
+    interval: 1m
+    input_series:
+      - {series: 'cecilai_llm_budget_limit_usd', values: '5x5'}
+      - {series: 'cecilai_llm_budget_spent_usd', values: '1 2 4.5 5.1 5.1'}
+      - {series: 'cecilai_llm_budget_exhausted', values: '0 0 0 1 1'}
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: CecilaiLlmBudgetExhausted
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: CecilaiLlmBudgetExhausted
+        exp_alerts:
+          - exp_labels: {severity: warning, signal: cost}
+            exp_annotations:
+              summary: The daily model budget is spent; the assistant is in degraded mode
+              description: Check /admin/llm_budget and the traces for abuse; raise LLM_DAILY_BUDGET_USD only if the traffic is legitimate.
+              runbook: docs/operations.md#runbook-short
+      - eval_time: 2m
+        alertname: CecilaiLlmBudgetNearlyGone
+        exp_alerts:
+          - exp_labels: {severity: info, signal: cost}
+            exp_annotations:
+              summary: 80% of the day's model budget is spent
+              description: At the limit the assistant runs degraded until 00:00 UTC (see CecilaiLlmBudgetExhausted).
+              runbook: docs/operations.md#runbook-short
+
+  - name: stale data fires only when freshness is enforced
+    interval: 1m
+    input_series:
+      - {series: 'cecilai_data_age_hours', values: '40x30'}
+      - {series: 'cecilai_data_freshness_slo_hours', values: '36x30'}
+      - {series: 'cecilai_data_freshness_enforced', values: '0x10 1x20'}
+    alert_rule_test:
+      - {eval_time: 9m, alertname: CecilaiDataStale, exp_alerts: []}   # the static dataset: age is past the SLO, enforcement is off
+      - eval_time: 28m
+        alertname: CecilaiDataStale
+        exp_alerts:
+          - exp_labels: {severity: critical, signal: freshness}
+            exp_annotations:
+              summary: The warehouse is older than the freshness SLO
+              description: With FRESHNESS_ENFORCE=1 every tool refuses and turns escalate as data_unavailable. Without it (the static dataset) this never fires.
+              runbook: docs/operations.md#runbook-short
+
+  - name: a retention purge that stopped running
+    interval: 1m
+    input_series:
+      - {series: 'cecilai_retention_enabled', values: '1x3700'}
+      - {series: 'cecilai_retention_interval_hours', values: '24x3700'}
+      - {series: 'cecilai_retention_last_run_timestamp_seconds', values: '0x3700'}   # it ran once, at the epoch: stale from hour 48 on
+    alert_rule_test:
+      - {eval_time: 40h, alertname: CecilaiRetentionNotRunning, exp_alerts: []}
+      - eval_time: 60h
+        alertname: CecilaiRetentionNotRunning
+        exp_alerts:
+          - exp_labels: {severity: warning, signal: retention}
+            exp_annotations:
+              summary: The retention purge has not run in twice its interval
+              description: Records past their retention are piling up. Run `make retention` or check the container's purge loop (ops/entrypoint.sh).
+              runbook: docs/operations.md#data-retention
+
+  - name: someone guessing an admin key
+    interval: 1m
+    input_series:
+      - {series: 'cecilai_rate_limit_hits_total{limiter="auth_failures"}', values: '0 0 0 5 9 9'}
+      - {series: 'cecilai_rate_limit_hits_total{limiter="chat"}', values: '0 50 100 150 200 250'}   # chat limits are traffic, not an attack
+    alert_rule_test:
+      - {eval_time: 2m, alertname: CecilaiKeyGuessing, exp_alerts: []}
+      - eval_time: 5m
+        alertname: CecilaiKeyGuessing
+        exp_alerts:
+          - exp_labels: {severity: warning, signal: access}
+            exp_annotations:
+              summary: Someone is guessing an admin, metrics or operator key
+              description: A client address is over its failed-attempt limit (OPERATOR_AUTH_FAILS_PER_MIN). The audit log has the origin.
+              runbook: docs/operations.md#access-control

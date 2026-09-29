@@ -1,35 +1,204 @@
+# The whole stack on one machine, one command, no account and no network service to depend on:  make up
+# (docs/operations.md, "Local development"). Everything below runs in Docker; the cloud services the project can use (S3 for the
+# organizer's data, a model provider's API, Render) are options, never requirements.
+#
+#   api         the Python service. Default data: the hand-made fixture warehouse. No model key: degraded mode, which is safe.
+#   web         the frontend (TanStack Start build, served by web/serve.mjs); it waits for a ready API
+#   prometheus  profile "monitoring": scrapes the API's /metrics and loads ops/alerts.yml
+#   grafana     profile "monitoring": a provisioned dashboard over that Prometheus
+#   ollama      profile "llm-local": a local model server (OpenAI-compatible API). CPU only unless the GPU file is added
+#   ollama-pull profile "llm-local": a one-shot that downloads LOCAL_LLM_MODEL into the ollama volume
+# Settings come from the root .env, which `make env` creates from .env.example with freshly generated secrets; every one has a
+# default here, so an empty environment also boots (logins refused, admin off: they fail closed).
+# Every port is published on 127.0.0.1 only. Ways to start it (Makefile): make up | monitoring-up | up-llm-local | up-llm-host | up-dataset
+name: cecilai-local  # not "cecilai": that name is what an older manual setup of this repo used for its volumes
 services:
-  agent:
+  api:
     build:
       context: ..
       dockerfile: ops/Dockerfile
     ports:
-      - "8000:8000"
+      - "127.0.0.1:${API_PORT:-8000}:8000"
     environment:
-      # Dataset (organizer's read-only bucket; values from the data dictionary)
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      # What to ingest on first boot: the fixture unless INGEST_ARGS says otherwise (`make up-dataset` reads your local CSVs;
+      # AWS_* and DATASET_BUCKET, all optional, let it read the organizer's S3 bucket instead). The warehouse then lives in the
+      # volume: later boots do not ingest again.
+      - INGEST_ARGS=${INGEST_ARGS:---profile serving --source local --raw-dir /app/tests/fixtures/raw}
+      - DUCKDB_MEMORY_LIMIT=${DUCKDB_MEMORY_LIMIT:-400MB}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
       - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-2}
-      - DATASET_BUCKET=${DATASET_BUCKET}
-      # Model providers, tried in LLM_PROVIDERS order; one without its key is skipped
+      - DATASET_BUCKET=${DATASET_BUCKET:-}
+      # Model providers, tried in LLM_PROVIDERS order; one without its key or address is skipped. With none, the assistant runs in
+      # degraded mode: plain balances from verified data, everything else to a person, no model call.
       - LLM_PROVIDERS=${LLM_PROVIDERS:-anthropic,groq,together}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-opus-5}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-sonnet-5}
       - ANTHROPIC_EFFORT=${ANTHROPIC_EFFORT:-low}
       - ANTHROPIC_FALLBACKS=${ANTHROPIC_FALLBACKS:-1}
-      - GROQ_API_KEY=${GROQ_API_KEY}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
       - GROQ_MODEL=${GROQ_MODEL:-openai/gpt-oss-120b}
-      - TOGETHER_API_KEY=${TOGETHER_API_KEY}
+      - TOGETHER_API_KEY=${TOGETHER_API_KEY:-}
       - TOGETHER_MODEL=${TOGETHER_MODEL:-meta-llama/Llama-3.3-70B-Instruct-Turbo}
-      # Sandbox identity and admin (both fail closed when empty)
-      - DEMO_IDP_SECRET=${DEMO_IDP_SECRET}
-      - ADMIN_API_KEY=${ADMIN_API_KEY}
-      - DEMO_PUBLIC_CUSTOMERS=${DEMO_PUBLIC_CUSTOMERS:-}
+      # The local model provider (LLM_PROVIDERS=local): the compose "ollama" service, or an Ollama on the host (make up-llm-host)
+      - LOCAL_LLM_BASE_URL=${LOCAL_LLM_BASE_URL:-http://ollama:11434/v1}
+      - LOCAL_LLM_MODEL=${LOCAL_LLM_MODEL:-gpt-oss:20b}
+      - LLM_DAILY_BUDGET_USD=${LLM_DAILY_BUDGET_USD:-}
+      # Identity, admin, operators and metrics: each fails closed when empty
+      - DEMO_IDP_SECRET=${DEMO_IDP_SECRET:-}
+      - ADMIN_API_KEY=${ADMIN_API_KEY:-}
+      - OPERATOR_KEYS=${OPERATOR_KEYS:-}
+      - METRICS_TOKEN=${METRICS_TOKEN:-}
       - DEMO_MODE=${DEMO_MODE:-0}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-}
+      - RETENTION_INTERVAL_HOURS=${RETENTION_INTERVAL_HOURS:-24}
+      - STATE_DB_PATH=/app/data/warehouse/state.sqlite
+      # Every other setting of .env.example reaches the container as it is written there (a bare name: passed when .env sets it,
+      # absent otherwise, so the code's own default applies). tests/test_setup.py fails if one the code reads is missing here.
+      - EXPOSE_API_DOCS
+      - SECURITY_HSTS
+      - CLIENT_IP_HEADER
+      - DEMO_PUBLIC_CUSTOMERS
+      - SESSION_TTL_SECONDS
+      - CHAT_RATE_PER_MIN
+      - LOGIN_RATE_PER_MIN
+      - OPERATOR_AUTH_FAILS_PER_MIN
+      - CHAT_CUSTOMER_RATE_PER_MIN
+      - CHAT_IP_RATE_PER_MIN
+      - MAX_CONCURRENT_CHATS
+      - CHAT_QUEUE_MAX
+      - CHAT_QUEUE_WAIT_SECONDS
+      - CHAT_RETRY_AFTER_SECONDS
+      - MAX_REQUEST_BYTES
+      - REQUEST_BODY_TIMEOUT_SECONDS
+      - TURN_BUDGET_SECONDS
+      - HANDOFF_BUDGET_SECONDS
+      - LLM_MAX_OUTPUT_TOKENS
+      - LLM_MAX_PROMPT_CHARS
+      - LLM_SESSION_BUDGET_USD
+      - LOG_FORMAT
+      - LOG_LEVEL
+      - LLM_TIMEOUT_SECONDS
+      - LLM_TOTAL_BUDGET_SECONDS
+      - SHADOW_MODEL
+      - SHADOW_SAMPLE_PERCENT
+      - CANARY_MODEL
+      - CANARY_PERCENT
+      - FRESHNESS_ENFORCE
+      - FRESHNESS_SLO_HOURS
+      - RETENTION_TRACES_DAYS
+      - RETENTION_AUDIT_DAYS
+      - RETENTION_SHADOW_DAYS
+      - RETENTION_CONVERSATIONS_DAYS
+      - RETENTION_TICKETS_DAYS
+      - RETENTION_TICKET_EVENTS_DAYS
+      - RETENTION_TRACE_REQUESTS_DAYS
+      - TRACE_LOG_PATH
+      - AUDIT_LOG_PATH
+      - HUMAN_QUEUE_PATH
+      - HUMAN_DESK_PATH
+      - TRACE_REQUESTS_PATH
+      - SHADOW_LOG_PATH
+      - DRIFT_BASELINE_PATH
+      - INTENT_MODEL_PATH
+      - INTENT_META_PATH
+      - MLFLOW_TRACKING_URI
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # reach an Ollama running on the host (Linux needs this line; Docker Desktop has it)
     volumes:
       - warehouse:/app/data/warehouse
-      - raw:/app/data/raw
+      # RAW_DIR: a host folder with the dataset's CSVs, read-only. Unset, a named volume that stays empty.
+      - ${RAW_DIR:-raw}:/app/data/raw:ro
+    healthcheck:  # readiness (the image's own check, run more often): the warehouse and the state store answer
+      test: ["CMD", "curl", "-fs", "http://localhost:8000/readyz"]
+      interval: 5s
+      timeout: 5s
+      retries: 180
+    restart: unless-stopped
+  web:
+    build:
+      context: ../web
+      dockerfile: ../ops/Dockerfile.web
+    ports:
+      - "127.0.0.1:${WEB_PORT:-3000}:3000"
+    environment:
+      - AGENT_API_URL=http://api:8000
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+  prometheus:
+    profiles: ["monitoring"]
+    image: prom/prometheus:v3.5.0
+    entrypoint: ["/bin/sh", "-c"]
+    # The scrape credential is the METRICS_TOKEN, written to a file at start: it is never in the config committed to git
+    command:
+      - >-
+        printf %s "$$METRICS_TOKEN" > /tmp/metrics_token &&
+        exec /bin/prometheus --config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/prometheus
+        --web.listen-address=:9090
+    environment:
+      - METRICS_TOKEN=${METRICS_TOKEN:-}
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus:/prometheus
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+  grafana:
+    profiles: ["monitoring"]
+    image: grafana/grafana:12.2.0
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_ANALYTICS_REPORTING_ENABLED=false  # nothing leaves this machine
+      - GF_ANALYTICS_CHECK_FOR_UPDATES=false
+      - GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES=false
+      - GF_NEWS_NEWS_FEED_ENABLED=false
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana:/var/lib/grafana
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3001}:3000"
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+  ollama:
+    profiles: ["llm-local"]
+    image: ollama/ollama:0.12.6
+    volumes:
+      - ollama:/root/.ollama  # the downloaded models: kept across restarts
+    ports:
+      - "127.0.0.1:${OLLAMA_PORT:-11434}:11434"
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+    restart: unless-stopped
+  ollama-pull:
+    profiles: ["llm-local"]
+    image: ollama/ollama:0.12.6
+    entrypoint: ["/bin/sh", "-c"]
+    command: ['echo "pulling $$LOCAL_LLM_MODEL (a resume if interrupted)" && ollama pull "$$LOCAL_LLM_MODEL"']
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+      - LOCAL_LLM_MODEL=${LOCAL_LLM_MODEL:-gpt-oss:20b}
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: "no"
 
 volumes:
   warehouse:
   raw:
+  prometheus:
+  grafana:
+  ollama:

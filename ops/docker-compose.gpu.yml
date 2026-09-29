@@ -1,0 +1,12 @@
+# Adds an NVIDIA GPU to the local model server (Linux with the NVIDIA container toolkit):
+#   make up-llm-local GPU=1
+# Docker on macOS cannot pass its GPU through: use the host's own Ollama there (make up-llm-host).
+services:
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

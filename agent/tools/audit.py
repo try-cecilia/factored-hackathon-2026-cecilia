@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import contextvars
 import json
+import logging
 import os
 import threading
 import time
@@ -20,6 +21,9 @@ from collections import deque
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
+
+from agent import metrics
+from agent.filelock import append_line
 
 current_trace_id: contextvars.ContextVar[str | None] = contextvars.ContextVar("current_trace_id", default=None)
 
@@ -59,11 +63,18 @@ class _JsonlSink:
         line = json.dumps(record, default=str, ensure_ascii=False)
         with self._lock:
             self._recent.append(record)
-            with open(self.path, "a", encoding="utf-8") as f:
-                f.write(line + "\n")
+            append_line(self.path, line)  # under the file lock, so a retention purge never swaps the file in mid-write
 
     def recent(self) -> list[dict]:
         return list(self._recent)
+
+
+def _observe(count) -> None:
+    """Metrics are a side view of the record just written: they never break the turn that produced it."""
+    try:
+        count()
+    except Exception:  # noqa: BLE001
+        logging.getLogger(__name__).exception("could not update metrics")
 
 
 class AuditLog:
@@ -84,6 +95,8 @@ class AuditLog:
         if error is not None:
             record.error, record.error_type = str(error), type(error).__name__
         self._sink.write({**asdict(record), "duration_ms": record.duration_ms})
+        seconds = None if record.duration_ms is None else record.duration_ms / 1000
+        _observe(lambda: metrics.default.observe_tool_call(record.tool_name, seconds, record.trace_id))
 
     def event(self, kind: str, **fields: Any) -> None:
         """A record that is not a tool call (a failed operator login). `started_at` lets ops/retention.py prune it."""
@@ -103,6 +116,7 @@ class TraceLog:
 
     def write(self, trace: dict) -> None:
         self._sink.write(trace)
+        _observe(lambda: metrics.default.observe_turn(trace))  # /metrics counts what the trace says (agent/metrics.py)
 
     def recent(self) -> list[dict]:
         return self._sink.recent()

@@ -26,6 +26,7 @@ import time
 from dataclasses import dataclass
 
 from agent.session.auth import Session, SessionStore, default_store
+from agent.session.secure_compare import constant_time_equals
 from agent.tools.db import get_connection
 
 MAX_FAILURES = 5
@@ -88,7 +89,7 @@ class IdentityService:
                 raise LockedOut("too many failed attempts; try again later")
         expected = derive_test_pin(customer_id)
         record = self._lookup(customer_id)
-        ok = hmac.compare_digest(expected, str(pin)) and record is not None and record.customer_status != "Closed"
+        ok = constant_time_equals(expected, str(pin)) and record is not None and record.customer_status != "Closed"
         if not ok:
             with self._lock:
                 self._failures.setdefault(customer_id, []).append(now)

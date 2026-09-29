@@ -56,8 +56,8 @@ prueba confiable" que pide la consigna: un número de cliente solo no prueba ide
 emite la sesión siempre termina en `SessionStore.issue(customer_id, atributos)`, y el resto del sistema solo conoce el token.
 
 **En producción.** El IdP del banco (inicio de sesión en la app, OTP o PIN de IVR), con MFA y vinculación de dispositivo;
-los atributos vendrían del IdP. `/demo/customers` publica PINs de prueba y debe estar vacío (`DEMO_PUBLIC_CUSTOMERS=`)
-en cualquier entorno real.
+los atributos vendrían del IdP. `/demo/customers` publica PINs de prueba: solo existe con `DEMO_MODE=1` (404 en cualquier
+otro caso) y debe quedar apagado en cualquier entorno real.
 
 **Cómo se verifica.** `tests/test_api.py` (inicio de sesión, consulta y cierre, límite de intentos detrás del BFF),
 `tests/test_durable_state.py` (sesiones tras un reinicio, solo el hash en disco).
@@ -312,15 +312,20 @@ razonamiento oculto del modelo, que la consigna no acepta como artefacto de audi
 
 | Registro | Contenido | Retención |
 |---|---|---|
-| `audit_log.jsonl` | Una línea por llamada a una herramienta, y los intentos fallidos de operador | 30 días |
+| `audit_log.jsonl` | Una línea por llamada a una herramienta, los intentos fallidos de clave y cada purga de retención | 30 días |
 | `traces.jsonl` | Una línea por turno: intentos al modelo y su uso, política aplicada, latencia, costo y cohorte | 30 días |
-| `ticket_events.jsonl` | Cada decisión del operador, con su nombre | Sin política de retención definida |
+| `ticket_events.jsonl` | Cada decisión del operador, con su nombre | con el ticket (se borran juntos, ya fuera de la cola y con el último evento de más de 90 días) |
 | `human_queue.jsonl` | Los tickets | 90 días (sustituto) |
+| `trace_requests.jsonl` | Los pedidos de rastreo | 90 días |
+| sesiones y conversaciones (SQLite) | Solo el hash del token; el historial enmascarado | vencidas al purgar; 1 día |
 
-La retención corre a diario con `python -m ops.retention`. Los endpoints de solo lectura (clave de admin) son
-`/admin/human_queue`, `audit_log`, `trace_log`, `traces/{id}`, `ops`, `llm_budget`, `data_quality`, `drift` y
-`experiments`. Los umbrales de alerta están especificados en `docs/operations.md` pero **no están conectados a un stack
-de métricas**.
+La retención la aplica `python -m ops.retention` (una política para todos los almacenes, cada período en una variable
+`RETENTION_*_DAYS`); el contenedor la corre en un bucle diario, es idempotente y cada corrida queda registrada como evento
+`retention_purge` en la auditoría. Los endpoints de solo lectura (clave de admin) son `/admin/human_queue`, `audit_log`,
+`trace_log`, `traces/{id}`, `ops`, `llm_budget`, `data_quality`, `drift` y `experiments`. `GET /metrics` (formato Prometheus,
+con `METRICS_TOKEN` o la clave de admin), `/livez` y `/readyz` completan la observabilidad, y `ops/alerts.yml` trae las reglas de
+alerta. Las reglas y un dashboard de Grafana corren en el compose local (`make monitoring-up`); **no hay un Alertmanager ni un
+canal de notificación conectado**. Detalle y comandos: `docs/operations.md` (Monitoring, Access control, Data retention).
 
 **Punto de sustitución.** `_JsonlSink.write(record)` en `audit.py`: es donde un SIEM o una canalización de logs recibiría
 cada registro.
@@ -329,7 +334,8 @@ cada registro.
 alertas cableadas. Hoy **no hay evidencia de manipulación** (un encadenamiento por hash está pensado, no hecho), y las
 ventanas en memoria son de 1000 registros de auditoría y 500 de trazas.
 
-**Cómo se verifica.** `tests/test_api.py` (el registro de trazas y que ningún registro exponga el token) y `tests/test_drift.py`.
+**Cómo se verifica.** `tests/test_api.py` (el registro de trazas y que ningún registro exponga el token), `tests/test_drift.py`,
+`tests/test_retention.py`, `tests/test_metrics.py` y `tests/test_alerts.py`.
 
 ---
 
@@ -411,6 +417,25 @@ límite de tasa, API caída, plazo agotado, escenario en portugués, móvil, res
 
 ---
 
+## Levantar todo con un comando
+
+Todo se levanta y se prueba en Docker local, sin cuentas, sin S3 y sin claves de API; los servicios en la nube (S3, Render,
+proveedores de modelos) son opciones, nunca requisitos.
+
+```bash
+make up                 # API + web sobre el warehouse de fixtures; escribe .env con secretos nuevos; http://127.0.0.1:3000 y :8000
+make monitoring-up      # además Prometheus (con las reglas de alerta) y Grafana con su dashboard: :9090 y :3001
+make up-dataset RAW_DIR=/ruta/a/data/raw   # tus CSV locales, montados de solo lectura, ingeridos en el primer arranque
+make up-llm-local       # además un modelo local (Ollama en Docker); make up-llm-host usa el Ollama del host
+make compose-e2e        # levanta todo desde cero en un proyecto aparte y descartable, lo comprueba de punta a punta y lo baja (es el job `compose` del CI)
+make down               # baja el stack; sus volúmenes se conservan
+make clean-volumes      # además borra los volúmenes (pregunta antes)
+```
+
+Sin clave de modelo el asistente corre en modo degradado seguro: saldos simples desde datos verificados y todo lo demás a una
+persona. Requisitos de RAM y disco de los modelos locales, y por qué en macOS conviene el Ollama del host: `docs/operations.md`
+("Local development").
+
 ## Trabajo restante antes de desplegar
 
 Es la lista consolidada de lo que separa este prototipo de un servicio real. El detalle de cada punto está en la
@@ -421,7 +446,7 @@ frontera correspondiente y en `LIMITATIONS.md`.
 3. **Rastreo:** API de operaciones de pagos con clave de idempotencia y lectura tras escritura.
 4. **Casos:** integración con el sistema de casos del banco y su retención regulatoria.
 5. **Modelos:** un modelo dentro del perímetro del banco, con acuerdo de tratamiento de datos.
-6. **Observabilidad:** un destino a prueba de manipulación, alertas cableadas al stack de métricas y cifrado en reposo.
+6. **Observabilidad:** un destino a prueba de manipulación, las alertas de `ops/alerts.yml` conectadas a un canal de notificación, y cifrado en reposo.
 7. **Escala:** el estado en SQLite tiene un solo escritor; varias réplicas necesitan Redis o Postgres.
 8. **Evaluación:** repetir la medición con datos y tráfico reales. Las cifras actuales son offline y de simulador, y
    **no son una mejora medida en producción**.

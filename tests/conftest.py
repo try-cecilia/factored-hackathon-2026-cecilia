@@ -75,3 +75,15 @@ def fixture_warehouse(tmp_path_factory):
     yield db_path
     db.close_all()
     mp.undo()
+
+
+@pytest.fixture(autouse=True)
+def fresh_auth_failure_limiter(monkeypatch):
+    """Failed admin, metrics and operator keys count per client address in one limiter (api/main.py). Every test client is the same
+    address, so without a fresh limiter per test one test's wrong keys would lock the next test's right one out."""
+    import sys
+
+    main = sys.modules.get("api.main")
+    if main is not None:
+        monkeypatch.setattr(main, "operator_fail_limiter", main.RateLimiter(10, 60, "auth_failures"))
+    yield

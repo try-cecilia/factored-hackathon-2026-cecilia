@@ -1,4 +1,4 @@
-"""Tool-layer policies on fixture data: masking, ownership, semantics, freshness, retention."""
+"""Tool-layer policies on fixture data: masking, ownership, semantics, freshness. (Retention: tests/test_retention.py.)"""
 from __future__ import annotations
 
 import pytest
@@ -51,16 +51,3 @@ def test_freshness_policy_blocks_stale_answers_when_enforced(monkeypatch):
 
 def test_transaction_limit_is_clamped_in_the_tool_too():
     assert t.list_transactions("CLI-FIX0001", limit=10_000)["limit"] == 50
-
-
-def test_retention_prunes_only_expired_records(tmp_path):
-    import json
-    import time
-
-    from ops.retention import prune
-
-    f = tmp_path / "traces.jsonl"
-    now = time.time()
-    f.write_text("".join(json.dumps({"ts": now - d * 86400, "id": d}) + "\n" for d in (1, 29, 31, 400)), encoding="utf-8")
-    assert prune(f, "ts", 30, now=now) == (2, 2)
-    assert [json.loads(l)["id"] for l in f.read_text(encoding="utf-8").splitlines()] == [1, 29]

@@ -1,22 +1,40 @@
 name: ci
 
+# Jobs run in parallel and each is cached:
+#   python     the hermetic suite, the classifier evaluation and the quality gate (eval.gate)
+#   web        the frontend's locked install, typecheck and build
+#   alerts     promtool over ops/alerts.yml and its unit tests
+#   container  the API image booted the way Render does (existing checks)
+#   web-image  the web image builds, runs unprivileged and answers
+#   compose    the whole stack (API + web + Prometheus) from scratch on the fixture warehouse: ops/compose_e2e.sh
+# Checks that other branches add (data/ML validation, per-category floors in eval.gate) come in through `make` targets:
+# `make gate` runs whatever eval.gate checks, and ops/ci_optional.sh runs a target only if this checkout defines it.
+
 on:
   push:
   pull_request:
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
+  python:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version-file: .python-version
           cache: pip
-      - run: pip install -r requirements-tracking.txt  # the runtime pins plus mlflow, so the tracking tests run
+          cache-dependency-path: requirements-tracking.txt
+      - name: The lock files match the pins they were compiled from
+        run: make lock-check
+      - name: Install the locked dependencies (exact versions, every wheel checked against its sha256)
+        run: pip install --require-hashes -r requirements-tracking.txt  # the serving lock plus mlflow, so the tracking tests run
       - name: Hermetic test suite (fixture warehouse, no S3, no API keys)
-        run: python -m pytest tests/ -q
+        run: make test
       - name: Intent classifier evaluation is reproducible
         run: |
           python -m eval.evaluate_intent_classifier > /dev/null
@@ -31,7 +49,37 @@ jobs:
           assert guard["false_escalation"]["rate"] <= 0.05
           EOF
       - name: Quality gate (safety floors, guard recall, evidence made with the current prompt)
-        run: python -m eval.gate
+        run: make gate
+      - name: Checks other branches add (skipped here if the Makefile has no such target)
+        run: sh ops/ci_optional.sh validate-data-ml
+
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json  # the pnpm version comes from "packageManager"
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm build
+
+  alerts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Alert rules and their unit tests (promtool)
+        run: make alerts-check
 
   container:
     runs-on: ubuntu-latest
@@ -80,6 +128,55 @@ jobs:
           curl -fs localhost:8001/health | grep -q '"data_as_of":"2024-01-16"' || { docker logs retry; exit 1; }
           sudo test -f /srv/bad/bank.duckdb && sudo test ! -e /srv/bad/bank.duckdb.building && sudo test ! -e /srv/bad/bank.duckdb.wal
           docker rm -f retry
+      - name: Retention runs on its schedule, records itself in the audit log and shows in /metrics
+        run: |
+          docker logs app 2>&1 | grep -q "retention loop started"
+          for i in $(seq 1 30); do docker exec app test -s /app/data/warehouse/retention_status.json && break; sleep 1; done
+          curl -fs -H "X-Admin-Key: ci-admin" "localhost:8000/admin/audit_log?limit=500" | grep -Eq '"event": ?"retention_purge"'
+          docker exec app python -m ops.retention --dry-run
+          curl -fs -H "X-Admin-Key: ci-admin" localhost:8000/metrics | grep -E '^cecilai_retention_last_run_timestamp_seconds [1-9]'
       - name: Container logs
         if: always()
         run: docker logs app
+
+  web-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build the web image (layers cached in the Actions cache)
+        uses: docker/build-push-action@v6
+        with:
+          context: web
+          file: ops/Dockerfile.web
+          load: true
+          tags: cecilai-web
+          cache-from: type=gha,scope=web-image
+          cache-to: type=gha,scope=web-image,mode=max
+      - name: It runs unprivileged, answers, and takes its API address at run time
+        run: |
+          docker run -d --name web -p 3000:3000 -e AGENT_API_URL=http://127.0.0.1:1 cecilai-web
+          for i in $(seq 1 30); do curl -fs localhost:3000/_healthz && break; sleep 1; done
+          test "$(docker exec web id -u)" != "0"
+          test "$(curl -s -o /dev/null -w '%{http_code}' localhost:3000/)" = 200
+          # no API behind it: the page still loads and the health route says so, instead of hanging or crashing
+          curl -s localhost:3000/api/agent/health | grep -q '"status":"unavailable"'
+      - name: Container logs
+        if: always()
+        run: docker logs web
+
+  compose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: The compose file resolves with nothing configured
+        run: |
+          docker compose -f ops/docker-compose.yml config -q
+          # every profile resolves; the heavy one (llm-local: a model server) is validated here and not started
+          docker compose -f ops/docker-compose.yml --profile monitoring --profile llm-local config -q
+          docker compose -f ops/docker-compose.yml -f ops/docker-compose.gpu.yml --profile llm-local config -q
+      - name: The stack from scratch on the fixture (no S3, no model keys), checked end to end
+        run: make compose-e2e
+

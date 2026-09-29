@@ -1,0 +1,36 @@
+# The web frontend as an image (ops/docker-compose.yml; build context: web/). Stages: the locked dependencies, the build,
+# and a runtime that holds only the build, its production dependencies and its server (web/serve.mjs). Runs unprivileged; AGENT_API_URL is read at run time.
+#   docker build -f ops/Dockerfile.web -t cecilai-web web
+#   docker run -p 3000:3000 -e AGENT_API_URL=http://host.docker.internal:8000 cecilai-web
+FROM node:24-slim AS base
+ENV CI=true
+# The exact pnpm the package pins (package.json "packageManager"), so an install is the same anywhere
+RUN corepack enable && corepack prepare pnpm@10.33.2 --activate
+WORKDIR /app
+
+FROM base AS deps
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
+
+FROM deps AS build
+COPY . .
+RUN pnpm build
+
+# Only what the server imports at run time (react, the router): no vite, no typescript
+FROM base AS prod-deps
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile --prod
+
+FROM node:24-slim AS runtime
+ENV NODE_ENV=production PORT=3000 AGENT_API_URL=http://api:8000
+WORKDIR /app
+# curl for the health check
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/* \
+    && useradd --create-home --uid 10001 web
+COPY --from=prod-deps --chown=web:web /app/node_modules ./node_modules
+COPY --from=build --chown=web:web /app/dist ./dist
+COPY --chown=web:web serve.mjs package.json ./
+USER web
+EXPOSE 3000
+HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=3 CMD curl -fs http://127.0.0.1:${PORT}/_healthz || exit 1
+CMD ["node", "serve.mjs"]

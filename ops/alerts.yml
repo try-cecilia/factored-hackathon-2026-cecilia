@@ -1,0 +1,234 @@
+# Prometheus alert rules for the service. They implement the signals and starting thresholds in docs/operations.md
+# ("Monitoring"), one alert per row; every metric name is one agent/metrics.py exposes (tests/test_alerts.py checks that, and
+# `make alerts-check` runs promtool's syntax check and the unit tests in ops/alerts_test.yml).
+# Thresholds are starting points, not tuned values: nothing here has run against production traffic (LIMITATIONS.md).
+groups:
+  - name: cecilai-availability
+    rules:
+      - alert: CecilaiDown
+        expr: up{job="cecilai-api"} == 0
+        for: 2m
+        labels: {severity: critical, signal: availability}
+        annotations:
+          summary: "The API does not answer its scrape"
+          description: "Prometheus could not scrape /metrics for 2 minutes. Check /livez (process) and /readyz (warehouse, state store)."
+          runbook: docs/operations.md#runbook-short
+
+      - alert: CecilaiServerErrors
+        expr: |
+          sum(rate(cecilai_http_requests_total{status=~"5.."}[5m])) / sum(rate(cecilai_http_requests_total[5m])) > 0.05
+          and sum(rate(cecilai_http_requests_total[5m])) > 0.05
+        for: 10m
+        labels: {severity: critical, signal: availability}
+        annotations:
+          summary: "More than 5% of requests fail with a 5xx"
+          description: "Look at the logs; a warehouse or state-store failure also shows as cecilai_scrape_errors_total."
+          runbook: docs/operations.md#runbook-short
+
+      - alert: CecilaiScrapeSourceFailing
+        expr: increase(cecilai_scrape_errors_total[15m]) > 0
+        for: 15m
+        labels: {severity: warning, signal: availability}
+        annotations:
+          summary: "A state source of /metrics cannot be read: {{ $labels.source }}"
+          description: "The gauges that source feeds (data age, pipeline health, breakers...) are missing, so their alerts cannot fire."
+          runbook: docs/operations.md#monitoring
+
+  - name: cecilai-runbook-signals
+    rules:
+      - alert: CecilaiSecurityEscalations
+        expr: sum(increase(cecilai_escalations_total{category="security"}[1h])) > 5
+        labels: {severity: warning, signal: security_escalations}
+        annotations:
+          summary: "More than 5 security escalations in an hour"
+          description: "Injection or enumeration attempts. Per customer it needs the traces (by session_ref at /admin/traces/{id}); a label per customer would be unbounded here."
+          runbook: docs/operations.md#runbook-short
+
+      - alert: CecilaiHandoffUnverified
+        expr: increase(cecilai_handoff_unverified_total[15m]) > 0
+        labels: {severity: critical, signal: handoff_unverified}
+        annotations:
+          summary: "A ticket did not read back and the customer was told to call"
+          description: "Find the turns by policy_rule ending in handoff_unverified at /admin/trace_log and file the tickets by hand."
+          runbook: docs/operations.md#runbook-short
+
+      - alert: CecilaiForeignProductReferences
+        expr: increase(cecilai_foreign_product_references_total[1h]) > 3
+        labels: {severity: warning, signal: foreign_product_references}
+        annotations:
+          summary: "Explicit attempts to read another customer's product"
+          description: "Turns escalated by reference_to_foreign_product. Review the traces; consider revoking the sessions."
+          runbook: docs/operations.md#runbook-short
+
+      - alert: CecilaiClarifyRateShifted
+        expr: |
+          (
+            sum(rate(cecilai_turns_total{disposition="CLARIFY"}[1d])) / sum(rate(cecilai_turns_total[1d]))
+              > 1.5 * (sum(rate(cecilai_turns_total{disposition="CLARIFY"}[1d] offset 7d)) / sum(rate(cecilai_turns_total[1d] offset 7d)))
+            or
+            sum(rate(cecilai_turns_total{disposition="CLARIFY"}[1d])) / sum(rate(cecilai_turns_total[1d]))
+              < 0.5 * (sum(rate(cecilai_turns_total{disposition="CLARIFY"}[1d] offset 7d)) / sum(rate(cecilai_turns_total[1d] offset 7d)))
+          ) and sum(increase(cecilai_turns_total[1d])) > 100
+        for: 1h
+        labels: {severity: warning, signal: clarify_rate}
+        annotations:
+          summary: "The CLARIFY rate moved more than 50% against the same day last week"
+          description: "Drift in how well the model understands requests; compare /admin/drift with its frozen reference."
+          runbook: docs/operations.md#monitoring
+
+      - alert: CecilaiToolArgumentErrorsShifted
+        expr: |
+          (
+            sum(rate(cecilai_tool_calls_total{error_type=~"MissingSlot|InvalidArgument"}[1d])) / sum(rate(cecilai_tool_calls_total[1d]))
+              > 1.5 * (sum(rate(cecilai_tool_calls_total{error_type=~"MissingSlot|InvalidArgument"}[1d] offset 7d)) / sum(rate(cecilai_tool_calls_total[1d] offset 7d)))
+            or
+            sum(rate(cecilai_tool_calls_total{error_type=~"MissingSlot|InvalidArgument"}[1d])) / sum(rate(cecilai_tool_calls_total[1d]))
+              < 0.5 * (sum(rate(cecilai_tool_calls_total{error_type=~"MissingSlot|InvalidArgument"}[1d] offset 7d)) / sum(rate(cecilai_tool_calls_total[1d] offset 7d)))
+          ) and sum(increase(cecilai_tool_calls_total[1d])) > 100
+        for: 1h
+        labels: {severity: warning, signal: clarify_rate}
+        annotations:
+          summary: "The MissingSlot/InvalidArgument share of tool calls moved more than 50% week over week"
+          description: "The model fills tool arguments worse (or better) than last week: a prompt or provider change is the first suspect."
+          runbook: docs/operations.md#monitoring
+
+      - alert: CecilaiModelRefusals
+        expr: sum(increase(cecilai_model_refusals_total[15m])) > 0
+        for: 30m
+        labels: {severity: warning, signal: model_refusals}
+        annotations:
+          summary: "The provider keeps declining banking requests"
+          description: "Refusals for 30 minutes running. Each one falls to the next provider or to an escalation."
+          runbook: docs/operations.md#runbook-short
+
+      - alert: CecilaiLlmUnavailable
+        expr: increase(cecilai_llm_unavailable_turns_total[10m]) > 0
+        for: 10m
+        labels: {severity: critical, signal: llm_outage}
+        annotations:
+          summary: "Turns are escalating because no model provider answers"
+          description: "The customer gets a person, or a plain balance from verified data. Check the provider's status and /health."
+          runbook: docs/operations.md#runbook-short
+
+      - alert: CecilaiCircuitOpen
+        expr: (cecilai_llm_circuit_open == 1) and on (provider) (cecilai_llm_provider_configured == 1)
+        for: 5m
+        labels: {severity: warning, signal: llm_outage}
+        annotations:
+          summary: "The circuit breaker of {{ $labels.provider }} has been open for 5 minutes"
+          description: "The provider failed repeatedly and is being skipped. The next provider in LLM_PROVIDERS carries the traffic."
+          runbook: docs/operations.md#runbook-short
+
+      - alert: CecilaiEscalationRateShifted
+        expr: |
+          (
+            sum by (category) (rate(cecilai_escalations_total[1d])) > 1.5 * sum by (category) (rate(cecilai_escalations_total[1d] offset 7d))
+            or
+            sum by (category) (rate(cecilai_escalations_total[1d])) < 0.5 * sum by (category) (rate(cecilai_escalations_total[1d] offset 7d))
+          ) and sum by (category) (increase(cecilai_escalations_total[1d])) > 20
+        for: 1h
+        labels: {severity: warning, signal: escalation_rate}
+        annotations:
+          summary: "The {{ $labels.category }} escalation rate moved more than 50% week over week"
+          description: "Drift in data quality (data_unavailable, tool_failure) or in demand."
+          runbook: docs/operations.md#monitoring
+
+      - alert: CecilaiTurnLatencyP95High
+        expr: histogram_quantile(0.95, sum by (le) (rate(cecilai_turn_latency_seconds_bucket[10m]))) > 8
+        for: 10m
+        labels: {severity: warning, signal: latency}
+        annotations:
+          summary: "p95 turn latency above 8 seconds"
+          description: "See cecilai_stage_latency_seconds by stage (llm, tools, policy_render) to tell a slow provider from a slow lookup."
+          runbook: docs/operations.md#monitoring
+
+      - alert: CecilaiCostPerSafeResolutionHigh
+        expr: |
+          sum(increase(cecilai_llm_cost_usd_total[1d])) / sum(increase(cecilai_turns_total{disposition="AUTO_RESOLVE"}[1d])) > 0.01
+        for: 1h
+        labels: {severity: info, signal: cost}
+        annotations:
+          summary: "Model cost per automated resolution above USD 0.01"
+          description: "Budget-dependent. 0.01 is about 3x the 0.0029 measured with Claude Sonnet 5 (eval/reports/SYSTEM_EVAL_LIVE.md); set your own."
+          runbook: docs/operations.md#monitoring
+
+      - alert: CecilaiLlmBudgetNearlyGone
+        expr: cecilai_llm_budget_limit_usd > 0 and cecilai_llm_budget_spent_usd / cecilai_llm_budget_limit_usd > 0.8
+        labels: {severity: info, signal: cost}
+        annotations:
+          summary: "80% of the day's model budget is spent"
+          description: "At the limit the assistant runs degraded until 00:00 UTC (see CecilaiLlmBudgetExhausted)."
+          runbook: docs/operations.md#runbook-short
+
+      - alert: CecilaiLlmBudgetExhausted
+        expr: cecilai_llm_budget_exhausted == 1
+        labels: {severity: warning, signal: cost}
+        annotations:
+          summary: "The daily model budget is spent; the assistant is in degraded mode"
+          description: "Check /admin/llm_budget and the traces for abuse; raise LLM_DAILY_BUDGET_USD only if the traffic is legitimate."
+          runbook: docs/operations.md#runbook-short
+
+      - alert: CecilaiQualityChecksFailing
+        expr: cecilai_dq_failed_error_checks > 0
+        for: 10m
+        labels: {severity: warning, signal: pipeline}
+        annotations:
+          summary: "Error-level data-quality checks failed in the served load"
+          description: "Read the failed checks at /admin/data_quality and _quarantine_<table>."
+          runbook: docs/operations.md#runbook-short
+
+      - alert: CecilaiIngestionFailed
+        expr: cecilai_ingestion_failed_tables > 0
+        for: 10m
+        labels: {severity: warning, signal: pipeline}
+        annotations:
+          summary: "The latest ingestion attempt of a table failed"
+          description: "The warehouse still serves the previous load. Read the failure in the quality report."
+          runbook: docs/operations.md#runbook-short
+
+  - name: cecilai-data-and-operations
+    rules:
+      - alert: CecilaiDataStale
+        expr: cecilai_data_freshness_enforced == 1 and cecilai_data_age_hours > cecilai_data_freshness_slo_hours
+        for: 15m
+        labels: {severity: critical, signal: freshness}
+        annotations:
+          summary: "The warehouse is older than the freshness SLO"
+          description: "With FRESHNESS_ENFORCE=1 every tool refuses and turns escalate as data_unavailable. Without it (the static dataset) this never fires."
+          runbook: docs/operations.md#runbook-short
+
+      - alert: CecilaiRetentionNotRunning
+        expr: |
+          cecilai_retention_enabled == 1
+          and (time() - cecilai_retention_last_run_timestamp_seconds) > 2 * 3600 * cecilai_retention_interval_hours
+        for: 1h
+        labels: {severity: warning, signal: retention}
+        annotations:
+          summary: "The retention purge has not run in twice its interval"
+          description: "Records past their retention are piling up. Run `make retention` or check the container's purge loop (ops/entrypoint.sh)."
+          runbook: docs/operations.md#data-retention
+
+      - alert: CecilaiRetentionFailing
+        expr: cecilai_retention_failed_stores > 0
+        for: 1h
+        labels: {severity: warning, signal: retention}
+        annotations:
+          summary: "The last retention purge could not prune a store"
+          description: "The audit log has a retention_purge event with the stores that failed."
+          runbook: docs/operations.md#data-retention
+
+      - alert: CecilaiKeyGuessing
+        expr: sum(increase(cecilai_rate_limit_hits_total{limiter="auth_failures"}[10m])) > 0
+        labels: {severity: warning, signal: access}
+        annotations:
+          summary: "Someone is guessing an admin, metrics or operator key"
+          description: "A client address is over its failed-attempt limit (OPERATOR_AUTH_FAILS_PER_MIN). The audit log has the origin."
+          runbook: docs/operations.md#access-control
+
+      - alert: CecilaiLoginLockouts
+        expr: sum(increase(cecilai_logins_total{result="locked_out"}[15m])) > 10
+        labels: {severity: warning, signal: access}
+        annotations:
+          summary: "Many customer logins are being locked out"
+          description: "Credential stuffing or a broken client. Lockouts are per customer after 5 failures in 15 minutes."
+          runbook: docs/operations.md#access-control
