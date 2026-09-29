@@ -184,6 +184,22 @@ describe('a scenario of the demo panel writes its message in the chat input', ()
     await waitFor(() => expect(input().value).toBe('Me clonaron la tarjeta'))
   })
 
+  it('asking for the step again is off while a message is on its way, so the input cannot go back a step', async () => {
+    const user = userEvent.setup()
+    let answer: (value: unknown) => void = () => {}
+    sendMessage.mockReturnValue(new Promise((resolve) => { answer = resolve }))
+    await draw()
+    const card = await load(user, 'Dos turnos')
+    await waitFor(() => expect(input().value).toBe('¿Cuál es mi saldo?'))
+    await user.click(screen.getByRole('button', { name: 'Enviar mensaje' }))
+
+    const again = within(card).getByRole('button', { name: 'Volver a escribir el mensaje' }) as HTMLButtonElement
+    expect(again.disabled).toBe(true)
+    await act(async () => { answer({ ok: true, reply: reply('AUTO_RESOLVE', 'Tu saldo es 10 USD.') }) })
+    await waitFor(() => expect(input().value).toBe('Me clonaron la tarjeta'))
+    expect((within(card).getByRole('button', { name: 'Volver a escribir el mensaje' }) as HTMLButtonElement).disabled).toBe(false)
+  })
+
   it('loading a scenario replaces a draft: the person chose it, and the session it belonged to is gone', async () => {
     const user = userEvent.setup()
     await draw()

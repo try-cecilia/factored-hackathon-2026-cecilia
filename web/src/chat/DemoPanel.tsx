@@ -175,7 +175,7 @@ export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations
                     </ol>
                     {off && <p className="demo__note" role="status">{t('demo.steps.offScript')}</p>}
                     <div className="demo__actions">
-                      {active.base !== null && next < turns.length && <Button variant="ghost" size="sm" tinted onClick={again}>{t('demo.steps.refill')}</Button>}
+                      {active.base !== null && next < turns.length && <Button variant="ghost" size="sm" tinted disabled={pending} onClick={again}>{t('demo.steps.refill')}</Button>}
                       <Button variant="ghost" size="sm" onClick={() => setActive(null)}>{t('demo.steps.close')}</Button>
                     </div>
                   </section>
