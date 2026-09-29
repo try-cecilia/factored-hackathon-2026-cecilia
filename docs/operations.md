@@ -202,7 +202,7 @@ its evidence. The full suite is `make test PY=.venv/bin/python`; the files below
 | Safe fallback | every failure ends in a fixed reply or a handoff: never an invented answer, never a half-done action | `agent/core/orchestrator.py`, `agent/policy/router.py` | `tests/test_resilience.py` | `pytest tests/test_resilience.py -q` |
 | Capacity limits | body size, concurrency with a queue and 503, rate limits with 429, per-session and daily cost caps, prompt and output caps | `api/middleware.py`, `api/main.py`, `agent/llm/budget.py`, `agent/core/orchestrator.py` | `tests/test_capacity.py` (21) | `pytest tests/test_capacity.py -q`; `make loadtest-http PY=.venv/bin/python` |
 
-All four run in the hermetic target `make test-resilience` (82 tests, about 9 s, no S3, no keys, no network beyond 127.0.0.1).
+All four run in the hermetic target `make test-resilience` (101 tests, about 16 s, no S3, no keys, no network beyond 127.0.0.1).
 
 ### Traces: what one turn leaves behind
 
