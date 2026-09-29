@@ -1,223 +1,211 @@
-# LATAM Bank — AI-first Account & Payment Inquiries
+# LATAM Bank — Consultas de cuentas y pagos con IA como primera línea
 
-Factored AI & Data Hackathon 2026. A working customer-service system for one
-focused banking workflow: **account and payment inquiries** (balances,
-transactions, payment/arrears status, exchange rates) for a retail bank in
-Mexico, Colombia and Argentina, in **Spanish and Portuguese**.
+Factored AI & Data Hackathon 2026. Un sistema de atención al cliente funcional para un flujo bancario
+acotado: **consultas de cuentas y pagos** (saldos, transacciones, estado de pagos y mora, tipos de cambio)
+de un banco minorista en México, Colombia y Argentina, en **español y portugués**.
 
-It understands the request, decides with deterministic policy, acts through
-permissioned tools, answers only with verified data, and hands off to a human
-with evidence when it shouldn't act. **The model interprets; the code speaks**:
-the system never gives the language model a customer record, identifiers the
-customer types are masked before they leave, and the model never writes to
-the customer ([ADR-001](docs/decisions/ADR-001-model-interprets-code-speaks.md)). Its one action, tracing a
-movement that is still pending, happens only on the customer's own yes, judged in code, and is
-announced only after it reads back ([ADR-002](docs/decisions/ADR-002-one-action-confirmed-in-code.md)).
+Entiende la consulta, decide con políticas deterministas, actúa mediante herramientas con permisos, responde
+solo con datos verificados y deriva a una persona, con evidencia, cuando no debe actuar. **El modelo
+interpreta; el código habla**: el sistema nunca le entrega al modelo de lenguaje un registro de cliente, los
+identificadores que el cliente escribe se enmascaran antes de salir, y el modelo nunca le escribe al cliente
+([ADR-001](docs/decisions/ADR-001-model-interprets-code-speaks.md)). Su única acción, rastrear un
+movimiento que sigue pendiente, ocurre solo con el "sí" del propio cliente, juzgado en código, y se anuncia
+únicamente después de leerla de vuelta ([ADR-002](docs/decisions/ADR-002-one-action-confirmed-in-code.md)).
 
-## For reviewers: where to look
+## Para quienes evalúan: dónde mirar
 
-1. **Try it:** [deployed URL]. Each guided scenario says what to look for. Press **"Why?"** on a reply to see
-   what the model received (masked) and chose and what the code verified, open the **bank view** after a
-   handoff or a trace, take the model down and ask again, and open **Data quality**.
-2. **Check a number:** every figure here comes from a generated report:
-   [`SYSTEM_EVAL.md`](eval/reports/SYSTEM_EVAL.md) (offline, 528 cases),
-   [`SYSTEM_EVAL_LIVE.md`](eval/reports/SYSTEM_EVAL_LIVE.md) (live models),
-   [`intent_classifier.md`](eval/reports/intent_classifier.md) and
-   [`baseline_metrics.md`](docs/evidence/baseline_metrics.md) (the human baseline).
-   [`EVALUATION.md`](EVALUATION.md) says how each is measured and labels what is a projection.
-3. **Read the two decisions:** [ADR-001](docs/decisions/ADR-001-model-interprets-code-speaks.md) and
+1. **Probarlo:** [URL desplegada]. Cada escenario guiado indica qué observar. Presioná **"Why?"** en una
+   respuesta para ver qué recibió el modelo (enmascarado), qué eligió y qué verificó el código; abrí la
+   **vista del banco** después de una derivación o un rastreo; dejá el modelo caído y volvé a preguntar; y
+   abrí **Data quality**.
+2. **Verificar un número:** todas las cifras de acá salen de un reporte generado:
+   [`SYSTEM_EVAL.md`](eval/reports/SYSTEM_EVAL.md) (offline, 528 casos),
+   [`SYSTEM_EVAL_LIVE.md`](eval/reports/SYSTEM_EVAL_LIVE.md) (modelos en vivo),
+   [`intent_classifier.md`](eval/reports/intent_classifier.md) y
+   [`baseline_metrics.md`](docs/evidence/baseline_metrics.md) (la línea base humana).
+   [`EVALUATION.md`](EVALUATION.md) explica cómo se mide cada uno y marca qué es una proyección.
+3. **Leer las dos decisiones:** [ADR-001](docs/decisions/ADR-001-model-interprets-code-speaks.md) y
    [ADR-002](docs/decisions/ADR-002-one-action-confirmed-in-code.md).
-4. **Run it:** `make test` needs no keys and no network; `make ingest-demo && make serve` runs the app on
-   your machine; `make all` rebuilds every number ([Quickstart](#quickstart)).
-5. **What is still missing:** [`LIMITATIONS.md`](LIMITATIONS.md).
+4. **Ejecutarlo:** `make test` no necesita claves ni red; `make ingest-demo && make serve` corre la app en
+   tu máquina; `make all` reconstruye cada número ([Inicio rápido](#inicio-rápido)).
+5. **Qué falta todavía:** [`LIMITATIONS.md`](LIMITATIONS.md).
 
-## Why this workflow (measured on the supplied data)
+## Por qué este flujo (medido sobre los datos provistos)
 
-| | Account/payment ("Transaccional") | All other reasons |
+| | Cuentas y pagos ("Transaccional") | Todos los demás motivos |
 |---|---|---|
-| Share of 686K contacts | **35.0%** (largest) | 65.0% |
-| Avg handle time / wait | 221 s / 120 s | 266–540 s / 120 s |
-| First-contact resolution | 91.5% | 44–90% |
-| CSAT (1–5) | 2.91 | 2.43–2.90 |
+| Participación en 686 mil contactos | **35,0%** (la mayor) | 65,0% |
+| Tiempo medio de atención / espera | 221 s / 120 s | 266–540 s / 120 s |
+| Resolución en el primer contacto | 91,5% | 44–90% |
+| CSAT (1–5) | 2,91 | 2,43–2,90 |
 
-High volume, simple and already resolvable, yet customers wait two minutes
-for a 3.7-minute call and still rate it under 3/5. Median 6,701 such contacts
-a month ≈ 411 agent-hours. Source: [`docs/evidence/baseline_metrics.md`](docs/evidence/baseline_metrics.md)
-(auto-generated by `make analysis`).
+Alto volumen, simple y ya resoluble; sin embargo, los clientes esperan dos minutos para una llamada de
+3,7 minutos y aun así la califican por debajo de 3/5. La mediana es de 6.701 contactos de este tipo al mes,
+unas 411 horas de agente. Fuente: [`docs/evidence/baseline_metrics.md`](docs/evidence/baseline_metrics.md)
+(generado automáticamente por `make analysis`).
 
-## Results (held-out test workload, ES + PT)
+## Resultados (workload de test held-out, ES + PT)
 
-Offline, on all 528 test cases (22 case types × 12 country·segment cells × ES/PT), design v3 on the organizer's
-warehouse:
+Offline, sobre los 528 casos de test (22 tipos de caso × 12 celdas país·segmento × ES/PT), diseño v3 sobre el
+warehouse del organizador:
 
-| | Keyword bot (baseline) | This system, ideal model¹ | This system, adversarial model² |
+| | Bot de palabras clave (línea base) | Este sistema, modelo ideal¹ | Este sistema, modelo adversarial² |
 |---|---|---|---|
-| Safe automated resolution | 69.6% [63.5–75.1] | 98.8% [96.4–99.6] | 60.8% [54.5–66.8] |
-| Escalation recall | 66.7% | 100% | 100% |
-| Missed escalations | 48 | 0 | 0 |
-| Handoff completeness | 50.0% | 100% | 100% |
-| **Unsafe outcomes** | 0 / 528 | **0 / 528** | **0 / 528** |
-| Cases that sent a customer record to the model | n/a | 0 / 528 | 0 / 528 |
+| Resolución automática segura | 69,6% [63,5–75,1] | 98,8% [96,4–99,6] | 60,8% [54,5–66,8] |
+| Recall de escalamiento | 66,7% | 100% | 100% |
+| Escalamientos omitidos | 48 | 0 | 0 |
+| Completitud del handoff | 50,0% | 100% | 100% |
+| **Resultados inseguros** | 0 / 528 | **0 / 528** | **0 / 528** |
+| Casos que enviaron un registro de cliente al modelo | n/a | 0 / 528 | 0 / 528 |
 
-¹ Scripted ideal model: measures every deterministic layer for real, and is an
-upper bound on the LLM's own understanding. Its 3 misses and 6 unnecessary
-transfers all come from one Spanish trace request, "hice un pago que sigue
-pendiente", that the pre-LLM dispute guard hands to a person: reported, not tuned
-([`LIMITATIONS.md`](LIMITATIONS.md#the-action)). ² A deliberately bad scripted model
-that obeys injections, queries other customers' products and invents figures:
-automation drops and transfers rise, **but nothing unsafe gets through**.
-Safety does not depend on the model.
+¹ Modelo ideal guionado: mide de verdad todas las capas deterministas y es un techo para la comprensión del
+propio LLM. Sus 3 omisiones y 6 derivaciones innecesarias vienen de un único pedido de rastreo en español,
+"hice un pago que sigue pendiente", que la guarda de disputas previa al LLM entrega a una persona: se reporta,
+no se ajusta ([`LIMITATIONS.md`](LIMITATIONS.md#the-action)). ² Un modelo guionado deliberadamente malo, que
+obedece inyecciones, consulta productos de otros clientes e inventa cifras: la automatización baja y las
+derivaciones suben, **pero nada inseguro pasa**. La seguridad no depende del modelo.
 
-With live models, on a stratified sample of 132 of those cases (every case type
-in both languages, 11 per cell), three runs each
+Con modelos en vivo, sobre una muestra estratificada de 132 de esos casos (todos los tipos de caso en ambos
+idiomas, 11 por celda), tres corridas cada uno
 ([`eval/reports/SYSTEM_EVAL_LIVE.md`](eval/reports/SYSTEM_EVAL_LIVE.md)):
 
 | | Claude Sonnet 5 | Claude Haiku 4.5 |
 |---|---|---|
-| Safe automated resolution | **95.0%** [86.3–98.3] | 78.3% [66.4–86.9] |
-| Escalation recall | 100% | 88.9% (4 missed) |
-| **Unsafe outcomes** | **0 / 132 in each run** | **0 / 132 in each run** |
-| Cases that sent a customer record to the model | 0 / 132 | 0 / 132 |
-| Latency per case, p50 / p95 | 1.8 s / 3.9 s | 1.2 s / 3.8 s |
-| Model cost per safe resolution | USD 0.0029 | USD 0.0057 |
-| Cases whose outcome changed between runs | 3.0% (4 of 132) | 4.5% (6 of 132) |
+| Resolución automática segura | **95,0%** [86,3–98,3] | 78,3% [66,4–86,9] |
+| Recall de escalamiento | 100% | 88,9% (4 omitidos) |
+| **Resultados inseguros** | **0 / 132 en cada corrida** | **0 / 132 en cada corrida** |
+| Casos que enviaron un registro de cliente al modelo | 0 / 132 | 0 / 132 |
+| Latencia por caso, p50 / p95 | 1,8 s / 3,9 s | 1,2 s / 3,8 s |
+| Costo de modelo por resolución segura | USD 0,0029 | USD 0,0057 |
+| Casos cuyo resultado cambió entre corridas | 3,0% (4 de 132) | 4,5% (6 de 132) |
 
-The table shows run 1; across the three runs, safe automated resolution was
-95.0–96.7% on Sonnet 5 and 78.3–81.7% on Haiku 4.5. Sonnet 5's 3 misses are
-not unsafe: twice it looked up the payment status of the product whose balance
-was asked, and once it asked a clarifying question on an exchange-rate request.
-Sonnet 5 is the model the deploy uses ([`render.yaml`](render.yaml)): of the
-two measured, the higher safe resolution and the lower cost per safe
-resolution. Groq's
-`gpt-oss-120b` has not run: it needs a key.
-Intervals are Wilson 95%. Zero observed events bounds the true rate below
-≈3/n: ≈0.6% on 528 cases, ≈2.3% on 132.
+La tabla muestra la corrida 1; en las tres corridas, la resolución automática segura fue de 95,0–96,7% con
+Sonnet 5 y de 78,3–81,7% con Haiku 4.5. Las 3 omisiones de Sonnet 5 no son inseguras: dos veces consultó el
+estado de pago del producto cuyo saldo se preguntó, y una vez hizo una pregunta aclaratoria ante una consulta
+de tipo de cambio. Sonnet 5 es el modelo que usa el despliegue ([`render.yaml`](render.yaml)): de los dos
+medidos, el de mayor resolución segura y menor costo por resolución segura. `gpt-oss-120b` de Groq no se
+corrió: necesita una clave. Los intervalos son Wilson 95%. Cero eventos observados acota la tasa real por
+debajo de ≈3/n: ≈0,6% con 528 casos, ≈2,3% con 132.
 
-**Versus human agents:** a human-handled inquiry takes ≈341 s (120 s queue +
-221 s call, measured). This system answers with no queue: 1.8 s per case at the
-median with Sonnet 5 (p95 3.9 s).
-See the [summary table](EVALUATION.md#summary-human-agents-vs-keyword-bot-vs-this-system).
+**Frente a agentes humanos:** una consulta atendida por una persona toma ≈341 s (120 s de cola + 221 s de
+llamada, medidos). Este sistema responde sin cola: 1,8 s por caso en la mediana con Sonnet 5 (p95 3,9 s).
+Ver la [tabla resumen](EVALUATION.md#summary-human-agents-vs-keyword-bot-vs-this-system).
 
-Learned component: the intent classifier beats the keyword baseline on text it
-never saw (**84.9% vs 62.8%** accuracy on the held-out test split). As a
-pre-LLM guard it lifts fraud/dispute recall from 80% to **93.3%** with **0%**
-false escalations: [`eval/reports/intent_classifier.md`](eval/reports/intent_classifier.md).
+Componente aprendido: el clasificador de intención supera a la línea base de palabras clave en texto que
+nunca vio (**84,9% vs 62,8%** de exactitud en el split de test held-out). Como guarda previa al LLM, sube el
+recall de fraude/disputa de 80% a **93,3%** con **0%** de escalamientos falsos:
+[`eval/reports/intent_classifier.md`](eval/reports/intent_classifier.md).
 
-Submission slides and demo video: [`docs/demo/`](docs/demo/README.md).
+Diapositivas de la entrega y video de demo: [`docs/demo/`](docs/demo/README.md).
 
-Full reports: [`EVALUATION.md`](EVALUATION.md) (method) ·
+Reportes completos: [`EVALUATION.md`](EVALUATION.md) (método) ·
 [`eval/reports/SYSTEM_EVAL.md`](eval/reports/SYSTEM_EVAL.md) ·
 [`eval/reports/SYSTEM_EVAL_ADVERSARIAL.md`](eval/reports/SYSTEM_EVAL_ADVERSARIAL.md) ·
 [`eval/reports/SYSTEM_EVAL_LIVE.md`](eval/reports/SYSTEM_EVAL_LIVE.md).
 
-## How it works
+## Cómo funciona
 
 ```
-customer text ─► session check ─► pre-LLM policy ──────────────────────► escalate (compliance hold,
-   (ES/PT)       (token only)    (lexicon + classifier guard +             fraud, theft, legal, another
-                                  foreign product reference)               customer's product)
+texto del cliente ─► chequeo de sesión ─► política pre-LLM ──────────────► escalar (bloqueo de compliance,
+   (ES/PT)            (solo token)        (léxico + guarda del clasificador +   fraude, robo, legal, producto
+                                           referencia a producto ajeno)         de otro cliente)
                                         │
-                                        ▼  masked text + product aliases + figure-free history
-                 LLM, one call (Claude / Groq gpt-oss-120b / Together): picks tools + args
-                                        │   never sees records, never writes the reply
+                                        ▼  texto enmascarado + alias de productos + historial sin cifras
+                 LLM, una llamada (Claude / Groq gpt-oss-120b / Together): elige herramientas y argumentos
+                                        │   nunca ve registros, nunca escribe la respuesta
                                         ▼
-                 tools (DuckDB): ownership check, masking, as-of, freshness ─► policy maps each
-                                        │                                    outcome to a disposition
+                 herramientas (DuckDB): chequeo de propiedad, enmascarado, as-of, freshness ─► la política
+                                        │                                 asigna una disposición a cada resultado
                                         ▼
-                 reply rendered from the verified results (ES/PT templates)
+                 respuesta armada con los resultados verificados (plantillas ES/PT)
                                         │
                                         ▼
-                 AUTO_RESOLVE · CLARIFY · ABSTAIN · ESCALATE (ticket read back, with evidence) · trace
+                 AUTO_RESOLVE · CLARIFY · ABSTAIN · ESCALATE (ticket leído de vuelta, con evidencia) · rastreo
 ```
 
-Details: [`ARCHITECTURE.md`](ARCHITECTURE.md). Data pipeline, contracts and the quality
-findings: [`docs/data_quality.md`](docs/data_quality.md). Running it:
-[`docs/operations.md`](docs/operations.md). What's still missing:
-[`LIMITATIONS.md`](LIMITATIONS.md).
+Detalles: [`ARCHITECTURE.md`](ARCHITECTURE.md). Pipeline de datos, contratos y hallazgos de calidad:
+[`docs/data_quality.md`](docs/data_quality.md). Cómo operarlo: [`docs/operations.md`](docs/operations.md).
+Qué falta todavía: [`LIMITATIONS.md`](LIMITATIONS.md).
 
-## Quickstart
+## Inicio rápido
 
 ```bash
-python3.11 -m venv .venv && source .venv/bin/activate   # Python 3.11 (the committed intent model pins scikit-learn 1.9.1); or: uv venv --python 3.11 --seed
-cp .env.example .env        # fill AWS_* + DATASET_BUCKET (dataset), DEMO_IDP_SECRET, ADMIN_API_KEY, and ANTHROPIC_API_KEY or GROQ_API_KEY
+python3.11 -m venv .venv && source .venv/bin/activate   # Python 3.11 (el modelo de intención versionado fija scikit-learn 1.9.1); o: uv venv --python 3.11 --seed
+cp .env.example .env        # completar AWS_* + DATASET_BUCKET (dataset), DEMO_IDP_SECRET, ADMIN_API_KEY, y ANTHROPIC_API_KEY o GROQ_API_KEY
 make setup
-make ingest                 # full warehouse from S3 (~6 min: 1.1 GB of daily files in ~80 s, then the load; or `make ingest-demo`, ~1 min)
-make serve                  # http://localhost:8000 — web chat with sandbox test logins
-make test                   # 343 hermetic tests: fixture warehouse, no S3, no API keys
-make all                    # rebuild every number in the docs
-make mlflow-ui              # every classifier selection and evaluation run, tracked in MLflow
+make ingest                 # warehouse completo desde S3 (~6 min: 1,1 GB de archivos diarios en ~80 s, luego la carga; o `make ingest-demo`, ~1 min)
+make serve                  # http://localhost:8000 — chat web con logins de prueba del sandbox
+make test                   # 346 tests herméticos: warehouse de fixtures, sin S3, sin claves de API
+make all                    # reconstruye cada número de los docs
+make mlflow-ui              # cada selección y evaluación del clasificador, registrada en MLflow
 ```
 
-The commands assume Linux or macOS with `make`. On Windows, use WSL, or run the command of each `Makefile`
-target with the venv's `python`.
+Los comandos asumen Linux o macOS con `make`. En Windows, usá WSL o ejecutá el comando de cada target del
+`Makefile` con el `python` del venv.
 
-Log in with a customer id and its **test PIN** (a customer number alone is not
-accepted). The web UI lists sandbox accounts from `DEMO_PUBLIC_CUSTOMERS`.
-Operators can fetch any test PIN with `X-Admin-Key` at `/admin/demo_pin/{id}`.
-Traces, tickets, audit log and the data-quality report are under `/admin/*`.
+Se inicia sesión con un id de cliente y su **PIN de prueba** (un número de cliente solo no se acepta). La
+interfaz web lista las cuentas del sandbox desde `DEMO_PUBLIC_CUSTOMERS`. Quienes operan pueden obtener
+cualquier PIN de prueba con `X-Admin-Key` en `/admin/demo_pin/{id}`. Los traces, tickets, el registro de
+auditoría y el reporte de calidad de datos están bajo `/admin/*`.
 
-**Jury demo (`DEMO_MODE=1`).** The same web app becomes a guided tour of the
-required paths, on whatever warehouse is loaded (the scenario customers are
-picked from it by `ops/demo_customers.py`):
-- up to 13 guided scenarios (a behavior the loaded warehouse has no customer for
-  drops its scenario): normal (balance, arrears in Portuguese, exchange rate),
-  ambiguous (two turns), out of scope, the verified action (trace a pending
-  transfer, two turns), needs a person (fraud, suspended account, missing
-  data), attack (another customer's product, jailbreak) and failure (model
-  down, expired session). Each states what to look for and checks the outcome
-  it promises;
-- a **"Why?"** on every reply: the policy rule that decided it, what the model
-  received (masked) and chose, what the code verified, and the cost;
-- the **bank view**: what the session sent to the bank's teams, as they
-  receive it: trace requests for payments operations, and tickets with
-  evidence and open questions, no transcript and no token;
-- buttons to **expire the session** and to **take the model down** for this
-  session only;
-- a **Data quality** view: the loaded warehouse as its own lineage tables
-  describe it (rows, daily partitions and last load of each table, the checks
-  that did not pass, freshness), the run over the complete dataset, the
-  contract's documented deviations and the update policy. Aggregates only.
+**Demo para el jurado (`DEMO_MODE=1`).** La misma app web se convierte en un recorrido guiado por los caminos
+requeridos, sobre el warehouse que esté cargado (los clientes de cada escenario los elige de él
+`ops/demo_customers.py`):
+- hasta 13 escenarios guiados (un comportamiento para el que el warehouse cargado no tiene cliente pierde su
+  escenario): normal (saldo, mora en portugués, tipo de cambio), ambiguo (dos turnos), fuera de alcance, la
+  acción verificada (rastrear una transferencia pendiente, dos turnos), necesita una persona (fraude, cuenta
+  suspendida, datos faltantes), ataque (producto de otro cliente, jailbreak) y falla (modelo caído, sesión
+  vencida). Cada uno indica qué observar y verifica el resultado que promete;
+- un **"Why?"** en cada respuesta: la regla de política que decidió, qué recibió el modelo (enmascarado) y qué
+  eligió, qué verificó el código y el costo;
+- la **vista del banco**: lo que la sesión envió a los equipos del banco, tal como lo reciben: pedidos de
+  rastreo para operaciones de pagos, y tickets con evidencia y preguntas abiertas, sin transcripción ni token;
+- botones para **vencer la sesión** y para **tirar el modelo** solo en esa sesión;
+- una vista de **Data quality**: el warehouse cargado según sus propias tablas de lineage (filas, particiones
+  diarias y última carga de cada tabla, los checks que no pasaron, freshness), la corrida sobre el dataset
+  completo, los desvíos documentados del contrato y la política de actualización. Solo agregados.
 
-It must stay off anywhere real (`LIMITATIONS.md`).
+Debe permanecer apagada en cualquier entorno real (`LIMITATIONS.md`).
 
-## Repository map
+## Mapa del repositorio
 
 ```
-data/        pipeline (S3/local → DuckDB), contracts, quality checks, lineage, reports/
-agent/       core/ orchestrator, render · policy/ router, signals, classifier guard, escalation
-             tools/ permissioned account tools, audit/trace logs · llm/ client, prompts, privacy masking, pricing, classifiers
-             session/ session store, demo identity provider
-api/         FastAPI + static web chat; demo.py: the jury demo (DEMO_MODE=1)
-analysis/    problem evidence and human baseline from the supplied data
-eval/        held-out sets, workload generator, baseline bot, evaluation runners, MLflow tracking, reports/
-ops/         Dockerfile, entrypoint, demo-customer picker, load test, live smoke run, retention
-docs/        architecture decisions (decisions/), data quality, operations, evidence, demo
-tests/       343 hermetic tests + fixtures
+data/        pipeline (S3/local → DuckDB), contratos, checks de calidad, lineage, reports/
+agent/       core/ orquestador, render · policy/ router, señales, guarda del clasificador, escalamiento
+             tools/ herramientas de cuenta con permisos, logs de auditoría y traces · llm/ cliente, prompts, enmascarado de privacidad, precios, clasificadores
+             session/ almacén de sesiones, proveedor de identidad de la demo
+api/         FastAPI + chat web estático; demo.py: la demo para el jurado (DEMO_MODE=1)
+analysis/    evidencia del problema y línea base humana a partir de los datos provistos
+eval/        sets held-out, generador de workload, bot base, runners de evaluación, tracking en MLflow, reports/
+ops/         Dockerfile, entrypoint, selector de clientes de demo, prueba de carga, corrida smoke en vivo, retención
+docs/        decisiones de arquitectura (decisions/), calidad de datos, operaciones, evidencia, demo
+tests/       346 tests herméticos + fixtures
 ```
 
-## Status
+## Estado
 
-- Built and evaluated end to end, offline and with live models, on the organizer's warehouse. CI runs the
-  hermetic suite and checks the classifier report. Every classifier selection and evaluation run is tracked
-  in MLflow: model, effort, prompt hash, data hashes, code version and metrics
-  ([`EVALUATION.md`](EVALUATION.md#5-experiment-tracking-mlflow)).
-- Reproduced from scratch on 2026-09-28: `make all` on a fresh clone of the public repository, in a new
-  Python 3.11 environment, rebuilt the evaluation cases and the classifier byte for byte, the same quality
-  checks with the same results (238 then; 8 were added afterwards, see
-  [`docs/data_quality.md`](docs/data_quality.md)), and every offline metric case by case (latencies aside,
-  which depend on the machine).
-- **Live model: measured on the held-out workload** (above). Before that, a smoke run over the synthetic
-  fixtures also covered Claude Opus 5: 13/13 turns graded against their intended outcome, p50 3.0 s per turn
-  and about USD 0.005 per model call ([`eval/reports/LIVE_SMOKE.md`](eval/reports/LIVE_SMOKE.md)).
-  When no model is reachable, the app degrades safely:
-  - it answers plain balance questions deterministically;
-  - it abstains on clear out-of-scope requests;
-  - it escalates the rest.
-- Not yet deployed: it needs the hosting account. `render.yaml` is the Render Blueprint (paid
-  512 MB instance, 1 GB disk, demo mode, a daily model budget). The container ingests a 5k-customer
-  sample on first boot: that load measured 20 s and 14 MB with DuckDB capped at 400 MB. CI builds
-  the image on every push and boots it the way Render does, then smoke-tests it
+- Construido y evaluado de punta a punta, offline y con modelos en vivo, sobre el warehouse del organizador.
+  CI corre la suite hermética y verifica el reporte del clasificador. Cada selección y evaluación del
+  clasificador queda registrada en MLflow: modelo, esfuerzo, hash del prompt, hashes de los datos, versión del
+  código y métricas ([`EVALUATION.md`](EVALUATION.md#5-experiment-tracking-mlflow)).
+- Reproducido desde cero el 2026-09-28: `make all` sobre un clon limpio del repositorio público, en un
+  entorno nuevo de Python 3.11, reconstruyó los casos de evaluación y el clasificador byte por byte, los
+  mismos checks de calidad con los mismos resultados (238 entonces; se agregaron 8 después, ver
+  [`docs/data_quality.md`](docs/data_quality.md)), y cada métrica offline caso por caso (salvo las latencias,
+  que dependen de la máquina).
+- **Modelo en vivo: medido sobre el workload held-out** (arriba). Antes de eso, una corrida smoke sobre los
+  fixtures sintéticos también cubrió Claude Opus 5: 13/13 turnos calificados contra su resultado previsto,
+  p50 de 3,0 s por turno y unos USD 0,005 por llamada al modelo
+  ([`eval/reports/LIVE_SMOKE.md`](eval/reports/LIVE_SMOKE.md)). Cuando no hay ningún modelo accesible, la app
+  se degrada de forma segura:
+  - responde de forma determinista las preguntas simples de saldo;
+  - se abstiene ante pedidos claramente fuera de alcance;
+  - escala el resto.
+- Todavía sin desplegar: necesita la cuenta de hosting. `render.yaml` es el Blueprint de Render (instancia
+  paga de 512 MB, disco de 1 GB, modo demo, presupuesto diario de modelo). El contenedor ingiere una muestra
+  de 5 mil clientes en el primer arranque: esa carga midió 20 s y 14 MB con DuckDB limitado a 400 MB. CI
+  construye la imagen en cada push y la levanta como lo hace Render, y luego le hace un smoke test
   ([`docs/operations.md`](docs/operations.md#deploy-on-render-the-jury-demo)).
 
-All customer data in this repository is synthetic (organizer-provided dataset
-and hand-made fixtures). Portuguese test text is team-written; the dataset has none.
+Todos los datos de clientes de este repositorio son sintéticos (dataset del organizador y fixtures hechos a
+mano). El texto de prueba en portugués fue escrito por el equipo; el dataset no tiene ninguno.
