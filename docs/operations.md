@@ -523,7 +523,7 @@ are starting points, not tuned values.
 | Endpoint | Answers | Access |
 |---|---|---|
 | `/livez` | the process is up (no dependency is checked, so a broken warehouse gets no restart loop) | anyone |
-| `/readyz` | ready or not, with a yes/no per dependency, read fresh on every probe with a 2 s limit: `warehouse` (the file exists and a new read-only connection answers a query: a deleted or corrupt file is 503 at once), `state_store`, `data_dir_writable`. 503 when any fails; the reason stays in the logs | anyone; the Docker and Render health check |
+| `/readyz` | ready or not, with a yes/no per dependency, read fresh on every probe with a 2 s limit and one in-flight probe per dependency (a hung one is refused at once, not stacked): `warehouse` (the file exists and a new read-only connection answers a query: a deleted or corrupt file is 503 at once), `state_store`, `data_dir_writable`. 503 when any fails; the reason stays in the logs | anyone; the Docker and Render health check |
 | `/health` | the data as-of date, the configured providers, whether the daily model budget is spent, whether the classifier loaded | anyone |
 | `/metrics` | Prometheus text (below) | `Authorization: Bearer <METRICS_TOKEN>`, or the admin key (as a bearer or `X-Admin-Key`). The token opens nothing else. 503 with neither configured |
 | `/admin/ops`, `/admin/trace_log`, `/admin/drift`... | summaries and the records themselves, for a person | admin key |

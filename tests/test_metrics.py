@@ -267,6 +267,7 @@ def test_readiness_gives_up_on_a_warehouse_that_does_not_answer_in_time(client, 
 
     import api.observability as observability
 
+    monkeypatch.setattr(observability, "_pools", {})
     monkeypatch.setattr(observability, "PROBE_TIMEOUT_S", 0.2)
     monkeypatch.setattr(observability, "_query_warehouse", lambda: time_module.sleep(2))
     started = time_module.perf_counter()
@@ -324,3 +325,33 @@ def test_without_stage_spans_a_failed_chain_is_the_sum_of_its_attempts_and_their
     r = m.registry.get_sample_value
     assert r("cecilai_stage_latency_seconds_sum", {"stage": "llm"}) == pytest.approx(0.6)
     assert r("cecilai_stage_latency_seconds_sum", {"stage": "policy_render"}) == pytest.approx(0.4)
+
+
+def test_probes_that_hang_never_pile_up_threads_and_the_next_probes_answer_at_once(client, monkeypatch):
+    """/readyz is public: a hung warehouse must cost at most one stuck thread however often it is probed."""
+    import threading
+    import time as time_module
+
+    import api.observability as observability
+
+    release = threading.Event()
+    monkeypatch.setattr(observability, "_pools", {})  # slots held by an earlier test's stuck probe are not this test's
+    monkeypatch.setattr(observability, "PROBE_TIMEOUT_S", 0.1)
+    monkeypatch.setattr(observability, "_query_warehouse", lambda: release.wait(20))
+    before = threading.active_count()
+    durations = []
+    try:
+        for _ in range(12):
+            started = time_module.perf_counter()
+            r = client.get("/readyz")
+            durations.append(time_module.perf_counter() - started)
+            assert r.status_code == 503 and r.json()["checks"]["warehouse"] is False
+        assert threading.active_count() - before <= 1, "hung probes accumulated threads"
+        assert max(durations[1:]) < 0.05  # once one is stuck the rest are refused without waiting, and without a queue
+    finally:
+        release.set()
+    deadline = time_module.time() + 5
+    while threading.active_count() > before and time_module.time() < deadline:
+        time_module.sleep(0.02)
+    monkeypatch.setattr(observability, "_query_warehouse", lambda: True)
+    assert client.get("/readyz").status_code == 200  # the slot came back when the stuck probe ended

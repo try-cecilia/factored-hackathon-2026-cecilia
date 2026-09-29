@@ -15,6 +15,7 @@ from fastapi.routing import iter_route_contexts
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from agent import metrics
+from agent.resilience import BoundedOps, run_bounded
 
 
 class RouteTemplates:
@@ -88,17 +89,18 @@ def _query_warehouse() -> bool:
         con.close()
 
 
-def _within(seconds: float, probe) -> bool:
-    """probe() answered True in time. A probe that hangs is abandoned (its thread finishes on its own), not waited for."""
-    from concurrent.futures import ThreadPoolExecutor, TimeoutError
+# One slot per dependency (READYZ_MAX_INFLIGHT, 1): /readyz is public, so a dependency that hangs may cost one stuck thread, not
+# one per request. While it is stuck the next probes are refused at once (no queue) and answer "not ready".
+_pools: dict[str, BoundedOps] = {}
 
-    pool = ThreadPoolExecutor(max_workers=1)
+
+def _within(name: str, seconds: float, probe) -> bool:
+    """probe() answered True in time. A probe that hangs is abandoned, but keeps its slot until it really ends."""
+    pool = _pools.setdefault(name, BoundedOps(f"readyz:{name}", "READYZ_MAX_INFLIGHT", 1))
     try:
-        return bool(pool.submit(probe).result(timeout=seconds))
-    except (TimeoutError, Exception):  # noqa: BLE001 - any failure means not ready; the reason stays in the logs
+        return bool(run_bounded(probe, seconds, pool))
+    except Exception:  # noqa: BLE001 - not ready, whatever the reason (a hang, no slot, an error); the reason stays in the logs
         return False
-    finally:
-        pool.shutdown(wait=False)
 
 
 def readiness() -> dict[str, bool]:
@@ -113,6 +115,6 @@ def readiness() -> dict[str, bool]:
     def data_dir_writable() -> bool:
         return os.access(default_audit_log.path.parent, os.W_OK)
 
-    return {"warehouse": _within(PROBE_TIMEOUT_S, _query_warehouse),
-            "state_store": _within(PROBE_TIMEOUT_S, state_store),
-            "data_dir_writable": _within(PROBE_TIMEOUT_S, data_dir_writable)}
+    return {"warehouse": _within("warehouse", PROBE_TIMEOUT_S, _query_warehouse),
+            "state_store": _within("state_store", PROBE_TIMEOUT_S, state_store),
+            "data_dir_writable": _within("data_dir_writable", PROBE_TIMEOUT_S, data_dir_writable)}
