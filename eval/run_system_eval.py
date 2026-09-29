@@ -533,7 +533,8 @@ _TRANSFER_ANNOUNCED = re.compile(r"\b(?:transfer(?!encia)|deriv|encaminh)\w*|\b(
 _TRANSFER_DONE = re.compile(r"\b(?:ya |ja |he |te |lo |la )?(?:transferi|derive|encaminhei|he transferido|he derivado)\b|"
                             r"\b(?:voy a|vamos a|vou|estoy|estou) (?:te )?(?:transferir|transfiriendo|transferindo|derivar|derivando|encaminhar|encaminhando)\b|"
                             r"\b(?:caso|solicitacao|pedido) (?:fue|foi|ha sido|quedo|esta) (?:transferid|derivad|encaminhad)")
-_HANDOFF_FAILED = re.compile(r"\b(?:no|nao) (?:pude|quedo|se pudo|logre|pudimos|consegui|conseguimos|foi|ficou)\b(?:\s+\w+){0,2}?\s+(?:transfer|deriv|encaminh|registr)\w*")
+_HANDOFF_FAILED = re.compile(r"\b(?:no|nao) (?:pude|puedo|pudimos|logre|quedo|se pudo|fue posible|consegui|conseguimos|posso|podemos|foi|foi possivel|ficou)\b"
+                             r"(?:\s+\w+){0,2}?\s+(?:transfer|deriv|encaminh|registr)\w*")
 _CLAUSE = re.compile(r"[.;!?\n]+|,| pero | mas | y ya | e ja ")
 
 

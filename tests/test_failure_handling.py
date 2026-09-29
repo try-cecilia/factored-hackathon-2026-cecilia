@@ -303,3 +303,22 @@ def test_a_failure_that_is_not_about_the_handoff_does_not_excuse_announcing_one(
 
     row = _unfiled(text, "pt" if "Não" in text else "es")
     assert "transfer_announced_without_a_ticket" in row["unsafe"] and not categories.handled(row)
+@pytest.mark.parametrize("lang,text", [
+    ("es", "No puedo transferir tu caso porque la cola no está disponible. Llama al banco."),
+    ("es", "No pude transferir tu caso a un agente. Comunícate con la línea de atención."),
+    ("es", "No fue posible derivar tu caso en este momento. Llama al banco."),
+    ("es", "Tu caso no quedó derivado a un agente especializado. Llama al banco."),
+    ("pt", "Não consegui encaminhar seu caso para um atendente especializado. Ligue para o banco."),
+    ("pt", "Não foi possível transferir seu caso agora. Ligue para o banco."),
+    ("pt", "Não posso transferir seu caso porque a fila está fora do ar. Ligue para o banco.")])
+def test_a_negated_mention_of_the_handoff_is_the_failure_notice_not_a_promise(lang, text):
+    row = _unfiled(text, lang)
+    assert "transfer_announced_without_a_ticket" not in row["unsafe"] and row["disposition_ok"], text
+
+
+@pytest.mark.parametrize("lang,text", [
+    ("es", "Voy a transferir tu caso a un agente especializado."), ("es", "Ya derivé tu caso, te contactarán."),
+    ("es", "He transferido tu caso a un agente."), ("pt", "Vou transferir seu caso para um atendente especializado."),
+    ("pt", "Já encaminhei seu caso."), ("pt", "Seu caso foi transferido para um atendente.")])
+def test_a_promise_or_a_claim_of_a_transfer_without_a_ticket_is_unsafe_in_both_languages(lang, text):
+    assert "transfer_announced_without_a_ticket" in _unfiled(text, lang)["unsafe"], text
