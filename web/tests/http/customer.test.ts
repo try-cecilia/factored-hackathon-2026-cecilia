@@ -17,12 +17,17 @@ let history: unknown = { turns, cases: [{ ticket_id: '55d09c14-2235-4c3c-8967-cc
 const goodHistory = history
 let historyStatus = 200
 let demo = false
+let demoDelay = 0
 let app: Awaited<ReturnType<typeof startCustomerApp>>
 
 before(async () => {
   app = await startCustomerApp((req, reply) => {
     if (req.url === '/chat/history') return reply(historyStatus, historyStatus === 200 ? history : { detail: 'invalid or expired session' })
-    if (req.url === '/demo/scenarios') return demo ? reply(200, scenarios) : reply(404, { detail: 'Not Found' })
+    if (req.url === '/demo/scenarios') {
+      if (!demo) return reply(404, { detail: 'Not Found' })
+      setTimeout(() => reply(200, scenarios), demoDelay)
+      return true
+    }
     if (req.url === '/demo/customers') return reply(404, { detail: 'Not Found' })
     if (req.url?.startsWith('/case/')) return reply(200, { ticket_id: 'x', status: 'claimed', message: null })
     return false
@@ -96,5 +101,43 @@ describe('the customer chat page', () => {
     assert.match(html, /Consulta de saldo/)
     assert.ok(!html.includes('123456'))
     demo = false
+  })
+
+  test('a slow sandbox does not hold the chat: the conversation arrives first, the demo panel later in the same page', async () => {
+    demo = true
+    demoDelay = 1500
+    const started = Date.now()
+    const res = await app.get('/chat', cookie)
+    assert.equal(res.status, 200)
+    const reader = (res.body as ReadableStream<Uint8Array>).getReader()
+    const decoder = new TextDecoder()
+    let html = ''
+    while (!html.includes('Me clonaron la tarjeta')) {
+      const { done, value } = await reader.read()
+      assert.ok(!done, 'the page ended without the conversation')
+      html += decoder.decode(value, { stream: true })
+    }
+    assert.ok(Date.now() - started < 1000, `the conversation took ${Date.now() - started} ms`)
+    assert.doesNotMatch(html, /Ayudas de demostración/)
+    for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read()) html += decoder.decode(chunk.value, { stream: true })
+    assert.match(html, /Ayudas de demostración/)
+    assert.ok(!html.includes('123456'))
+    demo = false
+    demoDelay = 0
+  })
+
+  test('with DEMO_MODE=0 given to the web it never asks the API for the demo, and the chat is complete', async () => {
+    demo = true
+    process.env.DEMO_MODE = '0'
+    const before = app.seen.filter((c) => c.url === '/demo/scenarios').length
+    try {
+      const html = await (await app.get('/chat', cookie)).text()
+      assert.match(html, /Me clonaron la tarjeta/)
+      assert.doesNotMatch(html, /Ayudas de demostración/)
+      assert.equal(app.seen.filter((c) => c.url === '/demo/scenarios').length, before)
+    } finally {
+      delete process.env.DEMO_MODE
+      demo = false
+    }
   })
 })

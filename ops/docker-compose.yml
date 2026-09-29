@@ -134,6 +134,8 @@ services:
       - TRUSTED_CLIENT_IP_HEADER
       - OPERATOR_IDLE_SECONDS
       - UI_GALLERY
+      # The API's own switch: with 0 the web never asks it for the demo kit.
+      - DEMO_MODE=${DEMO_MODE:-0}
     depends_on:
       api:
         condition: service_healthy
