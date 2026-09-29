@@ -50,6 +50,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from agent.core import orchestrator as orch_mod
+from agent.core.experiments import Experiments
 from agent.core.orchestrator import Orchestrator
 from agent.llm.client import LLMClient, LLMUnavailable, anthropic_effort, default_providers
 from agent.llm.pricing import PRICING_AS_OF
@@ -348,7 +349,8 @@ def run_case(case: Case, system: str, llm_mode: str, live_client=None) -> dict:
         if case.fault == "llm_outage" and not scripted:
             client = OutageOnce(live_client)
         recorder = _Recorder(client)
-        agent = Orchestrator(store, llm=lambda: recorder)
+        # Measure only the selected client; deployment canary/shadow settings must not bypass the recorder.
+        agent = Orchestrator(store, llm=lambda: recorder, experiments=Experiments())
     results = []
     with tool_fault(case.fault == "tool_failure"):
         for i, text in enumerate(case.turns):

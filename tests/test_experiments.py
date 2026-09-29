@@ -59,7 +59,28 @@ def test_canary_serves_the_chosen_share_of_sessions_with_the_candidate():
 
 def test_a_broken_canary_costs_the_customer_nothing():
     result, trace = turn(Experiments(canary=lambda: Broken(), canary_percent=100))
-    assert result.disposition == "AUTO_RESOLVE" and trace["cohort"] == "canary_fallback"
+    assert result.disposition == "AUTO_RESOLVE" and trace["cohort"] == "canary"
+    assert trace["model_route"] == "canary_fallback"
+
+
+def test_policy_only_turns_stay_in_their_sessions_canary_group():
+    candidate = FakeLLMClient([BALANCE])
+    orch = Orchestrator(SessionStore(), llm=lambda: FakeLLMClient([]),
+                        experiments=Experiments(canary=lambda: candidate, canary_percent=100))
+    token = orch.session_store.issue("CLI-FIX0001", ATTRS).token
+    rows = []
+    for text in ("cuál es mi saldo", "me robaron la tarjeta"):
+        orch.handle_message(token, text)
+        rows.append(json.loads(default_trace_log.path.read_text(encoding="utf-8").splitlines()[-1]))
+    assert rows[1]["llm_calls"] == 0 and rows[1]["model_route"] == "not_called"
+    summary = cohorts(rows)
+    assert set(summary) == {"canary"}
+    assert summary["canary"]["turns"] == 2 and summary["canary"]["escalation_rate"] == 0.5
+
+
+def test_an_outage_does_not_reassign_a_canary_turn_to_primary():
+    _, trace = turn(Experiments(canary=lambda: Broken(), canary_percent=100), primary=Broken())
+    assert trace["cohort"] == "canary" and trace["model_route"] == "unavailable"
 
 
 def test_shadow_logs_what_the_candidate_would_have_done_and_the_customer_reply_is_unchanged(log):
@@ -98,8 +119,13 @@ def test_the_summaries_count_agreement_errors_and_group_the_traces_by_cohort():
                              "shadow": {"calls": [2], "latency_ms": lat}}
     s = summarize_shadow([row(True, 50), row(False, 150), {"trace_id": "t", "same_tools": None, "same_args": None, "primary": {"calls": []}, "shadow": {"error": "X"}}])
     assert (s["turns"], s["candidate_errors"], s["same_tools_rate"], len(s["disagreements"])) == (3, 1, 0.5, 1)
-    c = cohorts([{"cohort": "canary", "disposition": "ESCALATE", "latency_ms": 10}, {"disposition": "AUTO_RESOLVE", "latency_ms": 5, "cost_usd": 0.1}])
+    c = cohorts([{"cohort": "canary", "disposition": "ESCALATE", "latency_ms": 10}, {"cohort": "primary", "disposition": "AUTO_RESOLVE", "latency_ms": 5, "cost_usd": 0.1}])
     assert c["canary"]["escalation_rate"] == 1.0 and c["primary"]["cost_usd"] == 0.1
+
+
+def test_legacy_fallbacks_belong_to_canary_and_missing_assignments_are_unknown():
+    summary = cohorts([{"cohort": "canary_fallback"}, {}])
+    assert set(summary) == {"canary", "unassigned"}
 
 
 def test_the_endpoint_needs_the_admin_key_and_reports_the_config(monkeypatch):

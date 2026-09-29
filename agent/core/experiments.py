@@ -7,7 +7,8 @@
 - **Canary** (`CANARY_MODEL=provider:modelo`, `CANARY_PERCENT=0-100`): un porcentaje de sesiones, elegido de forma
   determinística por el hash de su `session_ref` (una sesión no cambia de modelo a mitad de conversación), usa el
   candidato como modelo principal. Si el candidato falla, el turno se rehace con el modelo de siempre: el cliente nunca
-  paga por un candidato roto. Cada traza guarda su `cohort`, y `cohorts()` compara los resultados de cada grupo.
+  paga por un candidato roto. Cada traza guarda el grupo asignado en `cohort`, incluso sin llamar al modelo, y
+  `model_route` indica si respondió el candidato, el principal o hubo fallback. `cohorts()` compara los grupos asignados.
 
 Lo que las políticas en código deciden (escalar, pedir confirmación, autorizar) no depende del modelo: un candidato solo
 puede cambiar qué herramienta propone, y el orquestador la valida igual (ADR-001).
@@ -85,22 +86,26 @@ class Experiments:
         p.parent.mkdir(parents=True, exist_ok=True)
         return p
 
+    def cohort_for(self, session_ref: str) -> str:
+        """Assignment is independent of whether a turn needs a model or the candidate succeeds."""
+        return "canary" if self._canary and bucket(session_ref) < self.canary_percent else "primary"
+
     def chat(self, session_ref: str, primary: Callable[[], Any], messages: list[dict], tools: list[dict]):
-        """The turn's model response and the cohort that produced it. A canary that fails is replaced by the usual model."""
-        if self._canary and bucket(session_ref) < self.canary_percent:
+        """The model response and serving route. A canary that fails is replaced by the usual model."""
+        if self.cohort_for(session_ref) == "canary":
             try:
                 return self._canary().chat(messages, tools=tools), "canary"
             except LLMUnavailable:
-                cohort = "canary_fallback"
+                route = "canary_fallback"
             except Exception:  # noqa: BLE001 - a broken candidate must never reach the customer
                 logger.exception("canary model failed; answering with the usual model")
-                cohort = "canary_fallback"
-            return primary().chat(messages, tools=tools), cohort
+                route = "canary_fallback"
+            return primary().chat(messages, tools=tools), route
         return primary().chat(messages, tools=tools), "primary"
 
-    def shadow(self, trace_id: str, session_ref: str, messages: list[dict], tools: list[dict], resp, cohort: str) -> None:
+    def shadow(self, trace_id: str, session_ref: str, messages: list[dict], tools: list[dict], resp, route: str) -> None:
         """Ask the candidate the same thing in the background and log how it differs. Never raises, never blocks."""
-        if not self._shadow or cohort != "primary" or bucket(trace_id) >= self.shadow_percent:
+        if not self._shadow or route != "primary" or bucket(trace_id) >= self.shadow_percent:
             return
         job = self._pool.submit(self._run_shadow, trace_id, session_ref, list(messages), tools, resp)
         with self._lock:
@@ -152,10 +157,13 @@ def summarize_shadow(rows: list[dict]) -> dict:
 
 
 def cohorts(trace_rows: list[dict]) -> dict:
-    """The traces grouped by the model cohort that served them: what the customer got in each."""
+    """Outcomes by assigned group, including policy-only turns and failures. Missing assignments remain unknown."""
     groups: dict[str, list[dict]] = {}
     for r in trace_rows:
-        groups.setdefault(r.get("cohort") or "primary", []).append(r)
+        name = r.get("cohort") or "unassigned"
+        if name == "canary_fallback":  # older traces recorded the serving route as their cohort
+            name = "canary"
+        groups.setdefault(name, []).append(r)
     out = {}
     for name, rows in groups.items():
         n = len(rows)

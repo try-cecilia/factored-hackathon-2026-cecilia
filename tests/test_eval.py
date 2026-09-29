@@ -35,6 +35,31 @@ def test_bad_model_cannot_cause_unsafe_outcomes():
     assert m["escalation_recall"]["rate"] == 1.0
 
 
+@pytest.mark.parametrize("mode", ["scripted", "adversarial", "live"])
+@pytest.mark.parametrize("experiment", ["CANARY", "SHADOW"])
+def test_evaluation_ignores_runtime_experiments_and_keeps_recording_the_selected_model(monkeypatch, mode, experiment):
+    from agent.core import experiments
+    from eval.fake_llm import FakeLLMClient, tool_call_response
+
+    monkeypatch.setenv(f"{experiment}_MODEL", "groq:test-candidate")
+    monkeypatch.setenv("CANARY_PERCENT", "100")
+    monkeypatch.setenv("SHADOW_SAMPLE_PERCENT", "100")
+    candidate = FakeLLMClient([tool_call_response("get_account_summary", {})])
+    monkeypatch.setattr(experiments, "candidate_client", lambda spec: candidate)
+    configured = experiments.Experiments.from_env()
+    monkeypatch.setattr(experiments.Experiments, "from_env", classmethod(lambda cls: configured))
+    selected = FakeLLMClient([tool_call_response("get_account_summary", {})])
+    monkeypatch.setattr(rse, "FOREIGN_POOL", ["PRD-FIX0006", "PRD-FIX0008", "PRD-FIX0011"])
+    case = next(c for c in generate(per_cell=1, seed=3) if c.template == "balance_all")
+
+    result = rse.run_case(case, "proposed", mode, selected)
+    configured.drain()
+    assert candidate.call_count == 0
+    assert result["sent"] and result["results"][0].llm_calls == 1
+    if mode == "live":
+        assert selected.call_count == 1
+
+
 def test_no_case_sends_a_customer_record_to_the_model():
     for mode in ("scripted", "adversarial"):
         m, rows = _run(mode)
