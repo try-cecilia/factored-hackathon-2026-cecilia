@@ -8,9 +8,8 @@ What is kept for how long is `rules()` below and the table in docs/operations.md
 an environment variable (RETENTION_*_DAYS, 0 = keep forever), and the paths are the ones the writers use.
 - Idempotent: a second run right after the first drops nothing and rewrites nothing.
 - A JSONL file is rewritten only when something in it expired, aside and swapped in whole, so a reader never sees it
-  half written. Lines appended while it was being rewritten are carried over. A writer that opened the file in the few
-  microseconds before the swap could still lose that one line (LIMITATIONS.md); running it daily, the file is
-  rewritten only when a day's worth of records has expired.
+  half written. The purge holds the file's cross-process lock (agent/filelock.py) from its read to the swap and every
+  writer takes the same lock to append, so a record confirmed to its writer is never lost to a purge.
 - A line that is not JSON, or has no usable timestamp, is kept: retention never destroys what it cannot read.
 - A ticket's event log is dropped with its ticket, never event by event, or a ticket's state and version would change.
 - Every run records itself: an `retention_purge` event in the audit log (counts only, no customer data) and a status
@@ -19,6 +18,7 @@ an environment variable (RETENTION_*_DAYS, 0 = keep forever), and the paths are 
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import logging
 import os
@@ -27,6 +27,8 @@ import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Callable
+
+from agent.filelock import locked
 
 logger = logging.getLogger("retention")
 
@@ -93,29 +95,34 @@ def _timestamp(line: bytes, field_name: str):
 
 
 def _rewrite_jsonl(path: Path, expired: Callable[[bytes], bool], dry_run: bool) -> tuple[int, int]:
-    """Drop the lines `expired` says so about. Returns (kept, dropped)."""
+    """Drop the lines `expired` says so about. Returns (kept, dropped).
+
+    The file's lock (agent/filelock.py) is held from the read to the swap, and every writer takes it to append, so no record can be
+    written in between and lost. Lines appended by something that does not take the lock are still carried over, as a second
+    line of defence. A dry run reads without the lock and changes nothing."""
     if not path.exists():
         return 0, 0
-    data = path.read_bytes()
-    lines, tail = _split(data)
-    lines = [line for line in lines if line.strip()]
-    keep = [line for line in lines if not expired(line)]
-    dropped = len(lines) - len(keep)
-    if dropped == 0 or dry_run:
-        return len(lines), dropped
-    aside = path.with_name(path.name + ".retention.tmp")
-    try:
-        aside.write_bytes(b"".join(line + b"\n" for line in keep) + tail)
-        with open(path, "rb") as f:  # whatever was appended while this was being worked out
-            f.seek(len(data))
-            appended = f.read()
-        if appended:
-            with open(aside, "ab") as f:
-                f.write(appended)
-        os.replace(aside, path)
-    finally:
-        aside.unlink(missing_ok=True)
-    return len(keep), dropped
+    with (contextlib.nullcontext() if dry_run else locked(path)):
+        data = path.read_bytes()
+        lines, tail = _split(data)
+        lines = [line for line in lines if line.strip()]
+        keep = [line for line in lines if not expired(line)]
+        dropped = len(lines) - len(keep)
+        if dropped == 0 or dry_run:
+            return len(lines), dropped
+        aside = path.with_name(path.name + ".retention.tmp")
+        try:
+            aside.write_bytes(b"".join(line + b"\n" for line in keep) + tail)
+            with open(path, "rb") as f:  # what a writer that does not take the lock appended meanwhile
+                f.seek(len(data))
+                appended = f.read()
+            if appended:
+                with open(aside, "ab") as f:
+                    f.write(appended)
+            os.replace(aside, path)
+        finally:
+            aside.unlink(missing_ok=True)
+        return len(keep), dropped
 
 
 def _prune_jsonl(rule: Rule, now: float, dry_run: bool) -> Outcome:

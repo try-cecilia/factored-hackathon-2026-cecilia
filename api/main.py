@@ -37,6 +37,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from agent import metrics
+from agent.filelock import serialize_policy_writers
 from agent.core.experiments import cohorts, read_log as read_shadow_log, summarize_shadow
 from agent.core.orchestrator import default_orchestrator
 from agent.llm.budget import default_budget
@@ -53,6 +54,8 @@ from api import access, demo
 from api.observability import ObservabilityMiddleware, RouteTemplates, readiness
 from api.security import SecurityHeadersMiddleware, configure_cors, constant_time_equals
 from ops.drift import recent_rows, report as drift_report, save_baseline as save_drift_baseline
+
+serialize_policy_writers()  # the ticket queue and the desk append under the same lock as the retention purge (agent/filelock.py)
 
 # The API's schema and interactive docs are not published unless EXPOSE_API_DOCS=1 (development).
 _docs = os.environ.get("EXPOSE_API_DOCS") == "1"

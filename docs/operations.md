@@ -458,7 +458,8 @@ now and then every `RETENTION_INTERVAL_HOURS`. The container's entrypoint starts
 off), so the same schedule holds on Render (a Render cron job cannot mount the web service's disk, which is why it is not one),
 in the compose stack and in any Docker run. `make retention` runs it by hand.
 - **Idempotent.** A second run drops nothing and does not rewrite a file. A JSONL file is rewritten only when something in it
-  expired, aside and swapped in whole, and lines appended meanwhile are carried over. A line it cannot read (not JSON, no
+  expired, aside and swapped in whole, and the purge holds the file's cross-process lock (`agent/filelock.py`) from its read to the
+  swap while every writer takes the same lock to append, so a record already confirmed to its writer is not lost. A line it cannot read (not JSON, no
   timestamp) is kept: retention never destroys what it cannot parse. One store failing does not stop the others.
 - **Audited.** Each run appends a `retention_purge` event to the audit log with the counts dropped per data type, the stores that
   failed and the policy periods (no customer data), and writes `retention_status.json`, which `/metrics` reads
@@ -472,6 +473,7 @@ The records contain customer data, so PII redaction before export and encryption
 |---|---|---|---|
 | Policy by data type | `rules()` in `ops/retention.py`, the `RETENTION_*` settings in `.env.example` | `tests/test_retention.py`: expired records go and current ones stay for every store (parametrized), a ticket's events go together, sessions, conversations and case notices, leftovers, periods from the environment, 0 keeps forever | `python -m ops.retention --dry-run` |
 | Idempotent | `_rewrite_jsonl` | `test_second_run_drops_and_rewrites_nothing`, `test_a_line_it_cannot_read_is_kept`, `test_lines_appended_while_it_rewrites_are_carried_over` | `pytest tests/test_retention.py` |
+| No record lost to a purge | `agent/filelock.py` (`locked`, `append_line`), used by the trace, audit, trace-request, shadow-log and queue/desk writers and by `_rewrite_jsonl` | `tests/test_filelock.py`: a write of each of the five stores lands exactly at the swap; a writer process races 1,500 records against repeated purges; the lock excludes another process; a guard fails on a new append-mode `open` without the lock | `pytest tests/test_filelock.py` |
 | The purge is itself audited | `_record` | `test_the_purge_records_itself_in_the_audit_log_and_the_status_file`, `test_one_failing_store_does_not_stop_the_rest` | `curl -H "X-Admin-Key: $ADMIN_API_KEY" "http://127.0.0.1:8000/admin/audit_log?limit=500"` |
 | Scheduled | `loop()`, `ops/entrypoint.sh`, `RETENTION_INTERVAL_HOURS` | `test_the_loop_runs_every_interval_and_survives_a_failed_cycle`; `tests/test_setup.py` (the entrypoint starts it); the CI jobs `container` and `compose` check that it ran and audited itself | `make retention` · `make compose-e2e` |
 

@@ -15,6 +15,8 @@ import threading
 import time
 from pathlib import Path
 
+from agent.filelock import append_line, locked
+
 TRACE_SLA_BUSINESS_DAYS = 2  # synthetic policy
 
 
@@ -57,14 +59,13 @@ class TraceService:
                        "transaction_id": transaction_id, "product_id": product_id, "session_ref": session_ref,
                        "created_at": time.time(), "status": "open", "sla_business_days": TRACE_SLA_BUSINESS_DAYS,
                        "queue": "payments_ops"}
-            with open(self.path, "a", encoding="utf-8") as f:
-                f.write(json.dumps(request, ensure_ascii=False) + "\n")
+            append_line(self.path, json.dumps(request, ensure_ascii=False))  # under the file lock (retention swaps this file)
             return request
 
     def clear(self, customer_id: str) -> int:
         """Sandbox only: forget a customer's requests, so a demo scenario starts from a clean state. The file is
         written aside and swapped in whole, so a visitor reading it at that moment never sees it half written."""
-        with self._lock:
+        with self._lock, locked(self.path):
             everything = self._all()
             keep = [t for t in everything if t["customer_id"] != customer_id]
             aside = self.path.with_name(self.path.name + ".tmp")

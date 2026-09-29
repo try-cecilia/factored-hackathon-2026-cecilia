@@ -132,9 +132,14 @@ service, and as our own roadmap.
   per-customer security threshold is not expressible (a label per customer is unbounded): the alert counts in total and
   the customer is found in the traces. Counters are per process and reset on restart, so several replicas would need each
   one scraped, which the single-writer design does not need yet.
-- **Retention is applied, not proven at scale.** The purge is tested for every store and runs daily in the container, but a
-  writer that opens a JSONL file in the microseconds before a rewrite swaps it in can lose that one line (the rewrite
-  carries over everything appended before the swap; it runs only when something expired). SQLite gives freed pages back to
+- **Retention is applied, not proven at scale.** The purge is tested for every store and runs daily in the container. It
+  holds a cross-process lock (`flock` on `<file>.lock`, `agent/filelock.py`) from reading a JSONL file to swapping it in, and
+  every writer of those files takes the same lock, so a record confirmed to its writer is not lost to it (tested with a write
+  landing exactly at the swap and with a writer in another process). What that does not cover: a process that appends
+  without taking the lock (a script of your own), and Windows, where the lock is a no-op. The ticket queue and the desk take
+  the lock through a wrapper installed at API start-up (`serialize_policy_writers`), not in their own code, because editing
+  `agent/policy/` invalidates the evaluation reports' policy fingerprint and those can only be regenerated against the full
+  warehouse; when those files are next changed on purpose they should call `append_line` themselves. SQLite gives freed pages back to
   the file only on a `VACUUM`, which is not run. Backups, if any exist, are outside the policy. Ticket and event
   retention (90 days) is a sandbox stand-in for the bank's regulatory schedule. The warehouse itself holds the customer
   tables and is replaced, not pruned.

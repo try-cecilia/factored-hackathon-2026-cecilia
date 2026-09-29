@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from agent import metrics
+from agent.filelock import append_line
 
 current_trace_id: contextvars.ContextVar[str | None] = contextvars.ContextVar("current_trace_id", default=None)
 
@@ -62,8 +63,7 @@ class _JsonlSink:
         line = json.dumps(record, default=str, ensure_ascii=False)
         with self._lock:
             self._recent.append(record)
-            with open(self.path, "a", encoding="utf-8") as f:
-                f.write(line + "\n")
+            append_line(self.path, line)  # under the file lock, so a retention purge never swaps the file in mid-write
 
     def recent(self) -> list[dict]:
         return list(self._recent)
