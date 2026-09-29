@@ -1,0 +1,12 @@
+/* A tonal track with the chosen language raised on paper: no strokes. */
+.ui-lang { display: inline-flex; gap: 2px; padding: 2px; border-radius: var(--radius-control); background: var(--color-fill-subtle); }
+.ui-lang__option {
+  height: 24px; padding: 0 10px; border: 0; border-radius: var(--radius-compact); background: transparent;
+  color: var(--color-ink-70); font: inherit; font-size: var(--text-compact-sm); font-weight: var(--font-weight-semibold);
+  letter-spacing: -0.005em; line-height: 16px; cursor: pointer;
+}
+.ui-lang__option:hover { color: var(--color-ink-app); background: var(--color-fill-subtle); }
+.ui-lang__option[aria-pressed='true'] {
+  background: var(--color-paper); color: var(--color-ink-app); box-shadow: 0 1px 2px #0F0A1417;
+}
+.ui-lang__option:focus-visible { outline: none; box-shadow: var(--ring-focus); }

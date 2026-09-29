@@ -1,0 +1,4 @@
+.ui-spinner { flex-shrink: 0; rotate: -90deg; transform-origin: 50% 50%; animation: ui-spin 0.9s linear infinite; }
+.ui-spinner__track { stroke: var(--spinner-track, color-mix(in srgb, currentColor 35%, transparent)); }
+.ui-spinner__arc { stroke: currentColor; }
+@keyframes ui-spin { to { rotate: 270deg; } }
