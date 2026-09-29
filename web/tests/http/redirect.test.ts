@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { after, before, describe, test } from 'node:test'
-import { ADMIN, SAME_ORIGIN, startConsole } from './harness.ts'
+import { ADMIN, SAME_ORIGIN, sessionCookie, startConsole } from './harness.ts'
 
 let app: Awaited<ReturnType<typeof startConsole>>
 before(async () => { app = await startConsole() })
@@ -36,5 +36,35 @@ describe('the redirect after login never leaves this site', () => {
   test('a failed login sends the browser back with only a safe target', async () => {
     const bad = await app.send('/operador/sesion', { fields: { admin_key: 'nope', redirect: '/.//evil.example/x' }, headers: SAME_ORIGIN })
     assert.equal(bad.headers.get('location'), '/operador/login')
+  })
+})
+
+describe('the login page, visited while already signed in, never bounces out of the site', () => {
+  // The router may first drop an invalid query string (a 307 to the bare login page) before the signed-in redirect: follow
+  // the hops and judge where the browser ends up, which is what matters.
+  const visit = async (query: string) => {
+    const cookie = sessionCookie(await app.send('/operador/sesion', { fields: { admin_key: ADMIN }, headers: SAME_ORIGIN }))!
+    let res = await app.send(`/operador/login${query}`, { headers: { Cookie: cookie } })
+    for (let hops = 0; hops < 4 && res.status >= 300 && res.status < 400; hops++) {
+      const to = res.headers.get('location')!
+      assert.ok(to.startsWith('/') && !to.startsWith('//'), `left the site: ${to}`)
+      const next = await app.send(to, { headers: { Cookie: cookie } })
+      if (next.status < 300 || next.status >= 400) return res
+      res = next
+    }
+    return res
+  }
+
+  for (const hostile of ['//evil.example/x', '/.//evil.example/x', '/%2f/evil.example', '/%5cevil.example', 'https://evil.example']) {
+    test(`?redirect=${hostile} goes to the queue`, async () => {
+      const res = await visit(`?redirect=${encodeURIComponent(hostile)}`)
+      assert.equal(res.status, 307)
+      assert.equal(res.headers.get('location'), '/operador/cola')
+    })
+  }
+
+  test('a real target is honoured', async () => {
+    const res = await visit(`?redirect=${encodeURIComponent('/operador/trazas')}`)
+    assert.equal(res.headers.get('location'), '/operador/trazas')
   })
 })

@@ -6,11 +6,12 @@ import operatorStylesheet from '../styles/operator.css?url'
 export const Route = createFileRoute('/operador/login')({
   validateSearch: (search: Record<string, unknown>): { redirect?: string; motivo?: 'vencida' } => {
     const target = sameOriginPath(search.redirect)
-    return { ...(target && { redirect: target }), ...(search.motivo === 'vencida' && { motivo: 'vencida' as const }) }
+    // Explicit keys, even when undefined: the router merges what a validator leaves out back in from the raw query string.
+    return { redirect: target, motivo: search.motivo === 'vencida' ? 'vencida' : undefined }
   },
   beforeLoad: async ({ search }) => {
     const view = await getOperatorView({ data: { auto: false } }).catch(() => null)
-    if (view?.status === 'active') throw redirect({ href: search.redirect ?? '/operador/cola' })
+    if (view?.status === 'active') throw redirect({ href: sameOriginPath(search.redirect) ?? '/operador/cola' })
   },
   loader: () => getFlash().catch(() => null),
   head: () => ({
