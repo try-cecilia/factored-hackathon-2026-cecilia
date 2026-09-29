@@ -14,7 +14,7 @@
   letter-spacing: -0.005em;
 }
 .op h1, .op h2, .op h3 { margin: 0; font-family: var(--font-sans); }
-.op a { color: var(--color-cecil-blue); text-underline-offset: 3px; }
+.op-ticket a:not([class]), .op-page a:not([class]), .op-back a, .op-notice a:not([class]), .op-banner a { color: var(--color-cecil-blue); text-underline-offset: 3px; }
 .op :focus-visible { outline: none; box-shadow: var(--ring-focus); border-radius: var(--radius-compact); }
 .op-mono { font-family: var(--font-mono); font-size: var(--text-compact-xs); line-height: 14px; letter-spacing: 0; }
 .op-muted { color: var(--color-ink-70); }
@@ -79,18 +79,18 @@
 .op-seg a[aria-current='true'] { background: var(--color-paper); box-shadow: 0 1px 2px var(--color-glass); color: var(--color-ink-app); font-weight: var(--font-weight-semibold); }
 .op-seg .op-mono { font-size: var(--text-compact-2xs); line-height: 12px; color: var(--color-ink-70); }
 .op-select { position: relative; display: inline-flex; align-items: center; height: 28px; border-radius: var(--radius-control); background: var(--color-fill-subtle); color: var(--color-ink-70); }
-.op-select[data-set] { background: var(--color-row-selected); color: var(--color-cecil-blue); }
+.op-select[data-set] { background: var(--color-fill-muted); }
 .op-select select {
   height: 100%; padding: 0 26px 0 10px; border: 0; border-radius: inherit; outline: none; background: transparent; appearance: none; -webkit-appearance: none;
-  color: var(--color-ink-app); font-size: var(--text-compact-sm); font-weight: var(--font-weight-medium); cursor: pointer;
+  color: var(--color-ink-app); font-size: var(--text-compact-sm); font-weight: var(--font-weight-medium); cursor: pointer; field-sizing: content;
 }
-.op-select[data-set] select { color: var(--color-cecil-blue); font-weight: var(--font-weight-semibold); }
+.op-select[data-set] select { font-weight: var(--font-weight-semibold); }
 .op-select:focus-within { box-shadow: var(--ring-focus); }
 .op-select svg { position: absolute; right: 10px; pointer-events: none; }
-.op-order { color: var(--color-ink-70); font-size: var(--text-compact-sm); font-weight: var(--font-weight-medium); }
+.op-order { margin-left: auto; white-space: nowrap; color: var(--color-ink-70); font-size: var(--text-compact-sm); font-weight: var(--font-weight-medium); }
 .op-table .ui-dt__table tbody td .ui-priority { vertical-align: middle; }
 .op-empty { margin: 12vh auto 0; max-width: 320px; }
-.op-detail .op-empty { margin: auto; }
+.op-detail .ui-empty { margin: auto; background: transparent; }
 .op-back { display: none; padding: 12px 16px 0; font-weight: var(--font-weight-medium); }
 
 /* Detalle del caso y de la traza */
@@ -182,9 +182,9 @@ textarea.op-input:focus { box-shadow: 0 0 0 2px var(--color-cecil-blue); }
 .op-ev { width: 100%; border-collapse: separate; border-spacing: 0; table-layout: fixed; }
 .op-ev th { height: 20px; padding: 0 8px; color: var(--color-ink-70); font-size: var(--text-compact-2xs); font-weight: var(--font-weight-medium); line-height: 12px; text-align: left; }
 .op-ev td { height: 24px; padding: 0 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.op-ev th:nth-child(1), .op-ev td:nth-child(1) { width: 78px; }
-.op-ev th:nth-child(2), .op-ev td:nth-child(2) { width: 100px; }
-.op-ev th:nth-child(4), .op-ev td:nth-child(4) { width: 44px; }
+.op-ev th:nth-child(1), .op-ev td:nth-child(1) { width: 92px; }
+.op-ev th:nth-child(2), .op-ev td:nth-child(2) { width: 104px; }
+.op-ev th:nth-child(4), .op-ev td:nth-child(4) { width: 56px; }
 .op-ev td:first-child, .op-ev th:first-child { border-radius: var(--radius-compact) 0 0 var(--radius-compact); }
 .op-ev td:last-child, .op-ev th:last-child { border-radius: 0 var(--radius-compact) var(--radius-compact) 0; }
 .op-ev .op-ev__end { text-align: right; }
