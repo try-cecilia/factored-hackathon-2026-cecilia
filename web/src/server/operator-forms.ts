@@ -1,6 +1,7 @@
 import '@tanstack/react-start/server-only'
 import { checkOrigin, originConfigFromEnv } from './origin-check.ts'
-import { loginFromForm, operatorKeyFromForm, type KeyProbe } from './operator-login.ts'
+import { DEFAULT_LANDING, loginFromForm, operatorKeyFromForm, type KeyProbe } from './operator-login.ts'
+import { sameOriginPath } from './safe-path.ts'
 import { probeAdminKey, probeOperatorKey } from './operator-api'
 import { elevateOperatorSession, endOperatorSession, operatorSessionState, setFlash, startOperatorSession } from './operator-session'
 
@@ -14,8 +15,12 @@ const see = (to: string) => new Response(null, { status: 303, headers: { Locatio
 
 const readForm = (request: Request) => request.formData().catch(() => null)
 
-// A post that does not prove it came from one of our pages is refused before it reads a body or touches a cookie.
-const refused = () => new Response('Forbidden', { status: 403, headers: { 'Cache-Control': 'no-store' } })
+// A post that does not prove it came from one of our pages is refused before it reads a body or touches the session. The
+// answer is not a bare 403 page (a person who opened the console at another address than the configured one would see only
+// "Forbidden"): it is a redirect to the login whose `motivo` says why, one of a closed list and never anything from the request.
+// It travels in the URL, not in a cookie: a browser that refuses cookies (Safari with a Secure one over plain http, the very
+// mistake this notice is about) would never show it.
+const refused = (motivo: 'origen' | 'origen-config') => see(`/operador/login?motivo=${motivo}`)
 
 // One log line per minute per bad value, so a flood of hostile posts does not flood the log.
 const loggedAt = new Map<string, number>()
@@ -31,7 +36,7 @@ function foreign(request: Request) {
         'in production, and an http(s) origin wherever it is set.',
     )
   }
-  return refused()
+  return refused(verdict.reason === 'misconfigured' ? 'origen-config' : 'origen')
 }
 
 export async function handleLogin(request: Request) {
@@ -48,7 +53,19 @@ export async function handleLogin(request: Request) {
     setFlash('session_replaced')
     return see('/operador/login')
   }
-  return see(outcome.to)
+  return see(arrival(outcome.to))
+}
+
+// Where a login lands first. The Set-Cookie of the login can come back unusable (a browser that refuses the cookie, such as
+// Safari with a Secure one over plain http) and the server cannot know when it sends it. So the login redirects here, to a
+// GET that carries the cookie the browser did keep: with a session it goes on to where the operator wanted, without one it
+// says why the login did not take, instead of leaving a login form that looks like nothing happened.
+const arrival = (to: string) => `/operador/ingreso?to=${encodeURIComponent(to)}`
+
+export function handleArrival(request: Request) {
+  const to = sameOriginPath(new URL(request.url).searchParams.get('to')) ?? DEFAULT_LANDING
+  if (operatorSessionState(false).status === 'active') return see(to)
+  return see(`/operador/login?redirect=${encodeURIComponent(to)}&motivo=sin-cookie`)
 }
 
 export async function handleAddKey(request: Request) {

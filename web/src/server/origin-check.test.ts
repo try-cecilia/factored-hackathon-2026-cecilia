@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { checkOrigin } from './origin-check.ts'
+import { checkOrigin, publicOrigins } from './origin-check.ts'
 
 const post = (url: string, headers: Record<string, string> = {}) => new Request(url, { method: 'POST', headers })
+const post_ = (url: string, origin: string) => post(url, { Origin: origin })
 const dev = { production: false }
 
 test('in development, with nothing configured, the origin is the one of the request URL, scheme and port included', () => {
@@ -38,4 +39,76 @@ test('Fetch Metadata must still say same-origin, and neither header means no pro
   assert.equal(checkOrigin(post(url, { 'Sec-Fetch-Site': 'same-site', Origin: 'https://console.bank.example' }), config).ok, false)
   assert.equal(checkOrigin(post(url), config).ok, false)
   assert.equal(checkOrigin(post(url, { 'Sec-Fetch-Site': 'same-origin' }), config).ok, true)
+})
+
+test('a comma-separated list trusts each origin in it exactly, and nothing else', () => {
+  const config = { production: true, publicOrigin: 'http://127.0.0.1:3000, http://localhost:3000' }
+  const url = 'http://localhost:3000/operador/sesion'
+  for (const origin of ['http://127.0.0.1:3000', 'http://localhost:3000']) assert.equal(checkOrigin(post(url, { Origin: origin }), config).ok, true, origin)
+  assert.equal(checkOrigin(post(url, { Referer: 'http://localhost:3000/operador/login' }), config).ok, true)
+  for (const origin of ['http://localhost:3001', 'https://localhost:3000', 'http://127.0.0.2:3000', 'http://[::1]:3000', 'https://attacker.invalid', 'null']) {
+    assert.deepEqual(checkOrigin(post(url, { Origin: origin }), config), { ok: false, reason: 'cross-site' }, origin)
+  }
+})
+
+test('a list with a wildcard, or with any entry that is not an http(s) origin, is a configuration error, not a partial list', () => {
+  for (const publicOrigin of ['http://127.0.0.1:3000,*', '*', 'http://127.0.0.1:3000,nope', ',', 'http://127.0.0.1:3000,ftp://x.example']) {
+    const verdict = checkOrigin(post('http://127.0.0.1:3000/x', { Origin: 'http://127.0.0.1:3000' }), { production: true, publicOrigin })
+    assert.deepEqual(verdict, { ok: false, reason: 'misconfigured' }, publicOrigin)
+  }
+})
+
+test('publicOrigins reads each entry as a pure origin: scheme, host and optional port, and nothing else', () => {
+  assert.deepEqual(publicOrigins('https://a.example, https://B.example:8443/'), ['https://a.example', 'https://b.example:8443'])
+  assert.deepEqual(publicOrigins('http://[::1]:3000'), ['http://[::1]:3000'])
+  assert.equal(publicOrigins(undefined), null)
+  assert.equal(publicOrigins(''), null)
+})
+
+test('one entry that is not a pure origin invalidates the whole value: wildcard, userinfo, path, query, fragment, blank, other scheme', () => {
+  const good = 'https://console.bank.example'
+  const bad = [
+    'https://*.bank.example', 'https://console.*', '*', 'https://trusted.example@attacker.invalid', 'https://user:pw@console.bank.example',
+    'https://console.bank.example/operador', 'https://console.bank.example//', 'https://console.bank.example?x=1', 'https://console.bank.example#f',
+    'https://console.bank.example\\evil.example', 'https://console.bank.example /x', 'https://', 'ftp://console.bank.example', 'console.bank.example', '',
+  ]
+  for (const entry of bad) {
+    assert.equal(publicOrigins(`${good},${entry}`), null, `second: ${JSON.stringify(entry)}`)
+    assert.equal(publicOrigins(`${entry},${good}`), null, `first: ${JSON.stringify(entry)}`)
+  }
+})
+
+test('a wildcard or userinfo entry does not authorize anything, in either position', () => {
+  const post = (origin: string) => checkOrigin(post_('https://console.bank.example/x', origin), { production: true, publicOrigin: 'https://trusted.example@attacker.invalid' })
+  assert.deepEqual(post('https://attacker.invalid'), { ok: false, reason: 'misconfigured' })
+  assert.deepEqual(post('https://trusted.example'), { ok: false, reason: 'misconfigured' })
+})
+
+test('a list that mixes http and https is invalid, in either order: the cookies could not be right for both', () => {
+  assert.equal(publicOrigins('http://localhost:34567,https://console.bank.example'), null)
+  assert.equal(publicOrigins('https://console.bank.example,http://localhost:34567'), null)
+  assert.deepEqual(publicOrigins('https://a.example,https://b.example'), ['https://a.example', 'https://b.example'])
+  for (const publicOrigin of ['http://localhost:34567,https://console.bank.example', 'https://console.bank.example,http://localhost:34567']) {
+    const verdict = checkOrigin(post('https://console.bank.example/x', { Origin: 'https://console.bank.example' }), { production: true, publicOrigin })
+    assert.deepEqual(verdict, { ok: false, reason: 'misconfigured' }, publicOrigin)
+  }
+})
+
+test('Unicode look-alikes are not origins: what normalizes to a wildcard or another host invalidates the whole value', () => {
+  const good = 'https://console.bank.example'
+  const bad = [
+    'https://\uFF0A.bank.example', // fullwidth asterisk: the URL parser turns it into *
+    'https://\uFF0A', 'https://console\u3002bank.example', 'https://console\uFF0Ebank.example', 'https://console\uFF61bank.example', // other dots
+    'https://\uFF43\uFF4F\uFF4E\uFF53\uFF4F\uFF4C\uFF45.bank.example', // fullwidth letters
+    'https://con\u00ADsole.bank.example', 'https://console\u200B.bank.example', 'https://console.bank.example\u2044evil.example',
+    'https://b\u00FCcher.example', // an IDN must be written in punycode
+    'https://console.bank.example:\uFF13\uFF10\uFF10\uFF10', 'https://console.bank.example:99999', 'https://%2A.bank.example',
+    'https://-console.bank.example', 'https://console..bank.example', 'https://console.bank.example.', 'https://0x7f.1', 'https://[not-ipv6]',
+  ]
+  for (const entry of bad) {
+    assert.equal(publicOrigins(`${good},${entry}`), null, `second: ${JSON.stringify(entry)}`)
+    assert.equal(publicOrigins(`${entry},${good}`), null, `first: ${JSON.stringify(entry)}`)
+  }
+  assert.deepEqual(publicOrigins(`${good},https://xn--bcher-kva.example,https://a-b.c1.example:8443`), [good, 'https://xn--bcher-kva.example', 'https://a-b.c1.example:8443'])
+  assert.deepEqual(publicOrigins('http://127.0.0.1:3000,http://[::1]:8080,http://localhost:3000'), ['http://127.0.0.1:3000', 'http://[::1]:8080', 'http://localhost:3000'])
 })

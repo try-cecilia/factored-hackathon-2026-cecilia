@@ -9,7 +9,10 @@ after(() => app.close())
 const landing = async (redirect: string) => {
   const res = await app.send('/operador/sesion', { fields: { admin_key: ADMIN, redirect }, headers: SAME_ORIGIN })
   assert.equal(res.status, 303)
-  return res.headers.get('location')
+  // The login lands on the arrival check first (operador.ingreso.ts), which carries the target it will send the operator on to.
+  const arrival = new URL(res.headers.get('location') ?? '', 'http://console.test')
+  assert.equal(arrival.pathname, '/operador/ingreso')
+  return arrival.searchParams.get('to')
 }
 
 describe('the redirect after login never leaves this site', () => {

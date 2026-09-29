@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { after, before, describe, test } from 'node:test'
-import { ADMIN, ANA, CROSS_SITE, ORIGIN, SAME_ORIGIN, sessionCookie, setCookies, startConsole } from './harness.ts'
+import { ADMIN, ANA, assertRefused, CROSS_SITE, ORIGIN, SAME_ORIGIN, sessionCookie, startConsole } from './harness.ts'
 
 let app: Awaited<ReturnType<typeof startConsole>>
 before(async () => { app = await startConsole() })
@@ -9,11 +9,9 @@ after(() => app.close())
 const login = { admin_key: ADMIN }
 
 describe('the operator forms refuse a post that did not come from this site', () => {
-  test('a cross-site login is refused with 403 and starts no session', async () => {
+  test('a cross-site login is refused (back to the login with a notice, not a bare 403) and starts no session', async () => {
     const res = await app.send('/operador/sesion', { fields: login, headers: CROSS_SITE })
-    assert.equal(res.status, 403)
-    assert.deepEqual(setCookies(res), [])
-    assert.equal(sessionCookie(res), null)
+    assertRefused(res, 'origen')
   })
 
   test('each signal alone is enough to refuse', async () => {
@@ -30,8 +28,7 @@ describe('the operator forms refuse a post that did not come from this site', ()
     ]
     for (const headers of refused) {
       const res = await app.send('/operador/sesion', { fields: login, headers })
-      assert.equal(res.status, 403, JSON.stringify(headers))
-      assert.equal(sessionCookie(res), null, JSON.stringify(headers))
+      assertRefused(res, 'origen', JSON.stringify(headers))
     }
   })
 
@@ -52,11 +49,9 @@ describe('the operator forms refuse a post that did not come from this site', ()
   test('a cross-site add-key post cannot raise a session, and a cross-site logout cannot end one', async () => {
     const cookie = sessionCookie(await app.send('/operador/sesion', { fields: login, headers: SAME_ORIGIN }))!
     const add = await app.send('/operador/clave', { fields: { operator_key: ANA }, headers: { ...CROSS_SITE, Cookie: cookie } })
-    assert.equal(add.status, 403)
-    assert.deepEqual(setCookies(add), [])
+    assertRefused(add, 'origen')
     const out = await app.send('/operador/salir', { method: 'POST', headers: { ...CROSS_SITE, Cookie: cookie } })
-    assert.equal(out.status, 403)
-    assert.deepEqual(setCookies(out), [])
+    assertRefused(out, 'origen')
     const still = await app.send('/operador/cola', { headers: { Cookie: cookie } })
     assert.equal(still.status, 200, 'the session survived the cross-site logout')
   })

@@ -110,4 +110,4 @@ Sin Docker: `make web-setup` y `make serve-all-fixture` (warehouse de tests y mo
 | Operación | (1) Los probes de `/readyz` que vencen dejan hilos bloqueados que se acumulan. (2) Falta una prueba integrada de que la espera entre reintentos del modelo se atribuye al LLM y no a política. |
 | Evaluador held-out | (1) Una respuesta con datos y sesión vencida puede contarse como segura. (2) "Correcto y seguro" acepta respuestas a otra consulta. (3) El caso de cola caída no verifica lo que se le dice al cliente. (4) CI no aplica los pisos al reporte recién calculado. (5) La muestra Groq no versiona la selección ni los resultados por caso. Son falsos positivos del juez, no fugas del sistema. |
 | Sin medir | Un modelo local real (Ollama). Una muestra en vivo más grande. |
-| Sin revisar | El portugués de la UI por alguien nativo. El kit en Firefox y Safari (Safari no guarda cookies `Secure` por http). |
+| Sin revisar | El portugués de la UI por alguien nativo. El kit en Firefox y Safari (el login local ya se verificó en WebKit, ver LIMITATIONS.md). |
