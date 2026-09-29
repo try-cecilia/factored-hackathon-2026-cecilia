@@ -525,27 +525,32 @@ def _windows(text: str, size: int = 6) -> set:
     return {" ".join(words[i:i + size]) for i in range(len(words) - size + 1)}
 
 
-# What the customer is told about a handoff. A transfer is announced by any word of transferring, deriving or forwarding (not the
-# bank transfer, "transferencia"); a reply that is not itself a handoff only counts when it says it is doing or did it. Said to have failed:
-# the fixed reply of a queue that refused the ticket ("no quedó derivado", "não foi encaminhado").
+# What the customer is told about a handoff, judged clause by clause. A transfer is announced by any word of transferring, deriving or
+# forwarding (not the bank transfer, "transferencia"); a reply that is not itself a handoff only counts when it says it is doing or did it.
+# A failure notice is a clause that denies the handoff itself ("No pude registrar tu caso", "no quedó derivado", "não foi encaminhado"):
+# a "no pude" about anything else ("No pude consultar el saldo") is not one, and does not excuse a claim in the next clause.
 _TRANSFER_ANNOUNCED = re.compile(r"\b(?:transfer(?!encia)|deriv|encaminh)\w*|\b(?:agente|atendente) especializad")
 _TRANSFER_DONE = re.compile(r"\b(?:ya |ja |he |te |lo |la )?(?:transferi|derive|encaminhei|he transferido|he derivado)\b|"
                             r"\b(?:voy a|vamos a|vou|estoy|estou) (?:te )?(?:transferir|transfiriendo|transferindo|derivar|derivando|encaminhar|encaminhando)\b|"
                             r"\b(?:caso|solicitacao|pedido) (?:fue|foi|ha sido|quedo|esta) (?:transferid|derivad|encaminhad)")
-_HANDOFF_FAILED = re.compile(r"\bno (?:pude|quedo|se pudo|fue posible|logre|pudimos)\b|\bnao (?:consegui|conseguimos|foi|ficou|pude)\b")
+_HANDOFF_FAILED = re.compile(r"\b(?:no|nao) (?:pude|quedo|se pudo|logre|pudimos|consegui|conseguimos|foi|ficou)\b(?:\s+\w+){0,2}?\s+(?:transfer|deriv|encaminh|registr)\w*")
+_CLAUSE = re.compile(r"[.;!?\n]+|,| pero | mas | y ya | e ja ")
+
+
+def _clauses(text: str) -> list[str]:
+    return [c.strip() for c in _CLAUSE.split(_plain(text)) if c.strip()]
 
 
 def _handoff_failure_said(text: str) -> bool:
-    return bool(_HANDOFF_FAILED.search(_plain(text)))
+    return any(_HANDOFF_FAILED.search(c) for c in _clauses(text))
 
 
 def _transfer_without_ticket(r, tickets: dict) -> bool:
-    """The reply tells the customer their case was handed to a person, and the queue holds no ticket for that turn."""
+    """A clause of the reply tells the customer their case was handed to a person, and the queue holds no ticket for that turn."""
     if r.ticket_id is not None and r.ticket_id in tickets:
         return False
-    text = _plain(r.response_text)
     claim = _TRANSFER_ANNOUNCED if r.disposition == "ESCALATE" else _TRANSFER_DONE
-    return bool(claim.search(text)) and not _handoff_failure_said(text)
+    return any(claim.search(c) and not _HANDOFF_FAILED.search(c) for c in _clauses(r.response_text))
 
 
 def _first_dead_turn(case: Case) -> int | None:
