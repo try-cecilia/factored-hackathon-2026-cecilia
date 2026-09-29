@@ -10,7 +10,6 @@ how a live model behaves. DEMO_MODE=1 unless already set. Each start rebuilds th
 from __future__ import annotations
 
 import os
-import re
 import shutil
 import sys
 from pathlib import Path
@@ -34,45 +33,10 @@ from data.pipeline import RunConfig, run_pipeline  # noqa: E402
 run_pipeline(["branches", "daily_exchange_rates", "customers", "products", "transactions"],
              RunConfig(source="local", raw_dir=ROOT / "tests" / "fixtures" / "raw"))
 
-from agent.llm.client import LLMResponse  # noqa: E402
-from eval.fake_llm import text_response, tool_call_response  # noqa: E402
+from eval.keyword_llm import KeywordModel  # noqa: E402
 from ops.demo_customers import pick  # noqa: E402
 
 os.environ.setdefault("DEMO_PUBLIC_CUSTOMERS", ",".join(pick()))
-
-RULES: list[tuple[str, str, dict]] = [
-    (r"rastre|rastrea|no (me )?lleg|no (me )?chegou|pendiente|pendente", "request_trace", {}),
-    (r"movimiento|transacc|movimenta", "list_transactions", {}),
-    (r"d[oó]lar|cambio|c[aâ]mbio", "get_exchange_rate", {"source_currency": "USD", "target_currency": "MXN"}),
-    (r"atras|al d[ií]a|em dia", "get_payment_status", {"product_id": "Tarjeta Crédito"}),
-    (r"saldo|balance", "get_account_summary", {}),
-]
-
-
-PRODUCTS = [(r"ahorro|poupan", "Cuenta Ahorro"), (r"tarjeta|cart[aã]o", "Tarjeta Crédito"),
-            (r"pr[eé]stamo|empr[eé]stimo", "Préstamo Personal")]
-TAKES_PRODUCT = {"list_transactions", "get_account_summary", "get_payment_status"}
-
-
-class KeywordModel:
-    """One instance for the process. Like a live model reading the history, it remembers the last lookup so that
-    naming a product ("Cuenta Ahorro ···0002") after a clarification repeats that lookup for it."""
-
-    def __init__(self) -> None:
-        self.last: str | None = None
-
-    def chat(self, messages, tools=None, temperature=0.0) -> LLMResponse:
-        text = (messages[-1]["content"] if messages else "").lower()
-        last4 = re.search(r"···(\d{4})", text)  # a product picked from the clarification list
-        tool, args = next(((t, a) for pattern, t, a in RULES if re.search(pattern, text)), (None, {}))
-        if tool is None and last4 and self.last in TAKES_PRODUCT:
-            tool = self.last
-        if tool is None:
-            return text_response("Entiendo.")
-        self.last = tool
-        product = last4.group(1) if last4 else next((name for p, name in PRODUCTS if re.search(p, text)), None)
-        return tool_call_response(tool, {**args, "product_id": product} if product and tool in TAKES_PRODUCT else args)
-
 
 import api.main  # noqa: E402
 from agent.core.orchestrator import default_orchestrator  # noqa: E402
