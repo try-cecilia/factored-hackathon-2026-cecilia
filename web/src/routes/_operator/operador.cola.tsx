@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useI18n, useT } from '../../i18n/context'
 import { headTitle } from '../../i18n/head'
 import type { MessageKey } from '../../i18n/translate'
-import type { Ticket } from '../../server/operator.functions'
+import type { DeskStatus, QueueRow } from '../../server/operator.functions'
 import { Button, DataTable, PriorityChip, StatusIndicator, type Column, type SortState, type StatusTone } from '../../ui'
 import type { Priority } from '../../ui'
 import { ageShort, categoryName, statusKey, when } from '../-operator/format'
@@ -22,7 +22,7 @@ export const Route = createFileRoute('/_operator/operador/cola')({
 
 const layout = getRouteApi('/_operator')
 
-const tones: Record<Ticket['desk']['status'], StatusTone> = {
+const tones: Record<DeskStatus, StatusTone> = {
   open: 'open',
   claimed: 'info',
   approved: 'success',
@@ -87,7 +87,7 @@ function Queue() {
 
   const title = search.cola ?? t(search.vista === 'mias' ? 'operator.queue.title.mine' : search.vista === 'sin-asignar' ? 'operator.queue.title.unassigned' : 'operator.queue.title.all')
 
-  const columns: Column<Ticket>[] = [
+  const columns: Column<QueueRow>[] = [
     { id: 'priority', header: t('operator.queue.columns.priority'), width: 68, sortable: true, cell: (r) => <PriorityChip priority={r.priority.toLowerCase() as Priority} /> },
     { id: 'ticket', header: t('operator.queue.columns.ticket'), width: 76, mono: true, rowHeader: true, sortable: true, cell: (r) => r.ticket_id.slice(0, 8) },
     { id: 'queue', header: t('operator.queue.columns.queue'), width: 132, mono: true, muted: true, truncate: true, sortable: true, cell: (r) => r.queue },

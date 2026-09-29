@@ -275,6 +275,14 @@ cliente se entere del resultado se cubre con `GET /case/{id}` y con un aviso en 
 
 **Punto de sustitución.** `HumanQueue.enqueue/get` y `TicketDesk.act/state`.
 
+**Lo que la consola recibe de la cola.** `loadQueue` (`web/src/server/operator.functions.ts`) lee `/admin/human_queue` y
+devuelve al navegador `QueueRow` (`web/src/server/queue-row.ts`), no el ticket: `ticket_id`, `created_at`, `category`,
+`priority`, `queue`, `customer_id`, `country`, `language`, `request` y del desk solo `status`, `operator` y `version`. Es
+lo que usan la tabla, sus filtros, las pestañas y los contadores del sidebar, y la cola se relee cada 30 s. La evidencia,
+los hechos verificados, las acciones, las preguntas abiertas, la acción pendiente y el historial del desk viajan solo con
+el caso abierto (`loadTicket`, `/admin/tickets/{id}`). Una columna o un filtro que necesite otro campo lo agrega a
+`QueueRow` y a `toQueueRow`; `queue-row.test.ts` falla si la fila empieza a llevar algo del caso.
+
 **En producción.** El sistema de casos del banco. Necesita: alta idempotente por `ticket_id`; transiciones con
 concurrencia optimista por versión; adjuntar evidencia; y la retención que fije el banco (aquí 90 días es un sustituto).
 Cómo se asignan colas y prioridades reales: **por definir con el banco**.

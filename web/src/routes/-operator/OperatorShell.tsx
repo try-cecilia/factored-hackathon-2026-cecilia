@@ -1,7 +1,7 @@
 import { Link, useRouterState } from '@tanstack/react-router'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useT } from '../../i18n/context'
-import type { OperatorView, Result, Ticket } from '../../server/operator.functions'
+import type { OperatorView, QueueRow, Result } from '../../server/operator.functions'
 import { IconButton, LanguageSwitcher, MenuIcon, Sidebar, SidebarBrand, SidebarPerson, SidebarRow, SidebarSection } from '../../ui'
 import { OperatorKeyForm } from './OperatorKeyForm'
 import { sidebarCounts, type QueueSearch } from './queue'
@@ -12,7 +12,7 @@ type Active = Extract<OperatorView, { status: 'active' }>
 const toQueue = (search: QueueSearch) => ({ to: '/operador/cola', search: search as never })
 
 /** Compact operator sidebar (Paper "Operator · Queue"): views, the seven queues, the records, and who is signed in. */
-export function OperatorShell({ view, queue, children }: { view: Active; queue: Result<Ticket[]>; children: ReactNode }) {
+export function OperatorShell({ view, queue, children }: { view: Active; queue: Result<QueueRow[]>; children: ReactNode }) {
   const t = useT()
   const [open, setOpen] = useState(false)
   const location = useRouterState({ select: (s) => s.location })

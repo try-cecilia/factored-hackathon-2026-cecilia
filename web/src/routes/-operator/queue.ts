@@ -1,4 +1,4 @@
-import type { Ticket } from '../../server/operator.functions.ts'
+import type { QueueRow } from '../../server/queue-row.ts'
 import { clampPage } from '../../ui/table/paging.ts'
 import { priorityRank } from '../../ui/table/priority.ts'
 import { sortRows, type SortState } from '../../ui/table/sort.ts'
@@ -59,22 +59,22 @@ export function filtersOf(search: QueueSearch, q: string): QueueFilters {
   }
 }
 
-export const isClosed = (t: Ticket) => CLOSED.includes(t.desk.status)
-const isMine = (t: Ticket, me: string | null) => me !== null && t.desk.status === 'claimed' && t.desk.operator === me
+export const isClosed = (t: QueueRow) => CLOSED.includes(t.desk.status)
+const isMine = (t: QueueRow, me: string | null) => me !== null && t.desk.status === 'claimed' && t.desk.operator === me
 
-const inView = (t: Ticket, view: View, me: string | null) =>
+const inView = (t: QueueRow, view: View, me: string | null) =>
   view === 'mine' ? isMine(t, me) : view === 'unassigned' ? t.desk.status === 'open' : true
 
-const matchesSearch = (t: Ticket, q: string) => {
+const matchesSearch = (t: QueueRow, q: string) => {
   const needle = q.toLowerCase()
   return [t.ticket_id, t.request, t.queue, t.category, t.desk.operator, t.customer_id].some((field) => field?.toLowerCase().includes(needle))
 }
 
-const inTab = (t: Ticket, tab: StatusTab) =>
+const inTab = (t: QueueRow, tab: StatusTab) =>
   tab === 'all' ? true : tab === 'open' ? t.desk.status === 'open' : tab === 'claimed' ? t.desk.status === 'claimed' : isClosed(t)
 
 /** Everything but the status tab: the scope the tab counts are taken from. */
-export function inScope(tickets: readonly Ticket[], f: QueueFilters, me: string | null): Ticket[] {
+export function inScope(tickets: readonly QueueRow[], f: QueueFilters, me: string | null): QueueRow[] {
   return tickets.filter(
     (t) =>
       inView(t, f.view, me) &&
@@ -86,12 +86,12 @@ export function inScope(tickets: readonly Ticket[], f: QueueFilters, me: string 
   )
 }
 
-export const filterTickets = (tickets: readonly Ticket[], f: QueueFilters, me: string | null) =>
+export const filterTickets = (tickets: readonly QueueRow[], f: QueueFilters, me: string | null) =>
   inScope(tickets, f, me).filter((t) => inTab(t, f.tab))
 
 export type TabCounts = Record<StatusTab, number>
 
-export function tabCounts(scope: readonly Ticket[]): TabCounts {
+export function tabCounts(scope: readonly QueueRow[]): TabCounts {
   return {
     all: scope.length,
     open: scope.filter((t) => inTab(t, 'open')).length,
@@ -103,7 +103,7 @@ export function tabCounts(scope: readonly Ticket[]): TabCounts {
 export type SidebarCounts = { allOpen: number; mine: number; unassigned: number; queues: { name: string; count: number }[] }
 
 /** What the sidebar shows: pending work only (closed tickets are history, not workload). */
-export function sidebarCounts(tickets: readonly Ticket[], me: string | null): SidebarCounts {
+export function sidebarCounts(tickets: readonly QueueRow[], me: string | null): SidebarCounts {
   const pending = tickets.filter((t) => !isClosed(t))
   const byQueue = new Map<string, number>(QUEUES.map((q) => [q, 0]))
   for (const t of pending) byQueue.set(t.queue, (byQueue.get(t.queue) ?? 0) + 1)
@@ -116,7 +116,7 @@ export function sidebarCounts(tickets: readonly Ticket[], me: string | null): Si
 }
 
 /** Pending work first, most urgent first, then the one that has waited longest; closed work last, latest first. */
-export function defaultOrder(tickets: readonly Ticket[]): Ticket[] {
+export function defaultOrder(tickets: readonly QueueRow[]): QueueRow[] {
   return [...tickets].sort((a, b) => {
     const closed = Number(isClosed(a)) - Number(isClosed(b))
     if (closed) return closed
@@ -128,7 +128,7 @@ export function defaultOrder(tickets: readonly Ticket[]): Ticket[] {
 const STATUS_ORDER = ['open', 'claimed', 'approved', 'rejected', 'handed_back', 'stale']
 
 /** Column order chosen in the header. `age` ascending is the youngest first, so its value is the creation time upside down. */
-export function orderTickets(tickets: readonly Ticket[], sort: SortState): Ticket[] {
+export function orderTickets(tickets: readonly QueueRow[], sort: SortState): QueueRow[] {
   if (!sort) return defaultOrder(tickets)
   return sortRows(tickets, sort, (t, key) => {
     switch (key) {
@@ -162,7 +162,7 @@ const COUNTRY_CODES: Record<string, string> = {
 export const countryCode = (country: string | null) => (country ? COUNTRY_CODES[country.toLowerCase()] ?? country : null)
 
 /** Options of the country filter: the code the URL carries, with the name next to it. */
-export function countryOptions(tickets: readonly Ticket[]): { value: string; label: string }[] {
+export function countryOptions(tickets: readonly QueueRow[]): { value: string; label: string }[] {
   const byCode = new Map<string, string>()
   for (const t of tickets) {
     const code = countryCode(t.country)
@@ -177,9 +177,9 @@ export function pageSlice<T>(rows: readonly T[], page: number, pageSize: number)
   return { page: current, rows: rows.slice((current - 1) * pageSize, current * pageSize) }
 }
 
-export const localeOf = (t: Ticket) => [countryCode(t.country), t.language.toUpperCase()].filter(Boolean).join('·')
+export const localeOf = (t: QueueRow) => [countryCode(t.country), t.language.toUpperCase()].filter(Boolean).join('·')
 
-export const distinct = (tickets: readonly Ticket[], pick: (t: Ticket) => string | null) =>
+export const distinct = (tickets: readonly QueueRow[], pick: (t: QueueRow) => string | null) =>
   [...new Set(tickets.map(pick).filter((v): v is string => Boolean(v)))].sort()
 
 export const hasFilters = (f: QueueFilters) => Boolean(f.queue || f.priority || f.country || f.language || f.q || f.view !== 'all' || f.tab !== 'all')
