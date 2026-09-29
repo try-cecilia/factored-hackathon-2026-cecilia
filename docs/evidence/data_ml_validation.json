@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-09-29T14:34:10Z",
-  "code_version": "c1ce6aa",
-  "pytest": "pytest: 41 passed in 11.21s.",
+  "generated_at": "2026-09-29T14:53:27Z",
+  "code_version": "3b5f197",
+  "pytest": "pytest: 43 passed in 11.17s.",
   "criteria": [
     {
       "id": "contracts",
@@ -43,6 +43,18 @@
           "test": "test_contracts_a_value_that_would_be_rounded_to_fit_its_type_is_quarantined_not_stored_rounded",
           "status": "PASS",
           "evidence": "amount='200000.005' en un CSV real: error type_cast:amount, fila en cuarentena y no se guarda como 200000.01; '54.500' se acepta",
+          "detail": ""
+        },
+        {
+          "test": "test_contracts_valid_amounts_of_any_magnitude_are_stored_exactly_and_only_a_rounding_one_is_rejected",
+          "status": "PASS",
+          "evidence": "523 importes válidos de 0.01 a 9999999999999.99 (incluido 8995304.28) cargados exactos; 200000.005 rechazado con cast:amount; una sola fila en cuarentena",
+          "detail": ""
+        },
+        {
+          "test": "test_contracts_the_fixture_warehouse_loads_without_a_single_cast_error",
+          "status": "PASS",
+          "evidence": "la carga del fixture sin ningún type_cast ni fila en cuarentena (38 filas leídas)",
           "detail": ""
         },
         {
@@ -108,61 +120,61 @@
         {
           "test": "test_lineage_an_incomplete_record_fails_verification_even_without_the_raw_files[UPDATE _source_files SET sha256 = NULL WHERE table_name = 'customers'-malformed sha256]",
           "status": "PASS",
-          "evidence": "sha256 = NULL -> verify() sin raw_dir: customers: customers.csv in run 20260929T143403Z-f3db62 has a missing or malformed sha256",
+          "evidence": "sha256 = NULL -> verify() sin raw_dir: customers: customers.csv in run 20260929T145320Z-6fb39c has a missing or malformed sha256",
           "detail": ""
         },
         {
           "test": "test_lineage_an_incomplete_record_fails_verification_even_without_the_raw_files[UPDATE _source_files SET sha256 = 'abc123' WHERE table_name = 'customers'-malformed sha256]",
           "status": "PASS",
-          "evidence": "sha256 = 'abc123' -> verify() sin raw_dir: customers: customers.csv in run 20260929T143403Z-53d3a4 has a missing or malformed sha256",
+          "evidence": "sha256 = 'abc123' -> verify() sin raw_dir: customers: customers.csv in run 20260929T145321Z-8d002e has a missing or malformed sha256",
           "detail": ""
         },
         {
           "test": "test_lineage_an_incomplete_record_fails_verification_even_without_the_raw_files[UPDATE _source_files SET sha256 = upper(sha256) WHERE table_name = 'customers'-malformed sha256]",
           "status": "PASS",
-          "evidence": "sha256 = upper(sha256) -> verify() sin raw_dir: customers: customers.csv in run 20260929T143404Z-b4c121 has a missing or malformed sha256",
+          "evidence": "sha256 = upper(sha256) -> verify() sin raw_dir: customers: customers.csv in run 20260929T145321Z-3c52a2 has a missing or malformed sha256",
           "detail": ""
         },
         {
           "test": "test_lineage_an_incomplete_record_fails_verification_even_without_the_raw_files[UPDATE _source_files SET n_bytes = NULL WHERE table_name = 'customers'-n_bytes]",
           "status": "PASS",
-          "evidence": "n_bytes = NULL -> verify() sin raw_dir: customers: customers.csv in run 20260929T143404Z-96491d has a missing or malformed n_bytes",
+          "evidence": "n_bytes = NULL -> verify() sin raw_dir: customers: customers.csv in run 20260929T145321Z-ff2ce5 has a missing or malformed n_bytes",
           "detail": ""
         },
         {
           "test": "test_lineage_an_incomplete_record_fails_verification_even_without_the_raw_files[UPDATE _source_files SET source_uri = '' WHERE table_name = 'customers'-source_uri]",
           "status": "PASS",
-          "evidence": "source_uri = '' -> verify() sin raw_dir: customers: customers.csv in run 20260929T143404Z-eb33f0 has a missing or malformed source_uri",
+          "evidence": "source_uri = '' -> verify() sin raw_dir: customers: customers.csv in run 20260929T145322Z-fa9c30 has a missing or malformed source_uri",
           "detail": ""
         },
         {
           "test": "test_lineage_an_incomplete_record_fails_verification_even_without_the_raw_files[UPDATE _ingestion_log SET contract_version = NULL WHERE table_name = 'customers'-contract_version]",
           "status": "PASS",
-          "evidence": "contract_version = NULL -> verify() sin raw_dir: customers: run 20260929T143404Z-5e9e5e does not record contract_version",
+          "evidence": "contract_version = NULL -> verify() sin raw_dir: customers: run 20260929T145322Z-b1fe3d does not record contract_version",
           "detail": ""
         },
         {
           "test": "test_lineage_an_incomplete_record_fails_verification_even_without_the_raw_files[UPDATE _ingestion_log SET contract_version = '  ' WHERE table_name = 'customers'-contract_version]",
           "status": "PASS",
-          "evidence": "contract_version = '  ' -> verify() sin raw_dir: customers: run 20260929T143405Z-d568de does not record contract_version",
+          "evidence": "contract_version = '  ' -> verify() sin raw_dir: customers: run 20260929T145322Z-e650b5 does not record contract_version",
           "detail": ""
         },
         {
           "test": "test_lineage_an_incomplete_record_fails_verification_even_without_the_raw_files[UPDATE _ingestion_log SET code_version = NULL WHERE table_name = 'customers'-code_version]",
           "status": "PASS",
-          "evidence": "code_version = NULL -> verify() sin raw_dir: customers: run 20260929T143405Z-8ab8b6 does not record code_version",
+          "evidence": "code_version = NULL -> verify() sin raw_dir: customers: run 20260929T145322Z-7714cd does not record code_version",
           "detail": ""
         },
         {
           "test": "test_lineage_an_incomplete_record_fails_verification_even_without_the_raw_files[UPDATE _ingestion_log SET finished_at = NULL WHERE table_name = 'customers'-finished_at]",
           "status": "PASS",
-          "evidence": "finished_at = NULL -> verify() sin raw_dir: customers: run 20260929T143405Z-2cfcee does not record finished_at",
+          "evidence": "finished_at = NULL -> verify() sin raw_dir: customers: run 20260929T145323Z-a131da does not record finished_at",
           "detail": ""
         },
         {
           "test": "test_lineage_an_incomplete_record_fails_verification_even_without_the_raw_files[UPDATE _ingestion_log SET mode = NULL WHERE table_name = 'customers'-mode]",
           "status": "PASS",
-          "evidence": "mode = NULL -> verify() sin raw_dir: customers: run 20260929T143405Z-721ec4 does not record mode",
+          "evidence": "mode = NULL -> verify() sin raw_dir: customers: run 20260929T145323Z-a29a9b does not record mode",
           "detail": ""
         },
         {

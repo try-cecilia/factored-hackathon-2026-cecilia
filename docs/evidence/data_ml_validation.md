@@ -1,15 +1,15 @@
 # Validación de buenas prácticas de datos y ML (auto-generado)
 
-Generado por `make validate-data-ml` (`python -m eval.validate_data_ml`) el 2026-09-29T14:34:10Z sobre el código `c1ce6aa`.
+Generado por `make validate-data-ml` (`python -m eval.validate_data_ml`) el 2026-09-29T14:53:27Z sobre el código `3b5f197`.
 Rúbrica: «Buena práctica de datos y ML: contratos, calidad, linaje, política de frescura, y al menos un componente aprendido
-contra una línea base, sin fuga de datos». Resultado global: **PASS**. pytest: 41 passed in 11.21s.
+contra una línea base, sin fuga de datos». Resultado global: **PASS**. pytest: 43 passed in 11.17s.
 
 Cada fila es una prueba de `tests/test_data_ml_validation.py`: hermética (warehouse de prueba de `tests/fixtures`, sin S3 ni claves), y falla si la
 frase del documento que cita deja de ser cierta. Las cifras de la evidencia salen de la propia prueba, no se escriben a mano.
 
 | Criterio | Resultado | Pruebas | Comando |
 |---|---|---|---|
-| Contratos | **PASS** | 9/9 | `python -m pytest tests/test_data_ml_validation.py -k test_contracts_ -q` |
+| Contratos | **PASS** | 11/11 | `python -m pytest tests/test_data_ml_validation.py -k test_contracts_ -q` |
 | Calidad | **PASS** | 2/2 | `python -m pytest tests/test_data_ml_validation.py -k test_quality_ -q` |
 | Linaje | **PASS** | 13/13 | `python -m pytest tests/test_data_ml_validation.py -k test_lineage_ -q` |
 | Política de frescura | **PASS** | 4/4 | `python -m pytest tests/test_data_ml_validation.py -k test_freshness_ -q` |
@@ -28,6 +28,8 @@ Afirma: docs/data_quality.md (Pipeline, pasos 2-5), data/contracts.py.
 | over the quarantine threshold the load stops and the previous state stays | PASS | lote con 40% en cuarentena (umbral 1%): PipelineError, tabla servida idéntica (mismo md5), carga 'failed' en _ingestion_log, `python -m data.pipeline` sale con error y el reporte dice status=failed |
 | a missing required column fails the load | PASS | sin la columna obligatoria `amount` la carga falla ('missing required columns') y la tabla no cambia |
 | a value that would be rounded to fit its type is quarantined not stored rounded | PASS | amount='200000.005' en un CSV real: error type_cast:amount, fila en cuarentena y no se guarda como 200000.01; '54.500' se acepta |
+| valid amounts of any magnitude are stored exactly and only a rounding one is rejected | PASS | 523 importes válidos de 0.01 a 9999999999999.99 (incluido 8995304.28) cargados exactos; 200000.005 rechazado con cast:amount; una sola fila en cuarentena |
+| the fixture warehouse loads without a single cast error | PASS | la carga del fixture sin ningún type_cast ni fila en cuarentena (38 filas leídas) |
 | a truncated file cannot replace the rows it cuts off | PASS | un archivo cortado a mitad de la última fila: con el umbral por defecto la carga se detiene; aun tolerando todo, sus 5 filas van a cuarentena (con su archivo de origen) y la tabla servida queda idéntica |
 | the documented severities are the ones the code assigns | PASS | tabla de severidades de docs/data_quality.md == severidades que asignan measure/pydantic_sample/quarantine; muestra pydantic = 1000 |
 | each documented deviation is still measured as a warning | PASS | 2 desvíos del contrato: cada uno es una regla `warn` medida en cada carga y está en docs/data_quality.md |
@@ -49,16 +51,16 @@ Afirma: docs/data_quality.md (Pipeline paso 8), data/lineage.py.
 |---|---|---|
 | every served row traces to a run a file and its hash | PASS | 5 tablas servidas: fila -> run -> contrato/código -> archivo -> SHA-256 (recalculado del disco, 7 archivos); `python -m data.lineage --verify` sin problemas |
 | a broken chain is detected | PASS | se rompe la cadena de 5 maneras (fila sin run, run no exitoso, archivo sin hash, bytes cambiados, archivo borrado) y verify() lo dice; sin raw_dir, además, exige sha256 hex de 64, tamaño, URI, versión de contrato y de código, modo y horas no vacíos (10 casos negativos) |
-| an incomplete record fails verification even without the raw files[UPDATE  source files SET sha256 = NULL WHERE table name = 'customers'-malformed sha256] | PASS | sha256 = NULL -> verify() sin raw_dir: customers: customers.csv in run 20260929T143403Z-f3db62 has a missing or malformed sha256 |
-| an incomplete record fails verification even without the raw files[UPDATE  source files SET sha256 = 'abc123' WHERE table name = 'customers'-malformed sha256] | PASS | sha256 = 'abc123' -> verify() sin raw_dir: customers: customers.csv in run 20260929T143403Z-53d3a4 has a missing or malformed sha256 |
-| an incomplete record fails verification even without the raw files[UPDATE  source files SET sha256 = upper(sha256) WHERE table name = 'customers'-malformed sha256] | PASS | sha256 = upper(sha256) -> verify() sin raw_dir: customers: customers.csv in run 20260929T143404Z-b4c121 has a missing or malformed sha256 |
-| an incomplete record fails verification even without the raw files[UPDATE  source files SET n bytes = NULL WHERE table name = 'customers'-n bytes] | PASS | n_bytes = NULL -> verify() sin raw_dir: customers: customers.csv in run 20260929T143404Z-96491d has a missing or malformed n_bytes |
-| an incomplete record fails verification even without the raw files[UPDATE  source files SET source uri = '' WHERE table name = 'customers'-source uri] | PASS | source_uri = '' -> verify() sin raw_dir: customers: customers.csv in run 20260929T143404Z-eb33f0 has a missing or malformed source_uri |
-| an incomplete record fails verification even without the raw files[UPDATE  ingestion log SET contract version = NULL WHERE table name = 'customers'-contract version] | PASS | contract_version = NULL -> verify() sin raw_dir: customers: run 20260929T143404Z-5e9e5e does not record contract_version |
-| an incomplete record fails verification even without the raw files[UPDATE  ingestion log SET contract version = '  ' WHERE table name = 'customers'-contract version] | PASS | contract_version = '  ' -> verify() sin raw_dir: customers: run 20260929T143405Z-d568de does not record contract_version |
-| an incomplete record fails verification even without the raw files[UPDATE  ingestion log SET code version = NULL WHERE table name = 'customers'-code version] | PASS | code_version = NULL -> verify() sin raw_dir: customers: run 20260929T143405Z-8ab8b6 does not record code_version |
-| an incomplete record fails verification even without the raw files[UPDATE  ingestion log SET finished at = NULL WHERE table name = 'customers'-finished at] | PASS | finished_at = NULL -> verify() sin raw_dir: customers: run 20260929T143405Z-2cfcee does not record finished_at |
-| an incomplete record fails verification even without the raw files[UPDATE  ingestion log SET mode = NULL WHERE table name = 'customers'-mode] | PASS | mode = NULL -> verify() sin raw_dir: customers: run 20260929T143405Z-721ec4 does not record mode |
+| an incomplete record fails verification even without the raw files[UPDATE  source files SET sha256 = NULL WHERE table name = 'customers'-malformed sha256] | PASS | sha256 = NULL -> verify() sin raw_dir: customers: customers.csv in run 20260929T145320Z-6fb39c has a missing or malformed sha256 |
+| an incomplete record fails verification even without the raw files[UPDATE  source files SET sha256 = 'abc123' WHERE table name = 'customers'-malformed sha256] | PASS | sha256 = 'abc123' -> verify() sin raw_dir: customers: customers.csv in run 20260929T145321Z-8d002e has a missing or malformed sha256 |
+| an incomplete record fails verification even without the raw files[UPDATE  source files SET sha256 = upper(sha256) WHERE table name = 'customers'-malformed sha256] | PASS | sha256 = upper(sha256) -> verify() sin raw_dir: customers: customers.csv in run 20260929T145321Z-3c52a2 has a missing or malformed sha256 |
+| an incomplete record fails verification even without the raw files[UPDATE  source files SET n bytes = NULL WHERE table name = 'customers'-n bytes] | PASS | n_bytes = NULL -> verify() sin raw_dir: customers: customers.csv in run 20260929T145321Z-ff2ce5 has a missing or malformed n_bytes |
+| an incomplete record fails verification even without the raw files[UPDATE  source files SET source uri = '' WHERE table name = 'customers'-source uri] | PASS | source_uri = '' -> verify() sin raw_dir: customers: customers.csv in run 20260929T145322Z-fa9c30 has a missing or malformed source_uri |
+| an incomplete record fails verification even without the raw files[UPDATE  ingestion log SET contract version = NULL WHERE table name = 'customers'-contract version] | PASS | contract_version = NULL -> verify() sin raw_dir: customers: run 20260929T145322Z-b1fe3d does not record contract_version |
+| an incomplete record fails verification even without the raw files[UPDATE  ingestion log SET contract version = '  ' WHERE table name = 'customers'-contract version] | PASS | contract_version = '  ' -> verify() sin raw_dir: customers: run 20260929T145322Z-e650b5 does not record contract_version |
+| an incomplete record fails verification even without the raw files[UPDATE  ingestion log SET code version = NULL WHERE table name = 'customers'-code version] | PASS | code_version = NULL -> verify() sin raw_dir: customers: run 20260929T145322Z-7714cd does not record code_version |
+| an incomplete record fails verification even without the raw files[UPDATE  ingestion log SET finished at = NULL WHERE table name = 'customers'-finished at] | PASS | finished_at = NULL -> verify() sin raw_dir: customers: run 20260929T145323Z-a131da does not record finished_at |
+| an incomplete record fails verification even without the raw files[UPDATE  ingestion log SET mode = NULL WHERE table name = 'customers'-mode] | PASS | mode = NULL -> verify() sin raw_dir: customers: run 20260929T145323Z-a29a9b does not record mode |
 | a corrected partition shows which file and hash each row came from | PASS | tras una partición corregida, la fila corregida apunta al run y al hash de raw_late y las demás a los del primer run |
 
 ### Política de frescura: PASS
