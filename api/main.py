@@ -27,6 +27,8 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
+from agent.core.experiments import cohorts, read_log as read_shadow_log, summarize_shadow
+from agent.core.orchestrator import default_orchestrator
 from agent.llm.budget import default_budget
 from agent.llm.client import default_providers
 from agent.policy import intent_guard
@@ -275,6 +277,17 @@ def drift_snapshot(limit: int = 500) -> dict:
     """Freeze the last turns as the reference. Only counts are kept: no traces, no customer data."""
     snap = save_drift_baseline(recent_rows(min(max(limit, 1), 5000)))
     return {"n": snap["n"], "created_at": snap["created_at"]}
+
+
+@app.get("/admin/experiments", dependencies=[Depends(require_admin)])
+def experiments_report(limit: int = 500) -> dict:
+    """Shadow and canary (agent/core/experiments.py): the candidate against the usual model, and what each cohort got."""
+    limit = min(max(limit, 1), 5000)
+    return {"shadow": summarize_shadow(read_shadow_log(default_orchestrator.experiments.log_path, limit)),
+            "cohorts": cohorts(recent_rows(limit)),
+            "config": {"canary_percent": default_orchestrator.experiments.canary_percent,
+                       "shadow_enabled": default_orchestrator.experiments.shadow_enabled,
+                       "canary_enabled": default_orchestrator.experiments.canary_enabled}}
 
 
 @app.get("/admin/llm_budget", dependencies=[Depends(require_admin)])

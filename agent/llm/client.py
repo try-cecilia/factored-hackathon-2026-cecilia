@@ -15,6 +15,7 @@ Each response carries token usage and the attempt log for tracing and cost.
 """
 from __future__ import annotations
 
+import dataclasses
 import json
 import logging
 import os
@@ -188,10 +189,8 @@ def _anthropic_factory(api_key: str, timeout: float):
     return anthropic.Anthropic(api_key=api_key, timeout=timeout, max_retries=0)
 
 
-def default_providers() -> list[Provider]:
-    """In LLM_PROVIDERS order (default: anthropic, groq, together: Claude is the provider measured live so far);
-    a provider without its key is skipped at call time."""
-    known = {
+def _known_providers() -> dict[str, Provider]:
+    return {
         # llama-3.3-70b-versatile left Groq's free/developer tiers on 2026-08-16; gpt-oss-120b is Groq's replacement.
         "groq": Provider("groq", os.environ.get("GROQ_MODEL", os.environ.get("LLM_MODEL", "openai/gpt-oss-120b")),
                          "GROQ_API_KEY", _groq_factory),
@@ -202,8 +201,24 @@ def default_providers() -> list[Provider]:
         "anthropic": Provider("anthropic", os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-5"), "ANTHROPIC_API_KEY",
                               _anthropic_factory, call=anthropic_call),
     }
+
+
+def default_providers() -> list[Provider]:
+    """In LLM_PROVIDERS order (default: anthropic, groq, together: Claude is the provider measured live so far);
+    a provider without its key is skipped at call time."""
+    known = _known_providers()
     order = [n.strip() for n in os.environ.get("LLM_PROVIDERS", "anthropic,groq,together").split(",")]
     return [known[n] for n in order if n in known]
+
+
+def candidate_client(spec: str) -> "LLMClient":
+    """A client for one `provider:model` (e.g. groq:openai/gpt-oss-120b) with no fallback to another provider: a
+    candidate under test has to fail on its own, or its numbers would be the fallback's."""
+    name, _, model = spec.partition(":")
+    known = _known_providers()
+    if name not in known or not model:
+        raise ValueError(f"expected provider:model with a provider in {sorted(known)}, got {spec!r}")
+    return LLMClient(providers=[dataclasses.replace(known[name], model=model)], max_attempts_per_provider=1)
 
 
 def classify_error(exc: Exception) -> str:
