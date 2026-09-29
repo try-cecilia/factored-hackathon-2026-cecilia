@@ -1,7 +1,7 @@
 export const home = {
   titleLine1: 'Conoce a Cecilia,',
   titleLine2: 'tu asistente bancaria.',
-  lead: 'Consulta saldos, movimientos y pagos en lenguaje simple. Si hace falta una persona, Cecilia pasa tu caso completo.',
+  lead: 'Saldos, movimientos y pagos en lenguaje simple. Si hace falta una persona, Cecilia pasa tu caso completo.',
   signIn: 'Ingresar',
 }
 

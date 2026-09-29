@@ -52,7 +52,7 @@ export const demo = {
   bank: {
     title: 'Vista del banco',
     refresh: 'Actualizar',
-    empty: 'Todavía no hay casos de esta sesión. Prueba «Cargo no reconocido».',
+    empty: 'Todavía no hay casos de esta sesión. Probar con «Cargo no reconocido».',
     request: 'Pedido',
     reason: 'Motivo',
     next: 'Próximo paso',

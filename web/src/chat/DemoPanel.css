@@ -26,3 +26,8 @@
 .demo__facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 10px; margin: 0; }
 .demo__facts dt { color: var(--color-ink-70); font-size: var(--text-compact-sm); }
 .demo__facts dd { margin: 0; overflow-wrap: anywhere; }
+
+/* Narrow, the panel slides over the page on paper: its cards take the tonal fill instead of paper. */
+@media (max-width: 1179px) {
+  .demo__card { background: var(--color-fill-subtle); }
+}
