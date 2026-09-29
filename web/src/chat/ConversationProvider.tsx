@@ -4,8 +4,11 @@ import { casesOf, deliveryOf, fromHistory, isOpenCase, mergeCases, splitCaseNews
 import { newMessageKey } from './key'
 import type { HistoryCase, HistoryResult, Reply } from './types'
 
-/** How far a case is known: asked, failed to ask, or answered. */
-export type CaseState = { state: 'loading' } | { state: 'error' } | { state: 'ready'; status: string; message: string | null }
+/** How far a case is known: asked, failed to ask, not one of this session's (the API said 404), or answered. */
+export type CaseState = { state: 'loading' } | { state: 'error' } | { state: 'not_found' } | { state: 'ready'; status: string; message: string | null }
+
+/** What one read of a case came to: `ended` is a session that is over, and the conversation says so. */
+export type CaseRead = 'ready' | 'not_found' | 'error' | 'ended'
 
 export type CaseRow = { ref: CaseRef; state: CaseState }
 
@@ -24,6 +27,8 @@ export type Conversation = {
   reload: () => Promise<void>
   cases: CaseRow[]
   refreshCases: () => void
+  /** Reads one case again now (the case view's "update"); the sidebar and the handoff message follow. */
+  refreshCase: (ticketId: string) => Promise<CaseRead>
 }
 
 const ConversationContext = createContext<Conversation | null>(null)
@@ -81,18 +86,32 @@ export function ConversationProvider({ sessionRef, initial, children }: { sessio
     setEntries((all) => all.map((e) => (e.id === id && e.role === 'user' ? { ...e, ...change } : e)))
   }, [])
 
-  const loadCase = useCallback(async (ticketId: string) => {
-    // The first look shows "loading"; the ones after keep the last answer on screen until the new one arrives.
+  const loadCase = useCallback(async (ticketId: string): Promise<CaseRead> => {
+    // The first look shows "loading"; the ones after keep the last answer on screen until the new one arrives, and a failed
+    // one keeps it too (the caller is told it failed).
     const mine = epoch.current
+    const failed = () => setStates((s) => (s[ticketId]?.state === 'ready' ? s : { ...s, [ticketId]: { state: 'error' } }))
     if (!(ticketId in statesRef.current)) setStates((s) => ({ ...s, [ticketId]: { state: 'loading' } }))
     try {
       const result = await getCase({ data: { ticket_id: ticketId } })
-      if (mine !== epoch.current) return
-      if (result.ok) setStates((s) => ({ ...s, [ticketId]: { state: 'ready', status: result.case.status, message: result.case.message } }))
-      else if (result.failure === 'session_expired') setEnded(true)
-      else setStates((s) => (s[ticketId]?.state === 'ready' ? s : { ...s, [ticketId]: { state: 'error' } }))
+      if (mine !== epoch.current) return 'error'
+      if (result.ok) {
+        setStates((s) => ({ ...s, [ticketId]: { state: 'ready', status: result.case.status, message: result.case.message } }))
+        return 'ready'
+      }
+      if (result.failure === 'session_expired') {
+        setEnded(true)
+        return 'ended'
+      }
+      if (result.failure === 'not_found') {
+        setStates((s) => ({ ...s, [ticketId]: { state: 'not_found' } }))
+        return 'not_found'
+      }
+      failed()
+      return 'error'
     } catch {
-      if (mine === epoch.current) setStates((s) => (s[ticketId]?.state === 'ready' ? s : { ...s, [ticketId]: { state: 'error' } }))
+      if (mine === epoch.current) failed()
+      return 'error'
     }
   }, [])
 
@@ -204,8 +223,8 @@ export function ConversationProvider({ sessionRef, initial, children }: { sessio
   const cases = useMemo<CaseRow[]>(() => refs.map((ref) => ({ ref, state: states[ref.ticketId] ?? { state: 'loading' } })), [refs, states])
 
   const value = useMemo<Conversation>(
-    () => ({ entries, sending, ended, historyFailed, send, retry, reload, cases, refreshCases }),
-    [entries, sending, ended, historyFailed, send, retry, reload, cases, refreshCases],
+    () => ({ entries, sending, ended, historyFailed, send, retry, reload, cases, refreshCases, refreshCase: loadCase }),
+    [entries, sending, ended, historyFailed, send, retry, reload, cases, refreshCases, loadCase],
   )
   return <ConversationContext value={value}>{children}</ConversationContext>
 }

@@ -249,6 +249,7 @@ type Translate = ReturnType<typeof useT>
 function caseStatusText(t: Translate, row: CaseRow | undefined): string {
   if (!row || row.state.state === 'loading') return t('cases.loading')
   if (row.state.state === 'error') return t('cases.unavailable')
+  if (row.state.state === 'not_found') return t('cases.notFound')
   const key = row.state.status
   return t(`cases.status.${key in STATUS ? (key as keyof typeof STATUS) : 'unknown'}`)
 }
