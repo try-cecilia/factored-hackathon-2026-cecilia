@@ -119,7 +119,7 @@ lectura y trazas. Cómo se configuran las claves:
   **Puede ser una lista de orígenes exactos separados por comas** (esquema, host y puerto de cada uno): el stack local de Docker
   responde en `http://127.0.0.1:3000` y en `http://localhost:3000`, y el compose pasa ambos por defecto. Cada entrada
   tiene que ser un origen puro tal como está escrita: sin comodines, usuario@, ruta, query ni fragmento (se valida el texto
-  antes de normalizarlo; una `/` final se tolera). **Una sola entrada inválida invalida todo el valor**, y **una lista que mezcla
+  antes de normalizarlo, con el host en ASCII —un dominio internacionalizado va en punycode, `xn--…`; los caracteres Unicode que el parser convertiría en `*` o `.` se rechazan—; una `/` final se tolera). **Una sola entrada inválida invalida todo el valor**, y **una lista que mezcla
   http y https también** (las cookies no pueden ser correctas para las dos): se rechaza todo en vez de abrir algo por un error de
   tipeo. Las cookies y la autorización usan esa misma validación. Las cabeceras `X-Forwarded-*` siguen sin leerse. En producción
   va **un origen https explícito**. En desarrollo, si está
