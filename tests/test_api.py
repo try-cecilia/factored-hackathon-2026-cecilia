@@ -38,6 +38,17 @@ def test_behind_render_each_client_has_its_own_login_limit_and_nobody_can_pick_i
     assert codes == [200, 200, 429]
 
 
+def test_behind_the_bff_each_user_has_its_own_login_limit_only_when_configured(client, monkeypatch):
+    monkeypatch.setattr(main, "login_limiter", main.RateLimiter(1, 60))
+    as_ip = lambda ip: {"X-Client-IP": ip}  # noqa: E731
+    body = {"customer_id": "CLI-FIX0004", "pin": derive_test_pin("CLI-FIX0004")}
+    assert [client.post("/auth/session", json=body, headers=as_ip(ip)).status_code for ip in ("1.1.1.1", "2.2.2.2")] == [200, 429]
+    monkeypatch.setattr(main, "login_limiter", main.RateLimiter(1, 60))
+    monkeypatch.setenv("CLIENT_IP_HEADER", "X-Client-IP")
+    codes = [client.post("/auth/session", json=body, headers=as_ip(ip)).status_code for ip in ("1.1.1.1", "2.2.2.2", "1.1.1.1")]
+    assert codes == [200, 200, 429]
+
+
 def login(client, cid="CLI-FIX0001", pin=None):
     return client.post("/auth/session", json={"customer_id": cid, "pin": pin or derive_test_pin(cid)})
 
@@ -148,3 +159,45 @@ def test_demo_customers_only_lists_configured_sandbox_accounts(client, monkeypat
     monkeypatch.setenv("DEMO_PUBLIC_CUSTOMERS", "CLI-FIX0001")
     body = client.get("/demo/customers").json()
     assert body == [{"customer_id": "CLI-FIX0001", "test_pin": derive_test_pin("CLI-FIX0001")}]
+
+
+def test_the_session_can_be_read_back_without_extending_it(client):
+    s = login(client).json()
+    headers = {"X-Session-Token": s["token"]}
+    first, second = client.get("/auth/session", headers=headers), client.get("/auth/session", headers=headers)
+    assert first.status_code == 200 and first.json()["expires_at"] == second.json()["expires_at"] == s["expires_at"]
+    body = first.json()
+    assert set(body) == {"customer_id", "session_ref", "segment", "country", "customer_status", "expires_at", "expires_in"}
+    assert body["customer_id"] == "CLI-FIX0001" and body["session_ref"] == s["session_ref"]
+    assert body["segment"] and body["country"] and body["customer_status"]
+    assert 0 < body["expires_in"] <= 900
+    assert s["token"] not in json.dumps(body)
+
+
+@pytest.mark.parametrize("case", ["missing", "garbage", "revoked", "expired"])
+def test_reading_a_session_that_is_not_live_is_a_401(client, case):
+    from agent.session.auth import default_store
+
+    token = login(client).json()["token"]
+    if case == "revoked":
+        default_store.revoke(token)
+    if case == "expired":
+        default_store.expire(token)
+    headers = {} if case == "missing" else {"X-Session-Token": "not-a-real-token" if case == "garbage" else token}
+    r = client.get("/auth/session", headers=headers)
+    assert r.status_code == 401 and r.json() == {"detail": "invalid or expired session"}
+
+
+def test_logout_ends_the_session_and_never_fails(client):
+    token = login(client).json()["token"]
+    headers = {"X-Session-Token": token}
+    assert client.delete("/auth/session", headers=headers).status_code == 204
+    assert client.get("/auth/session", headers=headers).status_code == 401
+    r = client.post("/chat", json={"session_token": token, "message": "¿Cuál es mi saldo?"})
+    assert r.status_code == 200 and r.json()["disposition"] == "REAUTH_REQUIRED"
+    assert client.delete("/auth/session", headers=headers).status_code == 204  # already revoked
+    assert client.delete("/auth/session", headers={"X-Session-Token": "not-a-real-token"}).status_code == 204
+    assert client.delete("/auth/session").status_code == 204
+    admin = {"X-Admin-Key": "test-admin-key"}
+    logs = client.get("/admin/audit_log?limit=500", headers=admin).text + client.get("/admin/trace_log", headers=admin).text
+    assert token not in logs
