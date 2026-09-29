@@ -88,6 +88,8 @@ export function ConversationProvider({ sessionRef, initial, children }: { sessio
     }
   }, [])
 
+  const entriesRef = useRef(entries)
+  entriesRef.current = entries
   const refs = useMemo(() => casesOf(entries), [entries])
 
   useEffect(() => {
@@ -101,8 +103,6 @@ export function ConversationProvider({ sessionRef, initial, children }: { sessio
   const refreshCases = useCallback(() => {
     for (const { ticketId } of casesOf(entriesRef.current)) void loadCase(ticketId)
   }, [loadCase])
-  const entriesRef = useRef(entries)
-  entriesRef.current = entries
 
   // A case a person is working on changes without the customer doing anything: look again while the page is visible.
   useEffect(() => {

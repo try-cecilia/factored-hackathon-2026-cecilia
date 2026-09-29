@@ -103,6 +103,16 @@ export function AppShell({ session, scenarios, children }: { session: Session; s
           aria-label={phone && menuOpen ? t('shell.mainNav') : undefined}
           inert={phone && !menuOpen ? true : undefined}
         >
+          {phone && (
+            <IconButton
+              className="shell__close"
+              variant="ghost"
+              size="sm"
+              label={t('shell.menu.close')}
+              icon={<svg viewBox="0 0 20 20" width={14} height={14} aria-hidden="true" focusable="false"><path d="M5 5l10 10M15 5L5 15" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" /></svg>}
+              onClick={() => setMenuOpen(false)}
+            />
+          )}
           <Sidebar
             collapsed={rail}
             onCollapsedChange={phone ? undefined : setCollapsed}

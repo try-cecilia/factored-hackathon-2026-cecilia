@@ -33,10 +33,12 @@
   }
   .shell[data-menu='open'] .shell__side { transform: none; visibility: visible; }
   .shell__side .ui-sidebar { width: 100%; }
+  .shell__close { position: absolute; top: 12px; right: 10px; z-index: 1; }
   .shell__menu { display: inline-flex; }
   .shell__trust { display: none; }
   .shell__bar { gap: 8px; padding: 0 12px; }
-  .shell__title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* The title stays for screen readers; on a phone the bar has room only for the controls. */
+  .shell__title { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 }
 @media (prefers-reduced-motion: reduce) {
   .shell__side, .shell__demo { transition: none; }
