@@ -1,0 +1,198 @@
+"""D3, the one action this workflow takes: tracing a movement that is still pending.
+
+The model only picks request_trace. The code finds the movement, proposes it, and opens the trace only after the
+customer confirms with a plain yes, deterministically and without the model; it reads the trace back before
+saying it exists. Fixture: CLI-FIX0004 has one pending transfer (TXN-FIX0006, 40.00 USD, 15/01/2024, savings
+···0010); CLI-FIX0001 has nothing pending.
+"""
+from __future__ import annotations
+
+import json
+import os
+
+import pytest
+
+from agent.core.orchestrator import Orchestrator
+from agent.policy import router
+from agent.session.auth import SessionStore
+from agent.tools import traces
+from eval.fake_llm import FakeLLMClient, tool_call_response
+
+
+@pytest.fixture(autouse=True)
+def trace_store(tmp_path, monkeypatch):
+    monkeypatch.setenv("TRACE_REQUESTS_PATH", str(tmp_path / "trace_requests.jsonl"))
+    return tmp_path / "trace_requests.jsonl"
+
+
+def stored() -> list[dict]:
+    path = os.environ["TRACE_REQUESTS_PATH"]
+    return [json.loads(line) for line in open(path, encoding="utf-8")] if os.path.exists(path) else []
+
+
+def make(*responses, customer="CLI-FIX0004"):
+    fake = FakeLLMClient(list(responses))
+    orch = Orchestrator(SessionStore(ttl_seconds=900), llm=lambda: fake)
+    tok = orch.session_store.issue(customer, {"segment": "Student", "country": "México", "customer_status": "Active"}).token
+    return orch, tok, fake
+
+
+def test_a_pending_transfer_is_proposed_and_traced_only_after_the_customer_says_yes():
+    orch, tok, fake = make(tool_call_response("request_trace", {}))
+    r1 = orch.handle_message(tok, "hice una transferencia que todavía no llega")
+    assert (r1.disposition, r1.category, r1.policy_rule) == ("CLARIFY", "confirm_action", "action:trace_proposed")
+    assert "40.00 USD" in r1.response_text and "15/01/2024" in r1.response_text and "···0010" in r1.response_text
+    assert stored() == []  # nothing is opened before the customer confirms
+    assert "40" not in (r1.model_view or "")  # the model's history keeps no figures
+
+    r2 = orch.handle_message(tok, "sí")
+    assert (r2.disposition, r2.policy_rule, r2.llm_calls) == ("AUTO_RESOLVE", "action:trace_opened", 0)
+    [trace] = stored()
+    assert trace["transaction_id"] == "TXN-FIX0006" and trace["trace_id"] in r2.response_text
+    assert "2 días hábiles" in r2.response_text and r2.verified_facts[0]["tool"] == "request_trace"
+    assert fake.call_count == 1  # the confirmation never reached the model
+
+
+def test_a_plain_no_opens_nothing():
+    orch, tok, _ = make(tool_call_response("request_trace", {}))
+    orch.handle_message(tok, "hice una transferencia que todavía no llega")
+    r = orch.handle_message(tok, "no, gracias")
+    assert (r.disposition, r.category, r.policy_rule) == ("ABSTAIN", "action_cancelled", "action:trace_cancelled")
+    assert stored() == []
+
+
+def test_anything_but_a_plain_answer_drops_the_proposal_and_goes_through_the_usual_checks():
+    orch, tok, _ = make(tool_call_response("request_trace", {}), tool_call_response("get_account_summary", {}))
+    orch.handle_message(tok, "hice una transferencia que todavía no llega")
+    assert orch.handle_message(tok, "no, me clonaron la tarjeta").disposition == "ESCALATE"  # the safety lexicon ran
+    assert orch.handle_message(tok, "sí").policy_rule != "action:trace_opened"  # the proposal lapsed
+    assert stored() == []
+
+
+def test_asking_again_returns_the_same_trace_instead_of_a_new_one():
+    orch, tok, _ = make(tool_call_response("request_trace", {}), tool_call_response("request_trace", {}))
+    orch.handle_message(tok, "¿pueden rastrear mi transferencia? sigue pendiente")
+    opened = orch.handle_message(tok, "dale")
+    again = orch.handle_message(tok, "¿y mi transferencia pendiente?")
+    assert (again.disposition, again.policy_rule) == ("AUTO_RESOLVE", "action:trace_already_open")
+    assert len(stored()) == 1 and stored()[0]["trace_id"] in opened.response_text and stored()[0]["trace_id"] in again.response_text
+
+
+def test_a_trace_that_does_not_read_back_is_never_announced(monkeypatch):
+    orch, tok, _ = make(tool_call_response("request_trace", {}))
+    orch.handle_message(tok, "hice una transferencia que todavía no llega")
+    monkeypatch.setattr(traces.TraceService, "find", lambda self, customer_id, transaction_id: None)  # the write was lost
+    r = orch.handle_message(tok, "sí")
+    assert (r.disposition, r.policy_rule) == ("ESCALATE", "action:trace_unverified") and r.ticket_id
+    assert "abrí" not in r.response_text.lower()
+
+
+def test_with_nothing_pending_a_person_checks_it():
+    orch, tok, _ = make(tool_call_response("request_trace", {}), customer="CLI-FIX0001")
+    r = orch.handle_message(tok, "me hicieron una transferencia y nunca llegó")
+    assert (r.disposition, r.category) == ("ESCALATE", "trace_unmatched") and r.ticket_id
+    ticket = json.loads(open(os.environ["HUMAN_QUEUE_PATH"], encoding="utf-8").read().splitlines()[-1])
+    assert ticket["queue"] == "payments_ops" and ticket["ticket_id"] == r.ticket_id
+
+
+def test_another_customers_product_cannot_be_traced():
+    orch, tok, _ = make(tool_call_response("request_trace", {"product_id": "PRD-FIX0001"}))
+    r = orch.handle_message(tok, "rastreen el depósito de esa cuenta")
+    assert (r.disposition, r.category) == ("ESCALATE", "security") and stored() == []
+
+
+def test_several_pending_movements_make_the_customer_pick_one():
+    items = [{"transaction_id": t, "transaction_date": "2024-01-15 10:00:00", "transaction_type": "Transfer", "amount": 40,
+              "currency": "USD", "product_id": "PRD-FIX0010", "last4": "0010", "product_type": "Cuenta Ahorro", "open_trace": None}
+             for t in ("TXN-A", "TXN-B")]
+    decision = router.trace_step({"items": items})
+    assert (decision.disposition.value, decision.rule) == ("CLARIFY", "action:trace_choose")
+
+
+def test_the_pre_llm_guard_hands_few_trace_requests_to_a_person():
+    """12 team-written trace requests, never used for training (eval/test_cases/trace_requests_heldout.csv). The
+    intent classifier predates the trace action; one of them reads as a possible dispute and goes to a person,
+    which is safe but not self-served (LIMITATIONS.md). Retraining with trace examples cost a fraud report on the
+    classifier's held-out test, so the classifier was kept."""
+    import csv
+
+    from agent.policy.signals import escalation_categories
+    from agent.policy import intent_guard
+
+    rows = list(csv.DictReader(open("eval/test_cases/trace_requests_heldout.csv", encoding="utf-8")))
+    escalated = [r["utterance"] for r in rows if escalation_categories(r["utterance"]) or intent_guard.read(r["utterance"]).escalate]
+    assert len(rows) == 12 and escalated == ["necesito que rastreen un pago que no se acreditó"]
+
+
+@pytest.mark.parametrize("text,answer", [
+    ("sí", "yes"), ("Si", "yes"), ("SÍ, por favor", "yes"), ("dale", "yes"), ("confirmo", "yes"), ("sim", "yes"),
+    ("pode ser", "yes"), ("ok", "yes"), ("no", "no"), ("No, gracias", "no"), ("cancelar", "no"), ("não", "no"),
+    ("nao obrigado", "no"), ("sí, pero antes dime mi saldo", None), ("no sé", None), ("¿cuánto tengo?", None),
+    ("claro que sim", "yes"), ("sí sí", "yes"), ("sale", "yes"), ("va", "yes"), ("por supuesto", "yes"), ("correcto", "yes"),
+    ("ok dale", "yes"), ("sim, pode", "yes"), ("yes please", "yes"), ("no no", "no"), ("mejor no", "no"), ("não quero", "no"),
+])
+def test_only_a_plain_answer_counts_as_confirming_or_refusing(text, answer):
+    assert router.confirmation(text) == answer
+
+
+def test_a_trace_id_collision_never_announces_another_customers_trace(monkeypatch):
+    """With colliding ids, one customer's trace must never be found or announced for another (review finding I2)."""
+    monkeypatch.setattr(traces.TraceService, "trace_id", staticmethod(lambda customer_id, transaction_id: "TR-SAME"))
+    service = traces.TraceService()
+    service.open("CLI-FIX0001", "TXN-OTHER", "PRD-FIX0001", "someone-else")
+    assert service.find("CLI-FIX0004", "TXN-FIX0006") is None
+    orch, tok, _ = make(tool_call_response("request_trace", {}))
+    r = orch.handle_message(tok, "hice una transferencia que todavía no llega")
+    assert r.policy_rule == "action:trace_proposed"  # not "already open" with the other customer's number
+
+
+def test_clearing_a_customers_traces_never_leaves_the_file_half_written(trace_store, monkeypatch):
+    """The demo's reset rewrites the file other visitors are reading: the new content must appear whole or not at
+    all (review minor #6). If the swap fails, every request is still there and no temporary file is left behind."""
+    service = traces.TraceService()
+    service.open("CLI-FIX0004", "TXN-FIX0006", "PRD-FIX0010", "a-jury-run")
+    service.open("CLI-FIX0001", "TXN-OTHER", "PRD-FIX0001", "someone-else")
+    before = trace_store.read_text(encoding="utf-8")
+
+    def swap_fails(src, dst):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(os, "replace", swap_fails)
+    with pytest.raises(OSError):
+        service.clear("CLI-FIX0004")
+    assert trace_store.read_text(encoding="utf-8") == before
+    assert [p.name for p in trace_store.parent.iterdir()] == [trace_store.name]
+
+
+def test_trace_ids_are_long_enough_that_a_bank_never_sees_two_alike():
+    assert len(traces.TraceService.trace_id("CLI-FIX0004", "TXN-FIX0006")) == len("TR-") + 16
+
+
+def test_a_pending_movement_can_be_picked_by_its_number_in_the_list(monkeypatch):
+    """Several pending movements: the list is kept server side, and "la segunda" picks the second, in code
+    (review finding I3). The customer then confirms it as usual."""
+    from agent.core import orchestrator as orch_mod
+    from agent.tools import account_tools
+
+    real = account_tools.request_trace
+    first = {"transaction_id": "TXN-FIX0006", "transaction_date": "2024-01-15 10:00:00", "transaction_type": "Transfer",
+             "amount": 40, "currency": "USD", "product_id": "PRD-FIX0010", "product_type": "Cuenta Ahorro", "last4": "0010", "open_trace": None}
+    second = {**first, "transaction_id": "TXN-FIX0099", "transaction_type": "Deposit", "amount": 15, "transaction_date": "2024-01-14 09:00:00"}
+    monkeypatch.setitem(orch_mod.TOOL_FUNCTIONS, "request_trace",
+                        lambda customer_id, **kw: real(customer_id, **kw) | {"items": [first, second]})
+    orch, tok, fake = make(tool_call_response("request_trace", {}))
+    listed = orch.handle_message(tok, "tengo movimientos que no se acreditan")
+    assert listed.policy_rule == "action:trace_choose" and "1)" in listed.response_text and "2)" in listed.response_text
+    proposed = orch.handle_message(tok, "la segunda")
+    assert (proposed.policy_rule, proposed.llm_calls) == ("action:trace_proposed", 0) and "15.00 USD" in proposed.response_text
+    opened = orch.handle_message(tok, "sí")
+    assert opened.policy_rule == "action:trace_opened" and stored()[0]["transaction_id"] == "TXN-FIX0099"
+    assert fake.call_count == 1
+
+
+@pytest.mark.parametrize("text,n,index", [
+    ("la segunda", 2, 1), ("2", 2, 1), ("el primero", 2, 0), ("la 1", 3, 0), ("a segunda", 2, 1), ("o primeiro", 2, 0),
+    ("número 2", 2, 1), ("la tercera", 2, None), ("la de 40 dólares", 2, None), ("la segunda y la primera", 2, None),
+])
+def test_an_ordinal_picks_from_the_list_only_when_it_is_the_whole_answer(text, n, index):
+    assert router.ordinal(text, n) == index

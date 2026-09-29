@@ -1,0 +1,83 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements-tracking.txt  # the runtime pins plus mlflow, so the tracking tests run
+      - name: Hermetic test suite (fixture warehouse, no S3, no API keys)
+        run: python -m pytest tests/ -q
+      - name: Intent classifier evaluation is reproducible
+        run: |
+          python -m eval.evaluate_intent_classifier > /dev/null
+          python - <<'EOF'
+          import json
+          r = json.load(open("eval/reports/intent_classifier.json"))
+          t = r["test"]
+          learned, base = t["learned"]["accuracy"]["rate"], t["baseline_keywords"]["accuracy"]["rate"]
+          guard = t["escalation_guard"]["lexicon_or_classifier (runtime)"]
+          print(f"learned={learned} baseline={base} guard_recall={guard['recall']['rate']} false_esc={guard['false_escalation']['rate']}")
+          assert learned > base, "learned classifier no longer beats the keyword baseline"
+          assert guard["false_escalation"]["rate"] <= 0.05
+          EOF
+
+  container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the image
+        run: docker build -f ops/Dockerfile -t x-payments-agent .
+      - name: Boot it as on Render (disk mounted owned by root, its own PORT), on the fixture warehouse
+        run: |
+          sudo mkdir -p /srv/disk && sudo chown root:root /srv/disk && sudo chmod 755 /srv/disk
+          docker run -d --name app -p 8000:10000 -e PORT=10000 -v /srv/disk:/app/data/warehouse \
+            -e DEMO_MODE=1 -e DEMO_IDP_SECRET=ci-secret -e ADMIN_API_KEY=ci-admin \
+            -e INGEST_ARGS="--profile serving --source local --raw-dir /app/tests/fixtures/raw" \
+            x-payments-agent
+          for i in $(seq 1 90); do curl -fs localhost:8000/health && break; sleep 2; done
+          curl -fs localhost:8000/health | grep -q '"data_as_of":"2024-01-16"'
+      - name: Smoke test, with no model key (only what needs none)
+        run: python3 ops/container_smoke.py http://localhost:8000
+      - name: The app runs unprivileged, owns its data, and the disk survives a restart without re-ingesting
+        run: |
+          user=$(docker top app -o pid,user,args | awk '/uvicorn/ {print $2; exit}')
+          echo "uvicorn runs as: $user" && test -n "$user" && test "$user" != "root"
+          test "$(sudo stat -c %u /srv/disk/bank.duckdb)" = "10001"
+          loaded=$(sudo python3 -c "import json; print(json.load(open('/srv/disk/quality_report.json'))['run_id'])")
+          docker restart app
+          for i in $(seq 1 60); do curl -fs localhost:8000/health && break; sleep 2; done
+          test "$(docker logs app 2>&1 | grep -c 'ingesting with')" = "1"
+          shown=$(curl -fs -H "X-Admin-Key: ci-admin" localhost:8000/admin/data_quality | python3 -c "import json, sys; print(json.load(sys.stdin)['run_id'])")
+          echo "quality report on the disk: $loaded; /admin/data_quality after the restart: $shown"
+          test -n "$loaded" && test "$loaded" = "$shown"
+          python3 ops/container_smoke.py http://localhost:8000
+      - name: A first load that fails or is killed leaves nothing a later boot would serve, and the next boot loads again
+        run: |
+          sudo mkdir -p /srv/bad && sudo chown root:root /srv/bad
+          if docker run --rm -v /srv/bad:/app/data/warehouse -e DEMO_IDP_SECRET=ci-secret \
+               -e INGEST_ARGS="--profile serving --source local --raw-dir /app/no-such-dir" x-payments-agent; then
+            echo "the boot should have failed" && exit 1
+          fi
+          for f in bank.duckdb bank.duckdb.wal bank.duckdb.building; do sudo test ! -e /srv/bad/$f; done
+          # What a boot killed half way through its load leaves: a partial build under the temporary name, a stale WAL
+          sudo sh -c 'echo partial > /srv/bad/bank.duckdb.building && echo stale > /srv/bad/bank.duckdb.wal'
+          docker run -d --name retry -p 8001:10000 -e PORT=10000 -v /srv/bad:/app/data/warehouse -e DEMO_IDP_SECRET=ci-secret \
+            -e INGEST_ARGS="--profile serving --source local --raw-dir /app/tests/fixtures/raw" x-payments-agent
+          for i in $(seq 1 90); do curl -fs localhost:8001/health && break; sleep 2; done
+          curl -fs localhost:8001/health | grep -q '"data_as_of":"2024-01-16"' || { docker logs retry; exit 1; }
+          sudo test -f /srv/bad/bank.duckdb && sudo test ! -e /srv/bad/bank.duckdb.building && sudo test ! -e /srv/bad/bank.duckdb.wal
+          docker rm -f retry
+      - name: Container logs
+        if: always()
+        run: docker logs app

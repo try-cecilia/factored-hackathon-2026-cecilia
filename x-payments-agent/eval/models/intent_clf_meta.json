@@ -1,0 +1,8 @@
+{
+  "escalation_threshold": 0.55,
+  "variant": "char+word",
+  "trained_on": "eval/test_cases/intent_dataset.csv",
+  "train_n": 182,
+  "train_sha256": "b7c35dd8b895865d9f85de3c8e27b5b68aeba187e4ab6fa6b0ac6c77db028cdd",
+  "sklearn": "1.9.1"
+}
