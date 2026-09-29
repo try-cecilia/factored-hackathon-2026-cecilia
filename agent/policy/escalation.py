@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import time
 import uuid
 from dataclasses import asdict, dataclass, field
@@ -57,6 +58,9 @@ ENQUEUE_RETRY = RetryPolicy(max_attempts=3, base_s=0.1, cap_s=0.5)
 
 
 class HumanQueue:
+    def __init__(self) -> None:
+        self._write_lock = threading.Lock()  # a ticket is one line: two threads must not interleave their halves
+
     @property
     def path(self) -> Path:
         p = Path(os.environ.get("HUMAN_QUEUE_PATH", "data/warehouse/human_queue.jsonl"))
@@ -73,7 +77,7 @@ class HumanQueue:
             tries += 1
             if tries > 1 and self.get(ticket.ticket_id) is not None:
                 return
-            with open(self.path, "a", encoding="utf-8") as f:
+            with self._write_lock, open(self.path, "a", encoding="utf-8") as f:
                 f.write(json.dumps(asdict(ticket), default=str, ensure_ascii=False) + "\n")
 
         retry_call(write, policy=ENQUEUE_RETRY, idempotency_key=ticket.ticket_id)

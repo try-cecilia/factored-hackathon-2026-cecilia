@@ -146,3 +146,5 @@ def configure_logging() -> None:
     root.addHandler(handler)
     if root.level == logging.NOTSET or root.level > logging.INFO:
         root.setLevel(os.environ.get("LOG_LEVEL", "INFO").upper())
+    for noisy in ("httpx", "httpcore"):  # one line per outbound call, with nothing the turn log does not already say
+        logging.getLogger(noisy).setLevel(logging.WARNING)
