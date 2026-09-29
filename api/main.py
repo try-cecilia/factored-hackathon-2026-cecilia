@@ -21,6 +21,7 @@ import threading
 import time
 from collections import Counter, defaultdict, deque
 from pathlib import Path
+from typing import Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse
@@ -32,6 +33,7 @@ from agent.policy import intent_guard
 from agent.session.identity import AuthError, IdentityUnavailable, LockedOut, default_identity, derive_test_pin
 from agent.tools import account_tools
 from agent.tools.audit import default_audit_log, default_trace_log
+from agent.policy.desk import Conflict, DeskError, NotFound, default_desk
 from agent.policy.escalation import default_queue
 from api import demo
 
@@ -169,7 +171,34 @@ def _tail(path: Path, limit: int) -> list[dict]:
 
 @app.get("/admin/human_queue", dependencies=[Depends(require_admin)])
 def human_queue(limit: int = 20) -> list[dict]:
-    return _tail(default_queue.path, min(limit, 200))
+    return [{**t, "desk": default_desk.state(t["ticket_id"])} for t in _tail(default_queue.path, min(limit, 200))]
+
+
+class DeskAction(BaseModel):
+    operator: str = Field(min_length=1, max_length=80)
+    expected_version: int | None = None  # the version the operator saw; a newer one refuses the decision
+    reason: str | None = Field(default=None, max_length=300)
+
+
+@app.get("/admin/tickets/{ticket_id}", dependencies=[Depends(require_admin)])
+def ticket(ticket_id: str) -> dict:
+    found = default_queue.get(ticket_id)
+    if found is None:
+        raise HTTPException(404, "ticket not found")
+    return {**found, "desk": default_desk.state(ticket_id)}
+
+
+@app.post("/admin/tickets/{ticket_id}/{action}", dependencies=[Depends(require_admin)])
+def ticket_action(ticket_id: str, action: Literal["claim", "approve", "reject", "release"], body: DeskAction) -> dict:
+    """An operator takes a ticket, approves or rejects the action it carries, or hands the conversation back."""
+    try:
+        return default_desk.act(ticket_id, action, body.operator, body.expected_version, body.reason)
+    except NotFound as exc:
+        raise HTTPException(404, str(exc)) from None
+    except Conflict as exc:
+        raise HTTPException(409, str(exc)) from None
+    except DeskError as exc:
+        raise HTTPException(400, str(exc)) from None
 
 
 @app.get("/admin/audit_log", dependencies=[Depends(require_admin)])

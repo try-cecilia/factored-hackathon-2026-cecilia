@@ -182,6 +182,12 @@ def trace_unverified() -> Decision:
                     rule="action:trace_unverified")
 
 
+def trace_review(reason: str) -> Decision:
+    """The customer confirmed, but this movement is old or contradicts their records: a person approves the trace."""
+    return Decision(Disposition.ESCALATE, f"The customer confirmed a trace, but the movement needs a person's approval ({reason}).",
+                    "trace_review", open_questions=[f"Approve or reject the trace: {reason}."], rule="action:trace_review")
+
+
 def trace_cancelled() -> Decision:
     return Decision(Disposition.ABSTAIN, "The customer declined the proposed trace; nothing was opened.", "action_cancelled",
                     rule="action:trace_cancelled")
