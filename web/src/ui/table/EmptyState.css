@@ -1,0 +1,6 @@
+.ui-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; min-height: 192px; padding: 24px;
+  border-radius: var(--radius-xl); background: var(--color-fill-subtle); text-align: center;
+}
+.ui-empty__title { margin: 0; color: var(--color-ink-app); font-size: var(--text-sm); font-weight: var(--font-weight-semibold); letter-spacing: -0.01em; line-height: 18px; }
+.ui-empty__text { max-width: var(--container-xs); margin: 0; color: var(--color-ink-70); font-size: var(--text-compact-md); line-height: var(--leading-normal); }

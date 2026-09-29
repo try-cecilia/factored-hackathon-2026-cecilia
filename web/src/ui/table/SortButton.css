@@ -1,0 +1,15 @@
+/* Sortable header (Paper "UI · Data tables", block 4). The arrow space is always reserved so nothing shifts on hover. */
+.ui-sort {
+  display: inline-flex; align-items: center; gap: 4px; height: 28px; margin-inline: -10px; padding: 0 10px; border: 0; border-radius: var(--radius-compact);
+  background: transparent; color: inherit; font: inherit; font-weight: inherit; line-height: inherit; white-space: nowrap; cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+.ui-sort--end { flex-direction: row-reverse; }
+.ui-sort__arrow { opacity: 0; color: color-mix(in srgb, var(--color-ink) 30%, transparent); }
+.ui-sort:hover, .ui-sort[data-state='hover'] { background: var(--color-fill-subtle); color: var(--color-ink-app); }
+.ui-sort:hover .ui-sort__arrow, .ui-sort[data-state='hover'] .ui-sort__arrow,
+.ui-sort:focus-visible .ui-sort__arrow, .ui-sort[data-state='focus'] .ui-sort__arrow { opacity: 1; }
+.ui-sort[data-sort] { color: var(--color-ink-app); font-weight: var(--font-weight-semibold); }
+.ui-sort[data-sort] .ui-sort__arrow { opacity: 1; color: var(--color-ink-app); }
+.ui-sort[data-sort]:hover { background: transparent; }
+.ui-sort:focus-visible, .ui-sort[data-state='focus'] { outline: none; box-shadow: var(--ring-focus); }

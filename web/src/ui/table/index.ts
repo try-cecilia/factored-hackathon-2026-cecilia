@@ -1,2 +1,13 @@
 // Public surface of the table components: one export line per component. The gallery is not exported from here.
-export {}
+export { DataTable, RowIdentity, type DataTableEmpty, type DataTableProps } from './DataTable'
+export { Pagination } from './Pagination'
+export { BulkActionBar, type BulkAction } from './BulkActionBar'
+export { EmptyState } from './EmptyState'
+export { PriorityChip, StatusIndicator } from './PriorityChip'
+export { RowCheckbox } from './RowCheckbox'
+export { SortButton } from './SortButton'
+export type { Column, PaginationState, TableDensity } from './types'
+export { nextSort, ariaSort, directionOf, sortRows, compareValues, type SortDirection, type SortState } from './sort'
+export { toggleId, toggleAll, selectAllState, pruneSelection, isSelected, type SelectAllState } from './selection'
+export { pageCount, clampPage, pageRange, pageItems, type PageItem } from './paging'
+export { priorities, priorityRank, comparePriority, type Priority, type StatusTone } from './priority'

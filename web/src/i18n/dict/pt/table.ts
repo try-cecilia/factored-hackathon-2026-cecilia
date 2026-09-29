@@ -1,4 +1,108 @@
 import type { Like } from '../../types.ts'
 import type { table as es } from '../es/table.ts'
 
-export const table: Like<typeof es> = {}
+export const table: Like<typeof es> = {
+  loading: 'Carregando dados…',
+  select: {
+    all: 'Selecionar todas as linhas',
+    row: 'Selecionar linha',
+    rowNamed: 'Selecionar {name}',
+  },
+  bulk: {
+    label: 'Ações para as linhas selecionadas',
+    selectedOne: '{count} selecionada',
+    selectedMany: '{count} selecionadas',
+    clear: 'Limpar seleção',
+  },
+  pagination: {
+    label: 'Paginação',
+    showing: 'Mostrando {from}–{to} de {total}',
+    none: 'Sem resultados',
+    previous: 'Anterior',
+    next: 'Próxima',
+    goTo: 'Ir para a página {page}',
+  },
+  priority: {
+    critical: 'Crítica',
+    high: 'Alta',
+    medium: 'Média',
+    low: 'Baixa',
+  },
+  sample: {
+    titles: {
+      comfortable: '1 · Confortável',
+      compact: '2 · Compacta',
+      selection: '3 · Seleção e ações em massa',
+      sorting: '4 · Ordenação das colunas e paginação',
+      loading: '5 · Carregando',
+      empty: '6 · Vazia',
+      chips: 'Chips de prioridade e pontos de status',
+    },
+    descriptions: {
+      comfortable: 'Solicitações do cliente. Linhas de 48px, marcas de 28px, preenchimento suave ao passar o cursor sobre a linha inteira.',
+      compact: 'Fila do operador. Linhas de 32px, texto de 12px, ids em mono. Hover e seleção são preenchimentos.',
+      selection: 'As linhas selecionadas ganham um tom azul. A barra de ações flutua sobre a tabela.',
+      sorting: 'Estados do cabeçalho e depois o rodapé. As setas de ordenação só aparecem quando significam algo.',
+      loading: 'As linhas de carregamento mantêm a estrutura. Mesmas alturas das linhas reais, então nada pula.',
+      empty: 'Sem resultados. Explicar o motivo e oferecer uma única saída.',
+      chips: 'Âmbar só para Média e para os status de atenção (pendente, parada).',
+    },
+    caption: {
+      comfortable: 'Solicitações do cliente',
+      compact: 'Fila do operador',
+      selection: 'Solicitações selecionáveis',
+      loading: 'Solicitações do cliente, carregando',
+      empty: 'Solicitações do cliente, sem resultados',
+      sorting: 'Fila do operador, com ordenação e paginação',
+    },
+    columns: {
+      date: 'Data',
+      topic: 'Assunto',
+      category: 'Categoria',
+      status: 'Status',
+      messages: 'Mensagens',
+      priority: 'Prioridade',
+      ticket: 'Ticket',
+      queue: 'Fila',
+      request: 'Solicitação',
+      locale: 'Idioma',
+      age: 'Idade',
+      operator: 'Operador',
+    },
+    comfortable: {
+      rows: {
+        contact: { date: '28 set', topic: 'Atualização de dados', category: 'Conta' },
+        access: { date: '27 set', topic: 'Ajuda com o acesso', category: 'Segurança' },
+        movement: { date: '27 set', topic: 'Consulta de uma movimentação', category: 'Movimentações' },
+        language: { date: '26 set', topic: 'Troca de idioma', category: 'Preferências' },
+        card: { date: '26 set', topic: 'Cartão novo', category: 'Cartões' },
+        billing: { date: '24 set', topic: 'Dados de cobrança', category: 'Conta' },
+      },
+    },
+    status: {
+      resolved: 'Resolvida',
+      pending: 'Pendente',
+      scheduled: 'Agendada',
+      claimed: 'Assumida',
+      open: 'Aberta',
+      approved: 'Aprovada',
+      stale: 'Parada',
+    },
+    actions: {
+      claim: 'Assumir',
+      release: 'Devolver',
+    },
+    sortStates: {
+      unsorted: 'Sem ordem',
+      hover: 'Hover',
+      ascending: 'Crescente',
+      descending: 'Decrescente',
+      focus: 'Foco',
+    },
+    empty: {
+      title: 'Nenhuma solicitação encontrada',
+      description: 'Não há nada em setembro para “Cartão” com status Pendente. Ampliar o intervalo de datas pode ajudar.',
+      action: 'Remover filtros',
+    },
+  },
+}
