@@ -1,4 +1,4 @@
-"""One small SQLite file for the state that must outlive the process: sessions and conversations.
+"""One small SQLite file for sessions, conversations and customer case notifications.
 
 STATE_DB_PATH names it (on Render: the persistent disk, next to the warehouse). Unset, the stores use a private
 in-memory database, so tests and one-off runs behave as before. SQLite gives real transactions and survives a restart;
@@ -16,6 +16,9 @@ CREATE TABLE IF NOT EXISTS sessions (
     expires_at REAL NOT NULL, attributes TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS conversations (
     key TEXT PRIMARY KEY, data TEXT NOT NULL, updated_at REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS case_notifications (
+    customer_id TEXT NOT NULL, ticket_id TEXT NOT NULL, status TEXT NOT NULL,
+    PRIMARY KEY (customer_id, ticket_id));
 """
 
 
