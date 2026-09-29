@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-29T09:44:10.478055+00:00",
+  "generated_at": "2026-09-29T14:15:15.523747+00:00",
   "protocol": "train=templates; held-out written after freezing train+baseline; dev=selection+threshold; test=scored once",
   "train_n": 182,
   "train_class_counts": {
@@ -71,6 +71,29 @@
       }
     ]
   },
+  "leakage_dev_vs_test": {
+    "exclude_at": 0.9,
+    "review_at": 0.6,
+    "n": 85,
+    "max": 0.826,
+    "p95": 0.462,
+    "median": 0.235,
+    "counts_at_least": {
+      "0.5": 3,
+      "0.6": 1,
+      "0.7": 1,
+      "0.9": 0
+    },
+    "excluded": [],
+    "review": [
+      {
+        "heldout": "cuánto tenho na conta",
+        "train": "quanto tenho na conta?",
+        "similarity": 0.826
+      }
+    ]
+  },
+  "majority_class": "payment_status",
   "model_selection_dev": {
     "char": {
       "dev_macro_f1": 0.8285
@@ -181,6 +204,269 @@
       "exchange_rate_inquiry": 10,
       "out_of_scope": 15,
       "requires_escalation": 16
+    },
+    "baseline_majority": {
+      "accuracy": {
+        "k": 15,
+        "n": 88,
+        "rate": 0.1705,
+        "ci95": [
+          0.1061,
+          0.2624
+        ]
+      },
+      "macro_f1": 0.0485,
+      "per_class": {
+        "balance_inquiry": {
+          "precision": 0.0,
+          "recall": {
+            "k": 0,
+            "n": 16,
+            "rate": 0.0,
+            "ci95": [
+              0.0,
+              0.1936
+            ]
+          },
+          "f1": 0.0,
+          "support": 16
+        },
+        "exchange_rate_inquiry": {
+          "precision": 0.0,
+          "recall": {
+            "k": 0,
+            "n": 10,
+            "rate": 0.0,
+            "ci95": [
+              0.0,
+              0.2775
+            ]
+          },
+          "f1": 0.0,
+          "support": 10
+        },
+        "out_of_scope": {
+          "precision": 0.0,
+          "recall": {
+            "k": 0,
+            "n": 15,
+            "rate": 0.0,
+            "ci95": [
+              0.0,
+              0.2039
+            ]
+          },
+          "f1": 0.0,
+          "support": 15
+        },
+        "payment_status": {
+          "precision": 0.1705,
+          "recall": {
+            "k": 15,
+            "n": 15,
+            "rate": 1.0,
+            "ci95": [
+              0.7961,
+              1.0
+            ]
+          },
+          "f1": 0.2913,
+          "support": 15
+        },
+        "requires_escalation": {
+          "precision": 0.0,
+          "recall": {
+            "k": 0,
+            "n": 16,
+            "rate": 0.0,
+            "ci95": [
+              0.0,
+              0.1936
+            ]
+          },
+          "f1": 0.0,
+          "support": 16
+        },
+        "transaction_lookup": {
+          "precision": 0.0,
+          "recall": {
+            "k": 0,
+            "n": 16,
+            "rate": 0.0,
+            "ci95": [
+              0.0,
+              0.1936
+            ]
+          },
+          "f1": 0.0,
+          "support": 16
+        }
+      },
+      "by_language": {
+        "es": {
+          "k": 8,
+          "n": 40,
+          "rate": 0.2,
+          "ci95": [
+            0.105,
+            0.3476
+          ]
+        },
+        "pt": {
+          "k": 7,
+          "n": 48,
+          "rate": 0.1458,
+          "ci95": [
+            0.0725,
+            0.2717
+          ]
+        }
+      },
+      "by_style": {
+        "abbreviated": {
+          "k": 0,
+          "n": 11,
+          "rate": 0.0,
+          "ci95": [
+            0.0,
+            0.2588
+          ]
+        },
+        "colloquial": {
+          "k": 6,
+          "n": 37,
+          "rate": 0.1622,
+          "ci95": [
+            0.0765,
+            0.3114
+          ]
+        },
+        "formal": {
+          "k": 6,
+          "n": 28,
+          "rate": 0.2143,
+          "ci95": [
+            0.1021,
+            0.3954
+          ]
+        },
+        "no_accents": {
+          "k": 0,
+          "n": 1,
+          "rate": 0.0,
+          "ci95": [
+            0.0,
+            0.7935
+          ]
+        },
+        "regional_ar": {
+          "k": 0,
+          "n": 3,
+          "rate": 0.0,
+          "ci95": [
+            0.0,
+            0.5615
+          ]
+        },
+        "regional_co": {
+          "k": 1,
+          "n": 3,
+          "rate": 0.3333,
+          "ci95": [
+            0.0615,
+            0.7923
+          ]
+        },
+        "regional_mx": {
+          "k": 1,
+          "n": 1,
+          "rate": 1.0,
+          "ci95": [
+            0.2065,
+            1.0
+          ]
+        },
+        "slang": {
+          "k": 1,
+          "n": 4,
+          "rate": 0.25,
+          "ci95": [
+            0.0456,
+            0.6994
+          ]
+        }
+      },
+      "by_source": {
+        "team_heldout": {
+          "k": 15,
+          "n": 88,
+          "rate": 0.1705,
+          "ci95": [
+            0.1061,
+            0.2624
+          ]
+        }
+      },
+      "confusion": {
+        "labels": [
+          "balance_inquiry",
+          "exchange_rate_inquiry",
+          "out_of_scope",
+          "payment_status",
+          "requires_escalation",
+          "transaction_lookup"
+        ],
+        "matrix": [
+          [
+            0,
+            0,
+            0,
+            16,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            10,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            15,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            15,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            16,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            16,
+            0,
+            0
+          ]
+        ]
+      }
     },
     "baseline_keywords": {
       "accuracy": {
@@ -708,6 +994,19 @@
         ]
       }
     },
+    "paired_vs_keywords": {
+      "n": 88,
+      "only_b_right": 23,
+      "only_a_right": 3,
+      "diff": 0.2273,
+      "diff_ci95": [
+        0.125,
+        0.3295
+      ],
+      "mcnemar_p": 8.8e-05,
+      "resamples": 10000,
+      "seed": 0
+    },
     "escalation_guard": {
       "lexicon_only": {
         "recall": {
@@ -1045,6 +1344,305 @@
       "exchange_rate_inquiry": 9,
       "out_of_scope": 15,
       "requires_escalation": 15
+    },
+    "baseline_majority": {
+      "accuracy": {
+        "k": 15,
+        "n": 85,
+        "rate": 0.1765,
+        "ci95": [
+          0.11,
+          0.271
+        ]
+      },
+      "macro_f1": 0.05,
+      "per_class": {
+        "balance_inquiry": {
+          "precision": 0.0,
+          "recall": {
+            "k": 0,
+            "n": 16,
+            "rate": 0.0,
+            "ci95": [
+              0.0,
+              0.1936
+            ]
+          },
+          "f1": 0.0,
+          "support": 16
+        },
+        "exchange_rate_inquiry": {
+          "precision": 0.0,
+          "recall": {
+            "k": 0,
+            "n": 9,
+            "rate": 0.0,
+            "ci95": [
+              0.0,
+              0.2992
+            ]
+          },
+          "f1": 0.0,
+          "support": 9
+        },
+        "out_of_scope": {
+          "precision": 0.0,
+          "recall": {
+            "k": 0,
+            "n": 15,
+            "rate": 0.0,
+            "ci95": [
+              0.0,
+              0.2039
+            ]
+          },
+          "f1": 0.0,
+          "support": 15
+        },
+        "payment_status": {
+          "precision": 0.1765,
+          "recall": {
+            "k": 15,
+            "n": 15,
+            "rate": 1.0,
+            "ci95": [
+              0.7961,
+              1.0
+            ]
+          },
+          "f1": 0.3,
+          "support": 15
+        },
+        "requires_escalation": {
+          "precision": 0.0,
+          "recall": {
+            "k": 0,
+            "n": 15,
+            "rate": 0.0,
+            "ci95": [
+              0.0,
+              0.2039
+            ]
+          },
+          "f1": 0.0,
+          "support": 15
+        },
+        "transaction_lookup": {
+          "precision": 0.0,
+          "recall": {
+            "k": 0,
+            "n": 15,
+            "rate": 0.0,
+            "ci95": [
+              0.0,
+              0.2039
+            ]
+          },
+          "f1": 0.0,
+          "support": 15
+        }
+      },
+      "by_language": {
+        "es": {
+          "k": 7,
+          "n": 45,
+          "rate": 0.1556,
+          "ci95": [
+            0.0775,
+            0.2878
+          ]
+        },
+        "mixed": {
+          "k": 0,
+          "n": 4,
+          "rate": 0.0,
+          "ci95": [
+            0.0,
+            0.4899
+          ]
+        },
+        "pt": {
+          "k": 8,
+          "n": 36,
+          "rate": 0.2222,
+          "ci95": [
+            0.1172,
+            0.3809
+          ]
+        }
+      },
+      "by_style": {
+        "abbreviated": {
+          "k": 0,
+          "n": 4,
+          "rate": 0.0,
+          "ci95": [
+            0.0,
+            0.4899
+          ]
+        },
+        "code_switch": {
+          "k": 0,
+          "n": 4,
+          "rate": 0.0,
+          "ci95": [
+            0.0,
+            0.4899
+          ]
+        },
+        "colloquial": {
+          "k": 8,
+          "n": 28,
+          "rate": 0.2857,
+          "ci95": [
+            0.1525,
+            0.4706
+          ]
+        },
+        "formal": {
+          "k": 6,
+          "n": 34,
+          "rate": 0.1765,
+          "ci95": [
+            0.0835,
+            0.3351
+          ]
+        },
+        "no_accents": {
+          "k": 0,
+          "n": 3,
+          "rate": 0.0,
+          "ci95": [
+            0.0,
+            0.5615
+          ]
+        },
+        "regional_ar": {
+          "k": 0,
+          "n": 3,
+          "rate": 0.0,
+          "ci95": [
+            0.0,
+            0.5615
+          ]
+        },
+        "regional_co": {
+          "k": 0,
+          "n": 3,
+          "rate": 0.0,
+          "ci95": [
+            0.0,
+            0.5615
+          ]
+        },
+        "regional_mx": {
+          "k": 0,
+          "n": 2,
+          "rate": 0.0,
+          "ci95": [
+            0.0,
+            0.6576
+          ]
+        },
+        "slang": {
+          "k": 1,
+          "n": 3,
+          "rate": 0.3333,
+          "ci95": [
+            0.0615,
+            0.7923
+          ]
+        },
+        "typo": {
+          "k": 0,
+          "n": 1,
+          "rate": 0.0,
+          "ci95": [
+            0.0,
+            0.7935
+          ]
+        }
+      },
+      "by_source": {
+        "dataset_transcript": {
+          "k": 0,
+          "n": 2,
+          "rate": 0.0,
+          "ci95": [
+            0.0,
+            0.6576
+          ]
+        },
+        "team_heldout": {
+          "k": 15,
+          "n": 83,
+          "rate": 0.1807,
+          "ci95": [
+            0.1127,
+            0.277
+          ]
+        }
+      },
+      "confusion": {
+        "labels": [
+          "balance_inquiry",
+          "exchange_rate_inquiry",
+          "out_of_scope",
+          "payment_status",
+          "requires_escalation",
+          "transaction_lookup"
+        ],
+        "matrix": [
+          [
+            0,
+            0,
+            0,
+            16,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            9,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            15,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            15,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            15,
+            0,
+            0
+          ],
+          [
+            0,
+            0,
+            0,
+            15,
+            0,
+            0
+          ]
+        ]
+      }
     },
     "baseline_keywords": {
       "accuracy": {
@@ -1643,6 +2241,19 @@
           ]
         ]
       }
+    },
+    "paired_vs_keywords": {
+      "n": 85,
+      "only_b_right": 27,
+      "only_a_right": 8,
+      "diff": 0.2235,
+      "diff_ci95": [
+        0.0941,
+        0.3529
+      ],
+      "mcnemar_p": 0.001878,
+      "resamples": 10000,
+      "seed": 0
     },
     "escalation_guard": {
       "lexicon_only": {
