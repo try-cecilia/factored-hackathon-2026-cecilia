@@ -1,14 +1,29 @@
 # Small live sample: `openai/gpt-oss-120b` on Groq's free tier
 
-**A small sample, not an evaluation.** One run, no repeats, prompt 3.1.0, policies as of `ff02f58`, 65 cases in total, paced (20 s between
+**A small sample, not an evaluation, and not reproducible from artifacts (see below).** One run, no repeats, prompt 3.1.0, policies as of `ff02f58`, 65 cases in total, paced (20 s between
 cases) to stay inside the free tier's 8k tokens/minute and ~200k tokens/day. About 64 model calls of ≈ 1.3k tokens each
 (≈ 85k tokens with the smoke run; the client reported usage for roughly half of the calls, so the total is an estimate).
 Wilson 95% intervals; with n of 2 to 14 per cell they are very wide and only say what the sample cannot rule out.
 
-Reproduce: the smoke run is `python -m ops.live_smoke --models groq:openai/gpt-oss-120b`; the samples are the
-`make eval-failures-live` cases (batch 1 and 2 of `eval/heldout.py`, first two model-calling cases per category and
-language, plus the models-dependent injection, ambiguity and unauthorized cases) and one case of each type of the
-generated test workload (alternating ES and PT), each run through `eval.run_system_eval.run` with the live client.
+## What can and cannot be rebuilt from the repository
+
+The numbers below were taken from the console output of that run. **The exact case ids that were selected, the per-case result rows and the
+script that selected them were not saved**, so these tables cannot be rebuilt from an artifact and the selection cannot be replayed:
+the description "first two model-calling cases per category and language, plus the models-dependent injection, ambiguity and unauthorized
+cases, and one case of each type of the generated test workload" is all that is left of it. Read them as a report of one run, not as a
+reproducible measurement. No rows are invented here to make up for it, and Groq was not run again for this fix.
+
+What is versioned now, so that the next run is reproducible:
+- the selection: `eval/reports/live_sample_selection.json` (the ids and the rule that produces them, a fixed function of the committed case
+  files; a test checks that the file is what `python -m eval.live_sample select` writes). The rule is stricter than the one above, so
+  the next sample is 20 reserved and 23 generated cases, not 42 and 23: it is a new sample, not a replay of this one;
+- the runner: `python -m eval.live_sample run --part reserved` (fixture warehouse) and `--part generated` (full warehouse) run the selected
+  cases with the live model, paced (20 s between cases), and append one row per case to `eval/reports/live_sample_groq_rows.jsonl`
+  (this file does not exist yet: it is written by the first run);
+- the table: `python -m eval.live_sample report` rebuilds the tables from those rows and nothing else (handled as `eval/categories.py`
+  defines it, which is also stricter than when this run was made: an answer to another question is no longer counted as handled).
+
+The smoke run is `python -m ops.live_smoke --models groq:openai/gpt-oss-120b`.
 
 ## Smoke run (13 customer turns on the fixture): `LIVE_SMOKE_GROQ.md`
 

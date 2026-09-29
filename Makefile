@@ -8,7 +8,7 @@ WEB_PORT ?= 3000
 # Combined development always connects to its local API, unless overridden.
 AGENT_API_URL ?= http://127.0.0.1:$(API_PORT)
 
-.PHONY: gate validate-data-ml lineage operator-labels retention test-resilience loadtest loadtest-fixture loadtest-http setup ingest ingest-demo analysis train-eval workload eval eval-adversarial eval-failures eval-failures-live eval-failures-local eval-live live-smoke test serve docker-build all mlflow-ui
+.PHONY: gate validate-data-ml lineage operator-labels retention test-resilience loadtest loadtest-fixture loadtest-http setup ingest ingest-demo analysis train-eval workload eval eval-adversarial eval-failures eval-failures-live eval-live-sample eval-live-sample-report eval-failures-local eval-live live-smoke test serve docker-build all mlflow-ui
 .PHONY: web-setup serve-web web-build web-typecheck web-test serve-fixture serve-all-fixture serve-all
 .PHONY: env env-check env-fill evidence up down clean-volumes monitoring-up up-llm-local up-llm-host up-dataset lock lock-check alerts-check compose-e2e
 COMPOSE = docker compose -f ops/docker-compose.yml --env-file .env
@@ -132,6 +132,13 @@ eval-failures-live: ## el set reservado con modelos en vivo, sobre el warehouse 
 	$(PY) -m eval.heldout --build-warehouse $(HELDOUT_DB)
 	DUCKDB_PATH=$(HELDOUT_DB) $(PY) -m eval.run_system_eval --cases eval/heldout/cases_failures.jsonl --system proposed --llm live --repeats 3 --models $(EVAL_MODELS)
 	DUCKDB_PATH=$(HELDOUT_DB) $(PY) -m eval.run_system_eval --cases eval/heldout/cases_failures_2.jsonl --system proposed --llm live --repeats 3 --models $(EVAL_MODELS)
+
+eval-live-sample: ## la muestra chica con Groq (ids en eval/reports/live_sample_selection.json; necesita GROQ_API_KEY; ritmo de 20 s por caso)
+	$(PY) -m eval.live_sample run --part reserved
+	$(PY) -m eval.live_sample run --part generated
+
+eval-live-sample-report: ## rearma las tablas de la muestra desde sus filas por caso (eval/reports/live_sample_groq_rows.jsonl)
+	$(PY) -m eval.live_sample report
 
 eval-failures-local: ## el set reservado con un modelo local (Ollama; ver docker compose --profile llm-local), sin cuentas ni claves
 	$(MAKE) eval-failures-live EVAL_MODELS=local:$${LOCAL_LLM_MODEL:-gpt-oss:20b}
