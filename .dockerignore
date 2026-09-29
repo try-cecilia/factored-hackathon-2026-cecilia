@@ -22,3 +22,7 @@ docs/
 eval/reports/
 eval/workload/
 analysis/
+web/
+node_modules/
+.turbo/
+.venv-backups/

@@ -1,5 +1,62 @@
 # Operations: running, capacity, monitoring, access, retention
 
+## Local development
+
+Python stays at the repository root. `web/` is a separate TanStack Start
+package with its own pnpm lockfile. Use Python 3.11, Node 24 and pnpm 10.33.2.
+`make setup` installs Python dependencies; `make web-setup` installs frontend
+dependencies. Activate `.venv` or pass `PY=.venv/bin/python` to each Make command.
+
+For an offline run, build the fixture warehouse in a temporary directory.
+This leaves any existing warehouse in place and needs no S3 or model calls:
+
+```bash
+source .venv/bin/activate
+export DUCKDB_PATH="$(mktemp -d)/fixture.duckdb"
+python -m data.pipeline --profile serving --source local --raw-dir tests/fixtures/raw \
+  --report "$(dirname "$DUCKDB_PATH")/quality_report.json"
+make web-setup
+make serve-all
+```
+
+Open `http://127.0.0.1:3000` for the new landing page, or
+`http://127.0.0.1:8000` for the existing chat/demo UI. The fixture command
+only prepares data; chat still uses the root `.env` settings for identity and
+model access. Fetching the landing page and health endpoints makes no model calls.
+
+`make serve-all` runs `make serve` and `make serve-web` through `concurrently`,
+installed by `make web-setup`. Both commands use the same settings as when run
+separately. The API runs without reload; Vite reloads the frontend as you edit.
+Logs are labeled `api` and `web`. Ctrl-C or SIGTERM stops both services and their
+children. If either command exits, the other stops too. An occupied web port
+fails instead of silently selecting another port.
+
+| Command or setting | Behavior |
+| --- | --- |
+| `make serve-all WEB_PORT=3001 API_PORT=8001` | Starts both on alternate ports and points the proxy at port 8001 |
+| `make serve API_PORT=8001` | Runs only Python, without reload; `API_HOST` defaults to `0.0.0.0` |
+| `make serve-web WEB_PORT=3001` | Runs only the frontend; `WEB_HOST` defaults to `127.0.0.1` |
+| `make web-typecheck` | Checks TypeScript |
+| `make web-build` | Builds client and server bundles in `web/dist/` |
+
+For `make serve-web`, copy `web/.env.example` to `web/.env` and set
+`AGENT_API_URL` to the backend URL, or provide it in the command's environment.
+It defaults to `http://127.0.0.1:8000`. With `make serve-all`, Make supplies
+`http://127.0.0.1:$(API_PORT)` instead; an explicit `AGENT_API_URL` environment
+variable or Make argument overrides that value. Backend settings still belong
+in the root `.env`. The frontend loads only `AGENT_` settings into its server
+environment; never prefix backend secrets with `VITE_`.
+
+`GET /api/agent/health` forwards Python's `/health` JSON and status code with
+`Cache-Control: no-store`. Connection failures, invalid JSON and requests that
+take longer than five seconds return HTTP 503 with `{"status":"unavailable"}`.
+It reports the backend's response as-is, including the current backend's
+`status: ok` when `data_as_of` says data is unavailable.
+
+The new frontend is a setup skeleton. Authentication and chat are still in the
+existing Python UI. The container and Render deployment below continue to
+serve Python; deploying the TanStack server requires a separate hosting setup.
+
 ## Deploy (container)
 
 ```bash

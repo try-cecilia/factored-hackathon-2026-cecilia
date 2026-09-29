@@ -14,3 +14,14 @@ data/warehouse/
 htmlcov/
 .coverage
 mlruns/
+
+# Frontend dependencies, build output and local settings
+node_modules/
+web/dist/
+web/.tanstack/
+.env.*
+!.env.example
+
+# Local remnants of the abandoned workspace migration
+.turbo/
+.venv-backups/
