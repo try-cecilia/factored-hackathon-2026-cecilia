@@ -118,3 +118,48 @@ def test_the_handoff_has_a_budget_of_its_own_and_is_written_even_when_the_turn_i
     orch, tok = orchestrator(FakeLLMClient([]))
     r = orch.handle_message(tok, "Me clonaron la tarjeta")
     assert r.ticket_id and len(opened) == 2 and [t["ticket_id"] for t in lines("HUMAN_QUEUE_PATH")] == [r.ticket_id]
+
+
+# --- the degraded path obeys the same clock -------------------------------------------------------------------------
+
+def audited_lookups(trace_id: str) -> list[dict]:
+    return [a for a in lines("AUDIT_LOG_PATH") if a.get("trace_id") == trace_id and a.get("tool_name") == "get_account_summary"]
+
+
+def test_with_the_model_down_and_the_budget_spent_a_plain_balance_question_is_not_looked_up_or_answered(monkeypatch):
+    monkeypatch.setenv("TURN_BUDGET_SECONDS", "1e-9")
+    orch, tok = orchestrator(FakeLLMClient([]))  # never reached: the budget is gone before the model
+    from agent.llm.client import LLMUnavailable
+
+    orch._llm = lambda: type("Down", (), {"chat": lambda self, *a, **k: (_ for _ in ()).throw(LLMUnavailable("down", []))})()
+    r = orch.handle_message(tok, "cual es mi saldo")
+    assert r.disposition == "ESCALATE" and r.policy_rule != "degraded:deterministic_balance" and r.ticket_id
+    assert audited_lookups(r.trace_id) == [] and r.verified_facts == []
+
+
+def test_a_degraded_lookup_that_finishes_after_the_budget_is_not_used(monkeypatch):
+    from agent.llm.client import LLMUnavailable
+
+    real = orch_mod.TOOL_FUNCTIONS["get_account_summary"]
+
+    def slow(customer_id, **kw):
+        time.sleep(0.12)
+        return real(customer_id, **kw)
+
+    monkeypatch.setitem(orch_mod.TOOL_FUNCTIONS, "get_account_summary", slow)
+    monkeypatch.setenv("TURN_BUDGET_SECONDS", "0.1")
+    orch, tok = orchestrator(FakeLLMClient([]))
+    orch._llm = lambda: type("Down", (), {"chat": lambda self, *a, **k: (_ for _ in ()).throw(LLMUnavailable("down", []))})()
+    from agent.policy import intent_guard
+
+    intent_guard.read("hola")  # keep the classifier's first load out of the budget
+    r = orch.handle_message(tok, "cual es mi saldo")
+    assert r.disposition == "ESCALATE" and r.verified_facts == [] and "2,455.81" not in r.response_text and r.ticket_id
+
+
+def test_within_its_budget_the_degraded_balance_is_still_answered():
+    from agent.llm.client import LLMUnavailable
+
+    orch, tok = orchestrator(FakeLLMClient([]))
+    orch._llm = lambda: type("Down", (), {"chat": lambda self, *a, **k: (_ for _ in ()).throw(LLMUnavailable("down", []))})()
+    assert orch.handle_message(tok, "cual es mi saldo").policy_rule == "degraded:deterministic_balance"

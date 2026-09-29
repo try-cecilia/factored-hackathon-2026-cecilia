@@ -516,6 +516,9 @@ class Orchestrator:
         to a human."""
         if not reading.model_available or (reading.p_intent or 0) < DEGRADED_MIN_CONFIDENCE:
             return None
+        if out_of_time():  # the same clock as any lookup: nothing is read or answered once the turn's budget is gone
+            trace["degraded_skipped"] = "turn_budget_spent"
+            return None
         if reading.intent == "out_of_scope":
             trace["rule"] = "degraded:classifier_out_of_scope"
             return TurnResult(trace_id, Disposition.ABSTAIN.value, render.MSG["abstain"][lang], lang, "out_of_scope",
@@ -524,7 +527,11 @@ class Orchestrator:
             normalize(w) in normalize(text) for w in ("ahorro", "corriente", "credito", "debito", "prestamo", "hipotec",
                                                       "poupanca", "cartao", "emprestimo", "financiamento"))
         if reading.intent == "balance_inquiry" and not mentions_product:
-            result = account_tools.get_account_summary(session.customer_id)
+            with stage("tool:get_account_summary", degraded=True):
+                result = run_tool("get_account_summary", session.customer_id)
+            if out_of_time():  # the lookup finished after the budget: its result is not used, a person answers
+                trace["degraded_skipped"] = "turn_budget_spent"
+                return None
             facts = [{"tool": "get_account_summary", "args": {}, "result": result}]
             trace["rule"] = "degraded:deterministic_balance"
             return TurnResult(trace_id, Disposition.AUTO_RESOLVE.value, render.render_answer(facts, lang), lang, "resolved",
