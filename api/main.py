@@ -9,8 +9,9 @@
 - /admin/* require X-Admin-Key == ADMIN_API_KEY and are disabled (503) when
   no key is configured — they expose tickets, audit and traces, which carry
   customer data.
-- Input size limits and per-session / per-IP rate limits bound abuse and
-  cost. /demo/customers publishes test credentials only for the sandbox
+- Input size limits, per-session / per-customer / per-IP rate limits and a
+  concurrency gate on /chat bound abuse and cost (api/middleware.py); every
+  request gets a trace id, returned as X-Request-ID and traceparent. /demo/customers publishes test credentials only for the sandbox
   accounts listed in DEMO_PUBLIC_CUSTOMERS (like any sandbox's test login).
 - With DEMO_MODE=1 (the jury sandbox), api/demo.py adds guided scenarios, the
   bank view of the session's own tickets, fault buttons and a "why" on every
@@ -20,6 +21,7 @@ from __future__ import annotations
 
 import hmac
 import json
+import math
 import os
 import threading
 import time
@@ -32,10 +34,12 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from agent.core.experiments import cohorts, read_log as read_shadow_log, summarize_shadow
+from agent import observability
 from agent.core.orchestrator import default_orchestrator
 from agent.llm.budget import default_budget
 from agent.llm.client import default_providers
 from agent.policy import intent_guard
+from agent.resilience import turn_budget_seconds
 from agent.session.auth import ExpiredSession, InvalidSession, default_store
 from agent.session.identity import AuthError, IdentityUnavailable, LockedOut, default_identity, derive_test_pin
 from agent.session.operators import OperatorDirectory
@@ -43,26 +47,48 @@ from agent.tools import account_tools
 from agent.tools.audit import default_audit_log, default_trace_log
 from agent.policy.desk import Conflict, DeskError, NotFound, default_desk
 from agent.policy.escalation import default_queue
-from api import demo
+from api import demo, middleware
 from ops.drift import recent_rows, report as drift_report, save_baseline as save_drift_baseline
 
+observability.configure_logging()
 app = FastAPI(title="LATAM Bank — Account/Payment Inquiries Agent", version="2.0.0")
+app.add_middleware(middleware.RequestContextMiddleware)
 app.include_router(demo.router)
 STATIC = Path(__file__).parent / "static"
 
 
 class RateLimiter:
+    """A sliding window per key, in memory: it resets on restart and is not shared between replicas (a second replica
+    needs Redis). Bounded: keys that have gone quiet are dropped, and past MAX_KEYS the oldest go first."""
+
+    MAX_KEYS = 100_000
+    SWEEP_EVERY = 1_000
+
     def __init__(self, limit: int, window_s: float):
         self.limit, self.window_s = limit, window_s
         self._hits: dict[str, deque] = defaultdict(deque)
         self._lock = threading.Lock()
+        self._calls = 0
+
+    def _prune(self, key: str, now: float) -> deque:
+        q = self._hits[key]
+        while q and now - q[0] > self.window_s:
+            q.popleft()
+        return q
+
+    def _sweep(self, now: float) -> None:
+        for key in [k for k, q in self._hits.items() if not q or now - q[-1] > self.window_s]:
+            del self._hits[key]
+        while len(self._hits) > self.MAX_KEYS:
+            del self._hits[next(iter(self._hits))]
 
     def allow(self, key: str) -> bool:
         now = time.time()
         with self._lock:
-            q = self._hits[key]
-            while q and now - q[0] > self.window_s:
-                q.popleft()
+            self._calls += 1
+            if self._calls % self.SWEEP_EVERY == 0:
+                self._sweep(now)
+            q = self._prune(key, now)
             if len(q) >= self.limit:
                 return False
             q.append(now)
@@ -70,20 +96,34 @@ class RateLimiter:
 
     def over(self, key: str) -> bool:
         """Whether this key has used up its hits in the window. Looking does not count as a hit."""
-        now = time.time()
         with self._lock:
-            q = self._hits[key]
-            while q and now - q[0] > self.window_s:
-                q.popleft()
-            return len(q) >= self.limit
+            return len(self._prune(key, time.time())) >= self.limit
 
     def record(self, key: str) -> None:
         with self._lock:
             self._hits[key].append(time.time())
 
+    def retry_after(self, key: str) -> int:
+        """Whole seconds until this key has a hit to spend again (at least 1)."""
+        now = time.time()
+        with self._lock:
+            q = self._prune(key, now)
+            return max(1, math.ceil(self.window_s - (now - q[0]))) if q else 1
+
+    def __len__(self) -> int:
+        return len(self._hits)
+
+
+def too_many(limiter: "RateLimiter", key: str, detail: str) -> HTTPException:
+    return HTTPException(429, detail, headers={"Retry-After": str(limiter.retry_after(key))})
+
 
 chat_limiter = RateLimiter(int(os.environ.get("CHAT_RATE_PER_MIN", "20")), 60)
 login_limiter = RateLimiter(int(os.environ.get("LOGIN_RATE_PER_MIN", "10")), 60)
+# Across every session of one customer, and from one client address. Behind the BFF the address is the end user's only
+# when CLIENT_IP_HEADER is set; without it every user shares the BFF's, so the default is generous.
+chat_customer_limiter = RateLimiter(int(os.environ.get("CHAT_CUSTOMER_RATE_PER_MIN", "40")), 60)
+chat_ip_limiter = RateLimiter(int(os.environ.get("CHAT_IP_RATE_PER_MIN", "120")), 60)
 
 
 class SessionRequest(BaseModel):
@@ -156,7 +196,7 @@ def require_operator(request: Request, x_operator_key: str | None = Header(defau
     origin = client_ip(request)
     if operator_fail_limiter.over(origin):
         default_audit_log.event("operator_auth_failed", origin=origin, reason="blocked")
-        raise HTTPException(429, "too many failed attempts")
+        raise too_many(operator_fail_limiter, origin, "too many failed attempts")
     name = directory.authenticate(x_operator_key)
     if name is None:
         operator_fail_limiter.record(origin)
@@ -184,8 +224,9 @@ def health() -> dict:
 
 @app.post("/auth/session", response_model=SessionResponse)
 def create_session(req: SessionRequest, request: Request) -> SessionResponse:
-    if not login_limiter.allow(client_ip(request)):
-        raise HTTPException(429, "too many login attempts")
+    origin = client_ip(request)
+    if not login_limiter.allow(origin):
+        raise too_many(login_limiter, origin, "too many login attempts")
     try:
         s = default_identity.login(req.customer_id, req.pin)
     except IdentityUnavailable:
@@ -218,9 +259,18 @@ def end_session(x_session_token: str | None = Header(default=None)) -> Response:
 
 
 @app.post("/chat", response_model=ChatResponse)
-def chat(req: ChatRequest) -> ChatResponse:
+def chat(req: ChatRequest, request: Request) -> ChatResponse:
+    origin = client_ip(request)
+    if not chat_ip_limiter.allow(origin):
+        raise too_many(chat_ip_limiter, origin, "rate limit exceeded for this address")
     if not chat_limiter.allow(req.session_token):
-        raise HTTPException(429, "rate limit exceeded for this session")
+        raise too_many(chat_limiter, req.session_token, "rate limit exceeded for this session")
+    try:  # a customer opening many sessions shares one limit; a bad token is answered by the orchestrator as usual
+        customer = default_store.validate(req.session_token).customer_id
+    except (InvalidSession, ExpiredSession):
+        customer = None
+    if customer and not chat_customer_limiter.allow(customer):
+        raise too_many(chat_customer_limiter, customer, "rate limit exceeded for this customer")
     r = demo.orchestrator_for(req.session_token).handle_message(req.session_token, req.message)
     shown = demo.enabled()  # which rule decided is for the trace log; outside the jury demo it would guide an attacker
     return ChatResponse(trace_id=r.trace_id, disposition=r.disposition, response_text=r.response_text,
@@ -360,6 +410,18 @@ def experiments_report(limit: int = 500) -> dict:
             "config": {"canary_percent": default_orchestrator.experiments.canary_percent,
                        "shadow_enabled": default_orchestrator.experiments.shadow_enabled,
                        "canary_enabled": default_orchestrator.experiments.canary_enabled}}
+
+
+@app.get("/admin/capacity", dependencies=[Depends(require_admin)])
+def capacity() -> dict:
+    """The limits in force and how often they have refused a request since the process started (docs/operations.md)."""
+    return {"limits": {**middleware.limits(),
+                       "chat_per_min": {"session": chat_limiter.limit, "customer": chat_customer_limiter.limit,
+                                        "address": chat_ip_limiter.limit},
+                       "login_per_min": login_limiter.limit, "turn_budget_seconds": turn_budget_seconds(),
+                       "llm_session_budget_usd": default_orchestrator.session_budget.limit_usd},
+            "state": middleware.stats.snapshot(),
+            "rate_limiter_keys": {"session": len(chat_limiter), "customer": len(chat_customer_limiter), "address": len(chat_ip_limiter)}}
 
 
 @app.get("/admin/llm_budget", dependencies=[Depends(require_admin)])

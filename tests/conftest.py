@@ -16,6 +16,8 @@ FIXTURES = Path(__file__).parent / "fixtures"
 # and agent/tools/db.py loads a local .env at import without overriding what is already set. Pinning them
 # here, at collection time, keeps a developer's .env from changing test outcomes.
 os.environ.update({"CHAT_RATE_PER_MIN": "20", "LOGIN_RATE_PER_MIN": "10", "SESSION_TTL_SECONDS": "900",
+                   "CHAT_IP_RATE_PER_MIN": "100000", "CHAT_CUSTOMER_RATE_PER_MIN": "100000",  # the tests share one address
+                   "LLM_SESSION_BUDGET_USD": "0.25", "TURN_BUDGET_SECONDS": "30", "LOG_FORMAT": "text",
                    "CANARY_MODEL": "", "CANARY_PERCENT": "0", "SHADOW_MODEL": "", "SHADOW_SAMPLE_PERCENT": "0",
                    "MLFLOW_DISABLE_AGENT_HINT": "1"})  # MLflow 3.16 prints a hint for coding agents when imported
 for _var in ("INTENT_MODEL_PATH", "INTENT_META_PATH", "DQ_REPORT_PATH", "STATE_DB_PATH"):
