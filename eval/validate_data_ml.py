@@ -1,14 +1,20 @@
 """Validación de buenas prácticas de datos y ML: un comando, un reporte de evidencia.
 
 Corre `tests/test_data_ml_validation.py` (una prueba por afirmación de los documentos; herméticas: warehouse de
-prueba, sin S3 ni claves) y escribe `docs/evidence/data_ml_validation.md` y `.json` con el resultado por criterio:
-PASS o FAIL, la evidencia que cada prueba registró y el comando que lo reproduce. Un criterio pasa solo si corrieron
-pruebas y todas pasaron: una prueba omitida o que no se pudo recolectar cuenta como FAIL.
+prueba, sin S3 ni claves) y da el resultado por criterio: PASS o FAIL, la evidencia que cada prueba registró y el
+comando que lo reproduce. Un criterio pasa solo si corrieron pruebas y todas pasaron: una prueba omitida o que no se
+pudo recolectar cuenta como FAIL.
 
-    python -m eval.validate_data_ml        # sale con código 1 si algún criterio no pasa
+    python -m eval.validate_data_ml                  # verifica y no escribe nada; avisa si la evidencia versionada quedó vieja
+    python -m eval.validate_data_ml --out-dir DIR    # además escribe data_ml_validation.{md,json} en DIR
+    make evidence                                    # lo mismo con DIR = docs/evidence: el paso explícito que versiona la evidencia
+
+Sale con código 1 si algún criterio no pasa. Verificar (el gate, el CI) no toca archivos versionados: la fecha y el
+commit del reporte solo cambian cuando alguien regenera la evidencia a propósito.
 """
 from __future__ import annotations
 
+import argparse
 import json
 import subprocess
 import sys
@@ -21,8 +27,8 @@ from data.pipeline import _git_sha
 
 ROOT = Path(__file__).resolve().parent.parent
 TESTS = "tests/test_data_ml_validation.py"
-OUT_MD = ROOT / "docs" / "evidence" / "data_ml_validation.md"
-OUT_JSON = ROOT / "docs" / "evidence" / "data_ml_validation.json"
+EVIDENCE_DIR = ROOT / "docs" / "evidence"
+NAME = "data_ml_validation"
 
 # prefijo de las pruebas -> criterio, y el documento que hace la afirmación
 CRITERIA = [
@@ -120,7 +126,30 @@ frase del documento que cita deja de ser cierta. Las cifras de la evidencia sale
 """
 
 
-def main() -> int:
+def shape(rows: list[dict]) -> list[tuple[str, str, str]]:
+    """What must agree between the committed evidence and a fresh run: each test and its verdict (not the figures or the date)."""
+    return sorted((r["criterion"], t["test"], t["status"]) for r in rows for t in r["tests"])
+
+
+def stale_evidence(rows: list[dict], committed: Path = EVIDENCE_DIR / f"{NAME}.json") -> str | None:
+    """Why the versioned evidence no longer describes these tests, or None when it does."""
+    if not committed.exists():
+        return f"{committed.relative_to(ROOT)} no existe"
+    try:
+        before = shape(json.loads(committed.read_text(encoding="utf-8"))["criteria"])
+    except (ValueError, KeyError, TypeError):
+        return f"{committed.relative_to(ROOT)} no se puede leer"
+    now = shape(rows)
+    if before == now:
+        return None
+    changed = sorted({t for t in set(before) ^ set(now)})
+    return f"{committed.relative_to(ROOT)} no coincide con las pruebas de hoy ({len(changed)} diferencia(s), p. ej. {changed[0][1]})"
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--out-dir", type=Path, help=f"escribe {NAME}.md y {NAME}.json aquí (sin esto no se escribe nada)")
+    args = ap.parse_args(argv)
     with tempfile.TemporaryDirectory() as tmp:
         xml_path = Path(tmp) / "junit.xml"
         proc = run_tests(xml_path)
@@ -128,17 +157,21 @@ def main() -> int:
     rows = summarize(cases)
     lines = [l for l in proc.stdout.strip().splitlines() if l.strip()]
     pytest_line = f"pytest: {lines[-1].strip('= ')}." if lines else "pytest no produjo salida."
-    generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    OUT_MD.parent.mkdir(parents=True, exist_ok=True)
-    OUT_MD.write_text(to_markdown(rows, generated_at, _git_sha(), pytest_line), encoding="utf-8")
-    OUT_JSON.write_text(json.dumps({"generated_at": generated_at, "code_version": _git_sha(), "pytest": pytest_line, "criteria": rows},
-                                   indent=2, ensure_ascii=False), encoding="utf-8")
     for r in rows:
         print(f"{r['status']}  {r['criterion']}  ({sum(t['status'] == 'PASS' for t in r['tests'])}/{len(r['tests'])})")
     failed = [r for r in rows if r["status"] != "PASS"]
     if proc.returncode != 0 or failed:
         print(proc.stdout[-3000:])
-    print(f"evidencia: {OUT_MD.relative_to(ROOT)}")
+    if args.out_dir:
+        generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        args.out_dir.mkdir(parents=True, exist_ok=True)
+        (args.out_dir / f"{NAME}.md").write_text(to_markdown(rows, generated_at, _git_sha(), pytest_line), encoding="utf-8")
+        (args.out_dir / f"{NAME}.json").write_text(
+            json.dumps({"generated_at": generated_at, "code_version": _git_sha(), "pytest": pytest_line, "criteria": rows},
+                       indent=2, ensure_ascii=False), encoding="utf-8")
+        print(f"evidencia: {args.out_dir / (NAME + '.md')}")
+    elif (why := stale_evidence(rows)):
+        print(f"aviso: {why}; `make evidence` la regenera")
     return 1 if failed or proc.returncode != 0 else 0
 
 
