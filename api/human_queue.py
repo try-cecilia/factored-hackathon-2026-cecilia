@@ -8,10 +8,14 @@ history mean exactly what they do everywhere else.
 from __future__ import annotations
 
 import json
+import logging
 from collections import defaultdict
 from pathlib import Path
 
+from agent import observability
 from agent.policy.desk import TERMINAL, TicketDesk
+
+logger = logging.getLogger(__name__)
 
 
 class _DeskSnapshot(TicketDesk):
@@ -35,7 +39,7 @@ def listing(queue_path: Path, desk: TicketDesk, limit: int) -> list[dict]:
     if not queue_path.exists():
         return []
     snapshot = _DeskSnapshot(desk.path)
-    tickets = [json.loads(line) for line in queue_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    tickets = _readable(queue_path)
     recent_from = max(len(tickets) - limit, 0)
     rows = []
     for position, ticket in enumerate(tickets):
@@ -43,3 +47,21 @@ def listing(queue_path: Path, desk: TicketDesk, limit: int) -> list[dict]:
         if position >= recent_from or state["status"] not in TERMINAL:
             rows.append({**ticket, "desk": state})
     return rows
+
+
+def _readable(queue_path: Path) -> list[dict]:
+    """The queue's tickets that parse. A line that does not (a torn write, a bad edit) is counted and logged by its number, never
+    by its content, and must not take the whole queue down; the desk's file is not treated this way, its events decide state."""
+    tickets = []
+    for number, line in enumerate(queue_path.read_text(encoding="utf-8").splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            ticket = json.loads(line)
+            ticket["ticket_id"]
+        except (ValueError, TypeError, KeyError):
+            observability.count_failure("queue_line_unreadable")
+            logger.warning("a line of the ticket queue is unreadable and was skipped: line %d", number)
+            continue
+        tickets.append(ticket)
+    return tickets

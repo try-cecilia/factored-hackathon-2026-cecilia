@@ -107,3 +107,30 @@ def test_an_empty_queue_and_a_queue_with_no_desk_events():
     fill_queue(3)
     rows = queue()
     assert [r["desk"]["status"] for r in rows] == ["open"] * 3 and all(r["desk"]["version"] == 0 for r in rows)
+
+
+def test_a_corrupt_line_in_the_queue_file_is_skipped_and_counted_without_its_content(caplog):
+    from agent import observability
+    fill_queue(TOTAL)
+    path = Path(main.default_queue.path)
+    path.write_text('{"ticket_id": "T-BROKEN", "secret-detail"\n' + path.read_text(encoding="utf-8"), encoding="utf-8")
+    before = observability.failure_counts().get("queue_line_unreadable", 0)
+
+    with caplog.at_level("WARNING"):
+        response = TestClient(main.app).get("/admin/human_queue?limit=200", headers=ADMIN)
+
+    assert response.status_code == 200
+    assert len(response.json()) == TOTAL  # every valid ticket is open, so every valid one is listed
+    assert "T-BROKEN" not in ids(response.json())
+    assert observability.failure_counts()["queue_line_unreadable"] == before + 1
+    assert "secret-detail" not in caplog.text and "line 1" in caplog.text
+
+
+def test_a_corrupt_desk_line_still_fails_the_way_the_desk_does():
+    fill_queue(3)
+    default_desk.act("T-0000", "claim", "ana")
+    with open(default_desk.path, "a", encoding="utf-8") as f:
+        f.write("not json\n")
+    with pytest.raises(json.JSONDecodeError):
+        default_desk.state("T-0000")
+    assert TestClient(main.app).get("/admin/human_queue", headers=ADMIN).status_code == 500  # as it did: the desk is not silently skipped
