@@ -152,7 +152,8 @@ make monitoring-up
 ```
 
 Con eso quedan arriba la API, la web, Prometheus y Grafana, sobre los datos de prueba. Si tenés los CSV del organizador y querés
-usar el dataset real, en su lugar corré esto (el primer arranque ingiere una muestra de 5.000 clientes, un par de minutos):
+usar el dataset real, en su lugar corré `make up-dataset RAW_DIR=/ruta/a/data/raw` (la API y la web, sin monitoreo; el primer arranque
+ingiere una muestra de 5.000 clientes, un par de minutos). Con monitoreo, el mismo arranque a mano:
 
 ```bash
 RAW_DIR=/ruta/a/data/raw \
@@ -262,7 +263,7 @@ cp .env.example .env        # completar AWS_* + DATASET_BUCKET (dataset), DEMO_I
 make setup                  # dependencias bloqueadas con hashes (requirements*.txt)
 make ingest                 # warehouse completo desde S3 (~6 min: 1,1 GB de archivos diarios en ~80 s, luego la carga; o `make ingest-demo`, ~1 min)
 make serve                  # http://localhost:8000 — chat web con logins de prueba del sandbox
-make test                   # 346 tests herméticos: warehouse de fixtures, sin S3, sin claves de API
+make test                   # suite hermética (`pytest tests/`): warehouse de fixtures, sin S3, sin claves de API
 make all                    # reconstruye cada número de los docs
 make validate-data-ml       # contratos, calidad, linaje, frescura, clasificador vs línea base y fuga: PASS/FAIL, sin escribir nada; `make evidence` regenera docs/evidence/data_ml_validation.md
 make mlflow-ui              # cada selección y evaluación del clasificador, registrada en MLflow
@@ -335,7 +336,7 @@ analysis/    evidencia del problema y línea base humana a partir de los datos p
 eval/        sets held-out, generador de workload, bot base, runners de evaluación, tracking en MLflow, reports/
 ops/         Dockerfile, entrypoint, selector de clientes de demo, prueba de carga, corrida smoke en vivo, retención
 docs/        decisiones de arquitectura (decisions/), calidad de datos, operaciones, evidencia, demo
-tests/       346 tests herméticos + fixtures
+tests/       suite hermética (`make test`) + fixtures
 ```
 
 ## Estado
