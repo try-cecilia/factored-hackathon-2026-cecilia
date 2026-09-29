@@ -84,7 +84,46 @@ proveedor de identidad y devolvería el mismo nombre.
 **En producción.** SSO corporativo (OIDC) con los roles del banco y MFA. Las claves con nombre son un puente honesto,
 no el destino: viven en variables de entorno y se rotan a mano.
 
-**Cómo se verifica.** `tests/test_operators.py`, `tests/test_operator_auth.py`.
+**Consola web de operador** (`web/`, rutas `/operador/*`). Cola humana, detalle con evidencia y acciones, monitoreo de solo
+lectura y trazas. Cómo se configuran las claves:
+
+| Dónde | Qué se configura |
+|---|---|
+| API | `ADMIN_API_KEY` (lee: cola, tickets, monitoreo, trazas) y `OPERATOR_KEYS=ana=…,beto=…` (actúa: tomar, aprobar, rechazar, devolver). Cada clave de operador de 24 caracteres o más. |
+| Web (servidor) | Solo `AGENT_API_URL` (y `TRUSTED_CLIENT_IP_HEADER` si hay un proxy). **Las claves no van en el entorno de la web**: cada persona escribe las suyas en `/operador/login`. |
+| API, detrás del BFF | `CLIENT_IP_HEADER=X-Client-IP`, igual que para el login de clientes. Sin eso, el límite de intentos fallidos (`OPERATOR_AUTH_FAILS_PER_MIN`) cuenta por la IP del BFF y diez claves mal escritas bloquean a todos los operadores. Solo es seguro si nada más que el BFF alcanza la API. |
+
+- *Lectura y acción separadas, como en la API.* El ingreso pide la clave de lectura y, opcionalmente, la de operador. Con
+  solo la de lectura la sesión es de **solo lectura**: ve todo y no puede actuar; la consola ofrece agregar la clave de
+  operador sin volver a ingresar. La clave de operador se comprueba con `GET /admin/operator/me`, que devuelve el nombre
+  al que pertenece sin tocar ningún ticket; ese nombre es el que la consola muestra y el que queda en
+  `ticket_events.jsonl`. El ingreso exige la clave de lectura porque un operador sin ella no podría ver ni la cola.
+- *Dónde viven las claves.* Nunca en el JavaScript del navegador, en `localStorage` ni en una cookie. El servidor de la web
+  (BFF) las guarda **en memoria**, atadas a un identificador aleatorio de 256 bits que viaja en una cookie
+  `httpOnly` + `SameSite=Strict` (y `Secure` con prefijo `__Host-` en producción). Las claves pasan una sola vez del
+  formulario al BFF, por TLS; las respuestas a la página no las incluyen. La sesión vence a los 30 minutos sin uso o a las 8
+  horas, y se descarta si la API rechaza la clave (rotada o revocada).
+- *Alternativa descartada y por qué.* Una cookie sellada con las claves adentro evita el estado en el servidor, pero
+  pone las claves (cifradas) en el navegador, exige un secreto de sellado que rotar y no permite cerrar una sesión robada
+  desde el servidor. **Costo de la elección:** las sesiones viven en la memoria de un solo proceso, así que un reinicio
+  o una segunda réplica sin afinidad de sesión obliga a volver a ingresar. Para un puñado de operadores es aceptable; con
+  varias réplicas hace falta un almacén compartido (Redis) o pasar al SSO.
+- *`SameSite=Strict`.* Frena el envío de la cookie desde otro sitio, que es la defensa contra CSRF de las acciones; el
+  costo es que un enlace a la consola desde otra app (un chat, un correo) abre primero el ingreso.
+- *Errores.* 401 (clave rotada) cierra la sesión o pide de nuevo la clave de operador; 403 en la web significa "sesión
+  de solo lectura"; 409 (otra persona movió el caso, o la pantalla estaba vieja: cada acción envía la `version` que se
+  vio) recarga el estado y muestra el motivo; 429 y 503 se explican en pantalla. Las acciones piden confirmación.
+- *Datos del cliente.* La consola muestra lo que la API ya devuelve a la clave de lectura: el ticket (con su
+  `customer_id`, el pedido recortado y la evidencia). De las trazas **no** muestra el texto de la respuesta, lo que vio el
+  modelo ni los argumentos de las herramientas: el BFF deja pasar solo un conjunto fijo de campos (`loadTraceLog` y
+  `loadTrace` en `web/src/server/operator.functions.ts`).
+- *Probarlo sin datos reales ni claves de modelo:* `python -m ops.seed_operator_demo --dir /tmp/cecilai-operator-demo`
+  arma un warehouse mínimo, genera claves nuevas y llena la cola y las trazas con turnos de verdad; imprime las claves y
+  deja `operator-demo.env` para cargar antes de `uvicorn`. Las capturas del recorrido están en `docs/demo/operador-*.png`.
+
+**Cómo se verifica.** `tests/test_operators.py`, `tests/test_operator_auth.py` (incluye `/admin/operator/me`) y, para la consola,
+`make web-typecheck web-build` más el recorrido con capturas de `docs/demo/operador-*.png`. La web no tiene tests automáticos
+(`LIMITATIONS.md`).
 
 ---
 
