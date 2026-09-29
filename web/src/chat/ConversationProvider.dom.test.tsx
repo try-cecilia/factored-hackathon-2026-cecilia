@@ -177,6 +177,26 @@ describe('ConversationProvider', () => {
       expect(items('assistant').map((e) => e.textContent)).toContain('La respuesta nueva.')
     })
 
+    it('a retry also invalidates a reload in flight: the late history does not erase the message or its key', async () => {
+      const old = late<HistoryResult>()
+      const retrying = late<SendResult>()
+      server.sendMessage.mockResolvedValueOnce({ ok: false, failure: 'timeout' }).mockReturnValueOnce(retrying.promise)
+      server.getHistory.mockReturnValue(old.promise)
+      mount({ ok: false, failure: 'unavailable' })
+      const user = userEvent.setup()
+      await user.click(screen.getByText('send'))
+      await waitFor(() => expect(items('user')[0].getAttribute('data-delivery')).toBe('uncertain'))
+      await user.click(screen.getByText('reload'))
+      await user.click(screen.getByText('retry'))
+      await act(async () => old.done({ ok: true, turns: [], cases: [] })) // asked before the retry began, answered while it is still out
+      expect(items('user').map((e) => e.textContent)).toEqual(['hola'])
+      expect(screen.getByTestId('history-failed').textContent).toBe('true') // and it did not pretend the history was read
+      await act(async () => retrying.done(ok(reply({ response_text: 'La respuesta del reintento.' }))))
+      expect(items('assistant').map((e) => e.textContent)).toContain('La respuesta del reintento.')
+      const [first, second] = server.sendMessage.mock.calls.map((c) => c[0].data)
+      expect(second.key).toBe(first.key)
+    })
+
     it('the status of a case asked in one session does not fill the same case of the next', async () => {
       const t = 'T-0123456789'
       const withCase: HistoryResult = { ok: true, cases: [], turns: [{ role: 'user', text: 'x', at: 1 }, { role: 'assistant', reply: reply({ disposition: 'ESCALATE', category: 'theft', ticket_id: t }), at: 2 }] }

@@ -133,6 +133,7 @@ export function ConversationProvider({ sessionRef, initial, children }: { sessio
     sendingRef.current = true
     setSending(true)
     const mine = epoch.current
+    edits.current += 1 // any send, a retry included, outdates the reloads already asked for
     patch(id, { delivery: 'sending', failure: undefined })
     try {
       const result = await sendMessage({ data: { message: text, key } })
@@ -165,7 +166,6 @@ export function ConversationProvider({ sessionRef, initial, children }: { sessio
     if (sendingRef.current) return Promise.resolve(null)
     const id = nextId.current++
     const key = newMessageKey()
-    edits.current += 1
     setEntries((all) => [...all, { id, role: 'user', text, at: Date.now(), key, delivery: 'sending' }])
     return deliver(id, text, key)
   }, [deliver])
