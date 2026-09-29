@@ -357,8 +357,8 @@ lo que usan la tabla, sus filtros, las pestañas y los contadores del sidebar, y
 los hechos verificados, las acciones, las preguntas abiertas, la acción pendiente y el historial del desk viajan solo con
 el caso abierto (`loadTicket`, `/admin/tickets/{id}`). Una columna o un filtro que necesite otro campo lo agrega a
 `QueueRow` y a `toQueueRow`; `queue-row.test.ts` falla si la fila empieza a llevar algo del caso. La cola tolera un caso sin
-`priority` o sin `language` (un registro viejo o incompleto): se dibuja con "Desconocida" o "Desconocido" en la prioridad y en el
-idioma, sin ocultarlo y sin asignarle una prioridad que no tiene, y en el orden por defecto queda después de los que sí la
+`priority` o sin `language` (un registro viejo o incompleto): se dibuja con "Desconocida" en la prioridad y, en el idioma, con `?` a la vista y "Desconocido" para lectores de pantalla y
+en el `title` (el ancho de la columna no alcanza para la palabra; en el panel del caso sí se lee completa), sin ocultarlo y sin asignarle una prioridad que no tiene, y en el orden por defecto queda después de los que sí la
 tienen (`queue.ts`, `priorityOf` del kit).
 
 **En producción.** El sistema de casos del banco. Necesita: alta idempotente por `ticket_id`; transiciones con

@@ -1,9 +1,10 @@
 import { useRouter } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 import { useT } from '../../i18n/context'
-import type { Result } from '../../server/operator.functions'
+import type { QueueRow, Result } from '../../server/operator.functions'
 import { Button, EmptyState } from '../../ui'
 import { explainKey } from './format'
+import { localeOf } from './queue'
 
 /** The BFF or the API said no: what happened and the one way out (sign in again, or try again). */
 export function Notice({ status, acting, children }: { status?: number; acting?: boolean; children?: ReactNode }) {
@@ -101,3 +102,17 @@ export function KeyValues({ data, label }: { data: Record<string, unknown>; labe
 
 /** Small mono chip for ids and codes next to a label. */
 export const Code = ({ children }: { children: ReactNode }) => <span className="op-mono">{children}</span>
+
+/** Country and language of a queue row. Without a language the column shows `MX·?`, which is all the width has room for; the words
+ * ("Desconocido") are for screen readers and for a long press, so the case does not read as having a language it does not have. */
+export function LocaleCell({ row }: { row: QueueRow }) {
+  const t = useT()
+  if (row.language) return <>{localeOf(row)}</>
+  const full = localeOf(row, t('operator.queue.unknownLanguage'))
+  return (
+    <span title={full}>
+      <span aria-hidden="true">{localeOf(row)}</span>
+      <span className="sr-only">{full}</span>
+    </span>
+  )
+}

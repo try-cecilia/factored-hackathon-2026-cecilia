@@ -9,9 +9,9 @@ import { Button, DataTable, PriorityChip, priorityOf, StatusIndicator, type Colu
 import { ageShort, categoryName, statusKey, when } from '../-operator/format'
 import { useMinute } from '../-operator/now'
 import {
-  countryOptions, distinct, filterTickets, filtersOf, hasFilters, inScope, isClosed, localeOf, orderTickets, pageSlice, tabCounts, validateSearch, type QueueSearch, type StatusTab,
+  countryOptions, distinct, filterTickets, filtersOf, hasFilters, inScope, isClosed, orderTickets, pageSlice, tabCounts, validateSearch, type QueueSearch, type StatusTab,
 } from '../-operator/queue'
-import { Notice } from '../-operator/ui'
+import { LocaleCell, Notice } from '../-operator/ui'
 
 const PAGE_SIZE = 25
 
@@ -48,7 +48,7 @@ function makeColumns(t: Translate, locale: Locale, now: number): Column<QueueRow
     { id: 'ticket', header: t('operator.queue.columns.ticket'), width: 76, mono: true, rowHeader: true, sortable: true, cell: (r) => r.ticket_id.slice(0, 8) },
     { id: 'queue', header: t('operator.queue.columns.queue'), width: 132, mono: true, muted: true, truncate: true, sortable: true, cell: (r) => r.queue },
     { id: 'request', header: t('operator.queue.columns.request'), truncate: true, sortable: true, cell: (r) => <span title={categoryName(t, r.category)}>{r.request}</span> },
-    { id: 'locale', header: t('operator.queue.columns.locale'), width: 64, mono: true, muted: true, sortable: true, cell: (r) => <span title={r.language ? undefined : t('operator.queue.unknownLanguage')}>{localeOf(r)}</span> },
+    { id: 'locale', header: t('operator.queue.columns.locale'), width: 64, mono: true, muted: true, sortable: true, cell: (r) => <LocaleCell row={r} /> },
     { id: 'age', header: t('operator.queue.columns.age'), width: 52, align: 'end', mono: true, muted: true, sortable: true, cell: (r) => <span title={t('operator.queue.ageTitle', { date: when(r.created_at, locale) })}>{ageShort(r.created_at, now)}</span> },
     { id: 'status', header: t('operator.queue.columns.status'), width: 108, sortable: true, cell: (r) => <StatusIndicator tone={tones[r.desk.status]}>{t(statusKey[r.desk.status])}</StatusIndicator> },
     { id: 'operator', header: t('operator.queue.columns.operator'), width: 92, mono: true, truncate: true, sortable: true, cell: (r) => r.desk.operator ?? '—' },
