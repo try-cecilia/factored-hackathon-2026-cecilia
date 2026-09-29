@@ -22,6 +22,7 @@ complaints tables used only for analysis (docs/data_evidence.md).
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import subprocess
@@ -130,9 +131,21 @@ def ensure_meta_tables(con) -> None:
         contract_version VARCHAR, code_version VARCHAR, params VARCHAR, started_at TIMESTAMP, finished_at TIMESTAMP)""")
     con.execute("""CREATE TABLE IF NOT EXISTS _partition_log (
         run_id VARCHAR, table_name VARCHAR, partition_date DATE, source_uri VARCHAR, n_bytes BIGINT, loaded_at TIMESTAMP)""")
+    # One row per source file per load, flat tables included: where the bytes came from and which bytes they were.
+    con.execute("""CREATE TABLE IF NOT EXISTS _source_files (
+        run_id VARCHAR, table_name VARCHAR, source_file VARCHAR, source_uri VARCHAR, n_bytes BIGINT, sha256 VARCHAR,
+        partition_date DATE, loaded_at TIMESTAMP)""")
     con.execute("""CREATE TABLE IF NOT EXISTS _dq_results (
         run_id VARCHAR, table_name VARCHAR, check_name VARCHAR, category VARCHAR, severity VARCHAR,
         failed BIGINT, total BIGINT, rate DOUBLE, passed BOOLEAN, detail VARCHAR, measured_at TIMESTAMP)""")
+
+
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(8 * 1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _table_exists(con, name: str) -> bool:
@@ -281,6 +294,11 @@ def load_table(con, spec: TableSpec, cfg: RunConfig, run_id: str, source, sample
 
         now = datetime.now(timezone.utc)
         parts = [f for f in files if f.partition]
+        con.executemany(
+            "INSERT INTO _source_files VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            [(run_id, spec.name, str(f.local_path.resolve()).removeprefix(root), f.uri, f.size, file_sha256(f.local_path),
+              f.partition, now) for f in files],
+        )
         if parts:
             con.executemany(
                 "INSERT INTO _partition_log VALUES (?, ?, ?, ?, ?, ?)",
