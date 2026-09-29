@@ -245,6 +245,9 @@ def chat(req: ChatRequest, response: Response, idempotency_key: str | None = Hea
             return reply
     except idempotency.KeyReused:
         raise HTTPException(422, "Idempotency-Key was already used with a different message") from None
+    except idempotency.CapacityFull as full:  # refused before the turn ran: nothing changed, the client may retry
+        raise HTTPException(503, "too many turns in flight for the idempotency store; retry shortly",
+                            headers={"Retry-After": str(full.retry_after)}) from None
 
 
 def _live_session(token: str):

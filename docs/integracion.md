@@ -324,9 +324,11 @@ respuesta con `Idempotent-Replayed: true`, sin volver a correr el turno y sin ga
 reintento que llega mientras el primero corre espera su respuesta. Antes de entregar un replay se comprueba que la
 sesión siga viva (también después de esperar): con la sesión cerrada o vencida la respuesta es `REAUTH_REQUIRED`, como en
 un turno normal. La misma clave con otro texto es un 422. No se guardan las respuestas de sesión vencida ni los errores.
-Si la tabla se llena (50 000 respuestas), las más viejas pierden la respuesta pero conservan una marca (hash de la
-clave): un reintento de esa clave recibe un 409 "already processed" en vez de volver a ejecutarse, y la UI dice "Ya lo
-recibimos, pero la respuesta ya no está guardada". Sin la cabecera, el comportamiento es el de siempre. Con
+Pasadas 50 000 respuestas guardadas, las más viejas pierden la respuesta pero conservan una marca (hash de la clave):
+un reintento de esa clave recibe un 409 "already processed" en vez de volver a ejecutarse, y la UI dice "Ya lo
+recibimos, pero la respuesta ya no está guardada". Las marcas de sesiones vivas no se expulsan nunca: con 500 000 claves
+retenidas, un turno nuevo se rechaza antes de ejecutarse (503 con `Retry-After`, sin efectos), y cada turno toma su lugar
+en la misma transacción que comprueba el tope. Sin la cabecera, el comportamiento es el de siempre. Con
 `DEMO_MODE=1` la respuesta guardada incluye `why` y `policy_rule`, y un replay los filtra según el modo vigente.
 
 **Punto de sustitución.** El BFF solo conoce `POST /chat` y `GET /case/{id}`; con el core real el contrato no cambia.

@@ -260,3 +260,43 @@ def test_a_reply_stored_in_demo_mode_does_not_leak_demo_fields_when_replayed_out
 
     monkeypatch.setenv("DEMO_MODE", "1")  # and back in the sandbox the stored explanation is shown again
     assert chat(client, tok, CLONED, key="msg-0014-aaaa").json()["why"] == first["why"]
+
+
+def test_a_full_table_refuses_new_turns_and_never_forgets_a_live_session_key(client, monkeypatch):
+    """Capacity is the table's, not the sessions': when it is full a new turn is refused before it runs, and no key
+    of a live session is dropped to make room."""
+    monkeypatch.setattr(idempotency, "default", idempotency.IdempotencyStore(max_entries=2, max_marks=3))
+    tok = token(client)
+    before = tickets(client)
+    for n in range(3):
+        assert chat(client, tok, CLONED, key=f"msg-2000-aaa{n}").status_code == 200
+    assert tickets(client) == before + 3
+
+    refused = chat(client, tok, CLONED, key="msg-2000-aaa9")
+    assert refused.status_code == 503 and int(refused.headers["Retry-After"]) >= 1
+    assert tickets(client) == before + 3  # refused before it ran: no ticket, nothing changed
+
+    for n in range(3):  # the old keys are all still known: none is run again
+        again = chat(client, tok, CLONED, key=f"msg-2000-aaa{n}")
+        assert again.status_code in (200, 409)
+    assert tickets(client) == before + 3
+
+
+def test_a_turn_that_fails_gives_its_reservation_back(client, monkeypatch):
+    monkeypatch.setattr(main, "chat_limiter", main.RateLimiter(1, 60))
+    tok = token(client)
+    assert chat(client, tok, "¿Cuál es mi saldo?", key="msg-2001-aaaa").status_code == 200
+    limited = chat(client, tok, "¿Cuál es mi saldo?", key="msg-2001-bbbb")
+    assert limited.status_code == 429
+    assert idempotency.default.count() == 1  # only the turn that ran holds a place
+    monkeypatch.setattr(main, "chat_limiter", main.RateLimiter(20, 60))
+    assert chat(client, tok, "¿Cuál es mi saldo?", key="msg-2001-bbbb").status_code == 200  # not "already processed"
+
+
+def test_a_reservation_is_taken_together_with_the_capacity_check():
+    store = idempotency.IdempotencyStore(max_marks=1)
+    with store.guard("ref", "key-00000001", "hola", expires_at=9e9) as first:
+        with pytest.raises(idempotency.CapacityFull):  # the first turn is still running: its place is already held
+            with store.guard("ref", "key-00000002", "hola", expires_at=9e9):
+                pass
+        first.save('{"n": 1}')

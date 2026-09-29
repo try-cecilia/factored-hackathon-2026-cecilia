@@ -108,7 +108,8 @@ service, and as our own roadmap.
 - **Web chat: retries rely on an idempotency key.** Each message travels with an `Idempotency-Key` and the API keeps
   the reply for as long as the session lives, so a retry after a lost answer does not file a second ticket or confirm
   twice. Replies live in the single-writer SQLite state like sessions; if that file is lost the turn runs again, and
-  past 50,000 kept replies the oldest are dropped and their retries get a 409 instead of a reply.
+  past 50,000 kept replies the oldest are dropped and their retries get a 409 instead of a reply. Keys of live
+  sessions are never evicted: at 500,000 held keys new turns get a 503 with `Retry-After` until sessions end.
 - **Web chat: the conversation does not survive a login.** An expired session ends its conversation with it (the
   API keys it by session), so signing in again starts from zero; there is no "stay signed in" because the API
   has no refresh endpoint. Case status is read on demand ("Actualizar estado"), not pushed.
