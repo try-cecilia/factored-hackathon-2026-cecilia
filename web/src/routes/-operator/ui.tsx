@@ -52,8 +52,9 @@ export function Loaded<T>({ title, note, result, children }: {
   )
 }
 
-export const Stat = ({ name, value, hint }: { name: string; value: ReactNode; hint?: ReactNode }) => (
-  <div className="op-stat">
+/** A label and its value. Numbers and ids are mono; a word (a language, a route, "no limit") is `text`. */
+export const Stat = ({ name, value, hint, text }: { name: string; value: ReactNode; hint?: ReactNode; text?: boolean }) => (
+  <div className={text ? 'op-stat op-stat--text' : 'op-stat'}>
     <dt>{name}</dt>
     <dd>{value}</dd>
     {hint && <p>{hint}</p>}

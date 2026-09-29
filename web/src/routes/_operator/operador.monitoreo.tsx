@@ -83,7 +83,7 @@ function Monitor() {
               <>
                 <dl className="op-stats">
                   <Stat name={t('monitor.budget.spent')} value={usd(b.spent_today_usd)} />
-                  <Stat name={t('monitor.budget.limit')} value={b.limit_usd ? usd(b.limit_usd, 2) : t('monitor.budget.noLimit')} />
+                  <Stat text={!b.limit_usd} name={t('monitor.budget.limit')} value={b.limit_usd ? usd(b.limit_usd, 2) : t('monitor.budget.noLimit')} />
                 </dl>
                 {b.limit_usd ? (
                   <div className="op-meter" role="meter" aria-label={t('monitor.budget.meter')} aria-valuemin={0} aria-valuemax={b.limit_usd} aria-valuenow={Math.min(b.spent_today_usd, b.limit_usd)}>
@@ -99,7 +99,7 @@ function Monitor() {
             {(q) => (
               <>
                 <dl className="op-stats">
-                  <Stat name={t('monitor.quality.lastRun')} value={q.summary?.status ?? '—'} hint={q.run_id ? `${q.run_id.slice(0, 12)}` : undefined} />
+                  <Stat text name={t('monitor.quality.lastRun')} value={q.summary?.status ?? '—'} hint={q.run_id ? `${q.run_id.slice(0, 12)}` : undefined} />
                   <Stat name={t('monitor.quality.checks')} value={q.summary?.checks_run ?? '—'} />
                   <Stat name={t('monitor.quality.errors')} value={q.summary?.errors_failed ?? '—'} />
                   <Stat name={t('monitor.quality.warnings')} value={q.summary?.warnings_failed ?? '—'} />

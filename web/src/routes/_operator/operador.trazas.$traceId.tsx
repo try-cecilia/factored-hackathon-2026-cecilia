@@ -53,10 +53,10 @@ function TracePage() {
             <h2>{t('monitor.traces.decision')}</h2>
             <p>{t('monitor.traces.rule')} <span className="op-mono">{trace.policy_rule || '—'}</span></p>
             <dl className="op-stats">
-              <Stat name={t('monitor.traces.language')} value={trace.language} />
-              <Stat name={t('monitor.traces.segment')} value={trace.segment ?? '—'} />
-              <Stat name={t('monitor.traces.country')} value={trace.country ?? '—'} />
-              <Stat name={t('monitor.traces.cohort')} value={trace.cohort ?? '—'} />
+              <Stat text name={t('monitor.traces.language')} value={trace.language} />
+              <Stat text name={t('monitor.traces.segment')} value={trace.segment ?? '—'} />
+              <Stat text name={t('monitor.traces.country')} value={trace.country ?? '—'} />
+              <Stat text name={t('monitor.traces.cohort')} value={trace.cohort ?? '—'} />
             </dl>
             {trace.intent_reading && (
               <p className="op-muted">
@@ -76,8 +76,8 @@ function TracePage() {
           <section className="op-block">
             <h2>{t('monitor.traces.model')}</h2>
             <dl className="op-stats">
-              <Stat name={t('monitor.traces.route')} value={trace.model_route ?? '—'} />
-              <Stat name={t('monitor.traces.modelName')} value={trace.provider ? `${trace.provider}/${trace.model}` : t('monitor.traces.notCalled')} />
+              <Stat text name={t('monitor.traces.route')} value={trace.model_route ?? '—'} />
+              <Stat text name={t('monitor.traces.modelName')} value={trace.provider ? `${trace.provider}/${trace.model}` : t('monitor.traces.notCalled')} />
               <Stat name={t('monitor.traces.calls')} value={trace.llm_calls} />
               <Stat name={t('monitor.traces.latency')} value={ms(trace.latency_ms)} />
               <Stat name={t('monitor.traces.cost')} value={usd(trace.cost_usd)} />
