@@ -13,7 +13,7 @@ projections are labeled as such and never mixed.
 | | Human agents (measured, bank data) | Keyword bot (baseline) | This system |
 |---|---|---|---|
 | Queue wait | 120 s | 0 s | 0 s |
-| Handling time | 221 s (≈3.7 min) | 11 ms per case (p95 42 ms) | 22 ms per case (p95 75 ms) **excluding the LLM** |
+| Handling time | 221 s (≈3.7 min) | 2.3 ms per case (p95 7.5 ms) | 5.5 ms per case (p95 20 ms) **excluding the LLM** |
 | Total per inquiry | **≈341 s (≈5.7 min)** | milliseconds | **1.8 s p50, 3.9 s p95 per case with Claude Sonnet 5** (held-out live run) |
 | Resolved | 91.5% first-contact | 70.2% safe automated | **95.0% with Sonnet 5 (live, measured before the trace review rule)** · 99.2% ideal model (upper bound) · 60.5% adversarial model |
 | Required escalations missed | not in the data | 72 / 168 | 0 / 168 offline · 0 / 36 live (Sonnet 5, before the trace review rule) |
@@ -130,9 +130,10 @@ diversity mitigates it; a human-authored or production-sampled set is the fix
 >   rehacer sin una clave de Anthropic. Sus cifras aparecen marcadas.
 > - **Nota posterior (fallos, `feat/heldout-failure-eval`):** el set reservado de fallos encontró excepciones sin manejar
 >   (perfil, auditoría, trazas y cola de derivaciones) y un hueco del modo degradado en portugués. Se arreglaron en
->   `agent/core/orchestrator.py` (`ff02f58`), que está en la huella de las políticas: **los reportes `system_eval*.json`
->   quedan desactualizados hasta volver a correr `make eval eval-adversarial` con el warehouse completo** (donde se
->   escribió esto solo estaba el de prueba), y la compuerta falla mientras tanto. Las cifras de esta sección no se tocaron.
+>   `agent/core/orchestrator.py` (`ff02f58`), que está en la huella de las políticas, y por eso `make eval` y
+>   `make eval-adversarial` se volvieron a correr con el warehouse completo (`--profile all`, fuente local, mismos
+>   conteos que el reporte de calidad commiteado): **los 548 casos de test dieron el mismo resultado que antes, en
+>   ambos modos** (cambian solo la fecha y las latencias); el workload regenerado con `make workload` es idéntico al commiteado.
 > - **Para que no vuelva a pasar:** cada reporte guarda una huella de los archivos de políticas, y la compuerta del CI
 >   (`eval/gate.py`) falla si esos archivos cambian sin volver a medir.
 
@@ -278,7 +279,7 @@ diversity mitigates it; a human-authored or production-sampled set is the fix
 | **Unsafe outcomes** | **0 / 548** | **0 / 548** | **0 / 548** |
 | Cases that sent a customer record to the model | n/a | 0 / 548 | 0 / 548 |
 | Incorrect, not unsafe | 26 | 0 | 0 |
-| Latency p50 / p95 per case (non-LLM, local) | 11 / 42 ms | 22 / 75 ms | 24 / 70 ms |
+| Latency p50 / p95 per case (non-LLM, local) | 2.3 / 7.5 ms | 5.5 / 20.2 ms | 6.5 / 20.8 ms |
 
 The latencies were measured on the machine that regenerated the reports and are not comparable to the previous run's.
 
@@ -466,10 +467,9 @@ the case to a person instead of answering.
 *Generated test workload* (A; the 548 cases of the committed reports, ideal / adversarial model): every category is
 100% handled with the ideal model (expired 24/24, unauthorized 24/24, injection 48/48, tool failure 72/72, ambiguity
 72/72, in each language 12–36) and 100% safe with the adversarial one (0 unsafe, 0 records to the model, 0 crashes);
-the adversarial model handles 51% of tool-failure cases and 56% of ambiguity cases in the intended way. Those two
-reports were measured before the fixes above and are out of date with respect to the policy fingerprint until
-`make eval eval-adversarial` is re-run on the organizer's warehouse (see the note at the top of this section and
-[`LIMITATIONS.md`](LIMITATIONS.md#not-yet-measured)).
+the adversarial model handles 51% of tool-failure cases and 56% of ambiguity cases in the intended way. Both reports were re-run after the fixes on the
+full warehouse and every one of the 548 rows is identical to the run before them (only the timestamp and the latencies
+changed), so the fixes moved no outcome of the generated workload.
 
 Reading it:
 - 0 unsafe in 226 reserved cases (and 0 in 548 generated) bounds the true rate only below ≈ 1.3% (rule of three): a

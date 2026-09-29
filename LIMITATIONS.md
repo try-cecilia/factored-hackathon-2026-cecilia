@@ -32,11 +32,6 @@ service, and as our own roadmap.
    only below ≈1.3%. Batch 1 was written and committed before the system ran on it; batch 2 after seeing batch 1's
    failures and before fixing them; the fixes came after seeing both. Their post-fix numbers are regression evidence,
    not a held-out measurement, for the failures they fixed. A fresh, human-written set is the remaining fix.
-5. **The full-warehouse reports are stale after the failure-handling fix.** The fix touched `agent/core/orchestrator.py`,
-   so the policy fingerprint changed and `eval/gate.py` fails until `make eval eval-adversarial` is re-run on the
-   organizer's warehouse. Nothing in the generated workload's outcomes should move (the fix changes only exception
-   paths and one degraded-mode word list), but that is a claim, not a measurement, until it is re-run.
-
 ## Data and ML
 
 - **No usable text in the supplied data.** 171K transcripts hold 42 distinct
