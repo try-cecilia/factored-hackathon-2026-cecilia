@@ -431,7 +431,12 @@ modo limitado.
   el azul queda para el anillo de foco y los puntos de "no leído".
 - *Casos.* La sección lista los casos de la sesión (las derivaciones que llegaron con número, del índice `cases` del historial más los de esta página) y el estado de cada
   uno, consultado con `GET /case/{id}` (otra vez cada 45 s mientras un caso siga abierto y la página esté visible, y
-  cuando una respuesta trae una novedad). El título sale de la categoría de la derivación (`cases.category.*`).
+  cuando una respuesta trae una novedad). El título sale de la categoría de la derivación (`cases.category.*`). "Ver caso" en el
+  mensaje de derivación y la fila del caso en el sidebar abren la vista del caso (`web/src/shell/CaseView.tsx`): un diálogo
+  modal desde la derecha (pantalla completa en un teléfono) con el motivo, la fecha, el estado, qué está pasando y qué sigue
+  según el estado, la última novedad que redacta la API (en el idioma de la conversación) y el número; al abrirse y con
+  "Actualizar el estado" vuelve a pedir `GET /case/{id}`. La API no guarda un historial de novedades por caso, así que la
+  vista no lo muestra.
 - *Mensajes.* Cada respuesta se dibuja con el componente del kit que pide su disposición (`resolveMessage`): AUTO_RESOLVE,
   respuesta (con "¿Por qué?" solo si la API mandó `why`, o sea, en la demo); CLARIFY, aclaración con opciones, o la
   propuesta de rastreo con Sí/No (`category=confirm_action`); ABSTAIN, rechazo con sugerencias; ESCALATE con número de
