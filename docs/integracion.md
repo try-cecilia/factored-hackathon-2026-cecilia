@@ -143,17 +143,30 @@ lectura y trazas. Cómo se configuran las claves:
   costo es que un enlace a la consola desde otra app (un chat, un correo) abre primero el ingreso.
 - *Errores.* 401 (clave rotada) cierra la sesión o pide de nuevo la clave de operador; 403 en la web significa "sesión
   de solo lectura"; 409 (otra persona movió el caso, o la pantalla estaba vieja: cada acción envía la `version` que se
-  vio) recarga el estado y muestra el motivo; 429 y 503 se explican en pantalla. Las acciones piden confirmación.
+  vio) recarga el estado y muestra el panel de conflicto ("No se aplicó: el caso cambió", de `v3` a `v4`, con quién lo movió); mientras ese aviso está
+  visible no se puede decidir hasta usar "Recargar caso". 429 y 503 se explican en pantalla. Tomar, aprobar, rechazar y devolver actúan con
+  un clic (como en el artboard aprobado), sin diálogo de confirmación: la protección es `expected_version` más el nombre de la clave en el historial.
 - *Datos del cliente.* La consola muestra lo que la API ya devuelve a la clave de lectura: el ticket (con su
   `customer_id`, el pedido recortado y la evidencia). De las trazas **no** muestra el texto de la respuesta, lo que vio el
   modelo ni los argumentos de las herramientas: el BFF deja pasar solo un conjunto fijo de campos (`loadTraceLog` y
   `loadTrace` en `web/src/server/operator.functions.ts`).
 - *Probarlo sin datos reales ni claves de modelo:* `python -m ops.seed_operator_demo --dir /tmp/cecilai-operator-demo`
   arma un warehouse mínimo, genera claves nuevas y llena la cola y las trazas con turnos de verdad; imprime las claves y
-  deja `operator-demo.env` para cargar antes de `uvicorn`. Las capturas del recorrido están en `docs/demo/operador-*.png`.
+  deja `operator-demo.env` para cargar antes de `uvicorn`. Las capturas del recorrido están en `docs/demo/operador-kit-*.png`.
+
+- *Cómo está armada la pantalla.* Es el diseño aprobado de Paper (artboards "Operator · Queue" y "Operator · Ticket states", copias en
+  `docs/demo/paper-operator-*.jpg`) sobre el kit: sidebar compacto con las vistas (Todos abiertos, Míos, Sin asignar), las siete colas
+  con su cantidad de casos pendientes y los registros (monitoreo y trazas); tabla compacta (`DataTable`) con orden por columna, pestañas
+  de estado, filtros de prioridad, país e idioma, búsqueda (`Ctrl`/`Cmd` + `K`) y paginación de 25; y el detalle del caso en un panel
+  tonal a la derecha. Los filtros viven en la URL de `/operador/cola` (`vista=mias|sin-asignar`, `cola`, `estado=abiertos|tomados|decididos`,
+  `prioridad`, `pais`, `idioma`) y se validan en `web/src/routes/-operator/queue.ts`. La cola se lee en el layout `/_operator` (no en la
+  ruta de la cola) para que el sidebar tenga sus conteos en todas las páginas; el sondeo cada 30 s también se mudó ahí y sigue pasando
+  por `refreshQuietly`. La evidencia marca como riesgo los movimientos que la API marcó o cuyo score llega a 70
+  (`FRAUD_SCORE_FLAG` en `agent/policy/escalation.py`). Los textos de la consola están en `web/src/i18n/dict/{es,pt}/operator.ts` y
+  `monitor.ts`; lo que viene de la API (pedido del cliente, motivos, próximos pasos) se muestra tal cual, sin traducir.
 
 **Cómo se verifica.** `tests/test_operators.py`, `tests/test_operator_auth.py` (incluye `/admin/operator/me`) y, para la consola,
-`make web-test web-typecheck web-build` más el recorrido con capturas de `docs/demo/operador-*.png` (`LIMITATIONS.md` dice qué
+`make web-test web-typecheck web-build` más el recorrido con capturas de `docs/demo/operador-kit-*.png` (`LIMITATIONS.md` dice qué
 no cubre).
 
 ---
