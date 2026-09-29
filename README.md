@@ -92,7 +92,7 @@ llamada, medidos). Este sistema responde sin cola: 1,8 s por caso en la mediana 
 Ver la [tabla resumen](EVALUATION.md#summary-human-agents-vs-keyword-bot-vs-this-system).
 
 Componente aprendido: el clasificador de intención supera a la línea base de palabras clave en texto que
-nunca vio (**84,9% vs 62,8%** de exactitud en el split de test held-out). Como guarda previa al LLM, sube el
+nunca vio (**84,7% vs 62,4%** de exactitud en el split de test held-out). Como guarda previa al LLM, sube el
 recall de fraude/disputa de 80% a **93,3%** con **0%** de escalamientos falsos:
 [`eval/reports/intent_classifier.md`](eval/reports/intent_classifier.md).
 
@@ -137,6 +137,7 @@ make ingest                 # warehouse completo desde S3 (~6 min: 1,1 GB de arc
 make serve                  # http://localhost:8000 — chat web con logins de prueba del sandbox
 make test                   # 346 tests herméticos: warehouse de fixtures, sin S3, sin claves de API
 make all                    # reconstruye cada número de los docs
+make validate-data-ml       # contratos, calidad, linaje, frescura, clasificador vs línea base y fuga: PASS/FAIL en docs/evidence/data_ml_validation.md
 make mlflow-ui              # cada selección y evaluación del clasificador, registrada en MLflow
 ```
 

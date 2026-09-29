@@ -115,3 +115,18 @@ def test_integer_columns_accept_700_point_0_and_reject_700_point_5():
     got = {r[0]: (r[1], "cast:credit_score" in r[2]) for r in
            con.execute("SELECT customer_id, credit_score, _row_errors FROM typed").fetchall()}
     assert got == {"A": (700, False), "B": (701, True), "C": (700, False), "D": (None, False), "E": (None, True)}
+
+
+def test_decimal_columns_accept_trailing_zeros_and_reject_digits_beyond_the_scale():
+    """DECIMAL(15,2): '200000.005' would be stored as 200000.01, a rounding nobody asked for."""
+    from data.quality import build_typed_staging, measure
+    con = duckdb.connect()
+    con.execute("CREATE TABLE raw (transaction_id VARCHAR, amount VARCHAR, fraud_score VARCHAR)")
+    con.execute("""INSERT INTO raw VALUES ('A', '200000.00', '12.5'), ('B', '200000.005', NULL), ('C', '10.500', NULL),
+                   ('D', '10', NULL), ('F', '5.00', '12.345'), ('G', NULL, NULL)""")
+    build_typed_staging(con, "raw", "typed", "transactions")
+    bad = {r[0]: [e for e in r[1].split(",") if e.startswith("cast:")] for r in
+           con.execute("SELECT transaction_id, _row_errors FROM typed").fetchall()}
+    assert bad == {"A": [], "B": ["cast:amount"], "C": [], "D": [], "F": ["cast:fraud_score"], "G": []}
+    assert {c.check: c.failed for c in measure(con, "raw", "typed", "transactions") if c.check.startswith("type_cast:")} == {
+        "type_cast:amount": 1, "type_cast:fraud_score": 1}

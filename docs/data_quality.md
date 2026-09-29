@@ -13,14 +13,18 @@ tests use with hand-made fixtures.
 
 Per table, inside one transaction:
 
-1. **Raw staging.** CSVs are read as-is, with lineage columns added:
+1. **Raw staging.** CSVs are read as-is (the reader picks each column's type,
+   except the contract's DECIMAL columns, which are read as text so that
+   exactness can be judged on the delivered value), with lineage columns added:
    `_source_file`, `_run_id`, `_ingested_at`.
 2. **Schema drift** (`quality.schema_drift`):
    - a missing required column fails the load;
    - a missing optional column is a warning;
    - new columns are a warning, and they are **added** to the table (schema evolution), never silently dropped.
 3. **Typed staging.** Every column is `TRY_CAST` to the data dictionary's type.
-   A non-null value that fails its cast is a contract violation.
+   A non-null value that fails its cast, or that the cast would round
+   (`700.5` in an INTEGER, `200000.005` in a DECIMAL(15,2)), is a contract
+   violation; `10.500` and `700.0` are the same number and pass.
 4. **Measure.** Checks and their severity:
 
    | Check | Severity |
@@ -48,10 +52,26 @@ Per table, inside one transaction:
    missing table name. It counts executed and not-run checks separately and
    does not report the skipped check as passed.
 8. **Lineage.**
+   - Every served row carries `_run_id`, `_source_file` (relative to the raw
+     directory) and `_ingested_at`.
    - `_ingestion_log`: one row per table per run (mode, files, bytes,
      partition range, row counts, contract version, code version, parameters).
+   - `_source_files`: one row per file per load, flat tables included: its
+     path, source URI, size and **SHA-256** of the bytes that were loaded.
    - `_partition_log`: one row per daily partition loaded.
    - `_dq_results`: every check result.
+   - Quarantined rows carry the run that quarantined them (`_quarantine_run`).
+
+   The chain row → run → contract/code version → file → hash is queryable with
+   `python -m data.lineage` (per-table summary), `--row transactions TXN-1` (the
+   load and file behind one row) and `--verify --raw-dir data/raw` (exit 1 if a
+   row has no lineage, names a run that did not succeed or a file with no
+   recorded hash, if a load lacks its contract or code version or its times, if
+   a file's record lacks its size, URI or a 64-hex SHA-256 (all of this without
+   needing the raw files), or, with `--raw-dir`, if a file on disk no longer
+   has the recorded hash). A
+   warehouse loaded before `_source_files` existed fails `--verify` until it
+   is ingested again.
 
    The JSON report is written to `--report` (`data/reports/quality_report.json`
    by default; in the container, next to the warehouse on the persistent disk)
@@ -116,13 +136,20 @@ coverage. Non-null values are checked only when interactions are present.
 - **Batch, not streaming.** The source is daily files with no latency
   requirement below a day, so streaming would add cost without value, as the
   brief itself notes.
-- **As-of date.** The warehouse's as-of date (`max(process_date)`, 2026-06-17
-  for this dataset) is stated in every answer.
-- **Freshness SLO.** With `FRESHNESS_ENFORCE=1`, balance and transaction
-  answers become "data unavailable → escalate" when the warehouse is older
-  than `FRESHNESS_SLO_HOURS` (default 36). It is off by default only because
-  this dataset is a static 2023–2026 snapshot (tested in
-  `tests/test_tools_and_grounding.py`).
+- **As-of date.** The warehouse's as-of date (`max(process_date)` of
+  transactions, 2026-06-17 for this dataset) is stated in every answer. It is
+  read once per process, so a re-ingest shows up after a restart (ingestion
+  runs at boot; LIMITATIONS.md).
+- **Freshness SLO.** With `FRESHNESS_ENFORCE=1`, an answer from the account
+  summary (balance), the transaction list or the payment status becomes "data
+  unavailable → escalate" (a ticket, no figure) when the as-of date is more
+  than `FRESHNESS_SLO_HOURS` (default 36) before today in UTC. Age is counted
+  in whole days of 24 h, exactly at the limit is still fresh, and a warehouse
+  with no as-of date is never fresh. The customer profile and the exchange
+  rate (which says the date it used) are not gated. It is off by default only
+  because this dataset is a static 2023–2026 snapshot. Tested in
+  `tests/test_data_ml_validation.py` (`test_freshness_*`), including the
+  end-to-end turn.
 
 ## Findings on the supplied data
 
@@ -155,3 +182,23 @@ The quality gate was exercised on real data at least once: the first full run
 quarantined 14% of `call_transcripts` over the `duration_seconds` NOT NULL rule
 and rolled back that table's load. That led to the explicit deviation above
 rather than a silently relaxed contract.
+
+## How each claim is checked
+
+`make validate-data-ml` runs `tests/test_data_ml_validation.py`, one test per
+claim, and writes [`docs/evidence/data_ml_validation.md`](evidence/data_ml_validation.md)
+with PASS/FAIL, the evidence and the command for each criterion. It uses only
+the fixture warehouse and the committed reports (no S3, no keys) and is part of
+`make gate`.
+
+| Claim in this document | Test that fails if it stops being true |
+|---|---|
+| Contracts: types, keys, NOT NULL and the pydantic models agree; the served tables have the dictionary's types | `test_contracts_every_table_has_types_key_row_model_and_they_agree`, `..._the_served_tables_have_the_dictionary_types_and_keys` |
+| A violating row is quarantined with its reason and appears in the report | `test_contracts_a_violating_row_is_quarantined_...` |
+| Over 1% quarantined, or a missing required column: the load stops, the warehouse keeps its state, the run exits non-zero | `test_contracts_over_the_quarantine_threshold_...`, `test_contracts_a_missing_required_column_...` |
+| The severity table above is what the code assigns | `test_contracts_the_documented_severities_...` |
+| Each contract deviation is still measured as a warning | `test_contracts_each_documented_deviation_...` |
+| Every check is persisted and counted; the findings table is the committed full-run report | `test_quality_every_check_is_persisted_...`, `test_quality_the_committed_full_run_report_...` |
+| Lineage from a served row to its run, versions and file hash; a broken chain is detected | `test_lineage_*` |
+| Freshness: defaults, gated tools, limit, end-to-end escalation | `test_freshness_*` |
+
