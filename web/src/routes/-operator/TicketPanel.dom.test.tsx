@@ -199,3 +199,74 @@ describe('portuguese', () => {
     expect(screen.getByText('Solicitação')).toBeTruthy()
   })
 })
+
+// What the operator reads of the assistant's own decision: written from the codes of the case, in the operator's language, and the
+// English text of the API wherever the case has no code (or one this console does not know).
+describe('the texts of the case', () => {
+  const english = {
+    reason: 'The customer confirmed a trace, but the movement needs a person\'s approval (older_than_review_threshold).',
+    policy_rule: 'action:trace_review',
+    open_questions: ['Approve or reject the trace: older_than_review_threshold.', 'Could not gather recent activity automatically: db down'],
+    suggested_next_step: 'Review the movement (see pending_action.review_reason) and approve or reject the trace the customer asked for.',
+    verified_facts: [{ tool: 'get_payment_status', result: { status: 'pending' } }],
+    evidence: [{ type: 'denied_request', id: 'P-9', detail: { tool: 'get_account_summary' } }],
+  }
+  const codes: Pick<Ticket, 'reason_code' | 'open_question_codes' | 'next_step_code'> = {
+    reason_code: { code: 'trace_review', params: { review_reason: 'older_than_review_threshold' } },
+    open_question_codes: [{ code: 'decide_trace', params: { review_reason: 'older_than_review_threshold' } }, { code: 'evidence_failed', params: { detail: 'db down' } }],
+    next_step_code: 'trace_review',
+  }
+  const view = { canAct: true, operator: 'ana.ruiz' }
+  const panel = (t: Ticket, locale: 'es' | 'pt') =>
+    renderWithI18n(<TicketPanel ticket={t} view={view} act={vi.fn()} reload={vi.fn(async () => true)} />, locale)
+  const block = (heading: string) => screen.getByRole('heading', { name: heading }).closest('section') as HTMLElement
+
+  it('in Spanish, from the codes', () => {
+    panel(ticket('open', { ...english, ...codes }), 'es')
+    expect(screen.getByText(/^El cliente confirmó un rastreo, pero el movimiento necesita la aprobación de una persona \(Pendiente desde hace más tiempo/)).toBeTruthy()
+    expect(screen.getByText(/regla Rastreo: lo decide una persona$/)).toBeTruthy()
+    const questions = within(block('Preguntas abiertas')).getAllByRole('listitem').map((li) => li.textContent)
+    expect(questions).toEqual(['Aprobar o rechazar el rastreo: Pendiente desde hace más tiempo del que admite un rastreo simple.', 'No se pudo reunir la actividad reciente automáticamente: db down'])
+    expect(within(block('Próximo paso sugerido')).getByText(/^Revisar el movimiento \(ver el motivo de revisión\)/)).toBeTruthy()
+    expect(screen.queryByText(/Approve or reject|Review the movement|Could not gather/)).toBeNull()
+  })
+
+  it('in Portuguese, from the codes', () => {
+    panel(ticket('open', { ...english, ...codes }), 'pt')
+    expect(screen.getByText(/^O cliente confirmou um rastreio, mas a movimentação precisa da aprovação de uma pessoa/)).toBeTruthy()
+    const questions = within(block('Perguntas em aberto')).getAllByRole('listitem').map((li) => li.textContent)
+    expect(questions).toEqual(['Aprovar ou rejeitar o rastreio: Pendente há mais tempo do que um rastreio simples admite.', 'Não foi possível reunir a atividade recente automaticamente: db down'])
+    expect(within(block('Próximo passo sugerido')).getByText(/^Revisar a movimentação/)).toBeTruthy()
+  })
+
+  it('the evidence type, the keys of the facts and the review reason are written too', () => {
+    panel(ticket('open', { ...english, ...codes }), 'es')
+    expect(screen.getByRole('heading', { name: 'Pedido denegado · P-9' })).toBeTruthy()
+    expect(within(block('Hechos verificados')).getByText(/^Herramienta: get_payment_status · Resultado: /)).toBeTruthy()
+    expect(within(screen.getByRole('region', { name: 'Rastrear movimiento' })).getByText('Pendiente desde hace más tiempo del que admite un rastreo simple').getAttribute('title')).toBe('older_than_review_threshold')
+  })
+
+  it.each(['es', 'pt'] as const)('a case filed before the codes shows the English text as it came (%s)', (locale) => {
+    panel(ticket('open', english), locale)
+    expect(screen.getByText(english.reason, { exact: false })).toBeTruthy()
+    for (const question of english.open_questions) expect(screen.getByText(question)).toBeTruthy()
+    expect(screen.getByText(english.suggested_next_step)).toBeTruthy()
+  })
+
+  it('a code the console does not know shows the English text, question by question', () => {
+    const odd: typeof codes = { reason_code: { code: 'from_the_future' }, open_question_codes: [null, { code: 'also_new', params: {} }], next_step_code: 'nobody_knows_me' }
+    panel(ticket('open', { ...english, ...odd }), 'es')
+    expect(screen.getByText(english.reason, { exact: false })).toBeTruthy()
+    for (const question of english.open_questions) expect(screen.getByText(question)).toBeTruthy()
+    expect(screen.getByText(english.suggested_next_step)).toBeTruthy()
+  })
+
+  it('the summary the operator copies is in their language too', async () => {
+    const user = userEvent.setup() // installs its own clipboard, which the panel writes to
+    panel(ticket('claimed', { ...english, ...codes }, { operator: 'ana.ruiz', version: 1 }), 'pt')
+    await user.click(screen.getByRole('button', { name: /Copiar resumo/ }))
+    const summary = await navigator.clipboard.readText()
+    expect(summary).toContain('Motivo: O cliente confirmou um rastreio')
+    expect(summary).toContain('Próximo passo: Revisar a movimentação')
+  })
+})

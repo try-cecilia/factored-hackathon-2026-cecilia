@@ -30,6 +30,9 @@ export type PendingAction = {
   movement?: { transaction_type?: string; amount?: number | string; currency?: string }
 }
 
+/** A text for the operator as a stable code with its parameters. */
+export type TextCode = { code: string; params?: Record<string, string | number> }
+
 export type Ticket = {
   ticket_id: string
   trace_id: string | null
@@ -51,6 +54,10 @@ export type Ticket = {
   actions_taken: Record<string, Json>[]
   open_questions: string[]
   suggested_next_step: string
+  // The codes of the three texts above (agent/policy/notes.py). A case filed before them has none: the console shows the English text.
+  reason_code?: TextCode | null
+  open_question_codes?: (TextCode | null)[]
+  next_step_code?: string | null
   pending_action: PendingAction | null
   desk: DeskState
 }

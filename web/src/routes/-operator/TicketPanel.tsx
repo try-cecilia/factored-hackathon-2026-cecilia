@@ -8,6 +8,7 @@ import { CloseIcon } from '../../ui/table/icons'
 import { ago, clock, CLOSED, explainKey, money, shortStamp, when } from './format'
 import { FRAUD_SCORE_FLAG, isFlagged, scoreLabel, ticketSummary } from './summary'
 import { conflictOf, holdConflict, type Conflict } from './conflicts'
+import { evidenceTypeName, keyName, nextStepText, questionTexts, reasonText, reviewReasonName, ruleName } from './notes'
 import { KeyValues } from './ui'
 
 export type TicketPanelProps = {
@@ -150,7 +151,7 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
         <section className="op-block" aria-label={t('operator.ticket.request')}>
           <h2>{t('operator.ticket.request')}</h2>
           <p className="op-request">{ticket.request}</p>
-          <p className="op-muted">{t('operator.ticket.reasonLine', { reason: ticket.reason, rule: ticket.policy_rule })}</p>
+          <p className="op-muted">{t('operator.ticket.reasonLine', { reason: reasonText(t, ticket), rule: ruleName(t, ticket.policy_rule) })}</p>
           {ticket.prior_requests.length > 0 && (
             <>
               <h3>{t('operator.ticket.priorRequests')}</h3>
@@ -223,8 +224,8 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
             )}
             {otherEvidence.map((e, i) => (
               <div key={i}>
-                <h3>{e.type}{e.id ? ` · ${e.id}` : ''}</h3>
-                <KeyValues data={e.detail} />
+                <h3>{evidenceTypeName(t, e.type)}{e.id ? ` · ${e.id}` : ''}</h3>
+                <KeyValues data={e.detail} label={(key) => keyName(t, key)} />
               </div>
             ))}
           </section>
@@ -237,7 +238,7 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
               {ticket.verified_facts.map((fact, i) => (
                 <li key={i}>
                   <CheckIcon size={10} />
-                  <span className="op-mono">{Object.entries(fact).map(([k, v]) => `${k}: ${typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v)}`).join(' · ')}</span>
+                  <span className="op-mono">{Object.entries(fact).map(([k, v]) => `${keyName(t, k)}: ${typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v)}`).join(' · ')}</span>
                 </li>
               ))}
             </ul>
@@ -247,13 +248,13 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
         {ticket.open_questions.length > 0 && (
           <section className="op-block">
             <h2>{t('operator.ticket.openQuestions')}</h2>
-            <ul className="op-bullets">{ticket.open_questions.map((q, i) => <li key={i}>{q}</li>)}</ul>
+            <ul className="op-bullets">{questionTexts(t, ticket).map((q, i) => <li key={i}>{q}</li>)}</ul>
           </section>
         )}
 
         <section className="op-block">
           <h2>{t('operator.ticket.nextStep')}</h2>
-          <p className="op-callout">{ticket.suggested_next_step}</p>
+          <p className="op-callout">{nextStepText(t, ticket)}</p>
         </section>
 
         {ticket.actions_taken.length > 0 && (
@@ -410,7 +411,7 @@ function PendingCard({ ticket }: { ticket: Ticket }) {
     [t('operator.ticket.pending.product'), <span className="op-mono">{p.product_id}</span>],
     [t('operator.ticket.pending.amount'), <span className="op-mono op-strong">{p.movement ? money(p.movement.amount, p.movement.currency) : '—'}</span>],
     ...(p.age_days != null ? [[t('operator.ticket.pending.date'), t('operator.ticket.pending.dateValue', { days: p.age_days })] as [string, ReactNode]] : []),
-    ...(p.review_reason ? [[t('operator.ticket.pending.reviewReason'), <span className="op-mono">{p.review_reason}</span>] as [string, ReactNode]] : []),
+    ...(p.review_reason ? [[t('operator.ticket.pending.reviewReason'), <span title={p.review_reason}>{reviewReasonName(t, p.review_reason)}</span>] as [string, ReactNode]] : []),
     ...(!CLOSED.includes(status) ? [[t('operator.ticket.pending.ifApproved'), t('operator.ticket.pending.ifApprovedValue')] as [string, ReactNode]] : []),
     ...(typeof rejectedWith === 'string' && rejectedWith ? [[t('operator.ticket.pending.reasonGiven'), rejectedWith] as [string, ReactNode]] : []),
   ]

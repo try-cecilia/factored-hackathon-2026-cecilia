@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import re
+from pathlib import Path
 
 import pytest
 
@@ -9,6 +11,7 @@ from agent.policy import escalation, notes, router
 from agent.policy.router import Decision, Disposition
 from agent.tools.errors import DataUnavailable, PermissionDenied, ToolError
 
+ROOT = Path(__file__).resolve().parent.parent
 CARD = "4111111111111111"
 
 
@@ -94,3 +97,19 @@ def test_a_ticket_filed_before_the_codes_still_reads_the_same(tmp_path):
     queue_file.write_text(json.dumps(old) + "\n", encoding="utf-8")
     assert escalation.default_queue.get("t-old") == old  # nothing is added on read: the console falls back to the text
 
+
+# The console has each code in Spanish and Portuguese: a code without its translation would reach the operator in English.
+def _translated(language: str) -> str:
+    text = (ROOT / f"web/src/i18n/dict/{language}/operator.ts").read_text(encoding="utf-8")
+    return text[text.index("  codes: {"):]
+
+
+@pytest.mark.parametrize("language", ["es", "pt"])
+def test_every_code_has_its_translation(language):
+    section = _translated(language)
+    kinds = {"reason": notes.REASONS, "question": notes.QUESTIONS, "step": {**escalation.NEXT_STEP, "default": ""}}
+    for kind, catalog in kinds.items():
+        block = re.search(rf"\n    {kind}: \{{(.*?)\n    \}},", section, re.S)
+        assert block, f"codes.{kind} is missing in {language}"
+        for code in catalog:
+            assert re.search(rf"^\s+{code}: ", block.group(1), re.M), f"{language}: codes.{kind}.{code} is not translated"

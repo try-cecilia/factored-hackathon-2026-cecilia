@@ -1,6 +1,7 @@
 import type { Translate } from '../../i18n/translate.ts'
 import type { Ticket } from '../../server/operator.functions.ts'
 import { categoryName, statusKey } from './format.ts'
+import { nextStepText, reasonText } from './notes.ts'
 
 /** Score at which the desk marks a transaction (agent/policy/escalation.py: FRAUD_SCORE_FLAG). */
 export const FRAUD_SCORE_FLAG = 70
@@ -29,8 +30,8 @@ export function ticketSummary(ticket: Ticket, t: Translate): string {
     t('operator.ticket.summary.status', { status: `${t(statusKey[ticket.desk.status])}${ticket.desk.operator ? ` (${ticket.desk.operator})` : ''}` }),
     `${categoryName(t, ticket.category)} · v${ticket.desk.version}`,
     t('operator.ticket.summary.request', { request: ticket.request }),
-    t('operator.ticket.summary.reason', { reason: ticket.reason }),
-    t('operator.ticket.summary.nextStep', { step: ticket.suggested_next_step }),
+    t('operator.ticket.summary.reason', { reason: reasonText(t, ticket) }),
+    t('operator.ticket.summary.nextStep', { step: nextStepText(t, ticket) }),
     ...(flagged.length ? [t('operator.ticket.summary.flagged', { list: flagged.join(', ') })] : []),
     ...(ticket.desk.trace_id ? [t('operator.ticket.summary.trace', { id: ticket.desk.trace_id })] : []),
   ].join('\n')

@@ -82,7 +82,8 @@ export function Bars({ data, total, names }: { data: Record<string, number>; tot
 const scalar = (value: unknown) =>
   value === null || value === undefined || value === '' ? '—' : typeof value === 'object' ? JSON.stringify(value) : String(value)
 
-export function KeyValues({ data }: { data: Record<string, unknown> }) {
+/** `label` writes a key in the operator's language; without it the keys show as they came. */
+export function KeyValues({ data, label }: { data: Record<string, unknown>; label?: (key: string) => string }) {
   const t = useT()
   const entries = Object.entries(data)
   if (!entries.length) return <p className="op-muted">{t('operator.noData')}</p>
@@ -90,7 +91,7 @@ export function KeyValues({ data }: { data: Record<string, unknown> }) {
     <dl className="op-kv">
       {entries.map(([key, value]) => (
         <div key={key}>
-          <dt>{key}</dt>
+          <dt>{label ? label(key) : key}</dt>
           <dd className={typeof value === 'object' && value !== null ? 'op-mono' : undefined}>{scalar(value)}</dd>
         </div>
       ))}
