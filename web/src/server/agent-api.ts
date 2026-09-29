@@ -11,6 +11,7 @@ type RequestOptions = {
   method?: 'GET' | 'POST' | 'DELETE'
   body?: unknown
   token?: string
+  headers?: Record<string, string>
 }
 
 function clientIp() {
@@ -18,11 +19,12 @@ function clientIp() {
   return (trusted && getRequestHeader(trusted)) || getRequestIP()
 }
 
-export async function agentFetch(path: string, { method = 'GET', body, token }: RequestOptions = {}) {
+export async function agentFetch(path: string, { method = 'GET', body, token, headers: extra }: RequestOptions = {}) {
   const headers = new Headers({ Accept: 'application/json' })
   const ip = clientIp()
   if (ip) headers.set('X-Client-IP', ip)
   if (token) headers.set('X-Session-Token', token)
+  for (const [name, value] of Object.entries(extra ?? {})) headers.set(name, value)
   if (body !== undefined) headers.set('Content-Type', 'application/json')
 
   try {
