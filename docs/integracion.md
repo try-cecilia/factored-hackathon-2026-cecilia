@@ -417,7 +417,9 @@ modo limitado.
 
 - *Shell.* Sidebar de cliente (expandido de 260 px, o rail de 56 px con el botón de la marca), barra con el título, el
   selector de idioma y, solo en la demo, el botón "Demo". Bajo los 760 px el sidebar es un cajón (botón de menú, cierre con
-  Escape, con la barra de fondo o con su botón; el foco entra y vuelve al botón). Texto e íconos del sidebar van en tinta:
+  Escape, con la barra de fondo o con su botón; el foco entra y vuelve al botón). El panel abierto es visible desde el primer cuadro (`visibility` con transición de 0 s al abrir y con demora al cerrar): con `visibility: hidden` durante la
+  animación, Chromium deja el foco en `<body>`. `web/src/shell/drawer-css.test.ts` lo protege; en el navegador se comprueba con animaciones normales
+  (abrir el menú móvil y el panel Demo: el foco cae en "Cerrar", Tab sigue dentro y Escape lo devuelve al botón; capturas `docs/demo/cliente-27-*` y `cliente-28-*`). Texto e íconos del sidebar van en tinta:
   el azul queda para el anillo de foco y los puntos de "no leído".
 - *Casos.* La sección lista los casos de la sesión (las derivaciones que llegaron con número, del índice `cases` del historial más los de esta página) y el estado de cada
   uno, consultado con `GET /case/{id}` (otra vez cada 45 s mientras un caso siga abierto y la página esté visible, y
