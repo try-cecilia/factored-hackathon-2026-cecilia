@@ -46,7 +46,7 @@ from agent.core.orchestrator import default_orchestrator
 from agent.llm.budget import default_budget
 from agent.llm.client import default_providers
 from agent.policy import intent_guard
-from agent.resilience import handoff_budget_seconds, request_budget_seconds, turn_budget_seconds
+from agent.resilience import bounded_ops_stats, handoff_budget_seconds, request_budget_seconds, turn_budget_seconds
 from agent.session.auth import ExpiredSession, InvalidSession, default_store, session_ref
 from agent.session.identity import AuthError, IdentityUnavailable, LockedOut, default_identity, derive_test_pin
 from agent.session.operators import OperatorDirectory
@@ -558,7 +558,7 @@ def capacity() -> dict:
                        "login_per_min": login_limiter.limit, "turn_budget_seconds": turn_budget_seconds(),
                        "handoff_budget_seconds": handoff_budget_seconds(), "request_budget_seconds": request_budget_seconds(),
                        "llm_session_budget_usd": default_orchestrator.session_budget.limit_usd},
-            "state": middleware.stats.snapshot(), "failures": observability.failure_counts(),
+            "state": middleware.stats.snapshot(), "failures": observability.failure_counts(), "bounded_ops": bounded_ops_stats(),
             "rate_limiter_keys": {"session": len(chat_limiter), "customer": len(chat_customer_limiter), "address": len(chat_ip_limiter)}}
 
 

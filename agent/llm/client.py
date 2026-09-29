@@ -47,19 +47,25 @@ class DeadlineTransport:
     the SDKs ship their own (`httpx2`, over `httpcore2`), the local provider uses `httpx` (over `httpcore`)."""
 
 
-def deadline_transport(mod: Any) -> Any:
+def deadline_transport(mod: Any, max_connections: int = 200) -> Any:
     import importlib
 
     class Transport(DeadlineTransport, mod.BaseTransport):
         def __init__(self) -> None:
-            self._inner = mod.HTTPTransport(limits=mod.Limits(max_connections=200, max_keepalive_connections=50))
+            self._inner = mod.HTTPTransport(limits=mod.Limits(max_connections=max_connections, max_keepalive_connections=min(50, max_connections)))
             core = importlib.import_module(type(self._inner._pool).__module__.partition(".")[0])  # httpcore or httpcore2
             self._inner._pool._network_backend = _limited_backend(core, self._inner._pool._network_backend)
 
         def handle_request(self, request):
             limit = call_limit.get()
-            if limit is not None and limit - time.perf_counter() <= 0:
-                raise mod.ConnectTimeout("the call's time limit had passed before it started")
+            if limit is not None:
+                left = limit - time.perf_counter()
+                if left <= 0:
+                    raise mod.ConnectTimeout("the call's time limit had passed before it started")
+                # The wait for a free connection of the pool (`pool`) is a phase of the call like the others: without this
+                # cap it runs on the client's own timeout, outside the limit, when the pool is busy.
+                timeout = request.extensions.get("timeout") or {}
+                request.extensions["timeout"] = {k: min(timeout.get(k) or left, left) for k in ("connect", "read", "write", "pool")}
             return self._inner.handle_request(request)
 
         def close(self) -> None:
