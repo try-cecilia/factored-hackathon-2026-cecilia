@@ -206,14 +206,14 @@ describe('the texts of the case', () => {
   const english = {
     reason: 'The customer confirmed a trace, but the movement needs a person\'s approval (older_than_review_threshold).',
     policy_rule: 'action:trace_review',
-    open_questions: ['Approve or reject the trace: older_than_review_threshold.', 'Could not gather recent activity automatically: db down'],
+    open_questions: ['Approve or reject the trace: older_than_review_threshold.', 'Could not gather recent activity automatically: IO Error: Cannot open file "C:/srv/data/warehouse/bank.duckdb"'],
     suggested_next_step: 'Review the movement (see pending_action.review_reason) and approve or reject the trace the customer asked for.',
     verified_facts: [{ tool: 'get_payment_status', result: { status: 'pending' } }],
     evidence: [{ type: 'denied_request', id: 'P-9', detail: { tool: 'get_account_summary' } }],
   }
   const codes: Pick<Ticket, 'reason_code' | 'open_question_codes' | 'next_step_code'> = {
     reason_code: { code: 'trace_review', params: { review_reason: 'older_than_review_threshold' } },
-    open_question_codes: [{ code: 'decide_trace', params: { review_reason: 'older_than_review_threshold' } }, { code: 'evidence_failed', params: { detail: 'db down' } }],
+    open_question_codes: [{ code: 'decide_trace', params: { review_reason: 'older_than_review_threshold' } }, { code: 'evidence_failed', params: { error_type: 'OperationalError' } }],
     next_step_code: 'trace_review',
   }
   const view = { canAct: true, operator: 'ana.ruiz' }
@@ -226,7 +226,7 @@ describe('the texts of the case', () => {
     expect(screen.getByText(/^El cliente confirmó un rastreo, pero el movimiento necesita la aprobación de una persona \(Pendiente desde hace más tiempo/)).toBeTruthy()
     expect(screen.getByText(/regla Rastreo: lo decide una persona$/)).toBeTruthy()
     const questions = within(block('Preguntas abiertas')).getAllByRole('listitem').map((li) => li.textContent)
-    expect(questions).toEqual(['Aprobar o rechazar el rastreo: Pendiente desde hace más tiempo del que admite un rastreo simple.', 'No se pudo reunir la actividad reciente automáticamente: db down'])
+    expect(questions).toEqual(['Aprobar o rechazar el rastreo: Pendiente desde hace más tiempo del que admite un rastreo simple.', 'No se pudo reunir la actividad reciente automáticamente (OperationalError).'])
     expect(within(block('Próximo paso sugerido')).getByText(/^Revisar el movimiento \(ver el motivo de revisión\)/)).toBeTruthy()
     expect(screen.queryByText(/Approve or reject|Review the movement|Could not gather/)).toBeNull()
   })
@@ -235,7 +235,7 @@ describe('the texts of the case', () => {
     panel(ticket('open', { ...english, ...codes }), 'pt')
     expect(screen.getByText(/^O cliente confirmou um rastreio, mas a movimentação precisa da aprovação de uma pessoa/)).toBeTruthy()
     const questions = within(block('Perguntas em aberto')).getAllByRole('listitem').map((li) => li.textContent)
-    expect(questions).toEqual(['Aprovar ou rejeitar o rastreio: Pendente há mais tempo do que um rastreio simples admite.', 'Não foi possível reunir a atividade recente automaticamente: db down'])
+    expect(questions).toEqual(['Aprovar ou rejeitar o rastreio: Pendente há mais tempo do que um rastreio simples admite.', 'Não foi possível reunir a atividade recente automaticamente (OperationalError).'])
     expect(within(block('Próximo passo sugerido')).getByText(/^Revisar a movimentação/)).toBeTruthy()
   })
 

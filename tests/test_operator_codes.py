@@ -32,6 +32,7 @@ def every_decision() -> list[Decision]:
         suspended, unsafe, router.foreign_reference(["P-1", "P-2"]), router.llm_unavailable([]), router.turn_timeout(),
         router.after_tool(PermissionDenied("not yours")), router.after_tool(DataUnavailable("no opening date", field="opening_date")),
         router.after_tool(DataUnavailable("nothing to show")), router.after_tool(ToolError("boom")),
+        router.after_tool(DataUnavailable("balance missing for product PRD-AB12CD34EF56", field="current_balance")),
         router.trace_step({"items": []}), router.trace_unverified(), router.trace_review("older_than_review_threshold"),
     ]
 
@@ -56,7 +57,7 @@ def test_every_question_has_its_code_in_the_order_of_the_text_and_the_notes_of_t
         assert ticket["reason_code"]["code"] in notes.REASONS
         assert len(ticket["open_question_codes"]) == len(ticket["open_questions"])
         for question, coded in zip(ticket["open_questions"], ticket["open_question_codes"]):
-            assert coded is not None and question == notes.QUESTIONS[coded["code"]].format(**coded["params"])
+            assert coded is not None and question == notes.QUESTIONS[coded["code"]].format(detail=question.split(": ", 1)[-1], **coded["params"])
         assert ticket["next_step_code"] in {*escalation.NEXT_STEP, "default"}
 
 
@@ -78,7 +79,7 @@ def test_the_evidence_notes_are_questions_with_a_code_too(monkeypatch):
     monkeypatch.setattr(escalation.account_tools, "recent_activity_for_review", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("db down")))
     unsafe, _ = router.pre_llm("me robaron la tarjeta, es un fraude", "Active")
     ticket = filed(unsafe)
-    assert ticket["open_question_codes"][-1] == {"code": "evidence_failed", "params": {"detail": "db down"}}
+    assert ticket["open_question_codes"][-1] == {"code": "evidence_failed", "params": {"error_type": "RuntimeError"}}
     assert ticket["open_questions"][-1] == "Could not gather recent activity automatically: db down"
 
 
@@ -89,6 +90,49 @@ def test_the_parameters_carry_nothing_the_ticket_did_not_already_hold():
         assert CARD not in params and "mi tarjeta" not in params and "CLI-FIX0004" not in params and "trace-1" not in params
         for coded in [ticket["reason_code"], *ticket["open_question_codes"]]:
             assert all(isinstance(v, (str, int)) for v in coded["params"].values())
+
+
+# The message of an exception can carry internal ids and paths, and it is in English: it stays in the English fallback only.
+RAW_MESSAGES = {
+    "data_unavailable": DataUnavailable("balance missing for product PRD-AB12CD34EF56", field="current_balance"),
+    "data_unavailable_unspecified": DataUnavailable("balance missing for product PRD-AB12CD34EF56"),
+    "tool_failure": ToolError('unexpected failure in get_account_summary: OperationalError: IO Error: Cannot open file "C:/srv/data/warehouse/bank.duckdb": Permission denied'),
+    "permission_denied": PermissionDenied("customer CLI-FIX0004 does not own product PRD-AB12CD34EF56", resource_id="PRD-AB12CD34EF56"),
+}
+LEAKS = ("PRD-AB12CD34EF56", "bank.duckdb", "C:/srv", "Cannot open file", "balance missing", "IO Error", "db down")
+
+
+def wire_params(ticket: dict) -> str:
+    return json.dumps([ticket["reason_code"], ticket["open_question_codes"], ticket["next_step_code"]])
+
+
+def test_the_parameters_carry_no_raw_error_text(monkeypatch):
+    for expected_code, error in RAW_MESSAGES.items():
+        ticket = filed(router.after_tool(error))
+        params = wire_params(ticket)
+        assert not any(leak in params for leak in LEAKS), (expected_code, params)
+        assert all(isinstance(v, (str, int)) for v in ticket["reason_code"]["params"].values())
+    # the code says what happened without the message: the field that is missing, the type of the error
+    assert filed(router.after_tool(RAW_MESSAGES["data_unavailable"]))["reason_code"] == {"code": "data_unavailable", "params": {"field": "current_balance"}}
+    assert filed(router.after_tool(RAW_MESSAGES["data_unavailable_unspecified"]))["reason_code"] == {"code": "data_unavailable_unspecified", "params": {}}
+    assert filed(router.after_tool(RAW_MESSAGES["tool_failure"]))["reason_code"] == {"code": "tool_failure", "params": {"error_type": "ToolError"}}
+    assert filed(router.after_tool(RAW_MESSAGES["permission_denied"]))["reason_code"] == {"code": "ownership_check_failed", "params": {}}
+
+    # the evidence that could not be gathered: the database error is not in the code either
+    def boom(*a, **k):
+        raise RuntimeError('Cannot open file "C:/srv/data/warehouse/bank.duckdb" for product PRD-AB12CD34EF56')
+    monkeypatch.setattr(escalation.account_tools, "recent_activity_for_review", boom)
+    unsafe, _ = router.pre_llm("me robaron la tarjeta, es un fraude", "Active")
+    ticket = filed(unsafe)
+    assert not any(leak in wire_params(ticket) for leak in LEAKS)
+    assert ticket["open_question_codes"][-1] == {"code": "evidence_failed", "params": {"error_type": "RuntimeError"}}
+
+
+def test_the_english_fallback_keeps_the_raw_message_as_before():
+    ticket = filed(router.after_tool(RAW_MESSAGES["data_unavailable"]))
+    assert ticket["reason"] == "Data needed for a verified answer is unavailable: balance missing for product PRD-AB12CD34EF56"
+    ticket = filed(router.after_tool(RAW_MESSAGES["tool_failure"]))
+    assert ticket["reason"] == f"Tool failure: {RAW_MESSAGES['tool_failure']}"
 
 
 def test_a_ticket_filed_before_the_codes_still_reads_the_same(tmp_path):

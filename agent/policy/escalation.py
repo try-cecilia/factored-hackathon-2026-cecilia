@@ -211,7 +211,7 @@ def _evidence_for(decision: Decision, customer_id: str, actions: list[dict[str, 
                                                               "transaction_country", "transaction_status", "fraud_score")}})
             evidence.sort(key=lambda e: not e["flagged"])
         except Exception as exc:  # noqa: BLE001 - evidence is best-effort; the ticket must still be filed
-            notes.append(question("evidence_failed", detail=str(exc)))
+            notes.append(question("evidence_failed", str(exc), error_type=type(exc).__name__))
     for a in actions:
         if a.get("error_type") == "PermissionDenied":
             evidence.append({"type": "denied_request", "id": a.get("args", {}).get("product_id"), "detail": {"tool": a["tool"]}})

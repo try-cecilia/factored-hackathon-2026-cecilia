@@ -5,7 +5,9 @@ not know a code shows) and the code, so the console writes it in the operator's 
 the catalog here, so the two cannot drift: one line per code, `{name}` marks a parameter.
 
 Parameters are what the text needs and nothing of the customer's: a category, a product count, a review reason, a field name,
-the error a lookup raised. Never the request, an id, an amount or a card number.
+the type of error a lookup raised. Never the request, an id, an amount, a card number or the message of an exception: that
+message can carry internal ids and is in English whatever the operator reads. It goes only into the English text, through `raw`
+(the `{detail}` of a catalog line), and never into the parameters.
 
 To add a text: one line in the catalog of its kind (REASONS, QUESTIONS; the next steps are `escalation.NEXT_STEP`, keyed by
 category), and its Spanish and Portuguese in `web/src/i18n/dict/{es,pt}/operator.ts` under `codes`, plus the key in
@@ -23,6 +25,7 @@ REASONS = {
     "foreign_reference": "The request names {count} product(s) owned by another customer.",
     "ownership_check_failed": "Ownership check failed: the request targets a resource the customer does not own.",
     "data_unavailable": "Data needed for a verified answer is unavailable: {detail}",
+    "data_unavailable_unspecified": "Data needed for a verified answer is unavailable: {detail}",
     "tool_failure": "Tool failure: {detail}",
     "llm_unavailable": "No LLM provider available within the turn budget.",
     "turn_timeout": "The turn's time budget ran out before the lookup could run.",
@@ -64,16 +67,16 @@ class Note:
         return {"code": self.code, "params": self.params}
 
 
-def _note(catalog: dict[str, str], code: str, params: Params) -> Note:
-    return Note(code, catalog[code].format(**params), params)
+def _note(catalog: dict[str, str], code: str, params: Params, raw: str) -> Note:
+    return Note(code, catalog[code].format(detail=raw, **params), params)
 
 
-def reason(code: str, **params: str | int) -> Note:
-    return _note(REASONS, code, params)
+def reason(code: str, raw: str = "", **params: str | int) -> Note:
+    return _note(REASONS, code, params, raw)
 
 
-def question(code: str, **params: str | int) -> Note:
-    return _note(QUESTIONS, code, params)
+def question(code: str, raw: str = "", **params: str | int) -> Note:
+    return _note(QUESTIONS, code, params, raw)
 
 
 def text_of(item: "str | Note") -> str:

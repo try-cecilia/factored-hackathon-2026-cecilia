@@ -95,10 +95,11 @@ def after_tool(error: Exception | None) -> Decision | None:
                         "security", open_questions=[question("review_unauthorized_access")],
                         rule="tool_error:PermissionDenied")
     if isinstance(error, DataUnavailable):
-        return Decision(Disposition.ESCALATE, reason("data_unavailable", detail=str(error)), "data_unavailable",
+        unavailable = reason("data_unavailable", str(error), field=error.field) if error.field else reason("data_unavailable_unspecified", str(error))
+        return Decision(Disposition.ESCALATE, unavailable, "data_unavailable",
                         open_questions=[question("lookup_field", field=error.field) if error.field else question("lookup_missing_field")],
                         rule="tool_error:DataUnavailable")
-    return Decision(Disposition.ESCALATE, reason("tool_failure", detail=str(error)), "tool_failure",
+    return Decision(Disposition.ESCALATE, reason("tool_failure", str(error), error_type=type(error).__name__), "tool_failure",
                     open_questions=[question("manual_check")], rule=f"tool_error:{type(error).__name__}")
 
 
