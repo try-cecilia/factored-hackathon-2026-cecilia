@@ -28,7 +28,8 @@ class _DeskSnapshot(TicketDesk):
             for line in path.read_text(encoding="utf-8").splitlines():
                 if line.strip():
                     event = json.loads(line)
-                    self._by_ticket[event["ticket_id"]].append(event)
+                    if isinstance(event["ticket_id"], str):  # any other id equals no ticket's, as when `state()` filters the file
+                        self._by_ticket[event["ticket_id"]].append(event)
 
     def _events(self, ticket_id: str) -> list[dict]:
         return self._by_ticket.get(ticket_id, [])
@@ -50,16 +51,18 @@ def listing(queue_path: Path, desk: TicketDesk, limit: int) -> list[dict]:
 
 
 def _readable(queue_path: Path) -> list[dict]:
-    """The queue's tickets that parse. A line that does not (a torn write, a bad edit) is counted and logged by its number, never
-    by its content, and must not take the whole queue down; the desk's file is not treated this way, its events decide state."""
+    """The queue's tickets: JSON objects with a non-empty text `ticket_id`. A line that is not one (a torn write, a bad edit) is
+    counted and logged by its number, never by its content, and must not take the whole queue down; the desk's file is not
+    treated this way, its events decide state."""
     tickets = []
     for number, line in enumerate(queue_path.read_text(encoding="utf-8").splitlines(), start=1):
         if not line.strip():
             continue
         try:
             ticket = json.loads(line)
-            ticket["ticket_id"]
-        except (ValueError, TypeError, KeyError):
+        except ValueError:
+            ticket = None
+        if not (isinstance(ticket, dict) and isinstance(ticket.get("ticket_id"), str) and ticket["ticket_id"]):
             observability.count_failure("queue_line_unreadable")
             logger.warning("a line of the ticket queue is unreadable and was skipped: line %d", number)
             continue

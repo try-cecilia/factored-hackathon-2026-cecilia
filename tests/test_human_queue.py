@@ -149,3 +149,30 @@ def test_an_open_ticket_older_than_the_retention_leaves_the_queue_with_the_purge
     assert "T-91d" in ids(queue())  # still in the file: listed, however old
     retention.run(now=now)
     assert ids(queue()) == ["T-0001"]
+
+
+@pytest.mark.parametrize("bad", ['{"ticket_id": []}', '{"ticket_id": {}}', '{"ticket_id": 7}', '{"ticket_id": ""}', '{"ticket_id": null}', "{}",
+                                 "[]", '["T-1"]', "7", "null", '"T-1"'])
+def test_a_line_that_parses_but_is_not_a_ticket_is_skipped_and_counted_like_an_unreadable_one(bad, caplog):
+    from agent import observability
+    fill_queue(201)
+    path = Path(main.default_queue.path)
+    path.write_text(bad + "\n" + path.read_text(encoding="utf-8"), encoding="utf-8")
+    before = observability.failure_counts().get("queue_line_unreadable", 0)
+
+    with caplog.at_level("WARNING"):
+        response = TestClient(main.app).get("/admin/human_queue?limit=200", headers=ADMIN)
+
+    assert response.status_code == 200 and len(response.json()) == 201  # every valid ticket is open, so every valid one is listed
+    assert observability.failure_counts()["queue_line_unreadable"] == before + 1
+    assert "line 1" in caplog.text
+
+
+def test_a_desk_event_whose_ticket_id_is_not_a_string_belongs_to_no_ticket_as_before():
+    fill_queue(3)
+    default_desk.act("T-0000", "claim", "ana")
+    with open(default_desk.path, "a", encoding="utf-8") as f:
+        f.write(json.dumps({"ticket_id": [], "status": "claimed", "operator": "x", "detail": {}}) + "\n")
+    rows = queue()
+    assert [r["desk"]["status"] for r in rows] == ["claimed", "open", "open"]
+    assert all(r["desk"] == default_desk.state(r["ticket_id"]) for r in rows)
