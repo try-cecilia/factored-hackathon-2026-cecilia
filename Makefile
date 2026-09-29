@@ -10,7 +10,7 @@ AGENT_API_URL ?= http://127.0.0.1:$(API_PORT)
 
 .PHONY: gate operator-labels retention loadtest setup ingest ingest-demo analysis train-eval workload eval eval-adversarial eval-live live-smoke test serve docker-build all mlflow-ui
 .PHONY: web-setup serve-web web-build web-typecheck serve-all
-.PHONY: env up down monitoring-up up-llm-local up-llm-host up-dataset lock lock-check alerts-check compose-e2e
+.PHONY: env up down clean-volumes monitoring-up up-llm-local up-llm-host up-dataset lock lock-check alerts-check compose-e2e
 COMPOSE = docker compose -f ops/docker-compose.yml --env-file .env
 GPU_FILE = $(if $(GPU),-f ops/docker-compose.gpu.yml)
 # The model-serving choices below only set what the API is told; the `local` provider itself is agent/llm/client.py's
@@ -62,10 +62,17 @@ up-llm-host: env  ## the stack using an Ollama already running on this machine (
 
 up-dataset: env   ## the stack on your local CSVs (RAW_DIR=/path/to/data/raw), read-only, no S3; first boot ingests them
 	@test -n "$(RAW_DIR)" || { echo "usage: make up-dataset RAW_DIR=/path/to/data/raw   (INGEST_ARGS to change what is ingested)"; exit 1; }
+	@if docker volume inspect cecilai-local_warehouse >/dev/null 2>&1; then echo "note: a warehouse already exists in the volume, so nothing is ingested from RAW_DIR. To load it: make clean-volumes, then this again."; fi
 	RAW_DIR="$(RAW_DIR)" INGEST_ARGS="$${INGEST_ARGS:---profile serving --source local --raw-dir /app/data/raw --sample-customers 5000 --since 2025-06-17}" \
 	  $(COMPOSE) up --build --wait --wait-timeout 1800
 
-down:             ## stop the stack and drop its volumes (the fixture warehouse is rebuilt on the next up)
+down:             ## stop the stack; its volumes (warehouse, sessions, tickets, monitoring data, models) are kept
+	$(COMPOSE) --profile monitoring --profile llm-local down
+
+clean-volumes:    ## stop the stack AND delete its volumes: the warehouse is rebuilt on the next up. Asks first (YES=1 skips it)
+	@echo "This deletes the volumes of the compose project cecilai-local (warehouse, sessions, tickets, Prometheus, Grafana, models):"
+	@docker volume ls --filter label=com.docker.compose.project=cecilai-local --format '  {{.Name}}'
+	@[ -n "$(YES)" ] || { printf "Type yes to continue: "; read answer; [ "$$answer" = yes ] || { echo "nothing deleted"; exit 1; }; }
 	$(COMPOSE) --profile monitoring --profile llm-local down -v
 
 PROMTOOL = docker run --rm --entrypoint promtool -v "$(CURDIR)/ops:/ops:ro" prom/prometheus:v3.5.0
@@ -74,7 +81,7 @@ alerts-check:     ## promtool: syntax of ops/alerts.yml and its unit tests (need
 	$(PROMTOOL) check rules /ops/alerts.yml
 	$(PROMTOOL) test rules /ops/alerts_test.yml
 
-compose-e2e:      ## the stack from scratch on the fixture, checked end to end (what the CI's compose job runs; needs Docker)
+compose-e2e:      ## the whole stack from scratch on the fixture in its own throwaway compose project, checked end to end (the CI job; needs Docker)
 	sh ops/compose_e2e.sh
 
 ingest:           ## full warehouse (serving + analysis tables) from S3, with contracts + lineage

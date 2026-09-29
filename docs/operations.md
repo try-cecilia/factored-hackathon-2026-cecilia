@@ -9,7 +9,7 @@ Needs Docker with Compose v2 and Python 3 (only to write `.env`). No account, no
 ```bash
 make up          # writes .env with fresh secrets if there is none, builds both images, starts API + web, waits until healthy
 # web: http://127.0.0.1:3000   API and the chat page: http://127.0.0.1:8000   (DEMO_MODE=1, the fixture warehouse)
-make down        # stops it and drops its volumes
+make down        # stops it (its volumes stay); `make clean-volumes` also deletes them, after asking
 ```
 
 `make env` (run by `make up`) copies `.env.example` to `.env` with a random `DEMO_IDP_SECRET`, `ADMIN_API_KEY`,
@@ -32,8 +32,8 @@ a local equivalent:
 `branches.csv`, `customers.csv`, `daily_exchange_rates.csv`, `products.csv`, `transactions/` and, optionally, `complaints/`),
 ingests it on the first boot with `--source local` (by default the 5,000-customer, 12-month sample the Render deploy uses;
 `INGEST_ARGS="--profile serving"` in the environment loads everything, with `DUCKDB_MEMORY_LIMIT=2GB` and about 2 GB for the
-container) and keeps the warehouse in the volume, so later boots do not ingest again. To switch datasets run `make down`
-first: it drops the volume. Measured here with the fixture folder as `RAW_DIR`: a read-only mount, one ingestion, and no second
+container) and keeps the warehouse in the volume, so later boots do not ingest again. To switch datasets run `make clean-volumes`
+first (it asks, then deletes the volumes). Measured here with the fixture folder as `RAW_DIR`: a read-only mount, one ingestion, and no second
 one after `docker compose restart api`. The 900 MB dataset itself was not run in this checkout.
 
 **Monitoring.** `make monitoring-up` adds Prometheus (`http://127.0.0.1:9090`, scraping `/metrics` with `METRICS_TOKEN`, loading
@@ -63,7 +63,7 @@ API container reaches `http://ollama:11434/v1/models` and has `LLM_PROVIDERS=loc
 config` resolves every profile. Chatting through the `local` provider waits for that provider's code. The heavy profile is not
 started in CI.
 
-**Checked end to end.** `make compose-e2e` builds both images, starts API + web + Prometheus + Grafana on the fixture,
+**Checked end to end.** `make compose-e2e` builds both images in its own throwaway compose project (`cecilai-e2e-<random>`, its own settings file and free ports: it never touches the stack of `make up`), starts API + web + Prometheus + Grafana on the fixture,
 runs the smoke test, checks that the web reaches the API, the security headers, the access checks, `/metrics` (with and without
 its token), that Prometheus scrapes the API and loaded every alert rule, that Grafana holds the dashboard and its 20 queries are
 valid, and that the container's retention loop ran and audited itself; then it removes the stack. The same script is the CI job

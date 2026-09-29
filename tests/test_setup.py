@@ -99,6 +99,17 @@ def test_bootstrap_writes_an_env_with_fresh_secrets_and_leaves_an_existing_one(t
     assert bootstrap_env.main(["--root", str(tmp_path), "--force"]) == 0 and (tmp_path / ".env").read_text() != first
 
 
+def test_bootstrap_can_write_a_throwaway_file_with_free_ports_and_leaves_the_env_alone(tmp_path):
+    (tmp_path / ".env.example").write_text(EXAMPLE)
+    (tmp_path / ".env").write_text("KEEP=me\n")
+    out = tmp_path / "e2e.env"
+    assert bootstrap_env.main(["--root", str(tmp_path), "--out", str(out), "--free-ports"]) == 0
+    assert (tmp_path / ".env").read_text() == "KEEP=me\n"
+    env = dict(re.findall(r"^([A-Z][A-Z0-9_]+)=(.*)$", out.read_text(), re.M))
+    ports = [int(env[k]) for k in bootstrap_env.PORTS]
+    assert len(set(ports)) == len(ports) and all(p > 1024 for p in ports) and 8000 not in ports
+
+
 def test_bootstrap_refuses_an_example_that_lost_a_setting_it_fills():
     with pytest.raises(ValueError, match="does not declare"):
         bootstrap_env.render("DEMO_MODE=0\n", {"DEMO_MODE": "1", "METRICS_TOKEN": "x"})

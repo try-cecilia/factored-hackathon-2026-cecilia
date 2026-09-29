@@ -2,6 +2,7 @@
 
     python -m ops.bootstrap_env            # writes .env, or leaves an existing one alone
     python -m ops.bootstrap_env --force    # replaces it
+    python -m ops.bootstrap_env --out /tmp/x.env --free-ports   # a throwaway settings file on ports nothing is using (the e2e check)
 
 Local settings, not production ones: the fixture warehouse (no bucket needed) and DEMO_MODE=1, so the guided
 scenarios and the test PINs work. Every secret is random per machine and never printed. Stdlib only.
@@ -11,6 +12,7 @@ from __future__ import annotations
 import argparse
 import re
 import secrets
+import socket
 import sys
 from pathlib import Path
 
@@ -19,10 +21,28 @@ FIXTURE_INGEST = "--profile serving --source local --raw-dir /app/tests/fixtures
 SECRETS = ("DEMO_IDP_SECRET", "ADMIN_API_KEY", "METRICS_TOKEN", "GRAFANA_ADMIN_PASSWORD")
 
 
-def local_values() -> dict[str, str]:
-    return {**{name: secrets.token_urlsafe(32) for name in SECRETS},
-            "OPERATOR_KEYS": f"operator1={secrets.token_urlsafe(32)}",
-            "DEMO_MODE": "1", "INGEST_ARGS": FIXTURE_INGEST}
+PORTS = ("API_PORT", "WEB_PORT", "PROMETHEUS_PORT", "GRAFANA_PORT", "OLLAMA_PORT")
+
+
+def free_ports(n: int) -> list[int]:
+    """n distinct ports that nothing is listening on right now (all held open together, so they differ)."""
+    sockets = [socket.socket() for _ in range(n)]
+    try:
+        for sock in sockets:
+            sock.bind(("127.0.0.1", 0))
+        return [sock.getsockname()[1] for sock in sockets]
+    finally:
+        for sock in sockets:
+            sock.close()
+
+
+def local_values(use_free_ports: bool = False) -> dict[str, str]:
+    values = {**{name: secrets.token_urlsafe(32) for name in SECRETS},
+              "OPERATOR_KEYS": f"operator1={secrets.token_urlsafe(32)}",
+              "DEMO_MODE": "1", "INGEST_ARGS": FIXTURE_INGEST}
+    if use_free_ports:
+        values.update({name: str(port) for name, port in zip(PORTS, free_ports(len(PORTS)))})
+    return values
 
 
 def render(example: str, values: dict[str, str]) -> str:
@@ -41,14 +61,16 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--force", action="store_true", help="replace an existing .env")
     ap.add_argument("--root", type=Path, default=ROOT)
+    ap.add_argument("--out", type=Path, help="write here instead of ROOT/.env (always replaces)")
+    ap.add_argument("--free-ports", action="store_true", help="choose ports nothing is using for every published service")
     args = ap.parse_args(argv)
-    target = args.root / ".env"
-    if target.exists() and not args.force:
+    target = args.out or args.root / ".env"
+    if target.exists() and not args.force and not args.out:
         print(".env already exists: left as it is (use --force to replace it)")
         return 0
-    target.write_text(render((args.root / ".env.example").read_text(encoding="utf-8"), local_values()), encoding="utf-8")
+    target.write_text(render((args.root / ".env.example").read_text(encoding="utf-8"), local_values(args.free_ports)), encoding="utf-8")
     target.chmod(0o600)
-    print("wrote .env with generated secrets (local sandbox: fixture warehouse, DEMO_MODE=1)")
+    print(f"wrote {target.name} with generated secrets (local sandbox: fixture warehouse, DEMO_MODE=1)")
     return 0
 
 

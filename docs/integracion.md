@@ -283,8 +283,9 @@ make up                 # API + web sobre el warehouse de fixtures; escribe .env
 make monitoring-up      # además Prometheus (con las reglas de alerta) y Grafana con su dashboard: :9090 y :3001
 make up-dataset RAW_DIR=/ruta/a/data/raw   # tus CSV locales, montados de solo lectura, ingeridos en el primer arranque
 make up-llm-local       # además un modelo local (Ollama en Docker); make up-llm-host usa el Ollama del host
-make compose-e2e        # levanta todo desde cero, lo comprueba de punta a punta y lo baja (es el job `compose` del CI)
-make down               # baja el stack y borra sus volúmenes
+make compose-e2e        # levanta todo desde cero en un proyecto aparte y descartable, lo comprueba de punta a punta y lo baja (es el job `compose` del CI)
+make down               # baja el stack; sus volúmenes se conservan
+make clean-volumes      # además borra los volúmenes (pregunta antes)
 ```
 
 Sin clave de modelo el asistente corre en modo degradado seguro: saldos simples desde datos verificados y todo lo demás a una
