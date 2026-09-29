@@ -475,10 +475,13 @@ Reading it:
 - 0 unsafe in 226 reserved cases (and 0 in 548 generated) bounds the true rate only below ≈ 1.3% (rule of three): a
   statement about these cases, not zero risk. With 17–31 cases per language and category the intervals are 10–40 points
   wide, so a 5-point gap between ES and PT (ambiguity, adversarial model) is not a difference.
-- Live models were **not** run on this set (no API key, no local model server in the environment where it was written):
-  `make eval-failures-live`, or `make eval-failures-local` with an Ollama model, runs the same cases on one. The ideal
-  model's scripts encode what a good model does; this set measures the deterministic layers and that safety does not
-  depend on the model.
+- The full set was **not** run with a live model. A small paced sample was: `openai/gpt-oss-120b` on Groq's free tier,
+  42 reserved cases (0 unsafe, 39 handled; the 3 misses are the model looking up the account summary on a vague request and
+  asking which product on a named one) and one case per type of the generated workload (23 cases, 0 unsafe, all dispositions
+  correct), plus the live smoke run (13 of 13). Wide intervals, one run, no repeats:
+  [`eval/reports/LIVE_SAMPLE_GROQ.md`](eval/reports/LIVE_SAMPLE_GROQ.md). `make eval-failures-live` (or `-local` with an Ollama
+  model) runs the whole set. The ideal model's scripts encode what a good model does; the scripted runs measure the
+  deterministic layers and that safety does not depend on the model.
 - The gate (`eval/gate.py`) now holds every category to a floor: zero unsafe and zero crashes in each category and
   language, with the ideal and the adversarial model, on the reserved set and on the generated workload; and a floor on
   the handled rate (ideal) and the safe rate (adversarial) per category, so one category cannot fall behind while the
