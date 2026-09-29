@@ -351,3 +351,10 @@ def test_make_up_runs_the_env_check_as_a_warning_and_evidence_is_an_explicit_ste
     # the gate and the CI verify without writing; only `make evidence` regenerates the versioned files
     assert re.search(r"^validate-data-ml:.*\n\t\$\(PY\) -m eval.validate_data_ml\n", makefile, re.M)
     assert re.search(r"^evidence:.*\n\t\$\(PY\) -m eval.validate_data_ml --out-dir docs/evidence\n", makefile, re.M)
+
+
+def test_the_web_server_does_not_send_no_referrer_because_a_browser_then_posts_origin_null_and_the_console_login_is_refused():
+    """Found in Chromium: under Referrer-Policy: no-referrer a form post carries `Origin: null` and no Referer, and the operator
+    forms' origin check (web/src/server/origin-check.ts, which rightly refuses `null`) turned every login into a 403."""
+    serve = (ROOT / "web" / "serve.mjs").read_text(encoding="utf-8")
+    assert "'referrer-policy': 'same-origin'" in serve and "'referrer-policy': 'no-referrer'" not in serve

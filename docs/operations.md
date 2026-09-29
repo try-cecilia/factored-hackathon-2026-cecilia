@@ -31,8 +31,8 @@ knows the origin the browser sees. The compose passes `WEB_PUBLIC_ORIGIN`, by de
 publishes the UI kit gallery at `/dev/ui`; `0`, the default, is a 404 as on a real deploy). `tests/test_setup.py` fails if the web
 reads a setting the compose does not pass. In the browser: `http://127.0.0.1:3000/login` with a test PIN from the chat page
 (`DEMO_MODE=1`) for the customer, and `/operador/login` with `ADMIN_API_KEY` and the key in `OPERATOR_KEYS` for the console (both
-in `.env`; `grep` them there yourself, nothing prints them). The session cookies are `Secure` `__Host-` cookies, which Chrome and
-Firefox accept from `http://127.0.0.1`; see LIMITATIONS.md for what was and was not tried.
+in `.env`; `grep` them there yourself, nothing prints them). The session cookies are `Secure` `__Host-` cookies, which Chromium
+accepts from `http://127.0.0.1` (tried; LIMITATIONS.md says what was not).
 
 Everything the stack needs runs in it. The cloud services the project can use are options, never requirements, and each has
 a local equivalent:

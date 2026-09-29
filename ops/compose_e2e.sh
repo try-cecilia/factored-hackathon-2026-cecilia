@@ -165,6 +165,9 @@ check("No se pudo cargar" not in page and operator_key not in page and admin_key
 # the UI kit gallery is a development tool: a production build answers 404 unless UI_GALLERY=1
 check(call("GET", "/dev/ui")[0] == 404, "/dev/ui answers 404 in the production build")
 PY
+# A browser sends `Origin: null` with a form post under `Referrer-Policy: no-referrer`, which the operator forms refuse: the web
+# must send a policy that keeps the origin for its own posts (found by logging in with Chromium; curl cannot show it)
+headers "$WEB/operador/login" | grep -qi '^referrer-policy: same-origin' || fail "the web's Referrer-Policy is not same-origin: a browser's operator login would send Origin: null"
 ok "web as a browser uses it: customer login and chat, operator login and queue, /dev/ui closed"
 
 # --- access ---
