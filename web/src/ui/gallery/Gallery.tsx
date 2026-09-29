@@ -1,4 +1,5 @@
 import { Link } from '@tanstack/react-router'
+import type { ReactNode } from 'react'
 import { I18nProvider, useI18n, useT } from '../../i18n/context'
 import { locales, localeNames, type Locale } from '../../i18n/locales'
 import { LanguageSwitcher } from '../LanguageSwitcher'
@@ -12,18 +13,21 @@ import './Gallery.css'
 
 const sections = ['buttons', 'language', 'loaders', 'sidebar', 'table', 'messages'] as const
 
-function Sections() {
+const bodies: Record<(typeof sections)[number], () => ReactNode> = {
+  buttons: () => <ButtonGallery />,
+  language: () => <LanguageSwitcher />,
+  loaders: () => <LoadersGallery />,
+  sidebar: () => <SidebarGallery />,
+  table: () => <TableGallery />,
+  messages: () => <MessagesGallery />,
+}
+
+/** Anchors are `<language>-<section>` so the two languages of `?both=1` never share an id. */
+function Sections({ code }: { code: Locale }) {
   const t = useT()
-  return (
-    <>
-      <Section id="buttons" title={t('gallery.sections.buttons')}><ButtonGallery /></Section>
-      <Section id="language" title={t('gallery.sections.language')}><LanguageSwitcher /></Section>
-      <Section id="loaders" title={t('gallery.sections.loaders')}><LoadersGallery /></Section>
-      <Section id="sidebar" title={t('gallery.sections.sidebar')}><SidebarGallery /></Section>
-      <Section id="table" title={t('gallery.sections.table')}><TableGallery /></Section>
-      <Section id="messages" title={t('gallery.sections.messages')}><MessagesGallery /></Section>
-    </>
-  )
+  return sections.map((id) => (
+    <Section key={id} id={`${code}-${id}`} title={t(`gallery.sections.${id}`)}>{bodies[id]()}</Section>
+  ))
 }
 
 /** `/dev/ui`: every component in every variant and state. With `?both=1` it draws the whole kit once per language. */
@@ -44,7 +48,7 @@ export function Gallery({ both }: { both: boolean }) {
               {both ? t('gallery.oneLanguage') : t('gallery.bothLanguages')}
             </Link>
             <nav className="gal__nav" aria-label={t('gallery.title')}>
-              {sections.map((id) => <a key={id} href={`#${id}`}>{t(`gallery.sections.${id}`)}</a>)}
+              {sections.map((id) => <a key={id} href={`#${shown[0]}-${id}`}>{t(`gallery.sections.${id}`)}</a>)}
             </nav>
           </div>
         </header>
@@ -53,7 +57,7 @@ export function Gallery({ both }: { both: boolean }) {
             <I18nProvider key={code} locale={code}>
               <div className="gal__lang" data-locale={code} lang={code}>
                 {both && <p className="gal__lang-tag">{localeNames[code]}</p>}
-                <Sections />
+                <Sections code={code} />
               </div>
             </I18nProvider>
           ))}

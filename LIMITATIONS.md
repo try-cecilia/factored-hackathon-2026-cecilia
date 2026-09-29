@@ -115,6 +115,15 @@ service, and as our own roadmap.
 - **Web chat: contrast and screen readers are checked by hand only.** Text contrast was computed in the browser on
   the chat page (no pair under 4.5:1; oklch/color-mix values it cannot parse are skipped), focus rings and the
   live region were inspected, but no assistive technology or automated audit (axe) has run.
+- **Web UI kit: checked against Paper by eye and by measurement, not by pixel diff.** The gallery at `/dev/ui`
+  (`docs/demo/ui-kit-*.png`) was compared with each Paper artboard; values come from Paper's `get_jsx` and
+  `get_computed_styles`. Where Paper draws only one state, the rest was designed in the same language and is listed in
+  `docs/integracion.md`: the open "Why?" panel, the failed action result, the hover and selected quick replies, and the
+  failed step and error toast of the loaders. Paper draws no "delivered" message state and no skeleton avatar in tables,
+  so the kit has neither.
+- **Web UI: the Portuguese was written by the team, not reviewed by a native speaker**, and the interface has only Spanish
+  and Portuguese (the assistant's replies come from the API in the customer's language). The chat screen and the
+  operator console are not migrated to the kit or to i18n yet.
 
 ## Operations
 
