@@ -19,6 +19,9 @@ services:
     envVars:
       - key: DEMO_MODE
         value: "1"
+      # Sessions and conversations live on the disk, so a restart or a deploy keeps a customer's case in flight.
+      - key: STATE_DB_PATH
+        value: /app/data/warehouse/state.sqlite
       - key: DEMO_IDP_SECRET
         generateValue: true
       - key: ADMIN_API_KEY

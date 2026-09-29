@@ -74,6 +74,13 @@ class HumanQueue:
                     return ticket
         return None
 
+    def for_customer(self, customer_id: str) -> list[dict]:
+        """Tickets owned by the authenticated customer, across all of their sessions."""
+        if not self.path.exists():
+            return []
+        tickets = (json.loads(line) for line in self.path.read_text(encoding="utf-8").splitlines() if line.strip())
+        return [ticket for ticket in tickets if ticket["customer_id"] == customer_id]
+
 
 default_queue = HumanQueue()
 

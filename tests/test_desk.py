@@ -17,7 +17,7 @@ from agent.policy.escalation import default_queue
 from agent.session.auth import SessionStore
 from agent.tools import account_tools
 from api import main
-from eval.fake_llm import FakeLLMClient, tool_call_response
+from eval.fake_llm import FakeLLMClient, text_response, tool_call_response
 
 
 @pytest.fixture(autouse=True)
@@ -32,15 +32,19 @@ def traces_opened() -> list[dict]:
     return [json.loads(line) for line in open(path, encoding="utf-8")] if os.path.exists(path) else []
 
 
-def file_ticket() -> str:
+def file_ticket_in_session():
     """The customer asks to trace the pending transfer and says yes; the movement needs a person, so a ticket is filed."""
-    fake = FakeLLMClient([tool_call_response("request_trace", {})])
+    fake = FakeLLMClient([tool_call_response("request_trace", {}), *[text_response("ok")] * 10])  # later turns just chat
     orch = Orchestrator(SessionStore(ttl_seconds=900), llm=lambda: fake)
     tok = orch.session_store.issue("CLI-FIX0004", {"segment": "Student", "country": "México", "customer_status": "Active"}).token
     assert orch.handle_message(tok, "hice una transferencia que todavía no llega").policy_rule == "action:trace_proposed"
     r = orch.handle_message(tok, "sí")
     assert (r.disposition, r.policy_rule) == ("ESCALATE", "action:trace_review")
-    return r.ticket_id
+    return r.ticket_id, orch, tok
+
+
+def file_ticket() -> str:
+    return file_ticket_in_session()[0]
 
 
 def test_a_movement_that_needs_a_person_is_not_traced_until_one_approves():
@@ -134,3 +138,87 @@ def test_the_operator_endpoints_need_the_admin_key_and_map_conflicts_to_409(monk
     assert client.post("/admin/tickets/none/claim", json=body, headers=hdr).status_code == 404
     listed = client.get("/admin/human_queue", headers=hdr).json()
     assert listed[-1]["desk"]["status"] == "approved"
+
+
+def test_the_customer_hears_once_what_a_person_did_with_their_case():
+    ticket_id, orch, tok = file_ticket_in_session()
+    default_desk.act(ticket_id, "claim", "ana")
+    said = orch.handle_message(tok, "gracias").response_text
+    assert said.startswith("Novedad de tu caso: un agente ya lo tomó")
+    assert "Novedad" not in orch.handle_message(tok, "gracias").response_text  # said once
+
+    default_desk.act(ticket_id, "approve", "ana")
+    said = orch.handle_message(tok, "gracias").response_text
+    assert "aprobó el rastreo" in said and traces_opened()[0]["trace_id"] in said
+    assert "Novedad" not in orch.handle_message(tok, "gracias").response_text  # a finished case is not repeated
+
+
+def test_the_news_survives_a_restart_because_what_was_told_is_saved(tmp_path, monkeypatch):
+    from agent.core.orchestrator import ConversationStore
+    db = str(tmp_path / "state.sqlite")
+    fake = FakeLLMClient([tool_call_response("request_trace", {}), *[text_response("ok")] * 10])
+
+    def process():
+        return Orchestrator(SessionStore(ttl_seconds=900, db_path=db), llm=lambda: fake, conversations=ConversationStore(db_path=db))
+
+    before = process()
+    tok = before.session_store.issue("CLI-FIX0004", {"segment": "Student", "country": "México", "customer_status": "Active"}).token
+    before.handle_message(tok, "hice una transferencia que todavía no llega")
+    ticket_id = before.handle_message(tok, "sí").ticket_id
+    default_desk.act(ticket_id, "claim", "ana")
+    assert "ya lo tomó" in before.handle_message(tok, "hola").response_text
+
+    after = process()  # restarted: it must not repeat the news, and must still deliver what comes next
+    assert "Novedad" not in after.handle_message(tok, "hola").response_text
+    default_desk.act(ticket_id, "reject", "ana", reason="interno")
+    said = after.handle_message(tok, "hola").response_text
+    assert "no pudo abrir el rastreo" in said and "interno" not in said
+
+
+@pytest.mark.parametrize("end_session", ["expire", "revoke"])
+@pytest.mark.parametrize("action, expected", [("approve", "aprobó el rastreo"), ("reject", "no pudo abrir el rastreo")])
+def test_case_news_follows_the_customer_after_login_and_conversation_cleanup(tmp_path, end_session, action, expected):
+    import sqlite3
+    from agent.core.orchestrator import ConversationStore
+
+    db = str(tmp_path / "state.sqlite")
+    fake = FakeLLMClient([tool_call_response("request_trace", {}), *[text_response("ok")] * 10])
+
+    def process():
+        return Orchestrator(SessionStore(db_path=db), llm=lambda: fake, conversations=ConversationStore(db_path=db))
+
+    before = process()
+    attrs = {"segment": "Student", "country": "México", "customer_status": "Active"}
+    old = before.session_store.issue("CLI-FIX0004", attrs).token
+    before.handle_message(old, "hice una transferencia que todavía no llega")
+    ticket_id = before.handle_message(old, "sí").ticket_id
+    default_desk.act(ticket_id, "claim", "ana")
+    assert "ya lo tomó" in before.handle_message(old, "hola").response_text
+    getattr(before.session_store, end_session)(old)
+
+    with sqlite3.connect(db) as conn:
+        conn.execute("UPDATE conversations SET updated_at = 0")
+    after = process()
+    token = after.session_store.issue("CLI-FIX0004", attrs).token
+    assert "Novedad" not in after.handle_message(token, "hola").response_text
+    default_desk.act(ticket_id, action, "ana")
+    other = after.session_store.issue("CLI-FIX0001", attrs).token
+    assert "Novedad" not in after.handle_message(other, "hola").response_text
+    assert expected in after.handle_message(token, "hola").response_text
+
+    restarted = process()
+    newest = restarted.session_store.issue("CLI-FIX0004", attrs).token
+    assert "Novedad" not in restarted.handle_message(newest, "hola").response_text
+
+
+def test_the_case_endpoint_shows_a_customer_only_their_own_ticket(monkeypatch):
+    ticket_id, orch, tok = file_ticket_in_session()
+    monkeypatch.setattr(main.demo, "orchestrator_for", lambda token: orch)
+    client = TestClient(main.app)
+    default_desk.act(ticket_id, "claim", "ana")
+    ok = client.get(f"/case/{ticket_id}", headers={"X-Session-Token": tok})
+    assert ok.status_code == 200 and ok.json()["status"] == "claimed" and "ya lo tomó" in ok.json()["message"]
+    other = orch.session_store.issue("CLI-FIX0001", {"segment": "Student", "country": "México", "customer_status": "Active"}).token
+    assert client.get(f"/case/{ticket_id}", headers={"X-Session-Token": other}).status_code == 404
+    assert client.get(f"/case/{ticket_id}", headers={"X-Session-Token": "not-a-session"}).status_code == 401
+    assert client.get(f"/case/{ticket_id}").status_code == 401
