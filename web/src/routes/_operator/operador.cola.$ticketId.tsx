@@ -21,7 +21,7 @@ function TicketPage() {
       result={result}
       ticketId={ticketId}
       view={view}
-      act={(action, { expectedVersion, reason }) => actOnTicket({ data: { ticket_id: ticketId, action, expected_version: expectedVersion, reason } })}
+      act={(action, { expectedVersion, reason, message }) => actOnTicket({ data: { ticket_id: ticketId, action, expected_version: expectedVersion, reason, message } })}
     />
   )
 }

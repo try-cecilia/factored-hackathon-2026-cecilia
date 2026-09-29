@@ -16,7 +16,7 @@ export type TicketPanelProps = {
   /** Who is looking: `canAct` is a session with an operator key, and `operator` is the name that key carries. */
   view: { canAct: boolean; operator: string | null }
   /** Sends one action. The panel always passes the version it is showing. */
-  act: (action: DeskAction, input: { expectedVersion: number; reason?: string }) => Promise<Result<DeskState>>
+  act: (action: DeskAction, input: { expectedVersion: number; reason?: string; message?: string }) => Promise<Result<DeskState>>
   /** Reads the ticket again from the server. `true` only when the case was read and is now on screen. */
   reload: (minVersion: number) => Promise<boolean>
   /** Status of the last read of this case when it failed: the panel keeps what it has and says it is not fresh. */

@@ -1,4 +1,5 @@
 import { createServerFn } from '@tanstack/react-start'
+import { parseDeskAction } from './desk-action'
 import { adminRead, operatorAct, type Result } from './operator-api'
 import { publicOrigins } from './origin-check'
 import { operatorSessionState, takeFlash } from './operator-session'
@@ -9,7 +10,7 @@ export type { QueueRow, Result }
 // `unknown` does not cross the server-function boundary; the JSON the API sends does.
 export type Json = string | number | boolean | null | Json[] | { [key: string]: Json }
 
-export type DeskAction = 'claim' | 'approve' | 'reject' | 'release'
+export type DeskAction = 'claim' | 'approve' | 'reject' | 'release' | 'resolve'
 export type DeskStatus = 'open' | 'claimed' | 'approved' | 'rejected' | 'handed_back' | 'stale'
 
 export type DeskState = {
@@ -106,23 +107,14 @@ export const loadTicket = createServerFn({ method: 'GET' })
   .validator((input: unknown) => ({ id: idOf(input, 'ticket_id'), auto: autoOf(input as { auto?: boolean } | undefined) }))
   .handler(({ data }) => adminRead<Ticket>(`/admin/tickets/${data.id}`, !data.auto))
 
+// `reason` is the internal note of a rejection; `message`, what the customer reads when the case is resolved.
 export const actOnTicket = createServerFn({ method: 'POST' })
-  .validator((input: unknown) => {
-    const { action, expected_version, reason } = (input ?? {}) as Record<string, unknown>
-    if (!['claim', 'approve', 'reject', 'release'].includes(action as string)) throw new Error('action is not valid')
-    if (expected_version !== undefined && !Number.isInteger(expected_version)) throw new Error('expected_version must be an integer')
-    const note = clean(reason).slice(0, 300)
-    return {
-      ticket_id: idOf(input, 'ticket_id'),
-      action: action as DeskAction,
-      expected_version: expected_version as number | undefined,
-      reason: note || undefined,
-    }
-  })
+  .validator((input: unknown) => ({ ticket_id: idOf(input, 'ticket_id'), ...parseDeskAction(input) }))
   .handler(({ data }) =>
     operatorAct<DeskState>(`/admin/tickets/${data.ticket_id}/${data.action}`, {
       expected_version: data.expected_version,
       reason: data.reason,
+      message: data.message,
     }),
   )
 
