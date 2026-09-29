@@ -40,12 +40,12 @@ a { color: inherit; }
 }
 .brand-mark {
   display: grid; place-items: end center; width: 24px; height: 24px; overflow: hidden;
-  border-radius: var(--radius-sm); background: var(--color-sun-amber);
+  border-radius: var(--radius-sm); background: var(--color-sky-300);
 }
 .brand-mark img { display: block; width: 18px; height: 18px; }
 
-.sun { min-height: 100dvh; padding: 24px; background: var(--sun); display: flex; }
-.sun-center { align-items: center; justify-content: center; }
+.stage { min-height: 100dvh; padding: 24px; background: var(--color-fill-subtle); display: flex; }
+.stage-center { align-items: center; justify-content: center; }
 
 .window {
   flex: 1; display: flex; min-width: 0; height: calc(100dvh - 48px); overflow: hidden;
@@ -104,9 +104,9 @@ a { color: inherit; }
   letter-spacing: 0.04em; line-height: 12px; text-transform: uppercase;
 }
 .badge-ai, .tag { background: color-mix(in srgb, var(--color-ink) 6%, transparent); color: var(--color-ink-70); }
-.badge-demo { background: color-mix(in srgb, var(--color-sun-amber) 45%, transparent); color: var(--color-ink-app); }
+.badge-demo { background: var(--color-sky-100); color: var(--color-sky-900); }
 
-/* Callouts: design-system notices. Sun tint for the sensitive, never red; red only for failures. */
+/* Callouts: design-system notices. Sky for information, red only for failures, amber only for caution. */
 .callout {
   display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px;
   font-size: 13px; font-weight: var(--font-weight-medium); line-height: 16px;
@@ -115,7 +115,7 @@ a { color: inherit; }
 .callout-danger { background: color-mix(in srgb, var(--color-danger) 8%, transparent); }
 .callout-danger .icon { color: var(--color-danger); }
 .callout-neutral { background: color-mix(in srgb, var(--color-ink) 5%, transparent); }
-.callout-sun { background: color-mix(in srgb, var(--color-sun-amber) 20%, transparent); }
+.callout-info { background: var(--color-sky-100); }
 .callout-action { color: var(--color-ink-app); font-weight: var(--font-weight-semibold); }
 
 /* Public pages */
@@ -167,7 +167,7 @@ a { color: inherit; }
 .log:focus-visible { outline-offset: -2px; }
 
 .empty { display: grid; justify-items: center; gap: 8px; padding: 8vh 0 0; text-align: center; }
-.empty img { border-radius: var(--radius-xl); background: var(--color-sun-amber); }
+.empty img { border-radius: var(--radius-xl); background: var(--color-sky-300); }
 .empty h2 { font-size: var(--text-2xl); font-weight: var(--font-weight-semibold); letter-spacing: -0.02em; }
 .empty p { max-width: 420px; color: var(--color-ink-70); }
 
@@ -177,7 +177,7 @@ a { color: inherit; }
   flex: 0 0 36px; height: 36px; margin-top: 2px; display: grid; place-items: center; overflow: hidden;
   border-radius: var(--radius-lg); background: var(--color-gray-200); color: var(--color-ink-soft); font-weight: var(--font-weight-bold);
 }
-.avatar-assistant { place-items: end center; background: var(--color-sun-amber); }
+.avatar-assistant { place-items: end center; background: var(--color-sky-300); }
 .avatar-assistant img { display: block; width: 36px; height: 36px; }
 .byline { display: flex; align-items: baseline; gap: 8px; line-height: 18px; }
 .byline-name { font-weight: var(--font-weight-bold); }
@@ -219,7 +219,7 @@ a { color: inherit; }
 }
 .status-approved { background: color-mix(in srgb, var(--color-success) 12%, transparent); color: var(--color-success); }
 .status-rejected { background: color-mix(in srgb, var(--color-danger) 10%, transparent); color: var(--color-danger); }
-.status-claimed { background: color-mix(in srgb, var(--color-sun-amber) 30%, transparent); }
+.status-claimed { background: var(--color-sky-100); color: var(--color-sky-900); }
 
 .notices { display: grid; gap: 8px; width: 100%; max-width: 800px; margin-inline: auto; padding: 0 20px; }
 .notices:empty { display: none; }
@@ -241,10 +241,10 @@ a { color: inherit; }
 .send:disabled { background: color-mix(in srgb, var(--color-ink) 10%, transparent); color: var(--color-ink-muted); }
 .composer-foot { color: var(--color-ink-muted); font-size: 11px; font-weight: var(--font-weight-medium); line-height: 14px; text-align: center; }
 
-/* Demo: drawn apart, in the sun tint, so it never reads as the service. */
+/* Demo: drawn apart, on its own tonal panel, so it never reads as the service. */
 .demo {
   flex: 0 0 340px; overflow-y: auto; display: grid; align-content: start; gap: 16px; padding: 16px;
-  border-left: 1px dashed var(--hairline-strong); background: color-mix(in srgb, var(--color-sun-amber) 8%, var(--color-paper));
+  background: var(--color-fill-subtle);
   font-size: 13px;
 }
 .demo h2, .demo h3, .demo h4 { font-weight: var(--font-weight-semibold); }
@@ -282,8 +282,8 @@ a { color: inherit; }
   .demo { flex: none; border-left: 0; border-top: 1px dashed var(--hairline-strong); overflow: visible; }
 }
 @media (max-width: 767px) {
-  .sun { padding: 0; }
-  .sun-center { padding: 16px; }
+  .stage { padding: 0; }
+  .stage-center { padding: 16px; }
   .window { flex-direction: column; flex-wrap: nowrap; border-radius: 0; box-shadow: none; min-height: 100dvh; }
   .sidebar { flex: none; flex-direction: row; align-items: center; gap: 8px; padding: 8px 12px; border-right: 0; border-bottom: 1px solid var(--hairline); }
   .sidebar .brand { padding: 0; }

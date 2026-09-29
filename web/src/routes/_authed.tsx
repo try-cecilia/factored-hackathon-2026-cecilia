@@ -18,7 +18,7 @@ export const Route = createFileRoute('/_authed')({
 function Unavailable() {
   const t = useT()
   return (
-    <div className="sun sun-center">
+    <div className="stage stage-center">
       <main className="auth-card" id="main">
         <Link className="brand" to="/" aria-label={t('common.brandHome')}>
           <span className="brand-mark"><img src="/cecilia-avatar.png" alt="" width={24} height={24} /></span>cecilai
@@ -53,7 +53,7 @@ function AuthedLayout() {
   }
 
   return (
-    <div className="sun">
+    <div className="stage">
       <a className="skip" href="#main">{t('common.skipToContent')}</a>
       <div className="window">
         <aside className="sidebar">

@@ -64,7 +64,7 @@ function Login() {
   }
 
   return (
-    <div className="sun sun-center">
+    <div className="stage stage-center">
       <main className="auth-card" id="main">
         <Link className="brand" to="/" aria-label={t('common.brandHome')}>
           <span className="brand-mark"><img src="/cecilia-avatar.png" alt="" width={24} height={24} /></span>cecilai
@@ -72,7 +72,7 @@ function Login() {
         <h1>{t('login.title')}</h1>
         <p className="lead">{t('login.lead')}</p>
         {motivo === 'expired' && (
-          <div className="callout callout-sun" role="status">
+          <div className="callout callout-info" role="status">
             <ClockIcon />
             <span>{t('login.expired')}</span>
           </div>

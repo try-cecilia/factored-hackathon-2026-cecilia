@@ -17,7 +17,7 @@ const paper = [
 ]
 
 // Names that existed before the UI kit and that the screens written then still use.
-const legacy = ['--color-sun-amber', '--color-sun-yellow', '--color-sun-orange', '--color-sun-ember', '--color-ink-muted', '--color-ink-soft', '--hairline', '--hairline-strong', '--focus-ring', '--shadow-window', '--sun']
+const legacy = ['--color-ink-muted', '--color-ink-soft', '--hairline', '--hairline-strong', '--focus-ring', '--shadow-window']
 
 test('tokens.css declares every token of the approved design', () => {
   for (const name of paper) assert.ok(declared(name), name)
@@ -31,4 +31,8 @@ test('the fill tokens are the 4%, 8% and 12% tones of the design', () => {
   assert.match(css, /--color-fill-subtle:\s*#0000000A/)
   assert.match(css, /--color-fill-muted:\s*#00000014/)
   assert.match(css, /--color-fill-strong:\s*#0000001F/)
+})
+
+test('the sunrise palette is gone: Paper has no sun tokens, and amber is only --color-caution', () => {
+  assert.doesNotMatch(css, /--sun\b|--color-sun-/)
 })
