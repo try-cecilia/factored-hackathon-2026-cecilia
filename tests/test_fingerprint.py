@@ -73,3 +73,14 @@ def test_the_real_fingerprint_covers_the_judge_the_simulated_models_and_the_gold
             "eval/workload/cases_test.jsonl", "eval/heldout/cases_failures.jsonl", "eval/heldout/cases_failures_2.jsonl",
             "tests/fixtures/raw/customers.csv"} <= names
     assert not any(n.startswith("eval/reports/") or n in ("eval/gate.py", "eval/tracking.py") for n in names)
+
+
+def test_a_binary_file_is_hashed_as_it_is_and_only_text_gets_its_line_endings_normalised(tmp_path):
+    # two different models can differ exactly where a CRLF pair sits in their bytes; they must not share a fingerprint
+    a = tree(tmp_path / "a", b"x = 1\n")
+    b = tree(tmp_path / "b", b"x = 1\n")
+    for root, blob in ((a, b"\x00\x01\r\n\x02"), (b, b"\x00\x01\n\x02")):
+        model = root / "eval/models/intent_clf.joblib"
+        model.parent.mkdir(parents=True, exist_ok=True)
+        model.write_bytes(blob)
+    assert fingerprint.policy_fingerprint(a) != fingerprint.policy_fingerprint(b)

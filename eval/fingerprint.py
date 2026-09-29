@@ -9,8 +9,9 @@ decide qué cuenta como acierto: el juez, los modelos simulados (ideal y adversa
 resultado esperado y el warehouse de prueba del set reservado. Cambiar el criterio del juez o el gold sin volver a medir
 dejaba la compuerta en verde con reportes que ya no describían esta evaluación.
 
-Se normalizan los saltos de línea (`\\r\\n` a `\\n`): en Windows Git puede dejar el árbol de trabajo en CRLF, y el mismo
-código tiene que dar la misma huella allí y en el CI. Editar cualquiera de estos archivos, aunque sea un comentario,
+Se normalizan los saltos de línea (`\\r\\n` a `\\n`) solo en los archivos de texto; los binarios, como el .joblib, se
+hashean tal cual. En Windows Git puede dejar el árbol de trabajo en CRLF, y el mismo código tiene que dar la misma huella
+allí y en el CI. Editar cualquiera de estos archivos, aunque sea un comentario,
 cambia la huella y exige volver a medir; es intencional y cuesta minutos.
 """
 from __future__ import annotations
@@ -62,5 +63,6 @@ def policy_fingerprint(root: Path = ROOT) -> str:
     digest = hashlib.sha256()
     for path in policy_files(root):
         digest.update(path.relative_to(root).as_posix().encode() + b"\0")
-        digest.update(path.read_bytes().replace(b"\r\n", b"\n") + b"\0")
+        data = path.read_bytes()
+        digest.update((data.replace(b"\r\n", b"\n") if path.suffix in TEXT_SUFFIXES else data) + b"\0")
     return digest.hexdigest()
