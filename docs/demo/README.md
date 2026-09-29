@@ -21,7 +21,10 @@ for the record and left out of the public repository.
 
 ## Operator console (web)
 
-`operador-*.png` are screenshots of the `/operador/*` web console (login, read-only queue, ticket detail, confirmation
-dialogs, a 409 conflict, an approval that opens a trace, monitoring, traces, mobile, API down). They come from a local run
-on synthetic data: `python -m ops.seed_operator_demo`, then the API and `pnpm --dir web dev`, driven with Playwright. The
-setup and the key handling are in `docs/integracion.md` (frontier 2).
+`operador-kit-*.png` are screenshots of the `/operador/*` web console built on the UI kit, in Spanish and Portuguese, desktop
+(1440×900) and mobile (390×844): login, queue, ticket in each state (unassigned, taken, version conflict 409, decided),
+monitoring, traces, read-only session, empty result, filters, expired session, missing ticket and API down.
+`paper-operator-queue.jpg` and `paper-operator-ticket-states.jpg` are the approved Paper artboards ("Operator · Queue" and
+"Operator · Ticket states") they were checked against. They come from a local run on synthetic data:
+`python -m ops.seed_operator_demo`, then the API and `pnpm --dir web dev`, driven with Playwright. The setup and the key
+handling are in `docs/integracion.md` (frontier 2).

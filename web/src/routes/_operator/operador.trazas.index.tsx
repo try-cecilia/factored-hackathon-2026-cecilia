@@ -1,6 +1,12 @@
 import { createFileRoute } from '@tanstack/react-router'
+import { useT } from '../../i18n/context'
 import { Empty } from '../-operator/ui'
 
 export const Route = createFileRoute('/_operator/operador/trazas/')({
-  component: () => <Empty title="Elegí una traza">Vas a ver qué decidió el sistema en ese turno y con qué herramientas.</Empty>,
+  component: NoTrace,
 })
+
+function NoTrace() {
+  const t = useT()
+  return <Empty title={t('monitor.traces.chooseTitle')}>{t('monitor.traces.chooseBody')}</Empty>
+}
