@@ -46,7 +46,7 @@ from agent.policy import escalation, router
 from agent.policy.desk import default_desk
 from agent.policy.router import Decision, Disposition
 from agent.policy.signals import detect_language, normalize
-from agent.resilience import RetryPolicy, current_deadline, handoff_deadline, retry_call, turn_deadline
+from agent.resilience import RetryPolicy, current_deadline, handoff_deadline, retry_call, run_bounded, turn_deadline
 from agent.session.auth import ExpiredSession, InvalidSession, SessionStore, default_store, session_ref
 from agent.tools import account_tools, state
 from agent.observability import stage
@@ -419,19 +419,28 @@ class Orchestrator:
     def _escalate(self, decision: Decision, session, conv, ticket_text, lang, trace_id, actions, facts, llm_meta,
                   pending_action: dict | None = None) -> TurnResult:
         """File the ticket, read it back, and only then tell the customer they were transferred."""
+        known_id: str | None = None  # the id of a ticket that exists, or may still land: never reported as "no ticket"
         try:
             with handoff_deadline() as budget, stage("ticket", category=decision.category) as info:
                 ticket = escalation.escalate(decision, session.customer_id, session.ref, ticket_text, lang, actions,
                                              [{"tool": f["tool"], "result": f["result"]} for f in facts],
                                              list(conv.requests), session.attributes, trace_id, pending_action)
-                # The read-back is the last step of the same budget: past it the ticket cannot be confirmed, so it is not claimed.
-                filed = not budget.expired and escalation.default_queue.get(ticket.ticket_id) is not None
+                known_id = ticket.ticket_id
+                # The read-back is the last step of the same budget, bounded like the others, and the clock is checked after
+                # it: a ticket confirmed late is not claimed as filed.
+                try:
+                    found = run_bounded(lambda: escalation.default_queue.get(ticket.ticket_id), budget.remaining())
+                except TimeoutError:
+                    found = None
+                filed = found is not None and not budget.expired
                 info["outcome"] = "ok" if filed else "not_read_back"
+        except escalation.HandoffInFlight as late:
+            known_id, filed = late.ticket_id, False
         except Exception:  # noqa: BLE001 - an unwritable queue must not crash the turn; it is reported as unfiled
             filed = False
         if not filed:
             return TurnResult(trace_id, Disposition.ESCALATE.value, render.MSG["escalate_unverified"][lang].format(code=trace_id[:8]),
-                              lang, decision.category, f"{decision.rule}|handoff_unverified", None, facts, actions, **llm_meta)
+                              lang, decision.category, f"{decision.rule}|handoff_unverified", known_id, facts, actions, **llm_meta)
         msg = render.MSG["escalate_security" if decision.category == "security" else "escalate"][lang]
         return TurnResult(trace_id, Disposition.ESCALATE.value, msg, lang, decision.category, decision.rule,
                           ticket.ticket_id, facts, actions, **llm_meta)

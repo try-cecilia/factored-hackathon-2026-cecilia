@@ -76,7 +76,7 @@ def test_a_flock_held_by_another_process_cannot_hang_a_turn_and_no_ticket_lands_
     try:
         t0 = time.perf_counter()
         r = orch.handle_message(tok, "Me clonaron la tarjeta")
-        assert time.perf_counter() - t0 < 0.4  # the lock is held for a second; the handoff's budget is 0.1 s
+        assert time.perf_counter() - t0 < 0.1 + 0.15  # the lock is held for a second; the handoff's budget is 0.1 s
         assert r.ticket_id is None and r.response_text == render.MSG["escalate_unverified"]["es"].format(code=r.trace_id[:8])
     finally:
         proc.kill()
