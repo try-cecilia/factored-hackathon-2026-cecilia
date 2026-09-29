@@ -1,0 +1,235 @@
+{
+  "generated_at": "2026-09-29T14:26:05Z",
+  "code_version": "e6b9eb7",
+  "pytest": "pytest: 29 passed in 6.78s.",
+  "criteria": [
+    {
+      "id": "contracts",
+      "criterion": "Contratos",
+      "source": "docs/data_quality.md (Pipeline, pasos 2-5), data/contracts.py",
+      "status": "PASS",
+      "tests": [
+        {
+          "test": "test_contracts_every_table_has_types_key_row_model_and_they_agree",
+          "status": "PASS",
+          "evidence": "9 tablas: tipos, clave, NOT NULL y modelo pydantic coherentes; contrato 2.1.0",
+          "detail": ""
+        },
+        {
+          "test": "test_contracts_the_served_tables_have_the_dictionary_types_and_keys",
+          "status": "PASS",
+          "evidence": "95 columnas de 5 tablas servidas con el tipo del diccionario; sin claves repetidas",
+          "detail": ""
+        },
+        {
+          "test": "test_contracts_a_violating_row_is_quarantined_with_its_reason_and_appears_in_the_report",
+          "status": "PASS",
+          "evidence": "2 de 5 filas del lote malo en _quarantine_transactions con motivo (rule:status_enum, cast:amount); checks de error fallidos en el reporte JSON y en _dq_results; las 3 válidas se cargaron",
+          "detail": ""
+        },
+        {
+          "test": "test_contracts_over_the_quarantine_threshold_the_load_stops_and_the_previous_state_stays",
+          "status": "PASS",
+          "evidence": "lote con 40% en cuarentena (umbral 1%): PipelineError, tabla servida idéntica (mismo md5), carga 'failed' en _ingestion_log, `python -m data.pipeline` sale con error y el reporte dice status=failed",
+          "detail": ""
+        },
+        {
+          "test": "test_contracts_a_missing_required_column_fails_the_load",
+          "status": "PASS",
+          "evidence": "sin la columna obligatoria `amount` la carga falla ('missing required columns') y la tabla no cambia",
+          "detail": ""
+        },
+        {
+          "test": "test_contracts_a_truncated_file_cannot_replace_the_rows_it_cuts_off",
+          "status": "PASS",
+          "evidence": "un archivo cortado a mitad de la última fila: con el umbral por defecto la carga se detiene; aun tolerando todo, sus 5 filas van a cuarentena (con su archivo de origen) y la tabla servida queda idéntica",
+          "detail": ""
+        },
+        {
+          "test": "test_contracts_the_documented_severities_are_the_ones_the_code_assigns",
+          "status": "PASS",
+          "evidence": "tabla de severidades de docs/data_quality.md == severidades que asignan measure/pydantic_sample/quarantine; muestra pydantic = 1000",
+          "detail": ""
+        },
+        {
+          "test": "test_contracts_each_documented_deviation_is_still_measured_as_a_warning",
+          "status": "PASS",
+          "evidence": "2 desvíos del contrato: cada uno es una regla `warn` medida en cada carga y está en docs/data_quality.md",
+          "detail": ""
+        }
+      ],
+      "command": "python -m pytest tests/test_data_ml_validation.py -k test_contracts_ -q"
+    },
+    {
+      "id": "quality",
+      "criterion": "Calidad",
+      "source": "docs/data_quality.md (Pipeline paso 4, Findings)",
+      "status": "PASS",
+      "tests": [
+        {
+          "test": "test_quality_every_check_is_persisted_and_the_report_counts_them",
+          "status": "PASS",
+          "evidence": "161 checks de la corrida del fixture: los 161 en _dq_results y en el JSON; conteos del resumen recalculados",
+          "detail": ""
+        },
+        {
+          "test": "test_quality_the_committed_full_run_report_is_the_one_the_doc_quotes",
+          "status": "PASS",
+          "evidence": "quality_report.json (20260928T204248Z-31184c): 246 checks, 0 errores, 12 advertencias, 6,058,898 filas; 10 conteos del doc == los del reporte",
+          "detail": ""
+        }
+      ],
+      "command": "python -m pytest tests/test_data_ml_validation.py -k test_quality_ -q"
+    },
+    {
+      "id": "lineage",
+      "criterion": "Linaje",
+      "source": "docs/data_quality.md (Pipeline paso 8), data/lineage.py",
+      "status": "PASS",
+      "tests": [
+        {
+          "test": "test_lineage_every_served_row_traces_to_a_run_a_file_and_its_hash",
+          "status": "PASS",
+          "evidence": "5 tablas servidas: fila -> run -> contrato/código -> archivo -> SHA-256 (recalculado del disco, 7 archivos); `python -m data.lineage --verify` sin problemas",
+          "detail": ""
+        },
+        {
+          "test": "test_lineage_a_broken_chain_is_detected",
+          "status": "PASS",
+          "evidence": "se rompe la cadena de 5 maneras (fila sin run, run no exitoso, archivo sin hash, bytes cambiados, archivo borrado) y verify() lo dice",
+          "detail": ""
+        },
+        {
+          "test": "test_lineage_a_corrected_partition_shows_which_file_and_hash_each_row_came_from",
+          "status": "PASS",
+          "evidence": "tras una partición corregida, la fila corregida apunta al run y al hash de raw_late y las demás a los del primer run",
+          "detail": ""
+        }
+      ],
+      "command": "python -m pytest tests/test_data_ml_validation.py -k test_lineage_ -q"
+    },
+    {
+      "id": "freshness",
+      "criterion": "Política de frescura",
+      "source": "docs/data_quality.md (Update and freshness policy)",
+      "status": "PASS",
+      "tests": [
+        {
+          "test": "test_freshness_the_documented_defaults_and_the_as_of_date",
+          "status": "PASS",
+          "evidence": "sin FRESHNESS_ENFORCE se sirve el dato de 2024 con as_of=2024-01-16; SLO por defecto 36 h; lookback 3 días",
+          "detail": ""
+        },
+        {
+          "test": "test_freshness_stale_data_is_unavailable_on_the_gated_tools_and_only_on_them",
+          "status": "PASS",
+          "evidence": "FRESHNESS_ENFORCE=1: saldo, movimientos y estado de pago -> DataUnavailable(as_of); perfil y tipo de cambio siguen",
+          "detail": ""
+        },
+        {
+          "test": "test_freshness_the_limit_is_the_slo_in_hours_measured_from_the_data_date",
+          "status": "PASS",
+          "evidence": "as_of 2024-01-16: hoy+1 día (24 h) sirve; hoy+2 (48 h) bloquea con SLO 36; con SLO 48 sirve; sin fecha bloquea",
+          "detail": ""
+        },
+        {
+          "test": "test_freshness_a_stale_warehouse_ends_in_an_escalation_not_an_answer",
+          "status": "PASS",
+          "evidence": "misma pregunta: sin política AUTO_RESOLVE con 'al 16/01/2024'; con dato vencido ESCALATE/data_unavailable con ticket y sin la cifra",
+          "detail": ""
+        }
+      ],
+      "command": "python -m pytest tests/test_data_ml_validation.py -k test_freshness_ -q"
+    },
+    {
+      "id": "learned",
+      "criterion": "Componente aprendido contra una línea base",
+      "source": "EVALUATION.md §2, eval/reports/intent_classifier.md",
+      "status": "PASS",
+      "tests": [
+        {
+          "test": "test_learned_beats_the_keyword_baseline_on_the_same_test_split_with_intervals",
+          "status": "PASS",
+          "evidence": "test n=85: aprendido 84.7% [75.6–90.8] vs palabras clave 62.4% [51.7–71.9]; diferencia pareada +22.4 pts [+9.4, +35.3], McNemar p=0.001878; piso mayoritaria 17.6% [11.0–27.1]",
+          "detail": ""
+        },
+        {
+          "test": "test_learned_the_committed_report_is_what_the_code_and_data_produce",
+          "status": "PASS",
+          "evidence": "build_report() sobre los CSV del repo reproduce el reporte versionado (variante, τ, aciertos de dev y test, guarda, hashes de datos)",
+          "detail": ""
+        },
+        {
+          "test": "test_learned_the_deployed_model_is_the_one_that_was_selected_and_reported",
+          "status": "PASS",
+          "evidence": "eval/models/intent_clf.joblib da las mismas probabilidades que el modelo reentrenado (356 frases, tol 1e-9); meta: char+word, τ=0.55, mismo hash de entrenamiento",
+          "detail": ""
+        },
+        {
+          "test": "test_learned_the_paired_statistics_agree_with_a_hand_worked_case",
+          "status": "PASS",
+          "evidence": "diferencia pareada y McNemar exacto comprobados a mano en un caso de 10 ítems (4 a favor, 1 en contra, p = 12/32); el bootstrap es reproducible con semilla",
+          "detail": ""
+        }
+      ],
+      "command": "python -m pytest tests/test_data_ml_validation.py -k test_learned_ -q"
+    },
+    {
+      "id": "leakage",
+      "criterion": "Sin fuga de datos",
+      "source": "EVALUATION.md §2, eval/leakage.py, LIMITATIONS.md (Data and ML)",
+      "status": "PASS",
+      "tests": [
+        {
+          "test": "test_leakage_nothing_chosen_moves_when_the_test_split_changes",
+          "status": "PASS",
+          "evidence": "con las etiquetas del test rotadas: variante (char+word), τ (0.55), F1 de dev y barrido idénticos y la exactitud de test cambia; rotando dev sí cambia la selección (control positivo)",
+          "detail": ""
+        },
+        {
+          "test": "test_leakage_near_duplicates_between_train_dev_and_test",
+          "status": "PASS",
+          "evidence": "similitud máxima de trigramas de caracteres (excluye ≥ 0.9): {'dev↔train': 0.647, 'test↔train': 0.679, 'test↔dev': 0.826}; frases excluidas del puntaje: 1 de 174",
+          "detail": ""
+        },
+        {
+          "test": "test_leakage_the_check_catches_a_copy_of_a_training_phrase_and_keeps_it_out_of_the_scores",
+          "status": "PASS",
+          "evidence": "una copia de una frase de entrenamiento (otra capitalización, puntuación y espacios) se detecta y no entra al puntaje",
+          "detail": ""
+        },
+        {
+          "test": "test_leakage_the_only_input_of_the_learned_component_is_the_customers_words",
+          "status": "PASS",
+          "evidence": "features = texto del cliente: train() solo lee `utterance` e `intent`; reentrenar con columnas basura da las mismas probabilidades; ni el clasificador ni la guarda importan duckdb, herramientas ni el warehouse (sin info posterior al resultado)",
+          "detail": ""
+        },
+        {
+          "test": "test_leakage_the_two_datasets_are_the_ones_frozen_before_measuring_and_the_workloads_do_not_share_cases",
+          "status": "PASS",
+          "evidence": "hashes de entrenamiento y held-out == los del reporte y del modelo desplegado; workloads dev/test sin (plantilla, cliente) compartidos; similitud máxima de los turnos del workload con el entrenamiento: {'dev': 0.787, 'test': 0.787}",
+          "detail": ""
+        },
+        {
+          "test": "test_leakage_the_workload_generator_rejects_a_training_phrase_with_other_punctuation",
+          "status": "PASS",
+          "evidence": "el generador de workloads rechaza un turno que es una frase de entrenamiento con otra capitalización o puntuación (antes solo comparaba strip().lower())",
+          "detail": ""
+        },
+        {
+          "test": "test_leakage_the_test_misses_were_reported_not_tuned_away",
+          "status": "PASS",
+          "evidence": "1 escalación(es) omitida(s) en test, ['vou processar o banco']: siguen fuera del léxico y bajo τ=0.55; están declaradas en EVALUATION.md y LIMITATIONS.md",
+          "detail": ""
+        },
+        {
+          "test": "test_leakage_evaluation_doc_section_2_quotes_the_committed_report",
+          "status": "PASS",
+          "evidence": "26 cifras de EVALUATION.md §2 == eval/reports/intent_classifier.json; el titular coincide en README, slides_outline y LIMITATIONS",
+          "detail": ""
+        }
+      ],
+      "command": "python -m pytest tests/test_data_ml_validation.py -k test_leakage_ -q"
+    }
+  ]
+}
