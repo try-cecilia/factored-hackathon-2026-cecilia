@@ -210,7 +210,8 @@ def test_no_label_carries_a_customer_a_session_a_ticket_or_a_message(client):
     client.post("/chat", json={"session_token": token, "message": "Me clonaron la tarjeta 4111111111111111"})
     client.get("/case/T-abcdef", headers={"X-Session-Token": token})
     text, _ = scrape(client)
-    for secret in ("CLI-FIX0001", token, "4111", "clonaron", "T-abcdef"):
+    # The card number whole, not a fragment of it: "4111" alone also turns up by chance in a float or a random token.
+    for secret in ("CLI-FIX0001", token, "4111111111111111", "clonaron", "T-abcdef"):
         assert secret not in text
 
 
