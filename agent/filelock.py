@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import time
 from pathlib import Path
 from typing import Iterator
 
@@ -29,8 +30,12 @@ def lock_path(path: str | os.PathLike) -> Path:
 
 
 @contextlib.contextmanager
-def locked(path: str | os.PathLike) -> Iterator[None]:
-    """Hold the exclusive lock of `path` (the data file's own path, not the lock's) for the block."""
+def locked(path: str | os.PathLike, timeout: float | None = None) -> Iterator[None]:
+    """Hold the exclusive lock of `path` (the data file's own path, not the lock's) for the block.
+
+    Without `timeout` it waits as long as it takes. With one it tries without blocking, again every few milliseconds, and
+    raises TimeoutError once `timeout` seconds have passed (0 = try once): what a writer with a deadline uses, so a lock held by
+    another process, or by a purge, cannot hold its turn past its budget."""
     if fcntl is None:  # pragma: no cover
         yield
         return
@@ -38,7 +43,18 @@ def locked(path: str | os.PathLike) -> Iterator[None]:
     lock.parent.mkdir(parents=True, exist_ok=True)
     fd = os.open(lock, os.O_RDWR | os.O_CREAT, 0o600)
     try:
-        fcntl.flock(fd, fcntl.LOCK_EX)
+        if timeout is None:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+        else:
+            give_up = time.monotonic() + max(0.0, timeout)
+            while True:
+                try:
+                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    if time.monotonic() >= give_up:
+                        raise TimeoutError(f"could not take the lock of {Path(path).name} within {timeout:.2f}s") from None
+                    time.sleep(min(0.005, max(0.0, give_up - time.monotonic())))
         yield
     finally:
         try:
@@ -67,17 +83,19 @@ def _serialized(method):
 
 
 def serialize_policy_writers() -> None:
-    """Put the ticket queue's and the operator desk's appends under the lock too, from outside.
+    """Put the operator desk's appends under the lock too, from outside.
 
-    Those two writers live in agent/policy/, whose files eval/fingerprint.py hashes: editing them invalidates the committed
-    evaluation reports, and they can only be regenerated against the full warehouse. So instead of editing them, their write
-    methods are wrapped here (idempotently), and the API calls this at start-up. When they are next edited on purpose, they can
-    call `append_line` (or wrap their write in `locked(self.path)`) themselves, and this wrapper can go.
+    The desk lives in agent/policy/, whose files eval/fingerprint.py hashes: editing them invalidates the committed
+    evaluation reports, and they can only be regenerated against the full warehouse. So instead of editing it, its write
+    method is wrapped here (idempotently), and the API calls this at start-up. When it is next edited on purpose, it can
+    call `append_line` (or wrap its write in `locked(self.path)`) itself, and this wrapper can go.
+
+    The ticket queue is no longer wrapped: `HumanQueue.enqueue` takes the lock itself, with a timeout, inside the handoff's
+    budget (a wrapper cannot bound a wait it does not know the budget of).
     """
     from agent.policy.desk import TicketDesk
-    from agent.policy.escalation import HumanQueue
 
-    for cls, name in ((HumanQueue, "enqueue"), (TicketDesk, "_record")):
+    for cls, name in ((TicketDesk, "_record"),):
         method = getattr(cls, name)
         if not getattr(method, "__wrapped_by_filelock__", False):
             setattr(cls, name, _serialized(method))

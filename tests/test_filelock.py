@@ -109,18 +109,18 @@ def test_purges_racing_a_writer_in_another_process_lose_nothing(tmp_path):
     assert sorted(ids, key=lambda s: int(s[1:])) == [f"w{i}" for i in range(n)]  # every record, once, in order
 
 
-# Not edited (eval/fingerprint.py hashes agent/policy/): filelock.serialize_policy_writers wraps their write methods instead
-WRAPPED_FROM_OUTSIDE = {"agent/policy/escalation.py", "agent/policy/desk.py"}
+# Not edited (eval/fingerprint.py hashes agent/policy/): filelock.serialize_policy_writers wraps its write method instead.
+# The ticket queue takes the lock itself, with a timeout inside the handoff's budget (tests/test_handoff_lock.py).
+WRAPPED_FROM_OUTSIDE = {"agent/policy/desk.py"}
 
 
-def test_the_ticket_queue_and_the_desk_are_wrapped_when_the_api_starts_and_only_once():
+def test_the_desk_is_wrapped_when_the_api_starts_and_only_once():
     from agent.policy.desk import TicketDesk
-    from agent.policy.escalation import HumanQueue
 
     filelock.serialize_policy_writers()
     filelock.serialize_policy_writers()
-    for method in (HumanQueue.enqueue, TicketDesk._record):
-        assert method.__wrapped_by_filelock__ and not getattr(method.__wrapped__, "__wrapped_by_filelock__", False)
+    method = TicketDesk._record
+    assert method.__wrapped_by_filelock__ and not getattr(method.__wrapped__, "__wrapped_by_filelock__", False)
 
 
 def test_no_writer_appends_to_a_pruned_file_without_the_lock():

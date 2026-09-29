@@ -165,16 +165,3 @@ def handoff_deadline() -> Iterator[Deadline]:
         yield d
     finally:
         current_handoff.reset(token)
-
-
-@contextlib.contextmanager
-def acquire_within(lock: Any, seconds: float) -> Iterator[None]:
-    """Hold `lock` for the block, waiting at most `seconds` for it (TimeoutError otherwise). The one place a bounded wait
-    for a writer's lock lives: a lock between processes (a `flock` on the file) replaces `lock` here, with the same
-    timeout, without changing the callers."""
-    if not lock.acquire(timeout=max(0.0, seconds)):
-        raise TimeoutError("could not take the write lock within the handoff budget")
-    try:
-        yield
-    finally:
-        lock.release()

@@ -11,6 +11,7 @@ import pytest
 
 from agent.core import render
 from agent.core.orchestrator import Orchestrator
+from agent.filelock import locked
 from agent.llm.client import LLMClient
 from agent.policy import escalation
 from agent.resilience import handoff_budget_seconds, request_budget_seconds
@@ -44,7 +45,7 @@ def hold_lock(seconds):
     taken = threading.Event()
 
     def run():
-        with escalation.default_queue._write_lock:
+        with locked(escalation.default_queue.path):
             taken.set()
             time.sleep(seconds)
 

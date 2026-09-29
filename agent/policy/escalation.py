@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import json
 import os
-import threading
 import time
 import uuid
 from dataclasses import asdict, dataclass, field
@@ -21,7 +20,8 @@ from pathlib import Path
 from typing import Any
 
 from agent.policy.router import Decision
-from agent.resilience import Deadline, RetryPolicy, acquire_within, current_handoff, handoff_budget_seconds, handoff_deadline, retry_call
+from agent.filelock import locked
+from agent.resilience import Deadline, RetryPolicy, current_handoff, handoff_budget_seconds, handoff_deadline, retry_call
 from agent.policy.signals import PRIORITY_BY_CATEGORY
 from agent.tools import account_tools
 
@@ -58,9 +58,6 @@ ENQUEUE_RETRY = RetryPolicy(max_attempts=3, base_s=0.1, cap_s=0.5)
 
 
 class HumanQueue:
-    def __init__(self) -> None:
-        self._write_lock = threading.Lock()  # a ticket is one line: two threads must not interleave their halves
-
     @property
     def path(self) -> Path:
         p = Path(os.environ.get("HUMAN_QUEUE_PATH", "data/warehouse/human_queue.jsonl"))
@@ -78,13 +75,13 @@ class HumanQueue:
         def write() -> None:
             nonlocal tries
             tries += 1
-            with acquire_within(self._write_lock, budget.remaining()):  # replaced by a bounded flock between processes
-                if budget.expired:
+            # Between processes and threads, and never past the budget: the wait for the lock is what is left of it.
+            with locked(self.path, timeout=budget.remaining()), open(self.path, "a", encoding="utf-8") as f:
+                if budget.expired:  # the lock came too late: write nothing, so no ticket lands after the customer was told none did
                     raise TimeoutError("handoff budget spent before the ticket could be written")
                 if tries > 1 and self.get(ticket.ticket_id) is not None:
                     return
-                with open(self.path, "a", encoding="utf-8") as f:
-                    f.write(json.dumps(asdict(ticket), default=str, ensure_ascii=False) + "\n")
+                f.write(json.dumps(asdict(ticket), default=str, ensure_ascii=False) + "\n")
 
         retry_call(write, policy=ENQUEUE_RETRY, idempotency_key=ticket.ticket_id, deadline=budget)
 
