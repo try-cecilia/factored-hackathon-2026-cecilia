@@ -105,6 +105,16 @@ service, and as our own roadmap.
   ids, 8+ digit numbers, emails and document numbers, because the system
   must mask those even when the customer types them.
 - No WAF or bot protection beyond per-session and per-IP rate limits.
+- **Web chat: no idempotency on `POST /chat`.** The front sends one turn at a time and the BFF refuses a second
+  send from the same session while one runs, but after a timeout the customer may retry a message the API did
+  process. Opening a trace is idempotent per customer; a duplicated handoff would file a second ticket. Closing
+  it needs an idempotency key in the API.
+- **Web chat: the conversation does not survive a login.** An expired session ends its conversation with it (the
+  API keys it by session), so signing in again starts from zero; there is no "stay signed in" because the API
+  has no refresh endpoint. Case status is read on demand ("Actualizar estado"), not pushed.
+- **Web chat: contrast and screen readers are checked by hand only.** Text contrast was computed in the browser on
+  the chat page (no pair under 4.5:1; oklch/color-mix values it cannot parse are skipped), focus rings and the
+  live region were inspected, but no assistive technology or automated audit (axe) has run.
 
 ## Operations
 

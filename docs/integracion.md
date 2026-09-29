@@ -267,6 +267,67 @@ ventanas en memoria son de 1000 registros de auditoría y 500 de trazas.
 
 ---
 
+## 8. Frontend web del cliente
+
+**Hoy.** `web/` (TanStack Start, React 19). El navegador nunca habla con la API de Python: lo hace un BFF, con
+funciones de servidor en `web/src/server/`, y el token de sesión vive en una cookie httpOnly (ver frontera 1). La ruta
+`/chat` (`web/src/chat/`) es el chat del cliente; el shell y los estilos siguen el diseño "Cecil.ai" de Paper, y sus
+tokens están en `web/src/tokens.css` con los mismos nombres que en Paper (`--color-cecil-blue`, `--color-gray-500`,
+`--radius-app`...). La consola del operador debe reutilizar esas variables, no redefinirlas.
+
+**Cómo correrlo.**
+
+```bash
+make web-setup                 # Node 24, pnpm 10.33.2, dependencias fijadas
+make serve-all                 # con el warehouse real (make ingest o ingest-demo) y una clave de modelo
+make serve-all-fixture         # sin S3 ni claves: warehouse de los tests y un modelo simulado
+```
+
+Web en `http://127.0.0.1:3000`, API en `http://127.0.0.1:8000`. Variables del frontend (o `web/.env`):
+`AGENT_API_URL` (por defecto `http://127.0.0.1:8000`) y `TRUSTED_CLIENT_IP_HEADER` (ver frontera 1). Con `DEMO_MODE=1`
+en la API el chat muestra, aparte y marcado como **Demo**, los escenarios guiados, las fallas (vencer la sesión,
+modelo caído), "¿Por qué?" en cada respuesta y la vista del banco de la sesión; sin `DEMO_MODE` nada de eso se dibuja.
+`make serve-fixture` deja `DEMO_MODE=1` salvo que lo pises (`DEMO_MODE=0 make serve-fixture`).
+
+`ops/serve_fixture.py` es una **simulación offline**: el código posterior al modelo (políticas, herramientas, plantillas,
+tickets, rastreos, sesiones) es el real, pero qué herramienta pedir lo decide una coincidencia de palabras, no un modelo.
+Sirve para desarrollar y mostrar el front; no dice nada de cómo se comporta un modelo real.
+
+**Contrato que usa el BFF.**
+
+| Función de servidor | Llamada a la API | Qué devuelve al navegador |
+|---|---|---|
+| `sendMessage` | `POST /chat` con `session_token` (lo agrega el servidor), plazo de 35 s | La respuesta (`disposition`, texto, idioma, `category`, `ticket_id`, y `why` solo en demo) o un motivo de fallo |
+| `getCase` | `GET /case/{ticket_id}` | Estado del caso y el texto de novedad, o `not_found` |
+| `getDemoKit`, `startScenario`, `applyDemoFault`, `getDemoTickets` | `/demo/*` | Solo con `DEMO_MODE=1`; los PIN de prueba se quedan en el servidor |
+
+La propuesta de rastreo se reconoce por `disposition=CLARIFY` y `category=confirm_action`, y se responde con un "Sí" o "No"
+que el código de la API evalúa (nunca el modelo). Una aclaración se dibuja como lista de opciones cuando el texto trae
+`1) ...; 2) ...`; si no calza con ese formato se muestra el texto tal cual.
+
+**Fallas, y qué ve el cliente.**
+
+| Situación | Qué pasa |
+|---|---|
+| Sesión vencida (`REAUTH_REQUIRED`, o cookie ausente) | El BFF borra la cookie y el chat va a `/login?redirect=/chat&motivo=expired`, con aviso; al ingresar vuelve al chat (la conversación empieza de cero) |
+| 429 | Aviso en la conversación y botón "Reintentar"; no se reenvía solo |
+| API caída (conexión rechazada, 5xx) | "Tu mensaje no se envió" y "Reintentar" |
+| Plazo agotado | "No pude confirmar si tu mensaje llegó": el reintento es manual y el aviso pide mirar la conversación antes |
+| Respuesta que no calza con el contrato | "Recibí una respuesta que no pude mostrar" y "Reintentar" |
+| Doble envío | Un turno a la vez: el compositor se bloquea mientras envía, y el BFF rechaza un segundo envío de la misma sesión mientras el primero corre |
+
+**Punto de sustitución.** El BFF solo conoce `POST /chat` y `GET /case/{id}`; con el core real el contrato no cambia.
+
+**En producción.** Falta una clave de idempotencia en `POST /chat` (hoy, tras un plazo agotado, un reintento puede procesar
+el mensaje dos veces), y un `POST /auth/session/refresh` para ofrecer "Seguir conectado" antes de que venza.
+
+**Cómo se verifica.** `make web-typecheck`, `make web-test` (formato de las aclaraciones) y `make web-build`; el flujo
+completo se probó en el navegador con `make serve-all-fixture`, y las capturas están en `docs/demo/web-*.png`
+(login, chat vacío, propuesta de rastreo, escalamiento con número de caso, sesión vencida y su aviso previo, aclaración,
+límite de tasa, API caída, plazo agotado, escenario en portugués, móvil, respuesta inesperada, chat sin `DEMO_MODE`).
+
+---
+
 ## Trabajo restante antes de desplegar
 
 Es la lista consolidada de lo que separa este prototipo de un servicio real. El detalle de cada punto está en la
