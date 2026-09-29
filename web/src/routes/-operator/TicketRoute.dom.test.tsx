@@ -6,6 +6,7 @@ import { I18nProvider } from '../../i18n/context'
 import type { DeskStatus, Result, Ticket } from '../../server/operator.functions'
 import { readAgain, guarded } from './reload'
 import { TicketRoute } from './TicketRoute'
+import { Unavailable } from './Unavailable'
 
 const NOW = Date.now() / 1000
 function ticket(id: string, status: DeskStatus, version: number, history: Ticket['desk']['history'] = []): Ticket {
@@ -83,5 +84,66 @@ describe('reading the case again with the real router', () => {
     expect(await readAgain(router, '/cola/$ticketId', 'another-case', 0)).toBe(false)
     read.mockResolvedValue({ ok: false, status: 503 })
     expect(await readAgain(router, '/cola/$ticketId', ID, 4)).toBe(false)
+  })
+})
+
+/** The console's own shape: a layout with a beforeLoad that asks the BFF who is signed in, and the case as its child. */
+function mountWithLayout(read: () => Promise<Result<Ticket>>, whoAmI: () => Promise<void>) {
+  const act = vi.fn(async () => ({ ok: false as const, status: 409, message: 'the ticket changed' }))
+  const root = createRootRoute()
+  const layout = createRoute({
+    getParentRoute: () => root,
+    id: '_operator',
+    beforeLoad: async () => {
+      await whoAmI()
+      return { view }
+    },
+    errorComponent: Unavailable,
+  })
+  const route = createRoute({
+    getParentRoute: () => layout,
+    path: '/cola/$ticketId',
+    loader: () => guarded(read),
+    component: function Page() {
+      const result = route.useLoaderData() as Result<Ticket>
+      const { ticketId } = route.useParams()
+      return <TicketRoute from="/_operator/cola/$ticketId" result={result} ticketId={ticketId} view={view} act={act} />
+    },
+  })
+  const router = createRouter({ routeTree: root.addChildren([layout.addChildren([route])]), history: createMemoryHistory({ initialEntries: [`/cola/${ID}`] }) })
+  render(<I18nProvider locale="es"><RouterProvider router={router} /></I18nProvider>)
+  return { router }
+}
+
+describe('when the layout of the console fails while the case is read again', () => {
+  const claimed = { ok: true as const, data: ticket(ID, 'claimed', 3) }
+  const moved = { ok: true as const, data: ticket(ID, 'open', 4, released) }
+
+  it('a failing parent makes the reload fail even though the child match kept its old data', async () => {
+    const whoAmI = vi.fn<() => Promise<void>>().mockResolvedValueOnce().mockRejectedValueOnce(new Error('fetch failed'))
+    const { router } = mountWithLayout(vi.fn().mockResolvedValue(moved), whoAmI)
+    await screen.findByText('Rastrear el pago.')
+    expect(await readAgain(router, '/_operator/cola/$ticketId', ID, 4)).toBe(false)
+    expect(router.state.matches.map((m) => m.status)).toContain('error')
+  })
+
+  it('the 409 lock is still there when the console comes back', async () => {
+    const read = vi.fn<() => Promise<Result<Ticket>>>().mockResolvedValueOnce(claimed).mockResolvedValue(moved)
+    // 1st: first paint. 2nd: the refresh after the refused action. 3rd: "Recargar caso", which the layout fails.
+    const whoAmI = vi.fn<() => Promise<void>>().mockResolvedValueOnce().mockResolvedValueOnce().mockRejectedValueOnce(new Error('fetch failed')).mockResolvedValue()
+    mountWithLayout(read, whoAmI)
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: /Aprobar rastreo/ }))
+    await screen.findByText('No se aplicó: el caso cambió')
+
+    await user.click(screen.getByRole('button', { name: /Recargar caso/ }))
+    // The whole console is replaced by the error: the panel is gone, and so is its local state.
+    await user.click(await screen.findByRole('button', { name: 'Reintentar' }))
+    await screen.findByText('No se aplicó: el caso cambió')
+    expect((screen.getByRole('button', { name: /Tomar caso/ }) as HTMLButtonElement).disabled).toBe(true)
+
+    // Only a complete, successful reload lifts it.
+    await user.click(screen.getByRole('button', { name: /Recargar caso/ }))
+    await waitFor(() => expect(screen.queryByText('No se aplicó: el caso cambió')).toBeNull())
   })
 })
