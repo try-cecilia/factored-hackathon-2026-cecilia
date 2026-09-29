@@ -23,6 +23,7 @@ export const Route = createFileRoute('/operador/login')({
 
 const messages: Record<string, string> = {
   admin_missing: 'Ingresá la clave de lectura.',
+  session_replaced: 'Tu sesión se reemplazó al ingresar desde otra pestaña. Probá de nuevo.',
   key_invalid: 'Una de las claves no es válida.',
   admin_401: 'La clave de lectura no es válida.',
   admin_429: 'Demasiados intentos. Probá de nuevo en unos minutos.',

@@ -119,7 +119,9 @@ lectura y trazas. Cómo se configuran las claves:
   vacía, se usa el origen de la URL de la petición (`http://127.0.0.1:<puerto>`). Está en `web/.env.example`.
 - *Sesión nueva en cada ingreso y en cada elevación.* Un ingreso siempre crea un identificador nuevo y termina la sesión
   que ese navegador tuviera; agregar la clave de operador también cambia el identificador y el anterior deja de valer, así
-  que una cookie de solo lectura copiada no gana permisos de acción. El tope de 8 horas sigue contando desde el ingreso original.
+  que una cookie de solo lectura copiada no gana permisos de acción. El tope de 8 horas sigue contando desde el ingreso original. La sesión anterior se consume en un solo paso
+  (tomar y borrar): de dos ingresos simultáneos con la misma cookie solo uno crea sesión; el otro vuelve al ingreso con un
+  aviso y con la cookie vieja borrada, así que puede reintentar.
 - *Destino tras el ingreso.* Se decodifica y normaliza como lo haría un navegador (puntos, `%2f`, `%5c`, tabuladores,
   barras invertidas) y solo se acepta una ruta propia que no empiece con `//`; ante la duda va a `/operador/cola`.
 - *Dónde viven las claves.* Nunca en el JavaScript del navegador, en `localStorage` ni en una cookie. El servidor de la web

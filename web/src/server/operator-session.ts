@@ -18,10 +18,18 @@ const options = { httpOnly: true, secure, sameSite: 'strict', path: '/' } as con
 export type { OperatorSession }
 export type SessionState = { status: 'active'; session: OperatorSession } | { status: 'expired' } | { status: 'anonymous' }
 
-/** A login always gets a new id, and whatever session this browser held before it is ended. */
-export function startOperatorSession(adminKey: string, operatorKey?: string, operator?: string) {
-  store.end(getCookie(name))
+/**
+ * A login always gets a new id, and the session this browser held before it is consumed in the same step. If a second
+ * login arrives with a cookie that was just consumed, it gets nothing (false) and the stale cookie is cleared, so two
+ * simultaneous logins cannot leave two live sessions behind.
+ */
+export function startOperatorSession(adminKey: string, operatorKey?: string, operator?: string): boolean {
+  if (store.take(getCookie(name)) === 'already') {
+    deleteCookie(name, options)
+    return false
+  }
   setCookie(name, store.start(adminKey, operatorKey, operator), { ...options, maxAge: ABSOLUTE_MS / 1000 })
+  return true
 }
 
 /** `touch: false` for the console's automatic refresh: it must not count as the operator being there. */

@@ -43,4 +43,31 @@ describe('a session id is never reused when the session gains rights or is repla
     assert.equal(sessionCookie(failed), null)
     assert.ok(await opensConsole(app, first))
   })
+
+  test('two simultaneous logins with the same cookie leave at most one valid replacement, and logging out ends it', async () => {
+    for (let round = 0; round < 5; round++) {
+      const old = sessionCookie(await post('/operador/sesion', { admin_key: ADMIN }))!
+      const answers = await Promise.all([post('/operador/sesion', { admin_key: ADMIN }, old), post('/operador/sesion', { admin_key: ADMIN }, old)])
+      const cookies = answers.map(sessionCookie).filter((c): c is string => c !== null)
+      assert.ok(cookies.length <= 1, `round ${round}: ${cookies.length} replacements were issued`)
+      assert.equal(await opensConsole(app, old), false, 'the consumed cookie is dead')
+      const [replacement] = cookies
+      if (!replacement) continue
+      assert.ok(await opensConsole(app, replacement))
+      const out = await app.send('/operador/salir', { method: 'POST', headers: { ...SAME_ORIGIN, Cookie: replacement } })
+      assert.equal(out.status, 303)
+      assert.equal(await opensConsole(app, replacement), false, 'after logout nothing from that login is left')
+    }
+  })
+
+  test('the loser of that race is sent back to the login with a message, and the stale cookie is cleared so a retry works', async () => {
+    const old = sessionCookie(await post('/operador/sesion', { admin_key: ADMIN }))!
+    const [first, second] = await Promise.all([post('/operador/sesion', { admin_key: ADMIN }, old), post('/operador/sesion', { admin_key: ADMIN }, old)])
+    const loser = sessionCookie(first) ? second : first
+    assert.equal(loser.status, 303)
+    assert.equal(loser.headers.get('location'), '/operador/login')
+    assert.ok(loser.headers.getSetCookie().some((c) => /flash=session_replaced/.test(c)))
+    const retry = await post('/operador/sesion', { admin_key: ADMIN }) // the browser dropped the cleared cookie
+    assert.ok(sessionCookie(retry))
+  })
 })

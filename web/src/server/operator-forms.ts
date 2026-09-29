@@ -44,7 +44,10 @@ export async function handleLogin(request: Request) {
     setFlash(outcome.flash)
     return see(outcome.to)
   }
-  startOperatorSession(outcome.keys.adminKey, outcome.keys.operatorKey, outcome.keys.operator)
+  if (!startOperatorSession(outcome.keys.adminKey, outcome.keys.operatorKey, outcome.keys.operator)) {
+    setFlash('session_replaced')
+    return see('/operador/login')
+  }
   return see(outcome.to)
 }
 

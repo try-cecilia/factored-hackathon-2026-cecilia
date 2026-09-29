@@ -96,3 +96,32 @@ test('a session that is gone cannot be raised', () => {
   assert.equal(store.elevate('nope', 'op-key'), null)
   assert.equal(store.elevate(undefined, 'op-key'), null)
 })
+
+test('taking a session is atomic: the first caller gets it, the second is told it was already taken', () => {
+  const store = new SessionStore()
+  const id = store.start('admin-key')
+  assert.equal(store.take(id), 'taken')
+  assert.equal(store.take(id), 'already')
+  assert.equal(store.lookup(id, false).status, 'unknown')
+  assert.equal(store.take('never-existed'), 'none')
+  assert.equal(store.take(undefined), 'none')
+})
+
+test('a session that had expired is not "taken": its holder just logs in again', () => {
+  const time = clock()
+  const store = new SessionStore(time.now)
+  const id = store.start('admin-key')
+  time.advance(IDLE_MS + MIN)
+  assert.equal(store.take(id), 'none')
+})
+
+test('the memory of consumed ids is short and bounded', () => {
+  const time = clock()
+  const store = new SessionStore(time.now)
+  const id = store.start('admin-key')
+  assert.equal(store.take(id), 'taken')
+  time.advance(6 * MIN)
+  assert.equal(store.take(id), 'none', 'after the race window an old cookie is only an unknown one')
+  for (let i = 0; i < 3000; i++) store.take(store.start(`key-${i}`))
+  assert.equal(store.take(id), 'none')
+})
