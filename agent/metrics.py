@@ -39,13 +39,14 @@ CONTENT_TYPE = "text/plain; version=0.0.4; charset=utf-8"
 
 def _model_seconds(record: dict) -> float:
     """Time the turn spent on the model when the record has no stage spans: what each successful step says, and for a step that
-    ended in failure (no provider answered, so no latency) the sum of its attempts' durations plus any backoff they record."""
+    ended in failure (no provider answered, so no latency) the sum of its attempts' durations. That undercounts the backoff
+    waits between attempts, which no record carries: with `stages` (the orchestrator's spans) the whole chain is counted."""
     total = 0.0
     for step in record.get("llm_steps") or []:
         if step.get("latency_ms") is not None:
             total += float(step["latency_ms"]) / 1000
         else:
-            total += sum((float(a.get("ms") or 0) + float(a.get("wait_ms") or 0)) for a in step.get("attempts") or []) / 1000
+            total += sum(float(a.get("ms") or 0) for a in step.get("attempts") or []) / 1000
     return total
 
 

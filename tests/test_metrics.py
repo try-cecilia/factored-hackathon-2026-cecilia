@@ -317,14 +317,14 @@ def test_stage_spans_of_the_trace_are_the_preferred_source(m):
     assert r("cecilai_stage_latency_seconds_sum", {"stage": "policy_render"}) == pytest.approx(0.4)
 
 
-def test_without_stage_spans_a_failed_chain_is_the_sum_of_its_attempts_and_their_waits(m):
+def test_without_stage_spans_a_failed_chain_is_the_sum_of_its_attempts_and_no_more(m):
     m.observe_turn({"trace_id": "s2", "disposition": "ESCALATE", "category": "llm_unavailable", "latency_ms": 1000,
                     "llm_steps": [{"outcome": "unavailable", "attempts": [
-                        {"provider": "groq", "outcome": "error", "kind": "transient", "ms": 300.0, "wait_ms": 200.0},
+                        {"provider": "groq", "outcome": "error", "kind": "transient", "ms": 300.0},
                         {"provider": "anthropic", "outcome": "error", "kind": "transient", "ms": 100.0}]}]})
     r = m.registry.get_sample_value
-    assert r("cecilai_stage_latency_seconds_sum", {"stage": "llm"}) == pytest.approx(0.6)
-    assert r("cecilai_stage_latency_seconds_sum", {"stage": "policy_render"}) == pytest.approx(0.4)
+    assert r("cecilai_stage_latency_seconds_sum", {"stage": "llm"}) == pytest.approx(0.4)  # the waits are not recorded anywhere: a known undercount
+    assert r("cecilai_stage_latency_seconds_sum", {"stage": "policy_render"}) == pytest.approx(0.6)
 
 
 def test_probes_that_hang_never_pile_up_threads_and_the_next_probes_answer_at_once(client, monkeypatch):
@@ -355,3 +355,88 @@ def test_probes_that_hang_never_pile_up_threads_and_the_next_probes_answer_at_on
         time_module.sleep(0.02)
     monkeypatch.setattr(observability, "_query_warehouse", lambda: True)
     assert client.get("/readyz").status_code == 200  # the slot came back when the stuck probe ended
+
+
+class _SlowTimeout(Exception):
+    """classify_error reads "timeout" in the name as a transient failure: retried, with backoff."""
+
+
+def test_the_llm_stage_covers_the_whole_real_retry_chain_including_its_backoff_waits(client, monkeypatch):
+    """The real LLMClient, its real retries and sleeps, through the orchestrator: two failures and a success cost time that the
+    attempts alone do not show (the waits between them), and all of it is model time."""
+    import types
+
+    from agent.core.orchestrator import default_orchestrator
+    from agent.llm import client as llm_client
+    from agent.llm.client import LLMClient, Provider, Usage
+    from agent.tools.audit import default_trace_log
+
+    marks = {}
+
+    def flaky(sdk, provider, messages, tools, temperature, timeout):
+        marks.setdefault("first_call", time.perf_counter())
+        time.sleep(0.05)
+        marks["calls"] = marks.get("calls", 0) + 1
+        if marks["calls"] < 3:
+            raise _SlowTimeout("provider too slow")
+        marks["last_return"] = time.perf_counter()
+        return None, [], Usage(10, 2), provider.model, None
+
+    monkeypatch.setattr(llm_client, "random", types.SimpleNamespace(random=lambda: 1.0))  # the longest backoff: no jitter to flake on
+    monkeypatch.setenv("GROQ_API_KEY", "not-a-real-key")
+    chain = LLMClient(providers=[Provider("groq", "fake-model", "GROQ_API_KEY", lambda key, timeout: object(), call=flaky)],
+                      max_attempts_per_provider=3, backoff_base_s=0.15, breaker_threshold=99)
+    monkeypatch.setattr(default_orchestrator, "_llm", lambda: chain)
+    token = login(client)
+    reply = client.post("/chat", json={"session_token": token, "message": "¿Cuál es mi saldo?"}).json()
+    record = default_trace_log.recent()[-1]
+    attempts = [a for step in record["llm_steps"] for a in step["attempts"]]
+    assert [a["outcome"] for a in attempts] == ["error", "error", "ok"]
+    attempts_s = sum(a["ms"] for a in attempts) / 1000  # what the attempts show: about 0.15 s
+    chain_s = marks["last_return"] - marks["first_call"]  # the whole chain, waits included
+    assert chain_s - attempts_s > 0.3  # the backoff sleeps are real and are not in any attempt
+
+    _, s = scrape(client)
+    llm = value(s, "cecilai_stage_latency_seconds_sum", stage="llm")
+    policy = value(s, "cecilai_stage_latency_seconds_sum", stage="policy_render")
+    assert llm >= chain_s - 0.001, (llm, chain_s, attempts_s)  # the whole chain is model time
+    assert policy < reply["latency_ms"] / 1000 - chain_s + 0.05, (policy, chain_s, reply["latency_ms"])  # and what is left is the rest
+
+
+def test_a_chain_where_every_attempt_fails_is_all_model_time_through_the_real_client(client, monkeypatch):
+    """The case with no successful step to carry a latency: the real LLMClient gives up after its retries and waits, and the turn
+    falls back to a person or to degraded mode. The model's share must include the waits between the attempts."""
+    import types
+
+    from agent.core.orchestrator import default_orchestrator
+    from agent.llm import client as llm_client
+    from agent.llm.client import LLMClient, Provider
+    from agent.tools.audit import default_trace_log
+
+    marks = {"n": 0}
+
+    def always_fails(sdk, provider, messages, tools, temperature, timeout):
+        marks.setdefault("first_call", time.perf_counter())
+        time.sleep(0.05)
+        marks["n"] += 1
+        marks["last_failure"] = time.perf_counter()
+        raise _SlowTimeout("provider too slow")
+
+    monkeypatch.setattr(llm_client, "random", types.SimpleNamespace(random=lambda: 1.0))
+    monkeypatch.setenv("GROQ_API_KEY", "not-a-real-key")
+    chain = LLMClient(providers=[Provider("groq", "fake-model", "GROQ_API_KEY", lambda key, timeout: object(), call=always_fails)],
+                      max_attempts_per_provider=2, backoff_base_s=0.3, breaker_threshold=99)
+    monkeypatch.setattr(default_orchestrator, "_llm", lambda: chain)
+    token = login(client)
+    reply = client.post("/chat", json={"session_token": token, "message": "¿Cuál es mi saldo?"}).json()
+    record = default_trace_log.recent()[-1]
+    assert marks["n"] == 2 and record["llm_steps"][0]["outcome"] == "unavailable"
+    chain_s = marks["last_failure"] - marks["first_call"]
+    attempts_s = sum(a["ms"] for a in record["llm_steps"][0]["attempts"]) / 1000
+    assert chain_s - attempts_s > 0.25  # a real wait between the two attempts, which no attempt records
+
+    _, s = scrape(client)
+    llm = value(s, "cecilai_stage_latency_seconds_sum", stage="llm")
+    policy = value(s, "cecilai_stage_latency_seconds_sum", stage="policy_render")
+    assert llm >= chain_s - 0.001, (llm, chain_s, attempts_s)
+    assert policy < reply["latency_ms"] / 1000 - chain_s + 0.05, (policy, chain_s, reply["latency_ms"])
