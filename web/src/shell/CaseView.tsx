@@ -32,14 +32,16 @@ export function CaseView({ ticketId, row, ended, titleId, refresh, onClose, onSh
   const [refreshing, setRefreshing] = useState(false)
   const [note, setNote] = useState<{ ok: boolean; at: number } | null>(null)
 
-  // `announce`: the customer asked, so the outcome is said (when it was read, or that it could not be and the last one stays).
+  // A failed read is always said (the status on screen is the last one known, not the present one); a good one only when the
+  // customer asked for it (`announce`), with the time it was read.
   const update = useCallback(async (announce: boolean) => {
     setRefreshing(true)
     const read = await refresh(ticketId)
     setRefreshing(false)
     // A read that a newer one overtook says nothing: the newer one does.
     if (read === 'superseded') return
-    if (announce) setNote(read === 'ready' ? { ok: true, at: Date.now() } : read === 'error' ? { ok: false, at: Date.now() } : null)
+    if (read === 'error') setNote({ ok: false, at: Date.now() })
+    else if (announce) setNote(read === 'ready' ? { ok: true, at: Date.now() } : null)
   }, [refresh, ticketId])
 
   // Opening the case asks for it again: the sidebar may be showing an answer from a while ago.

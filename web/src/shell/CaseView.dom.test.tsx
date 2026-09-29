@@ -131,6 +131,20 @@ describe('the case view', () => {
     expect(within(dialog).getByText(/Estado consultado a las/)).toBeTruthy()
   })
 
+  it('reopened while the service fails (503), it keeps the last known status and says the update failed', async () => {
+    const user = userEvent.setup()
+    await draw()
+    const opener = screen.getByRole('button', { name: /^Ver caso 55d09c14/ })
+    await user.click(opener)
+    await within(await screen.findByRole('dialog')).findByText('En revisión')
+    await user.keyboard('{Escape}')
+    server.getCase.mockResolvedValue({ ok: false, failure: 'unavailable' })
+    await user.click(opener)
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText('En revisión')).toBeTruthy()
+    expect(await within(dialog).findByText('No se pudo actualizar el estado. Se muestra el último conocido.')).toBeTruthy()
+  })
+
   it('when the status cannot be read it says so, and trying again can bring it', async () => {
     server.getCase.mockResolvedValue({ ok: false, failure: 'unavailable' })
     const user = userEvent.setup()
