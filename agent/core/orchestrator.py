@@ -30,6 +30,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any, Callable
 
 from agent.core import render
+from agent.core.experiments import Experiments
 from agent.llm import prompts
 from agent.llm.budget import DailyBudget, default_budget
 from agent.llm.client import LLMUnavailable, Usage, get_default_client
@@ -243,12 +244,14 @@ def _clarify_view(missing: list[str], catalog: list[dict], reply_text: str) -> s
 
 class Orchestrator:
     def __init__(self, session_store: SessionStore | None = None, llm: Callable[[], Any] | None = None,
-                 conversations: ConversationStore | None = None, budget: DailyBudget | None = None):
+                 conversations: ConversationStore | None = None, budget: DailyBudget | None = None,
+                 experiments: Experiments | None = None):
         # `is None`, not `or`: both stores define __len__, so an empty one is falsy.
         self.session_store = default_store if session_store is None else session_store
         self._llm = llm or get_default_client
         self.conversations = ConversationStore() if conversations is None else conversations
         self.budget = default_budget if budget is None else budget
+        self.experiments = Experiments.from_env() if experiments is None else experiments  # shadow/canary: off unless configured
 
     def handle_message(self, session_token: str, text: str) -> TurnResult:
         trace_id = uuid.uuid4().hex
@@ -256,7 +259,8 @@ class Orchestrator:
         # The record's timestamp is wall time; the latency, a monotonic clock fine enough for milliseconds (Windows'
         # wall clock ticks every 15.6 ms).
         ts, start = time.time(), time.perf_counter()
-        trace: dict[str, Any] = {"trace_id": trace_id, "ts": ts, "prompt_version": prompts.PROMPT_VERSION, "llm_steps": []}
+        trace: dict[str, Any] = {"trace_id": trace_id, "ts": ts, "prompt_version": prompts.PROMPT_VERSION,
+                                 "llm_steps": [], "model_route": "not_called"}
         try:
             result = self._with_case_news(session_token, self._handle(session_token, text, trace_id, trace))
         finally:
@@ -423,7 +427,8 @@ class Orchestrator:
         # The raw text only feeds local policy checks. The model gets `model_text` (identifiers masked, own product
         # ids as aliases); a human agent's ticket gets `ticket_text` (card numbers masked, amounts kept).
         model_text, ticket_text = redact(text), mask_card_numbers(text)
-        trace.update({"session_ref": session.ref, "segment": session.attributes.get("segment"),
+        trace.update({"session_ref": session.ref, "cohort": self.experiments.cohort_for(session.ref),
+                      "segment": session.attributes.get("segment"),
                       "country": session.attributes.get("country"), "language_scores": [guess.pt_score, guess.es_score]})
 
         usage, costs, llm_calls = Usage(), [], 0
@@ -481,7 +486,9 @@ class Orchestrator:
             if self.budget.exhausted():  # past the daily spend cap: the model counts as down
                 raise LLMUnavailable("daily model budget reached", [{"provider": "budget", "outcome": "skipped",
                                                                      "reason": "daily_budget_exhausted"}])
-            resp = self._llm().chat(messages, tools=prompts.TOOL_SCHEMAS)
+            trace["model_route"] = "unavailable"
+            resp, model_route = self.experiments.chat(session.ref, self._llm, messages, prompts.TOOL_SCHEMAS)
+            trace["model_route"] = model_route
         except LLMUnavailable as exc:
             trace["llm_steps"].append({"step": 0, "outcome": "unavailable", "attempts": exc.attempts})
             degraded = self._degraded(reading, text, session, catalog, lang, trace_id, trace, llm_meta())
@@ -495,6 +502,7 @@ class Orchestrator:
         trace["llm_steps"].append({"step": 0, "provider": resp.provider, "model": resp.model, "latency_ms": round(resp.latency_ms, 1),
                                    "usage": asdict(resp.usage), "attempts": resp.attempts, "n_tool_calls": len(resp.tool_calls)})
 
+        self.experiments.shadow(trace_id, session.ref, messages, prompts.TOOL_SCHEMAS, resp, model_route)  # background, logged only
         calls = resp.tool_calls[:MAX_TOOL_CALLS_PER_TURN]
         if not calls:  # nothing to look up: abstain or ask, always with a fixed template
             decision = router.no_tool_answer(reading, text)
