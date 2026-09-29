@@ -298,6 +298,35 @@ def call_within(fn: Callable[[], Any], seconds: float) -> Any:
     return box["result"]
 
 
+# Error codes providers send that say what went wrong without saying anything of what we sent.
+KNOWN_ERROR_CODES = frozenset({
+    "rate_limit_exceeded", "rate_limit_error", "insufficient_quota", "overloaded_error", "server_error", "api_error",
+    "invalid_api_key", "authentication_error", "permission_error", "not_found_error", "model_not_found",
+    "invalid_request_error", "context_length_exceeded", "tool_use_failed", "request_too_large", "timeout"})
+
+
+def safe_error(exc: Exception) -> str:
+    """What may be recorded about a provider error: its type, its HTTP status and a code from KNOWN_ERROR_CODES. Never
+    its message or body: providers quote the input they rejected, and the input holds what the customer typed."""
+    out = type(exc).__name__
+    response = getattr(exc, "response", None)
+    status = getattr(exc, "status_code", None) or getattr(response, "status_code", None)
+    if isinstance(status, int):
+        out += f" status={status}"
+    body = getattr(exc, "body", None)
+    if body is None and response is not None:
+        try:
+            body = json.loads(response.text)
+        except (ValueError, TypeError, AttributeError):
+            body = None
+    err = body.get("error", body) if isinstance(body, dict) else None
+    for key in ("code", "type"):
+        code = err.get(key) if isinstance(err, dict) else None
+        if isinstance(code, str) and code in KNOWN_ERROR_CODES:
+            return f"{out} code={code}"
+    return out
+
+
 def classify_error(exc: Exception) -> str:
     if isinstance(exc, (TypeError, ValueError, AttributeError, KeyError)):
         return "permanent"  # our bug or an SDK contract mismatch; retrying can't help
@@ -393,9 +422,9 @@ class LLMClient:
                     kind = classify_error(exc)
                     hinted = retry_after_hint(exc)
                     attempts.append({"provider": p.name, "outcome": "error", "kind": kind,
-                                     "error": f"{type(exc).__name__}: {exc}"[:300], "ms": round((time.perf_counter() - t0) * 1000, 1),
+                                     "error": safe_error(exc), "ms": round((time.perf_counter() - t0) * 1000, 1),
                                      **({"retry_after_s": round(hinted, 1)} if hinted is not None else {})})
-                    logger.warning("LLM %s attempt %d failed (%s): %s", p.name, attempt + 1, kind, exc)
+                    logger.warning("LLM %s attempt %d failed (%s): %s", p.name, attempt + 1, kind, safe_error(exc))
                     if kind == "permanent":
                         break
                     if self._record_failure(p.name):
