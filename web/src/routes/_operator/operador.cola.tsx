@@ -8,7 +8,7 @@ import { Button, DataTable, PriorityChip, StatusIndicator, type Column, type Sor
 import type { Priority } from '../../ui'
 import { ageShort, categoryName, statusKey, when } from '../-operator/format'
 import {
-  countryCode, distinct, filterTickets, filtersOf, hasFilters, inScope, isClosed, localeOf, orderTickets, tabCounts, validateSearch, type QueueSearch, type StatusTab,
+  countryOptions, distinct, filterTickets, filtersOf, hasFilters, inScope, isClosed, localeOf, orderTickets, tabCounts, validateSearch, type QueueSearch, type StatusTab,
 } from '../-operator/queue'
 import { Notice } from '../-operator/ui'
 
@@ -71,7 +71,7 @@ function Queue() {
   const counts = tabCounts(scope)
   const rows = useMemo(() => orderTickets(filterTickets(scope, filters, me), sort), [scope, filters.tab, sort, me]) // eslint-disable-line react-hooks/exhaustive-deps
   const pending = scope.filter((ticket) => !isClosed(ticket)).length
-  const countries = useMemo(() => distinct(tickets, (ticket) => ticket.country), [tickets])
+  const countries = useMemo(() => countryOptions(tickets), [tickets])
   const languages = useMemo(() => distinct(tickets, (ticket) => ticket.language), [tickets])
 
   // Any change of what is being looked at goes back to the first page.
@@ -140,7 +140,7 @@ function Queue() {
               </div>
               <FilterSelect name={t('operator.queue.filter.priority')} value={search.prioridad} onChange={(v) => set({ prioridad: v })}
                 options={PRIORITIES.map((p) => ({ value: p, label: t(`table.priority.${p.toLowerCase() as Lowercase<typeof p>}`) }))} />
-              <FilterSelect name={t('operator.queue.filter.country')} value={search.pais} onChange={(v) => set({ pais: v })} options={countries.map((c) => ({ value: c, label: `${countryCode(c)}${countryCode(c) === c ? '' : ` · ${c}`}` }))} />
+              <FilterSelect name={t('operator.queue.filter.country')} value={filters.country} onChange={(v) => set({ pais: v })} options={countries} />
               <FilterSelect name={t('operator.queue.filter.language')} value={search.idioma} onChange={(v) => set({ idioma: v })} options={languages.map((l) => ({ value: l, label: l.toUpperCase() }))} />
               {hasFilters(filters) && <Button variant="ghost" size="xs" onClick={clear}>{t('operator.queue.filter.clear')}</Button>}
               <div className="op-head__spacer" />

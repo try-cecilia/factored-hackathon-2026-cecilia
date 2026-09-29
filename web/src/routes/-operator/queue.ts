@@ -31,7 +31,8 @@ export type QueueSearch = {
 
 const VIEWS = { mias: 'mine', 'sin-asignar': 'unassigned' } as const
 const TABS = { abiertos: 'open', tomados: 'claimed', decididos: 'decided' } as const
-const short = (value: unknown) => (typeof value === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(value) ? value : undefined)
+// Letters of any alphabet: a queue or a country can carry accents ("Perú"), and a link written by hand may use the name.
+const short = (value: unknown) => (typeof value === 'string' && /^[\p{L}\p{N}_ .-]{1,40}$/u.test(value) ? value : undefined)
 
 /** Search params come from a URL anyone can edit: keep what is known and drop the rest. Explicit keys, so the router does not merge the raw ones back in. */
 export function validateSearch(search: Record<string, unknown>): QueueSearch {
@@ -51,7 +52,7 @@ export function filtersOf(search: QueueSearch, q: string): QueueFilters {
     queue: search.cola,
     tab: search.estado ? TABS[search.estado] : 'all',
     priority: search.prioridad,
-    country: search.pais,
+    country: countryCode(search.pais ?? null) ?? undefined,
     language: search.idioma,
     q: q.trim() || undefined,
   }
@@ -78,7 +79,7 @@ export function inScope(tickets: readonly Ticket[], f: QueueFilters, me: string 
       inView(t, f.view, me) &&
       (!f.queue || t.queue === f.queue) &&
       (!f.priority || t.priority === f.priority) &&
-      (!f.country || t.country === f.country) &&
+      (!f.country || countryCode(t.country) === f.country) &&
       (!f.language || t.language === f.language) &&
       (!f.q || matchesSearch(t, f.q)),
   )
@@ -158,6 +159,16 @@ const COUNTRY_CODES: Record<string, string> = {
 
 /** The API sends the country's name ("México"); the table has room for its code. A country it does not know stays as it came. */
 export const countryCode = (country: string | null) => (country ? COUNTRY_CODES[country.toLowerCase()] ?? country : null)
+
+/** Options of the country filter: the code the URL carries, with the name next to it. */
+export function countryOptions(tickets: readonly Ticket[]): { value: string; label: string }[] {
+  const byCode = new Map<string, string>()
+  for (const t of tickets) {
+    const code = countryCode(t.country)
+    if (code && t.country && !byCode.has(code)) byCode.set(code, code === t.country ? code : `${code} · ${t.country}`)
+  }
+  return [...byCode].sort(([a], [b]) => a.localeCompare(b)).map(([value, label]) => ({ value, label }))
+}
 
 export const localeOf = (t: Ticket) => [countryCode(t.country), t.language.toUpperCase()].filter(Boolean).join('·')
 

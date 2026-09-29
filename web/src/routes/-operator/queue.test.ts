@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { DeskStatus, Ticket } from '../../server/operator.functions.ts'
-import { countryCode, defaultOrder, filterTickets, filtersOf, inScope, localeOf, orderTickets, sidebarCounts, tabCounts, validateSearch, type QueueFilters } from './queue.ts'
+import { countryCode, countryOptions, defaultOrder, filterTickets, filtersOf, inScope, localeOf, orderTickets, sidebarCounts, tabCounts, validateSearch, type QueueFilters } from './queue.ts'
 
 let n = 0
 function ticket(over: Partial<Ticket> & { status?: DeskStatus; operator?: string | null } = {}): Ticket {
@@ -91,4 +91,25 @@ test('the locale column shows the country code and the language', () => {
   assert.equal(countryCode(null), null)
   assert.equal(localeOf(ticket({ country: 'Colombia', language: 'es' })), 'CO·ES')
   assert.equal(localeOf(ticket({ country: null, language: 'pt' })), 'PT')
+})
+
+test('the country filter survives the URL for every country of the dataset and for names with accents', () => {
+  for (const name of ['México', 'Colombia', 'Argentina', 'Perú', 'Brasil', 'Chile', 'Uruguay', 'Atlántida']) {
+    const t = ticket({ country: name })
+    const other = ticket({ country: name === 'Colombia' ? 'Chile' : 'Colombia' })
+    const code = countryCode(name)!
+    // What the filter writes to the URL, read back the way the router reads it.
+    const search = validateSearch({ pais: code })
+    assert.equal(search.pais, code, name)
+    assert.deepEqual(filterTickets([t, other], filtersOf(search, ''), null), [t], name)
+  }
+  // A link written by hand with the country's name still works.
+  const mx = ticket({ country: 'México' })
+  assert.deepEqual(filterTickets([mx, ticket({ country: 'Chile' })], filtersOf(validateSearch({ pais: 'México' }), ''), null), [mx])
+  assert.equal(validateSearch({ pais: '<script>' }).pais, undefined)
+})
+
+test('the country options are the codes with the name next to them, once each', () => {
+  const options = countryOptions([ticket({ country: 'México' }), ticket({ country: 'México' }), ticket({ country: 'Perú' }), ticket({ country: null })])
+  assert.deepEqual(options, [{ value: 'MX', label: 'MX · México' }, { value: 'PE', label: 'PE · Perú' }])
 })
