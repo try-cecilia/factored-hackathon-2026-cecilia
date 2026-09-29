@@ -109,7 +109,10 @@ lock plus mlflow, 2,918 lines of lock) took 32 s; the serving lock alone is what
 can pick up a newer patch release of them (LIMITATIONS.md).
 
 **CI triggers.** A push to `main`, every pull request (any base branch) and `workflow_dispatch` for a branch without a PR. A branch with
-an open PR runs once. A newer run cancels the older one only in a pull request: on `main` every commit is verified, even two merges in a row.
+an open PR runs once. A pull request has one concurrency group (`ci-pr-<number>`) and a new push to it cancels the run in progress. Any
+other run (a push to `main`, a manual run) gets a group of its own (`ci-<run_id>`), so nothing cancels or replaces it: every commit of
+`main` is verified, even two merges in a row, and a manual run never displaces a push. A shared group would not be enough: it keeps one
+running and one pending run, and a third one cancels the pending one.
 
 **CI hooks.** Other branches add checks without rewriting the workflow: `make gate` runs whatever `eval.gate` checks (per-category
 floors included) and then `make validate-data-ml`; `make test` runs the whole `tests/` folder, `make test-resilience`'s files
