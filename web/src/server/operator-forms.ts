@@ -2,7 +2,7 @@ import '@tanstack/react-start/server-only'
 import { isSameOrigin } from './origin-check.ts'
 import { loginFromForm, operatorKeyFromForm, type KeyProbe } from './operator-login.ts'
 import { probeAdminKey, probeOperatorKey } from './operator-api'
-import { endOperatorSession, getOperatorSession, setFlash, startOperatorSession } from './operator-session'
+import { elevateOperatorSession, endOperatorSession, operatorSessionState, setFlash, startOperatorSession } from './operator-session'
 
 // The operator forms are plain HTML posts that land here, so the keys never pass through the page's JavaScript:
 // they are read from the form body, checked against the API, kept in the server-side session and answered with a
@@ -33,15 +33,14 @@ export async function handleLogin(request: Request) {
 export async function handleAddKey(request: Request) {
   if (!isSameOrigin(request)) return foreign()
   const form = await readForm(request)
-  const session = getOperatorSession(true)
-  if (!form || !session) return see('/operador/login')
+  // Without a live session there is nothing to raise, and the API is not asked to check keys for a stranger.
+  if (!form || operatorSessionState(true).status !== 'active') return see('/operador/login')
   const outcome = await operatorKeyFromForm(form, operator)
   if (!outcome.ok) {
     setFlash(outcome.flash)
     return see(outcome.to)
   }
-  session.operatorKey = outcome.operatorKey
-  session.operator = outcome.operator
+  if (!elevateOperatorSession(outcome.operatorKey, outcome.operator)) return see('/operador/login')
   return see(outcome.to)
 }
 

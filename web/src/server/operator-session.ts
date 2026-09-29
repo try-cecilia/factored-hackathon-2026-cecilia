@@ -18,7 +18,9 @@ const options = { httpOnly: true, secure, sameSite: 'strict', path: '/' } as con
 export type { OperatorSession }
 export type SessionState = { status: 'active'; session: OperatorSession } | { status: 'expired' } | { status: 'anonymous' }
 
+/** A login always gets a new id, and whatever session this browser held before it is ended. */
 export function startOperatorSession(adminKey: string, operatorKey?: string, operator?: string) {
+  store.end(getCookie(name))
   setCookie(name, store.start(adminKey, operatorKey, operator), { ...options, maxAge: ABSOLUTE_MS / 1000 })
 }
 
@@ -35,6 +37,13 @@ export function operatorSessionState(touch: boolean): SessionState {
 export function getOperatorSession(touch: boolean): OperatorSession | null {
   const state = operatorSessionState(touch)
   return state.status === 'active' ? state.session : null
+}
+
+/** Adds the operator key under a new id and a new cookie; the read-only cookie the browser held stops working. */
+export function elevateOperatorSession(operatorKey: string, operator?: string) {
+  const id = store.elevate(getCookie(name), operatorKey, operator)
+  if (id) setCookie(name, id, { ...options, maxAge: ABSOLUTE_MS / 1000 })
+  return id !== null
 }
 
 export function endOperatorSession() {

@@ -57,6 +57,19 @@ export class SessionStore {
     return { status: 'active', session }
   }
 
+  /**
+   * The same session with an operator key added, under a new id; the old id stops working. Rights never grow under an id
+   * that may already have been copied (fixation), and the 8-hour cap keeps counting from the original login.
+   */
+  elevate(id: string | undefined, operatorKey: string, operator?: string): string | null {
+    const found = this.lookup(id, false)
+    if (found.status !== 'active' || !id) return null
+    this.sessions.delete(id)
+    const fresh = randomBytes(32).toString('base64url')
+    this.sessions.set(fresh, { ...found.session, operatorKey, operator, lastSeen: this.now() })
+    return fresh
+  }
+
   end(id: string | undefined) {
     if (id) this.sessions.delete(id)
   }

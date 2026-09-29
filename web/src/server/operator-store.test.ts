@@ -76,3 +76,23 @@ test('the store is bounded and drops the idle sessions first', () => {
   for (let i = 0; i < MAX_SESSIONS + 5; i++) store.start(`key-${i}`)
   assert.equal(store.lookup(first, true).status, 'unknown')
 })
+
+test('raising a session gives it a new id, keeps the original cap and kills the old id', () => {
+  const time = clock()
+  const store = new SessionStore(time.now, ABSOLUTE_MS) // idle window out of the way: this test is about the cap
+  const readOnly = store.start('admin-key')
+  time.advance(7 * 60 * MIN)
+  const acting = store.elevate(readOnly, 'op-key', 'ana')!
+  assert.ok(acting && acting !== readOnly)
+  assert.equal(store.lookup(readOnly, false).status, 'unknown', 'the id that may have been copied gains nothing')
+  const now = store.lookup(acting, false)
+  assert.ok(now.status === 'active' && now.session.operator === 'ana' && now.session.adminKey === 'admin-key')
+  time.advance(61 * MIN) // 8 h 1 min since the original login: elevating did not restart the cap
+  assert.equal(store.lookup(acting, false).status, 'expired')
+})
+
+test('a session that is gone cannot be raised', () => {
+  const store = new SessionStore()
+  assert.equal(store.elevate('nope', 'op-key'), null)
+  assert.equal(store.elevate(undefined, 'op-key'), null)
+})
