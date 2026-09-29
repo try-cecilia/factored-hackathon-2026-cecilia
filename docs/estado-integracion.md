@@ -43,14 +43,14 @@ Sobre la rama `integracion/2026-09-29`, con Python 3.11 y Node 24.14:
 
 | Comando | Resultado |
 |---|---|
-| `python -m pytest tests/ -q` | 999 passed, 1 skipped (≈90 s) |
+| `python -m pytest tests/ -q` | 1016 passed, 1 skipped (≈100 s) |
 | `make web-typecheck`, `make web-build` | OK |
 | `make web-test` | 154 node:test, 82 vitest (DOM) y 67 HTTP contra el build de producción, todos en verde |
 | `make gate` | "compuerta: se cumple"; el árbol queda limpio |
 | `make lock-check`, `make alerts-check` | OK (promtool SUCCESS) |
 | `make compose-e2e` | Pasa en 22 s. Cubre API, web, login de cliente y chat, login de operador y cola, `/dev/ui` cerrado, métricas, Prometheus con las reglas y Grafana provisionado |
 | `make eval`, `make eval-adversarial` | 548 casos de test. 0 inseguros con el modelo ideal y con el adversarial. Resolución automática segura: 99,2% [97,0–99,8] (n=238) |
-| `make eval-failures` | Set reservado: 224/226 resueltos con el modelo ideal y 196/226 con el adversarial. 0 inseguros y 0 caídas |
+| `make eval-failures` | Set reservado: 224/226 resueltos con el modelo ideal y 196/226 con el adversarial. 0 inseguros y 0 caídas. Con el juez más estricto (sesión vencida, resolución correcta, derivación sin ticket) ninguna cifra cambió: 0 de 774 filas difieren |
 | `make loadtest-http` (`eval/reports/LOADTEST_HTTP.md`) | Satura en 17,5 chats/s (máximo teórico 17,8 con 32 slots y un modelo simulado de 1,8 s). El exceso se rechaza con 503 + `Retry-After` en 5,7 ms (128 clientes) y 2,0 ms (256) p95 |
 
 Cómo leer las cifras:
@@ -58,7 +58,8 @@ Cómo leer las cifras:
 - **El set reservado dejó de ser held-out para lo que se arregló.** Los arreglos del orquestador se hicieron después de ver sus
   resultados (`eval/reports/FAILURE_EVAL.md`; los de antes están en `FAILURE_EVAL_BEFORE_FIXES.md`).
 - **La muestra en vivo con Groq (`openai/gpt-oss-120b`, plan gratis) es chica:** 65 casos y una sola corrida. Da 39/42 en el set de
-  fallos y 0 inseguros (`eval/reports/LIVE_SAMPLE_GROQ.md`).
+  fallos y 0 inseguros (`eval/reports/LIVE_SAMPLE_GROQ.md`). No se puede rearmar desde artefactos: no se guardaron los ids ni las filas
+  por caso. La próxima corrida sí queda reproducible (`eval/live_sample.py`, `make eval-live-sample`, `make eval-live-sample-report`).
 - **El warehouse completo se construyó con los CSV del organizador en local.** Coincide con el reporte de calidad en las 5 tablas
   de servicio. Faltan las tablas de contact center, así que `make analysis` no se puede reproducir con esa copia.
 
