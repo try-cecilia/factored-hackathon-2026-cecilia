@@ -294,6 +294,7 @@ export const operator: Like<typeof es> = {
     submit: 'Entrar',
     errors: {
       admin_missing: 'Digitar a chave de leitura.',
+      sessionNotSaved: 'Seu navegador não guardou a sessão. Verifique se ele aceita cookies deste site e tente de novo. Fora do localhost, o console deve ser aberto por https.',
       session_replaced: 'A sessão foi substituída ao entrar em outra aba. Tentar de novo.',
       key_invalid: 'Uma das chaves não é válida.',
       admin_401: 'A chave de leitura não é válida.',

@@ -1,6 +1,7 @@
 import '@tanstack/react-start/server-only'
 import { checkOrigin, originConfigFromEnv } from './origin-check.ts'
-import { loginFromForm, operatorKeyFromForm, type KeyProbe } from './operator-login.ts'
+import { DEFAULT_LANDING, loginFromForm, operatorKeyFromForm, type KeyProbe } from './operator-login.ts'
+import { sameOriginPath } from './safe-path.ts'
 import { probeAdminKey, probeOperatorKey } from './operator-api'
 import { elevateOperatorSession, endOperatorSession, operatorSessionState, setFlash, startOperatorSession } from './operator-session'
 
@@ -48,7 +49,19 @@ export async function handleLogin(request: Request) {
     setFlash('session_replaced')
     return see('/operador/login')
   }
-  return see(outcome.to)
+  return see(arrival(outcome.to))
+}
+
+// Where a login lands first. The Set-Cookie of the login can come back unusable (a browser that refuses the cookie, such as
+// Safari with a Secure one over plain http) and the server cannot know when it sends it. So the login redirects here, to a
+// GET that carries the cookie the browser did keep: with a session it goes on to where the operator wanted, without one it
+// says why the login did not take, instead of leaving a login form that looks like nothing happened.
+const arrival = (to: string) => `/operador/ingreso?to=${encodeURIComponent(to)}`
+
+export function handleArrival(request: Request) {
+  const to = sameOriginPath(new URL(request.url).searchParams.get('to')) ?? DEFAULT_LANDING
+  if (operatorSessionState(false).status === 'active') return see(to)
+  return see(`/operador/login?redirect=${encodeURIComponent(to)}&motivo=sin-cookie`)
 }
 
 export async function handleAddKey(request: Request) {

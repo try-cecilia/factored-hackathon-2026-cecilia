@@ -16,6 +16,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthedChatRouteImport } from './routes/_authed/chat'
 import { Route as DevUiRouteImport } from './routes/dev.ui'
 import { Route as OperadorClaveRouteImport } from './routes/operador.clave'
+import { Route as OperadorIngresoRouteImport } from './routes/operador.ingreso'
 import { Route as OperadorLoginRouteImport } from './routes/operador.login'
 import { Route as OperadorSalirRouteImport } from './routes/operador.salir'
 import { Route as OperadorSesionRouteImport } from './routes/operador.sesion'
@@ -60,6 +61,11 @@ const DevUiRoute = DevUiRouteImport.update({
 const OperadorClaveRoute = OperadorClaveRouteImport.update({
   id: '/operador/clave',
   path: '/operador/clave',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OperadorIngresoRoute = OperadorIngresoRouteImport.update({
+  id: '/operador/ingreso',
+  path: '/operador/ingreso',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OperadorLoginRoute = OperadorLoginRouteImport.update({
@@ -134,6 +140,7 @@ export interface FileRoutesByFullPath {
   '/chat': typeof AuthedChatRoute
   '/dev/ui': typeof DevUiRoute
   '/operador/clave': typeof OperadorClaveRoute
+  '/operador/ingreso': typeof OperadorIngresoRoute
   '/operador/login': typeof OperadorLoginRoute
   '/operador/salir': typeof OperadorSalirRoute
   '/operador/sesion': typeof OperadorSesionRoute
@@ -153,6 +160,7 @@ export interface FileRoutesByTo {
   '/chat': typeof AuthedChatRoute
   '/dev/ui': typeof DevUiRoute
   '/operador/clave': typeof OperadorClaveRoute
+  '/operador/ingreso': typeof OperadorIngresoRoute
   '/operador/login': typeof OperadorLoginRoute
   '/operador/salir': typeof OperadorSalirRoute
   '/operador/sesion': typeof OperadorSesionRoute
@@ -173,6 +181,7 @@ export interface FileRoutesById {
   '/_authed/chat': typeof AuthedChatRoute
   '/dev/ui': typeof DevUiRoute
   '/operador/clave': typeof OperadorClaveRoute
+  '/operador/ingreso': typeof OperadorIngresoRoute
   '/operador/login': typeof OperadorLoginRoute
   '/operador/salir': typeof OperadorSalirRoute
   '/operador/sesion': typeof OperadorSesionRoute
@@ -194,6 +203,7 @@ export interface FileRouteTypes {
     | '/chat'
     | '/dev/ui'
     | '/operador/clave'
+    | '/operador/ingreso'
     | '/operador/login'
     | '/operador/salir'
     | '/operador/sesion'
@@ -213,6 +223,7 @@ export interface FileRouteTypes {
     | '/chat'
     | '/dev/ui'
     | '/operador/clave'
+    | '/operador/ingreso'
     | '/operador/login'
     | '/operador/salir'
     | '/operador/sesion'
@@ -232,6 +243,7 @@ export interface FileRouteTypes {
     | '/_authed/chat'
     | '/dev/ui'
     | '/operador/clave'
+    | '/operador/ingreso'
     | '/operador/login'
     | '/operador/salir'
     | '/operador/sesion'
@@ -253,6 +265,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   DevUiRoute: typeof DevUiRoute
   OperadorClaveRoute: typeof OperadorClaveRoute
+  OperadorIngresoRoute: typeof OperadorIngresoRoute
   OperadorLoginRoute: typeof OperadorLoginRoute
   OperadorSalirRoute: typeof OperadorSalirRoute
   OperadorSesionRoute: typeof OperadorSesionRoute
@@ -308,6 +321,13 @@ declare module '@tanstack/react-router' {
       path: '/operador/clave'
       fullPath: '/operador/clave'
       preLoaderRoute: typeof OperadorClaveRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/operador/ingreso': {
+      id: '/operador/ingreso'
+      path: '/operador/ingreso'
+      fullPath: '/operador/ingreso'
+      preLoaderRoute: typeof OperadorIngresoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/operador/login': {
@@ -462,6 +482,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   DevUiRoute: DevUiRoute,
   OperadorClaveRoute: OperadorClaveRoute,
+  OperadorIngresoRoute: OperadorIngresoRoute,
   OperadorLoginRoute: OperadorLoginRoute,
   OperadorSalirRoute: OperadorSalirRoute,
   OperadorSesionRoute: OperadorSesionRoute,

@@ -8,10 +8,10 @@ import { sameOriginPath } from '../server/safe-path'
 import operatorStylesheet from '../styles/operator.css?url'
 
 export const Route = createFileRoute('/operador/login')({
-  validateSearch: (search: Record<string, unknown>): { redirect?: string; motivo?: 'vencida' } => {
+  validateSearch: (search: Record<string, unknown>): { redirect?: string; motivo?: 'vencida' | 'sin-cookie' } => {
     const target = sameOriginPath(search.redirect)
     // Explicit keys, even when undefined: the router merges what a validator leaves out back in from the raw query string.
-    return { redirect: target, motivo: search.motivo === 'vencida' ? 'vencida' : undefined }
+    return { redirect: target, motivo: search.motivo === 'vencida' || search.motivo === 'sin-cookie' ? search.motivo : undefined }
   },
   beforeLoad: async ({ search }) => {
     const view = await getOperatorView({ data: { auto: false } }).catch(() => null)
@@ -44,7 +44,9 @@ function OperatorLogin() {
   const t = useT()
   const flash = Route.useLoaderData()
   const { redirect: target, motivo } = Route.useSearch()
-  const errorKey = flash ? (Object.hasOwn(messages, flash) ? messages[flash] : 'operator.login.errors.unavailable') : null
+  const flashKey = flash ? (Object.hasOwn(messages, flash) ? messages[flash] : 'operator.login.errors.unavailable') : null
+  // The login went through but the browser came back without the session: it did not keep the cookie (see handleArrival).
+  const errorKey = flashKey ?? (motivo === 'sin-cookie' ? 'operator.login.errors.sessionNotSaved' : null)
 
   return (
     <div className="op op-login">

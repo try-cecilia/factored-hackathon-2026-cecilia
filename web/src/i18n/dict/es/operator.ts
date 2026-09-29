@@ -292,6 +292,7 @@ export const operator = {
     submit: 'Ingresar',
     errors: {
       admin_missing: 'Escribir la clave de lectura.',
+      sessionNotSaved: 'Tu navegador no guardó la sesión. Verificar que acepte cookies de este sitio y volver a intentar. Fuera de localhost, la consola debe abrirse por https.',
       session_replaced: 'La sesión se reemplazó al ingresar desde otra pestaña. Intentar de nuevo.',
       key_invalid: 'Una de las claves no es válida.',
       admin_401: 'La clave de lectura no es válida.',

@@ -20,5 +20,6 @@ export const login = {
     badCredentials: 'Número de cliente o PIN incorrectos.',
     tooManyAttempts: 'Demasiados intentos. Reintentar en unos minutos.',
     unavailable: 'El servicio no está disponible en este momento.',
+    sessionNotSaved: 'Tu navegador no guardó la sesión. Verificar que acepte cookies de este sitio y volver a intentar. Fuera de localhost, la app debe abrirse por https.',
   },
 }
