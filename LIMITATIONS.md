@@ -10,8 +10,8 @@ service, and as our own roadmap.
    ([`eval/reports/SYSTEM_EVAL_LIVE.md`](eval/reports/SYSTEM_EVAL_LIVE.md)).
    The intervals are wide (Sonnet 5's safe automated resolution is 95.0%
    [86.3–98.3]), a segment or country cell holds 15–20 in-scope cases, and
-   0 unsafe outcomes in 132 bounds the true rate only below ≈2.3%. Groq has
-   not run: it needs a key. Its default is the open-weights
+   0 unsafe outcomes in 132 bounds the true rate only below ≈2.3%. Groq ran only
+   the small sample of item 3; more needs a key. Its default is the open-weights
    `openai/gpt-oss-120b`, because Llama 3.3 70B left Groq's self-serve tiers
    on 2026-08-16.
 2. **Deployment.** Not yet deployed: it needs the hosting account. The Render
@@ -137,7 +137,7 @@ service, and as our own roadmap.
   JavaScript de la página ni vuelven al navegador), así que dependen de que el canal sea TLS. Sin `CLIENT_IP_HEADER=X-Client-IP` detrás del BFF, el límite de intentos fallidos cuenta por la IP del
   BFF. La cola se lee entera (las últimas 200 entradas del archivo), se filtra, ordena y pagina en el navegador (25 por página) y se refresca por sondeo cada 30 s, sin
   notificaciones. Tomar, aprobar, rechazar y devolver actúan con un clic, sin diálogo de confirmación, como en el diseño aprobado. El motivo que escribe la persona solo se guarda al rechazar (es lo que la API registra). El diseño muestra una insignia "Demo · synthetic data" que la consola no dibuja: la API no informa si corre en modo demo. La web tiene pocos tests (`make web-test`: el formulario de ingreso, el plazo de la sesión, y pruebas HTTP contra el build de
-  producción de CSRF, redirecciones y rotación de sesión, y tests de DOM del panel del caso —sus cuatro estados, el 409 y la marca de evidencia— y de la tabla; el CI no los corre): el resto se verificó con `typecheck`, `build` y un
+  producción de CSRF, redirecciones y rotación de sesión, y tests de DOM del panel del caso —sus cuatro estados, el 409 y la marca de evidencia— y de la tabla; el CI los corre con `pnpm test:all`): el resto se verificó con `typecheck`, `build` y un
   recorrido en navegador (`docs/demo/operador-kit-*.png`, en español y portugués, con datos sintéticos de `ops.seed_operator_demo`); con el modelo
   de clientes y un banco real quedaría por probar la carga y la accesibilidad con lector de pantalla.
 - `/demo/customers` publishes test PINs for a few sandbox accounts, like any
@@ -244,7 +244,7 @@ service, and as our own roadmap.
   it shows the "service unavailable" page with a retry instead of switching.
 - **Web UI: the Portuguese was written by the team, not reviewed by a native speaker**, and the interface has only Spanish
   and Portuguese (the assistant's replies come from the API in the customer's language). The customer screens (home,
-  sign in, chat) use the kit and i18n; the operator console is not migrated yet.
+  sign in, chat) use the kit and i18n; the operator console (`web/src/routes/-operator/`) uses it too.
 
 ## Operations
 
@@ -291,9 +291,9 @@ service, and as our own roadmap.
   Docker base images (`python:3.11-slim`, `node:24-slim`, and the Prometheus, Grafana and Ollama images) are pinned by tag,
   not by digest, so a rebuild can take a newer patch release of a base image. `make lock` needs `uv`. The web image runs
   the build with `web/serve.mjs`, a small server of ours; it is tested in the compose stack and the CI, not under production
-  load or behind a real edge, and no production host for it is chosen. The stack was verified with Docker on macOS
-  (OrbStack) and never on Linux or Docker Desktop; the CI workflow has not been run on GitHub from here (its commands were run
-  locally; see the report).
+  load or behind a real edge, and no production host for it is chosen. The stack was verified locally with Docker on macOS
+  (OrbStack), and on Linux in the CI (the run of `main` at `2092b29`, 2026-09-29, passed its six jobs on `ubuntu-latest`, the `compose` job
+  among them); Docker Desktop was not tried.
 - **The local web is checked over HTTP, and by hand in one browser.** `make compose-e2e` drives the web the way a browser does
   (the same requests, cookies and headers: customer login and a chat turn, operator login on the plain form and the queue,
   `/dev/ui` closed), but no browser runs in it. Once, on 2026-09-29, the compose stack was driven with Chromium 154 (customer
