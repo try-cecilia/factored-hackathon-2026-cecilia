@@ -175,7 +175,14 @@ For this component it fails if:
 >   `make eval-adversarial` se volvieron a correr con el warehouse completo (`--profile all`, fuente local, mismos
 >   conteos que el reporte de calidad commiteado): **los 548 casos de test dieron el mismo resultado que antes, en
 >   ambos modos** (cambian solo la fecha y las latencias); el workload regenerado con `make workload` es idéntico al commiteado.
-> - **Para que no vuelva a pasar:** cada reporte guarda una huella de los archivos de políticas, y la compuerta del CI
+> - **Para que no vuelva a pasar:** cada reporte guarda una huella de los archivos que deciden (políticas, herramientas,
+>   orquestador) y de los que el juez compara (las plantillas de `agent/core/render.py`), más errores, sesión, privacidad,
+>   reintentos, prompt y el clasificador de la guarda; la lista completa y lo que queda fuera están en
+>   `eval/fingerprint.py`. La huella cubre todo `agent/` salvo lo que la evaluación no importa (credenciales de la demo, entrenamiento del
+>   clasificador), y también el juez (`eval/run_system_eval.py`, `eval/categories.py`), los modelos
+>   simulados, la línea base, los casos de test y del set reservado con su resultado esperado y el warehouse de prueba:
+>   cambiar cómo se juzga o qué se espera invalida los reportes igual que cambiar el sistema. El campo del reporte sigue
+>   llamándose `policy_sha256` por compatibilidad, aunque ya no cubre solo las políticas. La compuerta del CI
 >   (`eval/gate.py`) falla si esos archivos cambian sin volver a medir.
 
 `make workload eval eval-adversarial` → `eval/reports/SYSTEM_EVAL*.md`.

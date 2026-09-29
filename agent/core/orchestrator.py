@@ -116,12 +116,23 @@ class _Conversation:
     messages: list[dict] = field(default_factory=list)  # what the model may see
     requests: list[str] = field(default_factory=list)  # what a human agent may see: card numbers masked only
     language: str = "es"
+    language_set: bool = False  # whether the customer's own words ever showed a language; "es" above is only the default until then
     pending_clarification: bool = False
     pending_action: dict | None = None  # a trace proposed on the last turn, kept in code: never sent to the model
     pending_choice: list[dict] | None = None  # the pending movements listed on the last turn, to pick one by number
     cases: dict[str, str] = field(default_factory=dict)  # legacy notices, retained when loading older conversations
     transcript: list[dict] = field(default_factory=list)  # what the customer saw, as rendered: card numbers masked, no model data
     case_index: list[dict] = field(default_factory=list)  # the session's handoffs (ticket_id, category, at), not bounded by the transcript
+
+    @classmethod
+    def from_saved(cls, data: dict) -> "_Conversation":
+        """A conversation saved before `language_set` existed keeps the language it had: with turns, or with a language other than the
+        default, it was learned from the customer (the safest reading: it changes nothing for those rows, and the only cost is that a
+        session whose every turn was without a language signal keeps the default instead of falling back to its ticket's)."""
+        if "language_set" not in data:
+            data = {**data, "language_set": bool(data.get("messages") or data.get("requests") or data.get("transcript")
+                                                 or data.get("language", "es") != "es")}
+        return cls(**data)
 
 
 class ConversationStore:
@@ -181,7 +192,7 @@ class ConversationStore:
                                    (key, now - self.RETENTION_SECONDS)).fetchone()
         if row:
             self._checked[key] = now
-        return _Conversation(**json.loads(row[0])) if row else None
+        return _Conversation.from_saved(json.loads(row[0])) if row else None
 
     def save(self, key: str) -> None:
         """Write the conversation as the turn left it (a no-op for a key this store has not handed out)."""
@@ -482,6 +493,7 @@ class Orchestrator:
         for ticket in tickets:
             ticket_id = ticket["ticket_id"]
             state = default_desk.state(ticket_id)
+            # In the language of the reply it goes ahead of (the turn's, which is the session's once the customer has written).
             line = render.case_update(state["status"], result.language, default_traces.get(state["trace_id"] or ""))
             if line and self.conversations.mark_case_notified(session.customer_id, ticket_id, state["status"]):
                 # Seed notices already delivered by the earlier, session-scoped implementation without repeating them.
@@ -494,13 +506,16 @@ class Orchestrator:
 
     def case_status(self, session_token: str, ticket_id: str) -> dict | None:
         """The status of one of this customer's tickets, worded as the chat would; None if it is not theirs.
+        The language is the session's (the one the customer last wrote in, as for the news in the chat), not the ticket's;
+        a session whose customer has not yet written anything that shows a language falls back to the ticket's.
         Raises InvalidSession/ExpiredSession for a bad token."""
         session = self.session_store.validate(session_token)
         ticket = escalation.default_queue.get(ticket_id)
         if ticket is None or ticket["customer_id"] != session.customer_id:
             return None
         state = default_desk.state(ticket_id)
-        lang = self.conversations.get(session.ref).language
+        conv = self.conversations.get(session.ref)
+        lang = conv.language if conv.language_set else ticket.get("language") or conv.language
         text = render.case_update(state["status"], lang, default_traces.get(state["trace_id"] or ""))
         return {"ticket_id": ticket_id, "status": state["status"], "message": text}
 
@@ -660,6 +675,7 @@ class Orchestrator:
         conv = self.conversations.get(session.ref)
         lang = guess.language if (guess.pt_score or guess.es_score) else conv.language
         conv.language = lang
+        conv.language_set = conv.language_set or bool(guess.pt_score or guess.es_score)
         # The raw text only feeds local policy checks. The model gets `model_text` (identifiers masked, own product
         # ids as aliases); a human agent's ticket gets `ticket_text` (card numbers masked, amounts kept).
         model_text, ticket_text = redact(text), mask_card_numbers(text)
