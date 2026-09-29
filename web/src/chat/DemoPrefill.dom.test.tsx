@@ -102,7 +102,7 @@ describe('a scenario of the demo panel sends its first message through the chat'
     expect(within(aside).getAllByRole('region', { name: 'Pasos del escenario' })).toHaveLength(1)
   })
 
-  it('the reply fills the step and leaves the next message in the input', async () => {
+  it('the reply fills the step, and the next one waits in the card to be sent with a click, not in the input', async () => {
     const user = userEvent.setup()
     sendMessage.mockResolvedValue({ ok: true, reply: reply('AUTO_RESOLVE', 'Tu saldo es 10 USD.') })
     await draw()
@@ -110,28 +110,30 @@ describe('a scenario of the demo panel sends its first message through the chat'
 
     expect(await screen.findByText('Tu saldo es 10 USD.')).toBeTruthy()
     expect(sendMessage).toHaveBeenCalledOnce()
-    await waitFor(() => expect(input().value).toBe('Me clonaron la tarjeta'))
-    expect(document.activeElement).toBe(input())
     expect(within(card).getByText('✓ Resuelto')).toBeTruthy()
+    expect(input().value).toBe('')
+    expect((within(card).getByRole('button', { name: 'Enviar paso 2' }) as HTMLButtonElement).disabled).toBe(false)
   })
 
-  it('the second step is judged against what was expected, with the message sent from the composer', async () => {
+  it('a click on the next step sends it through the chat and the second step is judged against what was expected', async () => {
     const user = userEvent.setup()
     sendMessage
       .mockResolvedValueOnce({ ok: true, reply: reply('AUTO_RESOLVE', 'Tu saldo es 10 USD.') })
       .mockResolvedValueOnce({ ok: true, reply: reply('CLARIFY', '¿Qué pasó exactamente?') })
     await draw()
     const card = await load(user, 'Dos turnos')
-    await waitFor(() => expect(input().value).toBe('Me clonaron la tarjeta'))
-    await user.click(screen.getByRole('button', { name: 'Enviar mensaje' }))
+    await user.click(await within(card).findByRole('button', { name: 'Enviar paso 2' }))
 
+    expect(sendMessage).toHaveBeenCalledTimes(2)
+    expect(sendMessage.mock.calls[1][0].data).toMatchObject({ message: 'Me clonaron la tarjeta', key: expect.any(String) })
+    expect(sendMessage.mock.calls[1][0].data.key).not.toBe(sendMessage.mock.calls[0][0].data.key)
     expect(await within(card).findByText('✗ Salió Pregunta')).toBeTruthy()
-    // The scenario is over: nothing more is written into the input.
+    // The scenario is over: there is no step left to send, and the input was never written into.
+    expect(within(card).queryByRole('button', { name: /^Enviar paso/ })).toBeNull()
     expect(input().value).toBe('')
-    expect(within(card).queryByRole('button', { name: 'Volver a escribir el mensaje' })).toBeNull()
   })
 
-  it('a message the person is writing is not lost when the next step arrives; asking for the step again does replace it', async () => {
+  it('a message the person is writing is not touched by the steps', async () => {
     const user = userEvent.setup()
     let answer: (value: unknown) => void = () => {}
     sendMessage.mockReturnValue(new Promise((resolve) => { answer = resolve }))
@@ -144,10 +146,6 @@ describe('a scenario of the demo panel sends its first message through the chat'
     expect(await screen.findByText('Tu saldo es 10 USD.')).toBeTruthy()
     expect(within(card).getByText('✓ Resuelto')).toBeTruthy()
     expect(input().value).toBe('mi propio borrador')
-
-    await user.click(within(card).getByRole('button', { name: 'Volver a escribir el mensaje' }))
-    expect(input().value).toBe('Me clonaron la tarjeta')
-    expect(document.activeElement).toBe(input())
   })
 
   it('a reply to a message that is not the step is not the step: the card says so and the scenario stays where it was', async () => {
@@ -158,22 +156,19 @@ describe('a scenario of the demo panel sends its first message through the chat'
       .mockResolvedValueOnce({ ok: true, reply: reply('ESCALATE', 'Te paso con una persona.') })
     await draw()
     const card = await load(user, 'Dos turnos')
-    await waitFor(() => expect(input().value).toBe('Me clonaron la tarjeta'))
+    await within(card).findByRole('button', { name: 'Enviar paso 2' })
 
-    await user.clear(input())
     await user.type(input(), '¿A cuánto está el dólar?')
     await user.click(screen.getByRole('button', { name: 'Enviar mensaje' }))
 
     expect(await screen.findByText('El dólar está a 17 pesos.')).toBeTruthy()
     expect(within(card).getByRole('status', { name: '' }).textContent).toContain('no cuenta como paso')
     expect(within(card).queryByText(/^✗/)).toBeNull()
-    // Still on the second step: asking for it again writes the second message.
-    await user.click(within(card).getByRole('button', { name: 'Volver a escribir el mensaje' }))
-    expect(input().value).toBe('Me clonaron la tarjeta')
 
     // Back on the script, the step is answered and the note goes.
-    await user.click(screen.getByRole('button', { name: 'Enviar mensaje' }))
+    await user.click(within(card).getByRole('button', { name: 'Enviar paso 2' }))
     expect(await within(card).findByText('✓ A una persona')).toBeTruthy()
+    expect(sendMessage.mock.calls[2][0].data.message).toBe('Me clonaron la tarjeta')
     expect(within(card).queryByRole('status')).toBeNull()
   })
 
@@ -195,7 +190,7 @@ describe('a scenario of the demo panel sends its first message through the chat'
     expect(sendMessage.mock.calls[0][0].data.key).toBe(sendMessage.mock.calls[2][0].data.key)
     expect(within(card).getByText('✓ Resuelto')).toBeTruthy()
     expect(within(card).queryByRole('status')).toBeNull()
-    await waitFor(() => expect(input().value).toBe('Me clonaron la tarjeta'))
+    expect(within(card).getByRole('button', { name: 'Enviar paso 2' })).toBeTruthy()
   })
 
   it('the late reply of another message is not the answer of a step that failed', async () => {
@@ -216,10 +211,10 @@ describe('a scenario of the demo panel sends its first message through the chat'
     expect(sendMessage.mock.calls[1][0].data.key).toBe(sendMessage.mock.calls[2][0].data.key)
     expect(within(card).queryByText('✓ Resuelto')).toBeNull()
     expect(within(card).getByRole('status').textContent).toContain('no cuenta como paso')
-    expect(input().value).not.toBe('Me clonaron la tarjeta')
+    expect(within(card).getByRole('button', { name: 'Enviar paso 1' })).toBeTruthy()
   })
 
-  it('asking for the step again is off while a message is on its way, so the input cannot go back a step', async () => {
+  it('the step button is off while a message is on its way, and comes back for the next step when it is answered', async () => {
     const user = userEvent.setup()
     let answer: (value: unknown) => void = () => {}
     sendMessage.mockReturnValue(new Promise((resolve) => { answer = resolve }))
@@ -227,11 +222,12 @@ describe('a scenario of the demo panel sends its first message through the chat'
     const card = await load(user, 'Dos turnos')
     await waitFor(() => expect(sendMessage).toHaveBeenCalledOnce())
 
-    const again = within(card).getByRole('button', { name: 'Volver a escribir el mensaje' }) as HTMLButtonElement
-    expect(again.disabled).toBe(true)
+    const first = within(card).getByRole('button', { name: 'Enviar paso 1' }) as HTMLButtonElement
+    expect(first.disabled).toBe(true)
+    await user.click(first)
+    expect(sendMessage).toHaveBeenCalledOnce()
     await act(async () => { answer({ ok: true, reply: reply('AUTO_RESOLVE', 'Tu saldo es 10 USD.') }) })
-    await waitFor(() => expect(input().value).toBe('Me clonaron la tarjeta'))
-    expect((within(card).getByRole('button', { name: 'Volver a escribir el mensaje' }) as HTMLButtonElement).disabled).toBe(false)
+    await waitFor(() => expect((within(card).getByRole('button', { name: 'Enviar paso 2' }) as HTMLButtonElement).disabled).toBe(false))
   })
 
   it('loading a scenario leaves no draft behind: the session it belonged to is gone', async () => {
@@ -244,35 +240,64 @@ describe('a scenario of the demo panel sends its first message through the chat'
     expect(input().value).toBe('')
   })
 
-  it('in Portuguese the panel and the input speak Portuguese', async () => {
+  it('in Portuguese the step button speaks Portuguese and sends the step', async () => {
     const user = userEvent.setup()
+    sendMessage
+      .mockResolvedValueOnce({ ok: true, reply: reply('AUTO_RESOLVE', 'Tu saldo es 10 USD.') })
+      .mockResolvedValueOnce({ ok: true, reply: reply('ESCALATE', 'Te paso con una persona.') })
     await draw('pt')
     const aside = await screen.findByRole('complementary', { name: 'Recursos de demonstração' })
     const card = within(aside).getByRole('article', { name: 'Dos turnos (PT)' })
     await user.click(within(card).getByRole('button', { name: 'Carregar' }))
-    await waitFor(() => expect(sendMessage).toHaveBeenCalledOnce())
     expect(await screen.findByText('¿Cuál es mi saldo?')).toBeTruthy()
-    expect(within(card).getByRole('button', { name: 'Escrever a mensagem de novo' })).toBeTruthy()
+    await user.click(await within(card).findByRole('button', { name: 'Enviar passo 2' }))
+    expect(await screen.findByText('Te paso con una persona.')).toBeTruthy()
+    expect(sendMessage.mock.calls[1][0].data.message).toBe('Me clonaron la tarjeta')
   })
 
   describe('on a narrow screen, where the panel is a drawer', () => {
     beforeEach(() => phone(true))
 
-    it('choosing a scenario closes the drawer, gives the page back, and the chat shows the message sent and its reply', async () => {
+    it('choosing a scenario closes the drawer, gives the page back and puts the focus in the input while the message is on its way', async () => {
       const user = userEvent.setup()
       const { container } = await draw()
       await user.click(await screen.findByRole('button', { name: 'Demo' }))
       const drawer = container.querySelector('#shell-demo') as HTMLElement
       expect(drawer.hasAttribute('inert')).toBe(false)
       expect((container.querySelector('.shell__main') as HTMLElement).hasAttribute('inert')).toBe(true)
+      let answer: (value: unknown) => void = () => {}
+      sendMessage.mockReturnValue(new Promise((resolve) => { answer = resolve }))
 
-      sendMessage.mockResolvedValue({ ok: true, reply: reply('AUTO_RESOLVE', 'Tu saldo es 10 USD.') })
       await load(user, 'Dos turnos')
 
       expect(await screen.findByText('¿Cuál es mi saldo?')).toBeTruthy()
-      expect(await screen.findByText('Tu saldo es 10 USD.')).toBeTruthy()
       expect(drawer.hasAttribute('inert')).toBe(true)
       expect((container.querySelector('.shell__main') as HTMLElement).hasAttribute('inert')).toBe(false)
+      await waitFor(() => expect(document.activeElement).toBe(input()))
+      // The chat shows the message and, when it comes, the reply.
+      await act(async () => { answer({ ok: true, reply: reply('AUTO_RESOLVE', 'Tu saldo es 10 USD.') }) })
+      expect(await screen.findByText('Tu saldo es 10 USD.')).toBeTruthy()
+      await waitFor(() => expect(document.activeElement).toBe(input()))
+    })
+
+    it('the step button of a reopened drawer sends the step, closes the drawer over the chat and leaves the focus in the input', async () => {
+      const user = userEvent.setup()
+      sendMessage
+        .mockResolvedValueOnce({ ok: true, reply: reply('AUTO_RESOLVE', 'Tu saldo es 10 USD.') })
+        .mockResolvedValueOnce({ ok: true, reply: reply('ESCALATE', 'Te paso con una persona.') })
+      const { container } = await draw()
+      await user.click(await screen.findByRole('button', { name: 'Demo' }))
+      const card = await load(user, 'Dos turnos')
+      await screen.findByText('Tu saldo es 10 USD.')
+      await user.click(screen.getByRole('button', { name: 'Demo' }))
+      const drawer = container.querySelector('#shell-demo') as HTMLElement
+      expect(drawer.hasAttribute('inert')).toBe(false)
+
+      await user.click(within(card).getByRole('button', { name: 'Enviar paso 2' }))
+
+      expect(await screen.findByText('Te paso con una persona.')).toBeTruthy()
+      expect(sendMessage.mock.calls[1][0].data.message).toBe('Me clonaron la tarjeta')
+      expect(drawer.hasAttribute('inert')).toBe(true)
       await waitFor(() => expect(document.activeElement).toBe(input()))
     })
     it('reopening the drawer with a scenario in course puts the focus on its card, not on the top of the panel', async () => {
@@ -280,7 +305,7 @@ describe('a scenario of the demo panel sends its first message through the chat'
       const { container } = await draw()
       await user.click(await screen.findByRole('button', { name: 'Demo' }))
       const card = await load(user, 'Dos turnos')
-      await waitFor(() => expect(sendMessage).toHaveBeenCalledOnce())
+      await waitFor(() => expect(document.activeElement).toBe(input()))
       const drawer = container.querySelector('#shell-demo') as HTMLElement
       expect(drawer.hasAttribute('inert')).toBe(true)
 
@@ -305,6 +330,7 @@ describe('a scenario of the demo panel sends its first message through the chat'
       await user.click(await screen.findByRole('button', { name: 'Demo' }))
       const card = await load(user, 'Dos turnos')
       await screen.findByText('Tu saldo es 10 USD.')
+      await waitFor(() => expect(document.activeElement).toBe(input()))
       await user.click(screen.getByRole('button', { name: 'Demo' }))
       expect(document.activeElement).toBe(card)
       return { user, card }

@@ -9,10 +9,10 @@ import './DemoPanel.css'
 
 /**
  * The scenario in course. `from` is the session it was chosen in: the new one is there when `sessionRef` differs, and `base` is
- * how many entries that conversation already had (what comes after them can answer the steps). `prefilled` is the last step
- * written into the composer; `started` says the first one was sent.
+ * how many entries that conversation already had (what comes after them can answer the steps). `started` says the first
+ * message was sent.
  */
-type Active = { scenario: DemoScenario; from: string; base: number | null; prefilled: number; started: boolean }
+type Active = { scenario: DemoScenario; from: string; base: number | null; started: boolean }
 
 const PATHS = ['normal', 'ambiguous', 'out_of_scope', 'action', 'human', 'attack', 'failure'] as const
 const DISPOSITIONS = ['AUTO_RESOLVE', 'CLARIFY', 'ABSTAIN', 'ESCALATE'] as const
@@ -24,9 +24,10 @@ function known<T extends string>(list: readonly T[], value: string): value is T 
 
 // DEMO_MODE only. Everything here talks to the API's /demo endpoints through the server; the customer app works
 // the same without it, and it is drawn apart, on its own panel with its own label, so nobody mistakes it for the service.
-// A scenario does not send anything: it writes its next message into the chat's input, and the person sends it from there like
-// any other; the steps below only read the conversation. A step is answered when the reply is to the step's own text; a reply to
-// any other message is not a step (the card says so), so an edited or unrelated message does not move the scenario. Each reply
+// A scenario sends its messages through the chat's own send, like any suggestion: the first one when its session is up, the
+// next ones with the button of the step in course. The steps below read the conversation. A step is answered when the reply is
+// to the step's own text; a reply to any other message (one the person wrote by hand) is not a step (the card says so), so an
+// unrelated message does not move the scenario. Each reply
 // says which message it answers (`to`), because a retry's reply comes late, after other messages; the replies are read in the
 // order they came.
 function progress(entries: Entry[], turns: string[]): { got: string[]; off: boolean } {
@@ -45,16 +46,17 @@ function progress(entries: Entry[], turns: string[]): { got: string[]; off: bool
   return { got, off }
 }
 
-export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations, send, prefill, overlay, onSessionChanged, onClose }: {
+export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations, ended, send, overlay, onSessionChanged, onClose }: {
   scenarios: DemoScenario[]
   sessionRef: string
   entries: Entry[]
   pending: boolean
   escalations: number
   /** Writes a message into the chat's input; `replace` says the person chose it, so it goes over a draft. */
-  /** The chat's own send: the first message of a scenario goes through it, with the same key, the same state and the same retry. */
+  /** The session is over: no step can be sent (loading a scenario starts another). */
+  ended: boolean
+  /** The chat's own send: the messages of a scenario go through it, with the same key, the same state and the same retry. */
   send: (text: string) => Promise<unknown>
-  prefill: (text: string, replace: boolean) => void
   /** The panel is a drawer over the page: choosing a scenario closes it, so the input is in reach. */
   overlay: boolean
   onSessionChanged: () => Promise<void>
@@ -88,7 +90,7 @@ export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations
     try {
       const result = await startScenario({ data: { id: scenario.id } })
       if (!result.ok) return setNote('demo.scenarios.failed')
-      setActive({ scenario, from: sessionRef, base: null, prefilled: 0, started: false })
+      setActive({ scenario, from: sessionRef, base: null, started: false })
       setModelDown(scenario.fault === 'llm_outage')
       await onSessionChanged()
     } catch {
@@ -120,24 +122,25 @@ export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations
     setActive((a) => (a && a.base === null && sessionRef !== a.from ? { ...a, base: entries.length } : a))
   }, [sessionRef, entries.length])
 
-  // The scenario's first message is sent as soon as its session is up, and the drawer (over the chat) gives the page back.
+  // On a phone the drawer covers the chat: once a message is sent it closes, and the focus goes to the chat's input (the drawer's
+  // own close would give it back to the button that opened it, and that comes a render later).
+  const backToChat = useCallback(() => {
+    onClose()
+    requestAnimationFrame(() => document.getElementById('composer-input')?.focus())
+  }, [onClose])
+
+  // The scenario's first message is sent as soon as its session is up.
   useEffect(() => {
     if (!active || active.base === null || active.started || pending || turns.length === 0) return
     setActive({ ...active, started: true })
     void send(turns[0])
-    if (overlay) onClose()
-  }, [active, pending, turns, send, overlay, onClose])
+    if (overlay) backToChat()
+  }, [active, pending, turns, send, overlay, backToChat])
 
-  // The steps after it are still written into the input, only if it is empty, so a message being written is not lost.
-  useEffect(() => {
-    if (!active || active.base === null || next <= active.prefilled || next >= turns.length) return
-    setActive({ ...active, prefilled: next })
-    prefill(turns[next], false)
-  }, [active, next, turns, prefill])
-
-  function again() {
-    prefill(turns[next], true)
-    if (overlay) onClose()
+  // A step after the first goes with the button of the step in course.
+  function sendStep() {
+    void send(turns[next])
+    if (overlay) backToChat()
   }
 
   const groups = [...new Set(scenarios.map((s) => s.path))]
@@ -187,13 +190,15 @@ export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations
                             <span className="demo__quote">“{turn}”</span>
                             <span className="demo__muted">{t('demo.steps.expected', { what: expected ? disposition(expected) : t('demo.steps.anyOutcome') })}</span>
                             {reply && <span className={matches ? 'demo__ok' : 'demo__bad'}>{t(matches ? 'demo.steps.came' : 'demo.steps.cameWrong', { what: disposition(reply) })}</span>}
+                            {active.base !== null && i === next && (
+                              <Button variant="ghost" size="sm" tinted disabled={pending || ended} onClick={sendStep}>{t('demo.steps.send', { n: i + 1 })}</Button>
+                            )}
                           </li>
                         )
                       })}
                     </ol>
                     {off && <p className="demo__note" role="status">{t('demo.steps.offScript')}</p>}
                     <div className="demo__actions">
-                      {active.base !== null && next < turns.length && <Button variant="ghost" size="sm" tinted disabled={pending} onClick={again}>{t('demo.steps.refill')}</Button>}
                       <Button variant="ghost" size="sm" onClick={() => setActive(null)}>{t('demo.steps.close')}</Button>
                     </div>
                   </section>
