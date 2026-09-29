@@ -1,5 +1,6 @@
 // HTTP tests against the production build (dist/server/server.js): the same request handler `vite build` produces,
 // called with real Request objects, in front of a fake agent API. `pnpm test:http` builds first.
+import assert from 'node:assert/strict'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { pathToFileURL } from 'node:url'
@@ -73,6 +74,16 @@ export function sessionCookie(response: Response) {
   const set = response.headers.getSetCookie().find((c) => /cecilai_operator=/.test(c) && !/flash/.test(c) && !/=;|Max-Age=0|Expires=Thu, 01 Jan 1970/i.test(c))
   return set ? set.split(';')[0] : null
 }
+
+/** A refused form post: back to the login with a fixed reason in the URL (never a bare 403), and no cookie at all. */
+export function assertRefused(response: Response, motivo: 'origen' | 'origen-config', note = '') {
+  assert.equal(response.status, 303, note)
+  assert.equal(response.headers.get('location'), `/operador/login?motivo=${motivo}`, note)
+  assert.deepEqual(response.headers.getSetCookie(), [], note)
+}
+
+/** The text of the alert a rendered page shows, or null. The page also carries its dictionaries as data, so a text being anywhere in the HTML proves nothing. */
+export const alertOf = (html: string) => /role="alert">([^<]*)</.exec(html)?.[1] ?? null
 
 export const setCookies = (response: Response) => response.headers.getSetCookie()
 

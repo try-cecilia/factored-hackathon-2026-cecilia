@@ -3,7 +3,8 @@
 # It builds both images, starts API + web + Prometheus + Grafana, waits for them to be healthy, then checks:
 #   the API's probes and the smoke test (ops/container_smoke.py), the web's page and its path to the API, through the web (the
 #   BFF, in production mode, as a browser would use it): a customer's login and a chat turn, an operator's login on the plain form
-#   with the origin the compose configures (and a post without it refused) and the queue behind it, and /dev/ui closed; the
+#   with the origin the compose configures (and a post without it refused) and the queue behind it, and /dev/ui closed, first with
+#   the compose's http origin (plain cookies) and then with the web restarted behind an https one (Secure __Host- cookies); the
 #   security headers, the access checks that matter most, /metrics with and without credentials, that Prometheus scrapes the API and has
 #   loaded every alert rule, and that Grafana is provisioned with a dashboard whose queries Prometheus accepts.
 # The llm-local profile (a model server) is not started here.
@@ -84,11 +85,14 @@ rpc_id() { $COMPOSE exec -T web sh -c "grep -rhoE 'var $1 = createServerFn.{0,20
 E2E_LOGIN_FN="$(rpc_id login)"; E2E_SEND_FN="$(rpc_id sendMessage)"
 [ -n "$E2E_LOGIN_FN" ] && [ -n "$E2E_SEND_FN" ] || fail "could not find the login and chat server functions in the web build"
 E2E_CUSTOMER="$(curl -fs "$API/demo/customers" | python3 -c 'import json, sys; c = json.load(sys.stdin)[0]; print(c["customer_id"] + ":" + c["test_pin"])')" || fail "the API lists no demo customer"
-python3 - "$WEB" "$E2E_LOGIN_FN" "$E2E_SEND_FN" "$E2E_CUSTOMER" "$E2E_ADMIN" "$E2E_OPERATOR" <<'PY' || fail "the web's login, chat or operator console (see above)"
+cat > "$WORK/web_e2e.py" <<'PY'
 import json, re, sys, urllib.error, urllib.parse, urllib.request
 
-web, login_fn, send_fn, customer, admin_key, operator_key = sys.argv[1:7]
+web, login_fn, send_fn, customer, admin_key, operator_key, public_origin = sys.argv[1:8]
 customer_id, pin = customer.split(":")
+# Secure and __Host- follow WEB_PUBLIC_ORIGIN, not NODE_ENV (the image is in production mode in both variants)
+https = public_origin.startswith("https://")
+prefix = "__Host-" if https else ""
 
 
 class Stay(urllib.request.HTTPRedirectHandler):
@@ -135,28 +139,46 @@ def serverfn(fn, cookie=None, **data):
 # customer: a wrong PIN is refused (401), the right one starts a session held in an httpOnly cookie, and a turn goes through
 status, headers, body = serverfn(login_fn, customer_id=customer_id, pin="000000" if pin != "000000" else "111111")
 check(status == 200 and '"k":["ok","status"],"v":[{"t":2,"s":3},{"t":0,"s":401}]' in body, "web login: a wrong PIN is refused with 401")
-check(cookie_of(headers, "__Host-cecilai_session")[0] is None, "web login: a refused login sets no session")
+check(cookie_of(headers, prefix + "cecilai_session")[0] is None, "web login: a refused login sets no session")
 status, headers, body = serverfn(login_fn, customer_id=customer_id, pin=pin)
-session, line = cookie_of(headers, "__Host-cecilai_session")
+session, line = cookie_of(headers, prefix + "cecilai_session")
 check(status == 200 and '"k":["ok"],"v":[{"t":2,"s":2}]' in body and session, "web login: the customer's login starts a session")
-check(all(a in line for a in ("HttpOnly", "Secure", "SameSite=Lax", "Path=/")), "web login: the session cookie is __Host-, httpOnly, Secure and SameSite=Lax")
+check(all(a in line for a in ("HttpOnly", "SameSite=Lax", "Path=/")), "web login: the session cookie is httpOnly, SameSite=Lax")
+check(("Secure" in line) == https and (line.startswith("__Host-") == https),
+      f"web login: the session cookie is {'Secure with the __Host- prefix' if https else 'plain (no Secure, no __Host-): a browser keeps it from http'}")
 status, _, body = serverfn(send_fn, cookie=session, message="cual es mi saldo", key="e2e-key-0001")
 check(status == 200 and '"k":["ok","reply"],"v":[{"t":2,"s":2}' in body and '"s":"AUTO_RESOLVE"' in body, "web chat: a turn through the BFF answers, resolved from verified data")
 status, _, body = serverfn(send_fn, message="cual es mi saldo", key="e2e-key-0002")
 check(status == 200 and '"s":"session_expired"' in body and '"reply"' not in body, "web chat: without the session cookie there is no turn (session_expired)")
 
 # operator: the plain form, from this origin (what the compose configures as WEB_PUBLIC_ORIGIN), and the queue behind it
-origin = web
+origin = public_origin
 form = urllib.parse.urlencode({"admin_key": admin_key, "operator_key": operator_key}).encode()
 same = {"Content-Type": "application/x-www-form-urlencoded", "Origin": origin, "Referer": origin + "/operador/login"}
 for name, headers in (("with no Origin or Referer", {"Content-Type": same["Content-Type"]}),
                       ("from another origin", {**same, "Origin": "https://attacker.invalid", "Referer": "https://attacker.invalid/x"})):
     status, response, _ = call("POST", "/operador/sesion", form, headers)
-    check(status == 403 and cookie_of(response, "__Host-cecilai_operator")[0] is None, f"operator login {name}: refused with 403, no session")
+    check(status == 303 and response["Location"] == "/operador/login?motivo=origen" and not response.get_all("Set-Cookie"),
+          f"operator login {name}: refused, back to the login with a notice in the URL and no cookie")
+_, _, page = call("GET", "/operador/login?motivo=origen")
+check("No pudimos verificar el origen del formulario" in page and public_origin in page, "the login page names the origin to use, without any cookie")
+if not https:
+    # the compose trusts the machine by IP and by name; a form from another port or host is still refused
+    localhost = f"http://localhost:{public_origin.rsplit(':', 1)[1]}"
+    status, response, _ = call("POST", "/operador/sesion", form, {**same, "Origin": localhost, "Referer": localhost + "/operador/login"})
+    check(status == 303 and response["Location"].startswith("/operador/ingreso") and cookie_of(response, "cecilai_operator")[0], "operator login from http://localhost:<port>: accepted (the compose lists both origins)")
+    other = "http://localhost:1"
+    status, response, _ = call("POST", "/operador/sesion", form, {**same, "Origin": other, "Referer": other + "/x"})
+    check(status == 303 and response["Location"] == "/operador/login?motivo=origen" and cookie_of(response, "cecilai_operator")[0] is None, "operator login from another port: refused")
 status, response, _ = call("POST", "/operador/sesion", form, same)
-cookie, line = cookie_of(response, "__Host-cecilai_operator")
-check(status == 303 and response["Location"] == "/operador/cola" and cookie, "operator login from this origin: 303 to the queue with a session")
-check(all(a in line for a in ("HttpOnly", "Secure", "SameSite=Strict")), "operator session cookie: __Host-, httpOnly, Secure and SameSite=Strict")
+cookie, line = cookie_of(response, prefix + "cecilai_operator")
+check(status == 303 and response["Location"] == "/operador/ingreso?to=%2Foperador%2Fcola" and cookie, "operator login from this origin: 303 to the arrival check with a session")
+check(all(a in line for a in ("HttpOnly", "SameSite=Strict")) and ("Secure" in line) == https and (line.startswith("__Host-") == https),
+      f"operator session cookie: httpOnly, SameSite=Strict, {'Secure with the __Host- prefix' if https else 'no Secure and no __Host-'}")
+status, response, _ = call("GET", "/operador/ingreso?to=%2Foperador%2Fcola", headers={"Cookie": cookie})
+check(status == 303 and response["Location"] == "/operador/cola", "the arrival check, with the cookie the browser kept, goes on to the queue")
+status, response, _ = call("GET", "/operador/ingreso?to=%2Foperador%2Fcola")
+check(status == 303 and "motivo=sin-cookie" in response["Location"], "the arrival check, without the cookie (the browser dropped it), goes back to the login saying so")
 check(call("GET", "/operador/cola")[0] == 307, "the queue without a session redirects to the login")
 status, _, page = call("GET", "/operador/cola", headers={"Cookie": cookie})
 # The page also carries the area's dictionary (empty-state texts included), so look for what the table draws: its range
@@ -167,6 +189,16 @@ check(operator_key not in page and admin_key not in page, "operator queue: no ke
 # the UI kit gallery is a development tool: a production build answers 404 unless UI_GALLERY=1
 check(call("GET", "/dev/ui")[0] == 404, "/dev/ui answers 404 in the production build")
 PY
+web_checks() {  # the checks above, against the web as configured now: $1 is the origin WEB_PUBLIC_ORIGIN says the browser sees
+  python3 "$WORK/web_e2e.py" "$WEB" "$E2E_LOGIN_FN" "$E2E_SEND_FN" "$E2E_CUSTOMER" "$E2E_ADMIN" "$E2E_OPERATOR" "$1" || fail "the web's login, chat or operator console (see above)"
+}
+echo "--- the compose's own origin (http: plain cookies, as a local browser needs) ---"
+web_checks "$WEB"
+# The same web behind an https origin (a real deploy, or a TLS proxy in front): Secure cookies with the __Host- prefix
+echo "--- the web behind an https origin (Secure, __Host-) ---"
+WEB_PUBLIC_ORIGIN=https://console.e2e.example $COMPOSE up -d --no-deps --force-recreate --wait web >/dev/null 2>&1 || fail "the web did not restart with an https origin"
+web_checks https://console.e2e.example
+$COMPOSE up -d --no-deps --force-recreate --wait web >/dev/null 2>&1 || fail "the web did not restart with the compose's own origin"
 # A browser sends `Origin: null` with a form post under `Referrer-Policy: no-referrer`, which the operator forms refuse: the web
 # must send a policy that keeps the origin for its own posts (found by logging in with Chromium; curl cannot show it)
 headers "$WEB/operador/login" | grep -qi '^referrer-policy: same-origin' || fail "the web's Referrer-Policy is not same-origin: a browser's operator login would send Origin: null"

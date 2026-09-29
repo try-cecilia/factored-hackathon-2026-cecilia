@@ -292,6 +292,10 @@ export const operator = {
     submit: 'Ingresar',
     errors: {
       admin_missing: 'Escribir la clave de lectura.',
+      origin_refused: 'No pudimos verificar el origen del formulario. Ingresar desde {origins}.',
+      origin_refused_bare: 'No pudimos verificar el origen del formulario. Volver a abrir la consola e intentar de nuevo.',
+      origin_config: 'La consola no tiene configurado su origen público (WEB_PUBLIC_ORIGIN). Avisar a quien la administra.',
+      sessionNotSaved: 'Tu navegador no guardó la sesión. Verificar que acepte cookies de este sitio y volver a intentar. Fuera de localhost, la consola debe abrirse por https.',
       session_replaced: 'La sesión se reemplazó al ingresar desde otra pestaña. Intentar de nuevo.',
       key_invalid: 'Una de las claves no es válida.',
       admin_401: 'La clave de lectura no es válida.',

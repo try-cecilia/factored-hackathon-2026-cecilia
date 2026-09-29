@@ -109,14 +109,37 @@ lectura y trazas. Cómo se configuran las claves:
   controla un campo de contraseña o pasa una clave a una función de servidor. Además hay pruebas HTTP contra el handler del
   build de producción (`web/tests/http/`, con una API falsa): CSRF, destinos de redirección hostiles y rotación de sesión.
 - *Formularios protegidos contra CSRF.* Los tres POST (`/operador/sesion`, `/operador/clave`, `/operador/salir`) se rechazan
-  con 403, sin tocar cookies, si no prueban venir de una página de la consola: `Sec-Fetch-Site`, cuando el navegador lo
+  —sin leer el cuerpo ni tocar la sesión— si no prueban venir de una página de la consola: `Sec-Fetch-Site`, cuando el navegador lo
   manda, tiene que ser `same-origin`; `Origin` (o `Referer` si falta) tiene que ser **exactamente el origen público**
   (esquema, host y puerto); sin ninguna de las dos cabeceras no hay prueba y se rechaza. `SameSite=Strict` no alcanzaba
   para el ingreso porque todavía no hay cookie. El origen público sale de **`WEB_PUBLIC_ORIGIN`** en el servidor de la web
   (por ejemplo `https://console.bank.example`, sin ruta), nunca de cabeceras de proxy: una página `http://` del mismo host
   no puede forzar un ingreso sobre `https://`. **En producción es obligatoria**: sin ella, o con un valor que no sea un
-  origen http(s), todos los POST de la consola dan 403 y el servidor escribe en el log qué falta. En desarrollo, si está
+  origen http(s), todos los POST de la consola se rechazan y el servidor escribe en el log qué falta.
+  **Puede ser una lista de orígenes exactos separados por comas** (esquema, host y puerto de cada uno): el stack local de Docker
+  responde en `http://127.0.0.1:3000` y en `http://localhost:3000`, y el compose pasa ambos por defecto. Cada entrada
+  tiene que ser un origen puro tal como está escrita: sin comodines, usuario@, ruta, query ni fragmento (se valida el texto
+  antes de normalizarlo, con el host en ASCII —un dominio internacionalizado va en punycode, `xn--…`; los caracteres Unicode que el parser convertiría en `*` o `.` se rechazan—; una `/` final se tolera). **Una sola entrada inválida invalida todo el valor**, y **una lista que mezcla
+  http y https también** (las cookies no pueden ser correctas para las dos): se rechaza todo en vez de abrir algo por un error de
+  tipeo. Las cookies y la autorización usan esa misma validación. Las cabeceras `X-Forwarded-*` siguen sin leerse. En producción
+  va **un origen https explícito**. En desarrollo, si está
   vacía, se usa el origen de la URL de la petición (`http://127.0.0.1:<puerto>`). Está en `web/.env.example`.
+  **El rechazo no es una página en blanco:** es un `303` a `/operador/login?motivo=origen` (u `origen-config`) con el motivo en la URL, no en una
+  cookie (un navegador que no guarda cookies igual lo ve), de una lista cerrada y sin eco de la petición: ni las claves ni el origen
+  que mandó el navegador; también se ve si ya hay una sesión activa, que no se toca. En ES y PT: «No pudimos verificar el origen del
+  formulario. Ingresar desde <orígenes configurados>.», o, si `WEB_PUBLIC_ORIGIN` falta o es inválido, que la consola no tiene
+  configurado su origen público. No se emite ninguna cookie de sesión.
+- *Cookies según el origen.* Que una cookie salga `Secure` y con prefijo `__Host-` lo decide **`WEB_PUBLIC_ORIGIN`**, no `NODE_ENV`
+  (la imagen de Docker corre con `NODE_ENV=production` también en local). Con un origen **https** son `Secure` con `__Host-`
+  (`__Host-cecilai_session`, `__Host-cecilai_operator`, `__Host-cecilai_operator_flash`; el idioma, `cecilai_lang`, va `Secure`
+  sin prefijo); con un origen **http** (el stack local, `http://127.0.0.1:3000`) no llevan ninguna de las dos cosas, porque Safari
+  y los navegadores fuera de `localhost` no guardan una cookie `Secure` recibida por http y el ingreso se perdía sin aviso.
+  Sin `WEB_PUBLIC_ORIGIN` en producción se conserva el comportamiento anterior (`Secure`). En cualquier caso siguen `httpOnly`,
+  `SameSite` (`Lax` la sesión de cliente, `Strict` la de operador) y el chequeo de origen de los formularios. Es una sola
+  función (`web/src/server/cookie-policy.ts`) para las cuatro cookies. Si aun así el navegador no guarda la sesión (cookies
+  bloqueadas, http fuera de localhost), el ingreso de cliente devuelve el botón a su estado y muestra «Tu navegador no guardó la
+  sesión…», y el de operador —que pasa por `/operador/ingreso`, una redirección que mira la cookie que el navegador sí trajo—
+  vuelve al formulario con el mismo aviso (ES y PT).
 - *Sesión nueva en cada ingreso y en cada elevación.* Un ingreso siempre crea un identificador nuevo y termina la sesión
   que ese navegador tuviera; agregar la clave de operador también cambia el identificador y el anterior deja de valer, así
   que una cookie de solo lectura copiada no gana permisos de acción. El tope de 8 horas sigue contando desde el ingreso original. La sesión anterior se consume en un solo paso
@@ -132,7 +155,7 @@ lectura y trazas. Cómo se configuran las claves:
   barras invertidas) y solo se acepta una ruta propia que no empiece con `//`; ante la duda va a `/operador/cola`.
 - *Dónde viven las claves.* Nunca en el JavaScript del navegador, en `localStorage` ni en una cookie. El servidor de la web
   (BFF) las guarda **en memoria**, atadas a un identificador aleatorio de 256 bits que viaja en una cookie
-  `httpOnly` + `SameSite=Strict` (y `Secure` con prefijo `__Host-` en producción). La sesión vence a los 30 minutos sin
+  `httpOnly` + `SameSite=Strict` (y `Secure` con prefijo `__Host-` cuando el origen público es https; ver «Cookies según el origen»). La sesión vence a los 30 minutos sin
   actividad de la persona (el refresco automático de la cola y del monitoreo **no** cuenta como actividad) o a las 8
   horas, y se descarta si la API rechaza la clave (rotada o revocada). Al vencer, la consola vuelve al ingreso con un aviso.
   `OPERATOR_IDLE_SECONDS` (en el servidor de la web, por defecto 1800, mínimo 10) acorta esa ventana para probar el vencimiento.
@@ -588,9 +611,11 @@ make clean-volumes      # además borra los volúmenes (pregunta antes)
 ```
 
 La web del compose corre en modo producción: la consola de operador exige `WEB_PUBLIC_ORIGIN`, y el compose se la pasa
-(por defecto `http://127.0.0.1:${WEB_PORT}`, junto con `TRUSTED_CLIENT_IP_HEADER`, `OPERATOR_IDLE_SECONDS` y `UI_GALLERY`; están en
+(por defecto `http://127.0.0.1:${WEB_PORT}` y `http://localhost:${WEB_PORT}`, junto con `TRUSTED_CLIENT_IP_HEADER`, `OPERATOR_IDLE_SECONDS` y `UI_GALLERY`; están en
 `.env.example`). `make compose-e2e` entra por la web como un navegador: login de cliente y un turno de chat, login de operador por el
-formulario (con y sin el `Origin` correcto) y su cola, y `/dev/ui` en 404.
+formulario (con y sin el `Origin` correcto, y por `localhost`) y su cola, y `/dev/ui` en 404; lo repite con la web reiniciada tras un
+origen https, donde espera cookies `Secure` con `__Host-`. Con un navegador de verdad (WebKit, el motor de Safari, y Chromium)
+se verificó una vez con `ops/browser_cookies_check.mjs`.
 
 Sin clave de modelo el asistente corre en modo degradado seguro: saldos simples desde datos verificados y todo lo demás a una
 persona. Requisitos de RAM y disco de los modelos locales, y por qué en macOS conviene el Ollama del host: `docs/operations.md`

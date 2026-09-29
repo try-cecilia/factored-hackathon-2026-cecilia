@@ -1,5 +1,6 @@
 import { createServerFn } from '@tanstack/react-start'
 import { adminRead, operatorAct, type Result } from './operator-api'
+import { publicOrigins } from './origin-check'
 import { operatorSessionState, takeFlash } from './operator-session'
 import { toQueueRow, type QueueRow } from './queue-row'
 
@@ -75,6 +76,9 @@ export const getOperatorView = createServerFn({ method: 'GET' })
 
 /** The one-shot message a form post left for the login page. */
 export const getFlash = createServerFn({ method: 'GET' }).handler(async () => takeFlash())
+
+/** The origins the console trusts (configuration, never something from the request), for the notice of a refused origin. */
+export const getPublicOrigins = createServerFn({ method: 'GET' }).handler(async () => (publicOrigins(process.env.WEB_PUBLIC_ORIGIN) ?? []).join(', '))
 
 const idOf = (input: unknown, label: string) => {
   const value = clean((input as Record<string, unknown> | null)?.[label])
