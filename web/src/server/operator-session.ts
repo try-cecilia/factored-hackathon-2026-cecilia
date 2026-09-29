@@ -20,14 +20,11 @@ export type SessionState = { status: 'active'; session: OperatorSession } | { st
 
 /**
  * A login always gets a new id, and the session this browser held before it is consumed in the same step. If a second
- * login arrives with a cookie that was just consumed, it gets nothing (false) and the stale cookie is cleared, so two
- * simultaneous logins cannot leave two live sessions behind.
+ * login arrives with a cookie that was just consumed, it gets nothing (false) and its response must not touch the session
+ * cookie: the winner's Set-Cookie may already be in the browser, and a deletion arriving after it would orphan that session.
  */
 export function startOperatorSession(adminKey: string, operatorKey?: string, operator?: string): boolean {
-  if (store.take(getCookie(name)) === 'already') {
-    deleteCookie(name, options)
-    return false
-  }
+  if (store.take(getCookie(name)) === 'already') return false
   setCookie(name, store.start(adminKey, operatorKey, operator), { ...options, maxAge: ABSOLUTE_MS / 1000 })
   return true
 }
