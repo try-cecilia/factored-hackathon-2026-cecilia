@@ -22,7 +22,10 @@ export type SidebarMenuProps = {
   label: string
   items: readonly SidebarMenuItem[]
   onSelect: (id: string) => void
-  /** Esc closes and Tab leaves; the owner decides where the focus goes. */
+  /**
+   * Esc asks to close and Tab or Shift+Tab ask to close and leave. Tab is never cancelled here, so with or without
+   * this handler the focus can move on; the owner decides where it stands when the menu goes (Esc: the trigger).
+   */
   onClose?: (reason: 'escape' | 'tab') => void
   /** Which item takes the focus when the menu mounts. `false` leaves the focus alone, for a menu drawn on the page. */
   autoFocus?: 'first' | 'last' | false
@@ -57,7 +60,6 @@ export function SidebarMenu({ label, items, onSelect, onClose, autoFocus = 'firs
       event.preventDefault()
       onClose?.('escape')
     } else if (event.key === 'Tab') {
-      event.preventDefault()
       onClose?.('tab')
     } else if (!event.ctrlKey && !event.metaKey && !event.altKey) {
       const now = Date.now()
@@ -201,6 +203,8 @@ export function SidebarRowMenu({ name, items, onSelect }: SidebarRowMenuProps) {
             className="ui-sidebar-menu--layer"
             // Invisible but focusable until measured, so the first item can take the focus right away.
             style={position ? { left: position.left, top: position.top } : { left: 0, top: 0, opacity: 0, pointerEvents: 'none' }}
+            // Esc and Tab both put the focus back on the trigger. Tab is not cancelled, so the browser then steps on from
+            // the trigger (the layer sits at the end of the body): next control for Tab, previous one for Shift+Tab.
             onClose={() => close(true)}
             onSelect={(id) => {
               close(true)
