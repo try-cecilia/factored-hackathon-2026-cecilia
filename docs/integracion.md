@@ -325,8 +325,8 @@ razonamiento oculto del modelo, que la consigna no acepta como artefacto de audi
 
 La retención corre a diario con `python -m ops.retention`. Los endpoints de solo lectura (clave de admin) son
 `/admin/human_queue`, `audit_log`, `trace_log`, `traces/{id}`, `ops`, `llm_budget`, `data_quality`, `drift` y
-`experiments`. Los umbrales de alerta están especificados en `docs/operations.md` pero **no están conectados a un stack
-de métricas**.
+`experiments`. Los umbrales de alerta están especificados en `docs/operations.md` y `python -m ops.alerts` evalúa los que no necesitan historial, pero **nada lo ejecuta
+periódicamente** y no están conectados a un stack de métricas.
 
 **Punto de sustitución.** `_JsonlSink.write(record)` en `audit.py`: es donde un SIEM o una canalización de logs recibiría
 cada registro.

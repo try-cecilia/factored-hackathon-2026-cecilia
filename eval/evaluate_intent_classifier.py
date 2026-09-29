@@ -34,7 +34,7 @@ from agent.llm import baseline_classifier
 from agent.llm.intent_classifier import VARIANTS, load_rows, train
 from agent.policy.signals import contains_escalation_signal, escalation_categories
 from eval import leakage, tracking
-from eval.stats import fmt, rate, zero_event_upper_bound
+from eval.stats import fmt, paired_accuracy, rate, zero_event_upper_bound
 
 TRAIN = "eval/test_cases/intent_dataset.csv"
 HELDOUT = "eval/test_cases/heldout_utterances.csv"
@@ -97,8 +97,10 @@ def trace_guard(model, tau: float) -> dict:
             "source": TRACE_HELDOUT, "authors": "team-written, never used for training"}
 
 
-def main() -> None:
-    train_rows, held = load_rows(TRAIN), load_rows(HELDOUT)
+def build_report(train_rows: list[dict], held: list[dict]) -> tuple[dict, object]:
+    """Everything the evaluation decides, from the two datasets alone and with no file written: what to leave out for
+    leakage, the representation and the threshold (both from dev only), and the scores. Kept apart from `main` so a
+    test can change the test split and show that nothing chosen here moves (tests/test_data_ml_validation.py)."""
     leak = leakage.report([r["utterance"] for r in train_rows], [r["utterance"] for r in held])
     dropped, to_review = leakage.excluded_utterances(leak), leakage.review_utterances(leak)
     dev, test = dev_test_split(held)  # the split is fixed before anything is excluded, so no phrase changes side
@@ -128,6 +130,8 @@ def main() -> None:
     best = max(feasible, key=lambda s: (s["recall"], s["tau"]))
     tau = best["tau"]
 
+    majority = Counter(r["intent"] for r in train_rows).most_common(1)[0][0]  # the class that is most of the training data
+
     # 3) Score dev (for error analysis) and test (reported) once.
     def evaluate(rows):
         y = [r["intent"] for r in rows]
@@ -139,8 +143,10 @@ def main() -> None:
         clf_only = [pr[idx] >= tau for pr in probs]
         return {
             "n": len(rows), "class_counts": dict(Counter(y)),
+            "baseline_majority": score(y, [majority] * len(rows), rows),
             "baseline_keywords": score(y, base, rows),
             "learned": score(y, learned, rows),
+            "paired_vs_keywords": paired_accuracy(y, base, learned),
             "escalation_guard": {
                 "lexicon_only": guard_metrics(rows, lex),
                 "classifier_only": guard_metrics(rows, clf_only),
@@ -165,13 +171,23 @@ def main() -> None:
         "train_n": len(train_rows), "train_class_counts": dict(Counter(r["intent"] for r in train_rows)),
         "heldout_n": len(held), "dev_n": len(dev), "test_n": len(test),
         "leakage": leak,
+        "leakage_dev_vs_test": leakage.report([r["utterance"] for r in dev], [r["utterance"] for r in test]),
+        "majority_class": majority,
         "model_selection_dev": variants, "chosen_variant": chosen,
         "threshold_sweep_dev": sweep, "escalation_threshold": tau, "max_false_escalation_constraint": MAX_FALSE_ESCALATION,
         "dev": evaluate(dev), "test": evaluate(test),
         "test_without_templated_phrases": without_templated(evaluate([r for r in test if r["utterance"] not in to_review])),
         "trace_requests_guard": trace_guard(model, tau),
-        "versions": {"sklearn": sklearn.__version__, "train_sha256": _h(Path(TRAIN).read_text(encoding="utf-8")), "heldout_sha256": _h(Path(HELDOUT).read_text(encoding="utf-8"))},
     }
+    return report, model
+
+
+def main() -> None:
+    train_rows, held = load_rows(TRAIN), load_rows(HELDOUT)
+    report, model = build_report(train_rows, held)
+    chosen, tau = report["chosen_variant"], report["escalation_threshold"]
+    report["versions"] = {"sklearn": sklearn.__version__, "train_sha256": _h(Path(TRAIN).read_text(encoding="utf-8")),
+                          "heldout_sha256": _h(Path(HELDOUT).read_text(encoding="utf-8"))}
     MODEL_OUT.parent.mkdir(parents=True, exist_ok=True)
     # The same model must be the same bytes (it is an input of every system evaluation): sklearn caches the memory
     # address of the stop-word list in each vectorizer, and it recomputes it when missing.
@@ -233,6 +249,7 @@ def to_markdown(r: dict) -> str:
     style = "\n".join(f"| {k} | {fmt(t['baseline_keywords']['by_style'][k])} | {fmt(v)} |" for k, v in t["learned"]["by_style"].items())
     guard = "\n".join(f"| {k} | {fmt(v['recall'])} | {v['missed']} | {fmt(v['false_escalation'])} |" for k, v in t["escalation_guard"].items())
     lk, sw, tr = r["leakage"], r["test_without_templated_phrases"], r["trace_requests_guard"]
+    pr, ds, mj = t["paired_vs_keywords"], r["leakage_dev_vs_test"], t["baseline_majority"]
     errs = "\n".join(f"| {e['utterance']} | {e['gold']} | {e['baseline']} | {e['learned']} |" for e in d["errors"][:25])
     return f"""# Intent classifier evaluation (auto-generated)
 
@@ -249,6 +266,8 @@ Protocol: {r['protocol']}. Intervals are Wilson 95%.
 |---|---|---|
 | Accuracy | {fmt(t['baseline_keywords']['accuracy'])} | {fmt(t['learned']['accuracy'])} |
 | Macro-F1 | {t['baseline_keywords']['macro_f1']} | {t['learned']['macro_f1']} |
+
+Same {pr['n']} test utterances for both. Paired, learned minus keywords: **{100 * pr['diff']:+.1f} points** (bootstrap 95% [{100 * pr['diff_ci95'][0]:+.1f}, {100 * pr['diff_ci95'][1]:+.1f}], {pr['resamples']} resamples, seed {pr['seed']}); the learned classifier is right where the baseline is wrong on {pr['only_b_right']} utterances and the reverse on {pr['only_a_right']} (exact McNemar p = {pr['mcnemar_p']}). Floor: always answering `{r['majority_class']}`, the most common training class, gets {fmt(mj['accuracy'])}.
 
 | Class | n | Baseline recall | Learned recall | Baseline F1 | Learned F1 |
 |---|---|---|---|---|---|
@@ -276,6 +295,7 @@ Similarity is char 3-gram Jaccard on text without case, accents or punctuation. 
 
 - Highest similarity per held-out phrase: max {lk['max']}, p95 {lk['p95']}, median {lk['median']}. Phrases at ≥ 0.5 / 0.6 / 0.7 / 0.9: {' / '.join(str(v) for v in lk['counts_at_least'].values())} of {lk['n']}.
 - Left out for leakage ({len(lk['excluded'])}): {'; '.join(f"'{p['heldout']}' ~ '{p['train']}' ({p['similarity']})" for p in lk['excluded']) or 'none'}.
+- Dev against test (the split that chose the model and the threshold against the one that scores them): highest similarity {ds['max']}, {len(ds['excluded'])} pair(s) at ≥ {ds['exclude_at']}.
 - Kept but listed ({len(lk['review'])}): {'; '.join(f"'{p['heldout']}' ({p['similarity']})" for p in lk['review']) or 'none'}.
 
 | Test result | n | Baseline accuracy | Learned accuracy | Learned macro-F1 | Guard recall |

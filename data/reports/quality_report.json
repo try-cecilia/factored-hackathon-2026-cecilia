@@ -1,8 +1,8 @@
 {
-  "run_id": "20260928T204248Z-31184c",
-  "contract_version": "2.0.0",
-  "code_version": "996774d",
-  "generated_at": "2026-09-28T20:45:32.662419+00:00",
+  "run_id": "20260929T145046Z-12c946",
+  "contract_version": "2.1.0",
+  "code_version": "0f05d83",
+  "generated_at": "2026-09-29T14:55:02.746034+00:00",
   "tables": {
     "branches": {
       "partitions": 1,
@@ -11,7 +11,7 @@
       "rows_deduplicated": 0,
       "rows_new": 350,
       "rows_updated": 0,
-      "seconds": 2.15
+      "seconds": 2.8
     },
     "daily_exchange_rates": {
       "partitions": 1,
@@ -20,7 +20,7 @@
       "rows_deduplicated": 0,
       "rows_new": 13164,
       "rows_updated": 0,
-      "seconds": 0.5
+      "seconds": 0.3
     },
     "customers": {
       "partitions": 1,
@@ -29,7 +29,7 @@
       "rows_deduplicated": 0,
       "rows_new": 150000,
       "rows_updated": 0,
-      "seconds": 3.55
+      "seconds": 3.8
     },
     "products": {
       "partitions": 1,
@@ -38,7 +38,7 @@
       "rows_deduplicated": 0,
       "rows_new": 400000,
       "rows_updated": 0,
-      "seconds": 5.14
+      "seconds": 6.28
     },
     "transactions": {
       "partitions": 1097,
@@ -47,7 +47,7 @@
       "rows_deduplicated": 0,
       "rows_new": 4425008,
       "rows_updated": 0,
-      "seconds": 109.95
+      "seconds": 162.59
     },
     "call_center_interactions": {
       "partitions": 1097,
@@ -56,7 +56,16 @@
       "rows_deduplicated": 0,
       "rows_new": 686296,
       "rows_updated": 0,
-      "seconds": 22.32
+      "seconds": 39.14
+    },
+    "complaints": {
+      "partitions": 1097,
+      "rows_staged": 67095,
+      "rows_quarantined": 0,
+      "rows_deduplicated": 0,
+      "rows_new": 67095,
+      "rows_updated": 0,
+      "seconds": 14.72
     },
     "call_transcripts": {
       "partitions": 1097,
@@ -65,7 +74,7 @@
       "rows_deduplicated": 0,
       "rows_new": 171321,
       "rows_updated": 0,
-      "seconds": 9.63
+      "seconds": 12.54
     },
     "satisfaction_surveys": {
       "partitions": 1097,
@@ -74,14 +83,15 @@
       "rows_deduplicated": 0,
       "rows_new": 212759,
       "rows_updated": 0,
-      "seconds": 10.65
+      "seconds": 14.38
     }
   },
   "summary": {
     "status": "success",
     "errors_failed": 0,
-    "warnings_failed": 12,
-    "checks_run": 246
+    "warnings_failed": 16,
+    "checks_run": 294,
+    "checks_not_run": 1
   },
   "failure": null,
   "contract_deviations": [
@@ -91,6 +101,13 @@
       "dictionary": "INTEGER NOT NULL",
       "observed": "14.0% null (24,029 of 171,321 in the full run)",
       "decision": "warn rule instead of quarantine; analysis-only table, column unused"
+    },
+    {
+      "table": "call_center_interactions",
+      "column": "reason_category",
+      "dictionary": "5 categories (p. 9)",
+      "observed": "6th category \"Retenci\u00f3n\" (20,578 of 686,296 in the full run)",
+      "decision": "warn rule instead of quarantine; kept as delivered, never translated or remapped"
     }
   ],
   "checks": [
@@ -2175,6 +2192,17 @@
     },
     {
       "table": "call_center_interactions",
+      "check": "rule:reason_category_in_dictionary",
+      "category": "domain",
+      "severity": "warn",
+      "failed": 20578,
+      "total": 686296,
+      "detail": "reason_category IN ('Transaccional', 'Producto', 'Queja', 'T\u00e9cnico', 'Comercial')",
+      "rate": 0.029984,
+      "passed": false
+    },
+    {
+      "table": "call_center_interactions",
       "check": "quarantine_rate",
       "category": "gate",
       "severity": "info",
@@ -2205,6 +2233,534 @@
       "detail": "",
       "rate": 0.186969,
       "passed": false
+    },
+    {
+      "table": "complaints",
+      "check": "schema_missing_required_columns",
+      "category": "schema",
+      "severity": "error",
+      "failed": 0,
+      "total": 27,
+      "detail": "",
+      "rate": 0.0,
+      "passed": true
+    },
+    {
+      "table": "complaints",
+      "check": "schema_missing_optional_columns",
+      "category": "schema",
+      "severity": "warn",
+      "failed": 0,
+      "total": 27,
+      "detail": "",
+      "rate": 0.0,
+      "passed": true
+    },
+    {
+      "table": "complaints",
+      "check": "schema_new_columns",
+      "category": "schema",
+      "severity": "warn",
+      "failed": 0,
+      "total": 27,
+      "detail": "",
+      "rate": 0.0,
+      "passed": true
+    },
+    {
+      "table": "complaints",
+      "check": "pk_duplicates_in_batch",
+      "category": "uniqueness",
+      "severity": "warn",
+      "failed": 0,
+      "total": 67095,
+      "detail": "exact-key duplicates before dedup (latest record wins)",
+      "rate": 0.0,
+      "passed": true
+    },
+    {
+      "table": "complaints",
+      "check": "not_null:complaint_id",
+      "category": "not_null",
+      "severity": "error",
+      "failed": 0,
+      "total": 67095,
+      "detail": "",
+      "rate": 0.0,
+      "passed": true
+    },
+    {
+      "table": "complaints",
+      "check": "not_null:creation_date",
+      "category": "not_null",
+      "severity": "error",
+      "failed": 0,
+      "total": 67095,
+      "detail": "",
+      "rate": 0.0,
+      "passed": true
+    },
+    {
+      "table": "complaints",
+      "check": "not_null:process_date",
+      "category": "not_null",
+      "severity": "error",
+      "failed": 0,
+      "total": 67095,
+      "detail": "",
+      "rate": 0.0,
+      "passed": true
+    },
+    {
+      "table": "complaints",
+      "check": "not_null:customer_id",
+      "category": "not_null",
+      "severity": "error",
+      "failed": 0,
+      "total": 67095,
+      "detail": "",
+      "rate": 0.0,
+      "passed": true
+    },
+    {
+      "table": "complaints",
+      "check": "not_null:case_type",
+      "category": "not_null",
+      "severity": "error",
+      "failed": 0,
+      "total": 67095,
+      "detail": "",
+      "rate": 0.0,
+      "passed": true
+    },
+    {
+      "table": "complaints",
+      "check": "not_null:category",
+      "category": "not_null",
+      "severity": "error",
+      "failed": 0,
+      "total": 67095,
+      "detail": "",
+      "rate": 0.0,
+      "passed": true
+    },
+    {
+      "table": "complaints",
+      "check": "not_null:reception_channel",
+      "category": "not_null",
+      "severity": "error",
+      "failed": 0,
+      "total": 67095,
+      "detail": "",
+      "rate": 0.0,
+      "passed": true
+    },
+    {
+      "table": "complaints",
+      "check": "not_null:description",
+      "category": "not_null",
+      "severity": "error",
+      "failed": 0,
+      "total": 67095,
+      "detail": "",
+      "rate": 0.0,
+      "passed": true
+    },
+    {
+      "table": "complaints",
+      "check": "not_null:priority",
+      "category": "not_null",
+      "severity": "error",
+      "failed": 0,
+      "total": 67095,
+      "detail": "",
+      "rate": 0.0,
+      "passed": true
+    },
+    {
+      "table": "complaints",
+      "check": "not_null:status",
+      "category": "not_null",
+      "severity": "error",
+      "failed": 0,
+      "total": 67095,
+      "detail": "",
+      "rate": 0.0,
+      "passed": true
+    },
+    {
+      "table": "complaints",
+      "check": "not_null:sla_breached",
+      "category": "not_null",
+      "severity": "error",
+      "failed": 0,
+      "total": 67095,
+      "detail": "",
+      "rate": 0.0,
+      "passed": true
+    },
+    {
+      "table": "complaints",
+      "check": "not_null:is_repeat_complainer",
+      "category": "not_null",
+      "severity": "error",
+      "failed": 0,
+      "total": 67095,
+      "detail": "",
+      "rate": 0.0,
+      "passed": true
+    },
+    {
+      "table": "complaints",
+      "check": "null_rate:subcategory",
+      "category": "profile",
+      "severity": "info",
+      "failed": 6698,
+      "total": 67095,
+      "detail": "",
+      "rate": 0.099829,
+      "passed": null
+    },
+    {
+      "table": "complaints",
+      "check": "null_rate:affected_product_id",
+      "category": "profile",
+      "severity": "info",
+      "failed": 22525,
+      "total": 67095,
+      "detail": "",
+      "rate": 0.335718,
+      "passed": null
+    },
+    {
+      "table": "complaints",
+      "check": "null_rate:related_branch_id",
+      "category": "profile",
+      "severity": "info",
+      "failed": 47917,
+      "total": 67095,
+      "detail": "",
+      "rate": 0.714166,
+      "passed": null
+    },
+    {
+      "table": "complaints",
+      "check": "null_rate:origin_interaction_id",
+      "category": "profile",
+      "severity": "info",
+      "failed": 67095,
+      "total": 67095,
+      "detail": "",
+      "rate": 1.0,
+      "passed": null
+    },
+    {
+      "table": "complaints",
+      "check": "null_rate:claimed_amount",
+      "category": "profile",
+      "severity": "info",
+      "failed": 45344,
+      "total": 67095,
+      "detail": "",
+      "rate": 0.675818,
+      "passed": null
+    },
+    {
+      "table": "complaints",
+      "check": "null_rate:currency",
+      "category": "profile",
+      "severity": "info",
+      "failed": 45319,
+      "total": 67095,
+      "detail": "",
+      "rate": 0.675445,
+      "passed": null
+    },
+    {
+      "table": "complaints",
+      "check": "null_rate:assigned_agent_id",
+      "category": "profile",
+      "severity": "info",
+      "failed": 23115,
+      "total": 67095,
+      "detail": "",
+      "rate": 0.344512,
+      "passed": null
+    },
+    {
+      "table": "complaints",
+      "check": "null_rate:assignment_date",
+      "category": "profile",
+      "severity": "info",
+      "failed": 23128,
+      "total": 67095,
+      "detail": "",
+      "rate": 0.344705,
+      "passed": null
+    },
+    {
+      "table": "complaints",
+      "check": "null_rate:first_response_date",
+      "category": "profile",
+      "severity": "info",
+      "failed": 26242,
+      "total": 67095,
+      "detail": "",
+      "rate": 0.391117,
+      "passed": null
+    },
+    {
+      "table": "complaints",
+      "check": "null_rate:resolution_date",
+      "category": "profile",
+      "severity": "info",
+      "failed": 51746,
+      "total": 67095,
+      "detail": "",
+      "rate": 0.771235,
+      "passed": null
+    },
+    {
+      "table": "complaints",
+      "check": "null_rate:closing_date",
+      "category": "profile",
+      "severity": "info",
+      "failed": 64614,
+      "total": 67095,
+      "detail": "",
+      "rate": 0.963023,
+      "passed": null
+    },
+    {
+      "table": "complaints",
+      "check": "null_rate:resolution_days",
+      "category": "profile",
+      "severity": "info",
+      "failed": 51732,
+      "total": 67095,
+      "detail": "",
+      "rate": 0.771026,
+      "passed": null
+    },
+    {
+      "table": "complaints",
+      "check": "null_rate:resolution",
+      "category": "profile",
+      "severity": "info",
+      "failed": 51785,
+      "total": 67095,
+      "detail": "",
+      "rate": 0.771816,
+      "passed": null
+    },
+    {
+      "table": "complaints",
+      "check": "null_rate:compensation_granted",
+      "category": "profile",
+      "severity": "info",
+      "failed": 62454,
+      "total": 67095,
+      "detail": "",
+      "rate": 0.930829,
+      "passed": null
+    },
+    {
+      "table": "complaints",
+      "check": "null_rate:resolution_satisfaction",
+      "category": "profile",
+      "severity": "info",
+      "failed": 64611,
+      "total": 67095,
+      "detail": "",
+      "rate": 0.962978,
+      "passed": null
+    },
+    {
+      "table": "complaints",
+      "check": "rule:case_type_enum",
+      "category": "domain",
+      "severity": "error",
+      "failed": 0,
+      "total": 67095,
+      "detail": "case_type IN ('Complaint', 'Claim', 'Request', 'Suggestion')",
+      "rate": 0.0,
+      "passed": true
+    },
+    {
+      "table": "complaints",
+      "check": "rule:channel_enum",
+      "category": "domain",
+      "severity": "error",
+      "failed": 0,
+      "total": 67095,
+      "detail": "reception_channel IN ('Call Center', 'Email', 'Web', 'App', 'Branch', 'Regulator')",
+      "rate": 0.0,
+      "passed": true
+    },
+    {
+      "table": "complaints",
+      "check": "rule:currency_enum",
+      "category": "domain",
+      "severity": "error",
+      "failed": 0,
+      "total": 67095,
+      "detail": "currency IS NULL OR currency IN ('MXN', 'COP', 'ARS', 'USD')",
+      "rate": 0.0,
+      "passed": true
+    },
+    {
+      "table": "complaints",
+      "check": "rule:priority_enum",
+      "category": "domain",
+      "severity": "error",
+      "failed": 0,
+      "total": 67095,
+      "detail": "priority IN ('Low', 'Medium', 'High', 'Critical')",
+      "rate": 0.0,
+      "passed": true
+    },
+    {
+      "table": "complaints",
+      "check": "rule:status_enum",
+      "category": "domain",
+      "severity": "error",
+      "failed": 0,
+      "total": 67095,
+      "detail": "status IN ('Open', 'In Process', 'Escalated', 'Resolved', 'Closed', 'Rejected')",
+      "rate": 0.0,
+      "passed": true
+    },
+    {
+      "table": "complaints",
+      "check": "rule:resolution_days_non_negative",
+      "category": "domain",
+      "severity": "error",
+      "failed": 0,
+      "total": 67095,
+      "detail": "resolution_days IS NULL OR resolution_days >= 0",
+      "rate": 0.0,
+      "passed": true
+    },
+    {
+      "table": "complaints",
+      "check": "rule:resolution_satisfaction_range",
+      "category": "domain",
+      "severity": "error",
+      "failed": 0,
+      "total": 67095,
+      "detail": "resolution_satisfaction IS NULL OR resolution_satisfaction BETWEEN 1 AND 5",
+      "rate": 0.0,
+      "passed": true
+    },
+    {
+      "table": "complaints",
+      "check": "rule:claimed_amount_has_currency",
+      "category": "domain",
+      "severity": "warn",
+      "failed": 1040,
+      "total": 67095,
+      "detail": "claimed_amount IS NULL OR currency IS NOT NULL",
+      "rate": 0.0155,
+      "passed": false
+    },
+    {
+      "table": "complaints",
+      "check": "rule:resolved_has_evidence",
+      "category": "domain",
+      "severity": "warn",
+      "failed": 1549,
+      "total": 67095,
+      "detail": "status NOT IN ('Resolved', 'Closed') OR (resolution_date IS NOT NULL AND resolution IS NOT NULL)",
+      "rate": 0.023087,
+      "passed": false
+    },
+    {
+      "table": "complaints",
+      "check": "quarantine_rate",
+      "category": "gate",
+      "severity": "info",
+      "failed": 0,
+      "total": 67095,
+      "detail": "threshold=0.01",
+      "rate": 0.0,
+      "passed": null
+    },
+    {
+      "table": "complaints",
+      "check": "pydantic_row_contract_sample",
+      "category": "contract_sample",
+      "severity": "error",
+      "failed": 0,
+      "total": 1000,
+      "detail": "",
+      "rate": 0.0,
+      "passed": true
+    },
+    {
+      "table": "complaints",
+      "check": "cross:fk_customer",
+      "category": "cross_table",
+      "severity": "warn",
+      "failed": 0,
+      "total": 67095,
+      "detail": "",
+      "rate": 0.0,
+      "passed": true
+    },
+    {
+      "table": "complaints",
+      "check": "cross:fk_affected_product",
+      "category": "cross_table",
+      "severity": "warn",
+      "failed": 0,
+      "total": 44570,
+      "detail": "",
+      "rate": 0.0,
+      "passed": true
+    },
+    {
+      "table": "complaints",
+      "check": "cross:customer_owns_affected_product",
+      "category": "cross_table",
+      "severity": "warn",
+      "failed": 44570,
+      "total": 44570,
+      "detail": "",
+      "rate": 1.0,
+      "passed": false
+    },
+    {
+      "table": "complaints",
+      "check": "cross:fk_related_branch",
+      "category": "cross_table",
+      "severity": "warn",
+      "failed": 0,
+      "total": 19178,
+      "detail": "",
+      "rate": 0.0,
+      "passed": true
+    },
+    {
+      "table": "complaints",
+      "check": "cross:fk_origin_interaction",
+      "category": "cross_table",
+      "severity": "warn",
+      "failed": 0,
+      "total": 0,
+      "detail": "",
+      "rate": 0.0,
+      "passed": true
+    },
+    {
+      "table": "complaints",
+      "check": "cross:fk_assigned_agent",
+      "category": "dependency",
+      "severity": "info",
+      "failed": 0,
+      "total": 0,
+      "detail": "not run; missing parent tables: service_agents",
+      "rate": 0.0,
+      "passed": null
     },
     {
       "table": "call_transcripts",

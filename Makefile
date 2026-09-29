@@ -8,7 +8,7 @@ WEB_PORT ?= 3000
 # Combined development always connects to its local API, unless overridden.
 AGENT_API_URL ?= http://127.0.0.1:$(API_PORT)
 
-.PHONY: gate operator-labels retention loadtest setup ingest ingest-demo analysis train-eval workload eval eval-adversarial eval-live live-smoke test serve docker-build all mlflow-ui
+.PHONY: gate validate-data-ml lineage operator-labels retention loadtest setup ingest ingest-demo analysis train-eval workload eval eval-adversarial eval-live live-smoke test serve docker-build all mlflow-ui
 .PHONY: web-setup serve-web web-build web-typecheck web-test serve-all
 
 web-setup:        ## install the frontend's pinned dependencies (Node 24, pnpm 10.33.2)
@@ -60,8 +60,15 @@ EVAL_MODELS ?= anthropic:claude-sonnet-5,anthropic:claude-haiku-4-5,groq:openai/
 eval-live:        ## live models compared on one 132-case sample (3 per case type and language), 3 repeats each (a model without its API key is skipped)
 	$(PY) -m eval.run_system_eval --split test --system proposed --llm live --repeats 3 --limit 132 --models $(EVAL_MODELS)
 
-gate:            ## compuerta de calidad: pisos de seguridad y evidencia vigente (la corre el CI)
+gate:            ## compuerta de calidad: pisos de seguridad y evidencia vigente, más la validación de datos y ML (la corre el CI)
 	$(PY) -m eval.gate
+	$(MAKE) validate-data-ml
+
+validate-data-ml: ## contratos, calidad, linaje, frescura, clasificador vs línea base y fuga: PASS/FAIL por criterio -> docs/evidence/data_ml_validation.md
+	$(PY) -m eval.validate_data_ml
+
+lineage:          ## the served warehouse traced back to its source files and their hashes (exit 1 if the chain is broken)
+	$(PY) -m data.lineage --verify --raw-dir data/raw
 
 operator-labels: ## las decisiones del operador como etiquetas + barrido del umbral de antigüedad
 	$(PY) -m eval.operator_labels
