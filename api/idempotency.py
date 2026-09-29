@@ -47,6 +47,16 @@ class Slot:
     processed: bool = False  # this key already ran, and its reply is no longer kept
     _save: Callable[[str], None] = field(default=lambda body: None, repr=False)
     saved: bool = False
+    started: bool = False
+
+    def begin(self) -> None:
+        """The point of no return: the turn is about to run and may have effects. From here the key's place is only
+        given back by `abandon`; an error, before or after the reply is saved, leaves the key marked as processed."""
+        self.started = True
+
+    def abandon(self) -> None:
+        """The turn is proven to have had no effect (the session had already ended): give the place back."""
+        self.started = False
 
     def save(self, body: str) -> None:
         self._save(body)
@@ -97,8 +107,8 @@ class IdempotencyStore:
                         total, soonest = self._db.execute("SELECT COUNT(*), MIN(expires_at) FROM idempotency_keys").fetchone()
                         if total >= self._max_marks:
                             raise CapacityFull(max(1, min(900, int((soonest or now) - now) + 1)))
-                        # Held from here: if the turn fails the place is given back, if the process dies mid-turn the
-                        # mark stays and the key counts as processed (the turn may have run).
+                        # Held from here. Given back only if the turn is refused before it begins (Slot.begin); once it
+                        # began, or if the process dies mid-turn, the mark stays: the turn may have had effects.
                         self._db.execute("INSERT INTO idempotency_keys VALUES (?, ?, ?, NULL, ?, ?)",
                                          (*ident, message_hash, now, expires_at))
 
@@ -111,7 +121,7 @@ class IdempotencyStore:
                 slot = Slot(replay=row[1] if row else None, processed=row is not None and row[1] is None, _save=save)
                 yield slot
             finally:
-                if slot is not None and row is None and not slot.saved:  # the turn produced nothing to keep
+                if slot is not None and row is None and not slot.saved and not slot.started:  # it never began to run
                     with self._lock, self._db:
                         self._db.execute("DELETE FROM idempotency_keys WHERE session_ref = ? AND key_hash = ? "
                                          "AND response IS NULL", ident)

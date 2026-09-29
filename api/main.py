@@ -239,8 +239,12 @@ def chat(req: ChatRequest, response: Response, idempotency_key: str | None = Hea
                 stored = ChatResponse.model_validate_json(slot.replay)
                 # Stored whole; what the caller may see is decided now, not when the turn ran.
                 return stored if demo.enabled() else stored.model_copy(update={"why": None, "policy_rule": ""})
-            reply = _chat_turn(req)
-            if reply.disposition != "REAUTH_REQUIRED":  # a dead session is answered afresh after signing in again
+            _admit(req)  # a refusal here ran nothing: the key's place is given back
+            slot.begin()  # POINT OF NO RETURN: from here the turn may have effects (a ticket, a trace), so whatever
+            reply = _run_turn(req)  # happens next, an error included, the key stays taken and a retry gets a 409
+            if reply.disposition == "REAUTH_REQUIRED":  # the session ended first: nothing ran, answered afresh after login
+                slot.abandon()
+            else:
                 slot.save(reply.model_dump_json())
             return reply
     except idempotency.KeyReused:
@@ -258,8 +262,17 @@ def _live_session(token: str):
 
 
 def _chat_turn(req: ChatRequest) -> ChatResponse:
+    _admit(req)
+    return _run_turn(req)
+
+
+def _admit(req: ChatRequest) -> None:
+    """Everything that can refuse a turn before it starts. Nothing has run when this raises."""
     if not chat_limiter.allow(req.session_token):
         raise HTTPException(429, "rate limit exceeded for this session")
+
+
+def _run_turn(req: ChatRequest) -> ChatResponse:
     r = demo.orchestrator_for(req.session_token).handle_message(req.session_token, req.message)
     shown = demo.enabled()  # which rule decided is for the trace log; outside the jury demo it would guide an attacker
     return ChatResponse(trace_id=r.trace_id, disposition=r.disposition, response_text=r.response_text,

@@ -218,7 +218,7 @@ def test_a_replay_is_not_delivered_once_the_session_is_over(client):
 def test_a_retry_that_waited_for_the_first_turn_is_checked_again_when_its_turn_comes(client, monkeypatch):
     tok = token(client)
     started, release, out = threading.Event(), threading.Event(), {}
-    real = main._chat_turn
+    real = main._run_turn
 
     def slow(req):
         reply = real(req)  # the turn has run; the reply is not yet saved or delivered
@@ -226,7 +226,7 @@ def test_a_retry_that_waited_for_the_first_turn_is_checked_again_when_its_turn_c
         release.wait(5)
         return reply
 
-    monkeypatch.setattr(main, "_chat_turn", slow)
+    monkeypatch.setattr(main, "_run_turn", slow)
 
     def retry():
         started.wait(5)
@@ -317,3 +317,46 @@ def test_the_first_version_of_the_table_is_dropped_not_migrated(tmp_path):
     idempotency.IdempotencyStore(db_path=db)
     names = {r[0] for r in sqlite3.connect(db).execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
     assert "idempotency" not in names and "idempotency_keys" in names
+
+
+def test_a_turn_that_fails_after_it_started_is_never_run_again_by_a_retry(client, monkeypatch):
+    """The ticket is filed, then writing the trace log fails: the customer gets a 500, but the effect happened. The retry
+    must be told so (409), not file a second ticket."""
+    from agent.tools.audit import default_trace_log
+
+    tok = token(client)
+    before = tickets(client)
+    crashing = TestClient(main.app, raise_server_exceptions=False)
+    with monkeypatch.context() as m:
+        m.setattr(default_trace_log, "write", lambda trace: (_ for _ in ()).throw(OSError("disk full")))
+        assert chat(crashing, tok, CLONED, key="msg-3000-aaaa").status_code == 500
+    assert tickets(client) == before + 1  # the ticket was filed before the failure
+
+    retry = chat(client, tok, CLONED, key="msg-3000-aaaa")
+    assert retry.status_code == 409 and "already processed" in retry.json()["detail"]
+    assert tickets(client) == before + 1
+    assert idempotency.default.count() == 1  # the mark stays until the session ends; the error is not kept as a reply
+
+
+def test_a_failure_while_saving_the_reply_keeps_the_mark_too(client, monkeypatch):
+    tok = token(client)
+    before = tickets(client)
+    def broken(self):
+        raise OSError("state file is read-only")
+
+    crashing = TestClient(main.app, raise_server_exceptions=False)
+    with monkeypatch.context() as m:
+        m.setattr(idempotency.IdempotencyStore, "_make_room", broken)
+        assert chat(crashing, tok, CLONED, key="msg-3001-aaaa").status_code == 500
+    assert chat(client, tok, CLONED, key="msg-3001-aaaa").status_code == 409
+    assert tickets(client) == before + 1
+
+
+def test_a_refusal_before_the_turn_starts_gives_the_place_back(client, monkeypatch):
+    """A 429 ran nothing: the same key may be sent again once the limit allows it."""
+    monkeypatch.setattr(main, "chat_limiter", main.RateLimiter(0, 60))
+    tok = token(client)
+    assert chat(client, tok, "¿Cuál es mi saldo?", key="msg-3002-aaaa").status_code == 429
+    assert idempotency.default.count() == 0
+    monkeypatch.setattr(main, "chat_limiter", main.RateLimiter(20, 60))
+    assert chat(client, tok, "¿Cuál es mi saldo?", key="msg-3002-aaaa").status_code == 200

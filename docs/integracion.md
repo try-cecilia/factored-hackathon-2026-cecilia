@@ -323,7 +323,9 @@ defecto), en el mismo SQLite de sesiones y conversaciones (`STATE_DB_PATH`, o me
 respuesta con `Idempotent-Replayed: true`, sin volver a correr el turno y sin gastar cupo del límite de mensajes; un
 reintento que llega mientras el primero corre espera su respuesta. Antes de entregar un replay se comprueba que la
 sesión siga viva (también después de esperar): con la sesión cerrada o vencida la respuesta es `REAUTH_REQUIRED`, como en
-un turno normal. La misma clave con otro texto es un 422. No se guardan las respuestas de sesión vencida ni los errores.
+un turno normal. La misma clave con otro texto es un 422. No se guardan las respuestas de sesión vencida ni los errores. Un turno que falla después de empezar (por ejemplo, el ticket
+ya se creó y falla el log de trazas) deja la clave marcada: el reintento recibe 409 y nunca un segundo turno; el lugar solo
+se devuelve si el turno se rechazó antes de empezar (429, sesión terminada).
 Pasadas 50 000 respuestas guardadas, las más viejas pierden la respuesta pero conservan una marca (hash de la clave):
 un reintento de esa clave recibe un 409 "already processed" en vez de volver a ejecutarse, y la UI dice "Ya lo
 recibimos, pero la respuesta ya no está guardada". Las marcas de sesiones vivas no se expulsan nunca: con 500 000 claves
