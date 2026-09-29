@@ -463,12 +463,8 @@ def run_case(case: Case, system: str, llm_mode: str, live_client=None) -> dict:
         if case.fault == "llm_outage" and not scripted:
             client = OutageOnce(live_client)
         recorder = _Recorder(client)
-        if system.startswith("naive-"):  # the ablation rungs (eval/ablation.py): the same models without the safety layers
-            from eval.ablation import NaiveAgent
-            agent = NaiveAgent(store, recorder, system, case.customer_id, case.language)
-        else:
-            # Measure only the selected client; deployment canary/shadow settings must not bypass the recorder.
-            agent = Orchestrator(store, llm=lambda: recorder, experiments=Experiments())
+        # Measure only the selected client; deployment canary/shadow settings must not bypass the recorder.
+        agent = Orchestrator(store, llm=lambda: recorder, experiments=Experiments())
     results = []
     kind, _, after = (case.fault or "").partition(":")
     with inject(case.fault):
@@ -949,9 +945,6 @@ def run(system: str, llm_mode: str, cases: list[Case], live_client=None) -> tupl
             else:
                 os.environ[k] = v
     rows = [judge(c, o["results"], tickets, o["sent"], o["traces"]) for c, o in outs]
-    if system.startswith("naive-"):
-        from eval.ablation import without_structural
-        rows = [without_structural(r) for r in rows]
     m = metrics(rows)
     if system == "baseline":  # no model at all: the metric does not apply
         m["records_sent_to_model"] = rate(0, 0)

@@ -118,6 +118,46 @@ class NaiveAgent:
                           None, facts, actions, usage=Usage(), cost_usd=0.0, llm_calls=1 + bool(facts))
 
 
+def _run_naive_case(case, rung: str, llm_mode: str) -> dict:
+    """`run_system_eval.run_case` for a naive rung: the same session, the same models, the same fault injection, another agent."""
+    from eval import run_system_eval as rse
+
+    store = rse.SessionStore(ttl_seconds=-1 if case.fault == "expired_session" else 900)
+    session = store.issue(case.customer_id, {"segment": case.segment, "country": case.country, "customer_status": case.customer_status})
+    scripted = rse.ScriptedLLM(case) if llm_mode == "scripted" else rse.AdversarialLLM(case, rse.FOREIGN_POOL)
+    recorder = rse._Recorder(scripted)
+    agent = NaiveAgent(store, recorder, rung, case.customer_id, case.language)
+    results = []
+    kind, _, after = (case.fault or "").partition(":")
+    with rse.inject(case.fault):
+        if kind == "case_probe":
+            results = rse._case_probe(agent, case, store, session)
+        for i, text in enumerate(case.turns if kind != "case_probe" else []):
+            scripted.turn = i
+            try:
+                results.append(agent.handle_message(rse._session_token(session.token, case.fault), text))
+            except Exception as exc:  # noqa: BLE001 - a crash is an outcome to report, as in run_case
+                results.append(TurnResult("crash", "ERROR", f"{type(exc).__name__}: {exc}", case.language, "crash"))
+                break
+            if kind == "expire_after" and i + 1 == int(after):
+                store.expire(session.token)
+            elif kind == "revoke_after" and i + 1 == int(after):
+                store.revoke(session.token)
+    return {"results": results, "sent": recorder.sent}
+
+
+def run_rung(rung: str, mode: str, cases: list):
+    """`run_system_eval.run` for any rung. The naive ones are plugged in from here (the case runner and the judge's rows are
+    swapped for the call), so the measured evaluation code stays as it was and its fingerprint with it."""
+    from eval import run_system_eval as rse
+
+    if not rung.startswith("naive-"):
+        return rse.run(rung, mode, cases)
+    run_case, judge = rse.run_case, rse.judge
+    with mock.patch.object(rse, "run_case", lambda case, system, llm_mode, live_client=None: _run_naive_case(case, system, llm_mode)),             mock.patch.object(rse, "judge", lambda *a, **k: without_structural(judge(*a, **k))):
+        return rse.run(rung, mode, cases)
+
+
 def without_structural(row: dict) -> dict:
     """The naive rungs' rows, without the finding that is true of any free-text reply."""
     unsafe = [u for u in row["unsafe"] if u not in STRUCTURAL]
@@ -141,7 +181,7 @@ def main() -> None:
     out: dict = {}
     for rung in [*RUNGS, "proposed"]:
         for mode in ("scripted", "adversarial"):
-            m, rows = rse.run(rung, mode, cases)
+            m, rows = run_rung(rung, mode, cases)
             out[(rung, mode)] = m
             print(f"{rung:20s} {mode:12s} unsafe {m['unsafe_outcomes']['k']}/{m['n_cases']}", file=sys.stderr)
     kinds = sorted({k for m in out.values() for k in m["unsafe_by_type"]})
