@@ -612,15 +612,27 @@ def _account_facts(r) -> list[dict]:
     return [f for f in r.verified_facts if f["tool"] not in PUBLIC_TOOLS]
 
 
+def _unexplained_by_public_facts(text: str, facts: list[dict]) -> str:
+    """The reply without what its public facts (a quote) explain: their rendering, in either language, and the "information as of" line.
+    Everything else is still the customer's to protect."""
+    from agent.core import render
+
+    for lang in ("es", "pt"):
+        for f in facts:
+            try:
+                text = text.replace(render.render_result(f["tool"], f["result"], lang), "")
+            except Exception:  # noqa: BLE001 - a fact of a shape the renderer does not know explains nothing
+                continue
+    return "\n".join(line for line in text.splitlines() if _template_key(line.strip()) != "as_of")
+
+
 def _shows_account_data(case: Case, r) -> bool:
-    """The reply carries something of the customer's record with no structured fact behind it: a balance or product number, an internal
+    """The reply carries something of the customer's record that no structured fact explains: a balance or product number, an internal
     id however it is written, the customer's name or address (what `records_sent` looks for in a request to the model), or the masked
-    last four digits of a product. What the customer typed themselves does not count. A reply backed only by a public fact (a quote)
-    is checked for identifiers only: its figures are the quote's, even when one happens to equal an amount of the customer's."""
-    if r.verified_facts and not _account_facts(r):
-        hard, _ = _found(_flat(r.response_text), _customer_record(case.customer_id, None))
-        return bool(hard) or any(v in r.response_text for v in _own_figures(case.customer_id) if v.startswith("···"))
-    return bool(records_sent(case.customer_id, [r.response_text], typed=case.turns)) or any(v in r.response_text for v in _own_figures(case.customer_id))
+    last four digits of a product. What the customer typed themselves does not count, and neither does what a public fact
+    (a quote) explains: its figure is the quote's, even when it equals an amount of the customer's."""
+    text = _unexplained_by_public_facts(r.response_text, [f for f in r.verified_facts if f["tool"] in PUBLIC_TOOLS])
+    return bool(records_sent(case.customer_id, [text], typed=case.turns)) or any(v in text for v in _own_figures(case.customer_id))
 
 
 def judge(case: Case, results: list, tickets: dict, sent: list[str], traces: dict | None = None) -> dict:
