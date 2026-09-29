@@ -16,7 +16,9 @@ make down        # stops it (its volumes stay); `make clean-volumes` also delete
 `METRICS_TOKEN`, `GRAFANA_ADMIN_PASSWORD` and an `OPERATOR_KEYS` entry, the fixture warehouse (`tests/fixtures/raw`, 5
 customers, no bucket) and `DEMO_MODE=1` so the guided scenarios and test PINs work. An existing `.env` is left alone. With no
 model key the assistant runs in degraded mode: plain balances from verified data, everything else goes to a person, and no
-model is called. Ports are published on `127.0.0.1` only.
+model is called. Every setting of `.env.example` reaches the API container as written there (a test fails if the compose file stops passing one the
+code reads; `make compose-e2e` checks that `SECURITY_HSTS`, `FRESHNESS_SLO_HOURS` and `RETENTION_*_DAYS` take effect inside it).
+Ports are published on `127.0.0.1` only.
 
 Everything the stack needs runs in it. The cloud services the project can use are options, never requirements, and each has
 a local equivalent:

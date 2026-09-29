@@ -18,6 +18,11 @@ WORK="$(mktemp -d "${TMPDIR:-/tmp}/cecilai-e2e.XXXXXX")"
 ENVFILE="$WORK/env"
 python3 ops/bootstrap_env.py --out "$ENVFILE" --free-ports >/dev/null
 
+# Settings the checks below look for in the running container: a value written in the settings file must take effect there
+for override in SECURITY_HSTS=1 FRESHNESS_SLO_HOURS=12 RETENTION_TRACES_DAYS=7 RETENTION_TICKETS_DAYS=45; do
+  sed "s|^${override%%=*}=.*|$override|" "$ENVFILE" > "$ENVFILE.tmp" && mv "$ENVFILE.tmp" "$ENVFILE"
+  grep -q "^$override\$" "$ENVFILE" || { echo "the settings file has no ${override%%=*} to override" >&2; exit 1; }
+done
 val() { grep "^$1=" "$ENVFILE" | head -1 | cut -d= -f2-; }
 # Names below start with E2E_ so the unset of the settings file's own names (further down) cannot remove them
 E2E_API_PORT="$(val API_PORT)"; E2E_PROM_PORT="$(val PROMETHEUS_PORT)"; E2E_GRAFANA_PORT="$(val GRAFANA_PORT)"
@@ -61,7 +66,8 @@ python3 ops/container_smoke.py "$API" || fail "smoke test"
 headers() { curl -s -D - -o /dev/null "$1" | tr -d '\r'; }  # a GET, headers only: the page has no HEAD route
 headers "$API/livez" | grep -qi '^x-content-type-options: nosniff' || fail "security headers missing"
 headers "$API/" | grep -qi "^content-security-policy: .*script-src 'sha256-" || fail "the page has no script-hash CSP"
-ok "security headers"
+headers "$API/livez" | grep -qi '^strict-transport-security: max-age=' || fail "SECURITY_HSTS=1 did not reach the container"
+ok "security headers, and SECURITY_HSTS from the settings file"
 
 # --- web ---
 [ "$(curl -s -o /dev/null -w '%{http_code}' "$WEB/")" = 200 ] || fail "the web does not answer /"
@@ -90,6 +96,8 @@ echo "$scrape" | awk '/^cecilai_turns_total\{.*disposition="ESCALATE"/ {n += $NF
 # the container's retention loop ran at boot: its status file is what this gauge reads
 echo "$scrape" | grep -Eq '^cecilai_retention_last_run_timestamp_seconds [1-9]' || fail "the retention loop has not run"
 curl -fs -H "X-Admin-Key: $E2E_ADMIN" "$API/admin/audit_log?limit=500" | grep -Eq '"event": ?"retention_purge"' || fail "the purge left no audit record"
+echo "$scrape" | grep -Eq '^cecilai_data_freshness_slo_hours 12(\.0)?$' || fail "FRESHNESS_SLO_HOURS did not reach the container"
+curl -fs -H "X-Admin-Key: $E2E_ADMIN" "$API/admin/audit_log?limit=500" | grep -Eq '"policy_days": ?\{[^}]*"traces": ?7(\.0)?,[^}]*"tickets": ?45(\.0)?' || fail "RETENTION_*_DAYS did not reach the container"
 ok "/metrics answers to its token only and exposes the expected series; retention ran and audited itself"
 
 # --- Prometheus ---

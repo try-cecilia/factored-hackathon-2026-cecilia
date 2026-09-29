@@ -53,6 +53,41 @@ services:
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-}
       - RETENTION_INTERVAL_HOURS=${RETENTION_INTERVAL_HOURS:-24}
       - STATE_DB_PATH=/app/data/warehouse/state.sqlite
+      # Every other setting of .env.example reaches the container as it is written there (a bare name: passed when .env sets it,
+      # absent otherwise, so the code's own default applies). tests/test_setup.py fails if one the code reads is missing here.
+      - EXPOSE_API_DOCS
+      - SECURITY_HSTS
+      - CLIENT_IP_HEADER
+      - DEMO_PUBLIC_CUSTOMERS
+      - SESSION_TTL_SECONDS
+      - CHAT_RATE_PER_MIN
+      - LOGIN_RATE_PER_MIN
+      - OPERATOR_AUTH_FAILS_PER_MIN
+      - LLM_TIMEOUT_SECONDS
+      - LLM_TOTAL_BUDGET_SECONDS
+      - SHADOW_MODEL
+      - SHADOW_SAMPLE_PERCENT
+      - CANARY_MODEL
+      - CANARY_PERCENT
+      - FRESHNESS_ENFORCE
+      - FRESHNESS_SLO_HOURS
+      - RETENTION_TRACES_DAYS
+      - RETENTION_AUDIT_DAYS
+      - RETENTION_SHADOW_DAYS
+      - RETENTION_CONVERSATIONS_DAYS
+      - RETENTION_TICKETS_DAYS
+      - RETENTION_TICKET_EVENTS_DAYS
+      - RETENTION_TRACE_REQUESTS_DAYS
+      - TRACE_LOG_PATH
+      - AUDIT_LOG_PATH
+      - HUMAN_QUEUE_PATH
+      - HUMAN_DESK_PATH
+      - TRACE_REQUESTS_PATH
+      - SHADOW_LOG_PATH
+      - DRIFT_BASELINE_PATH
+      - INTENT_MODEL_PATH
+      - INTENT_META_PATH
+      - MLFLOW_TRACKING_URI
     extra_hosts:
       - "host.docker.internal:host-gateway"  # reach an Ollama running on the host (Linux needs this line; Docker Desktop has it)
     volumes:

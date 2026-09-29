@@ -32,6 +32,7 @@ def settings_read_by_the_code() -> set[str]:
             found |= set(re.findall(r'getenv\(\s*"([A-Z][A-Z0-9_]+)"', text))
             found |= set(re.findall(r'_JsonlSink\(\s*"([A-Z][A-Z0-9_]+)"', text))  # the log paths are read through the sink
             found |= set(re.findall(r'_wh\(\s*"([A-Z][A-Z0-9_]+)"', text))  # and retention's own path table
+            found |= set(re.findall(r'_days\(\s*"([A-Z][A-Z0-9_]+)"', text))  # and its retention periods
     return found - NOT_SETTINGS
 
 
@@ -211,3 +212,27 @@ def test_optional_ci_targets_run_when_defined_skip_when_missing_and_fail_when_th
     ok = run("absent", "good")
     assert ok.returncode == 0 and "skipped: this checkout has no 'make absent'" in ok.stdout and "ran-good" in ok.stdout
     assert run("bad").returncode != 0
+
+
+# Settings the image or the compose file fixes on purpose, so a value in .env must not reach the container
+FIXED_IN_THE_CONTAINER = {
+    "DUCKDB_PATH": "the image puts the warehouse on its volume",
+    "DQ_REPORT_PATH": "next to the warehouse, on the volume",
+    "RAW_DATA_DIR": "the image's data directory (RAW_DIR mounts your CSVs there)",
+    "RETENTION_STATUS_PATH": "on the volume, where /metrics reads it",
+}
+
+
+# Read by compose itself (published ports, the Grafana login, the dataset mount), not by the API
+COMPOSE_ONLY = {"API_PORT", "WEB_PORT", "PROMETHEUS_PORT", "GRAFANA_PORT", "OLLAMA_PORT", "GRAFANA_ADMIN_PASSWORD", "RAW_DIR"}
+
+
+def test_the_compose_passes_every_setting_the_code_reads_and_every_one_env_example_lists():
+    """A setting in .env that never reached the container is a setting that silently does nothing."""
+    passed = {entry.split("=", 1)[0] for entry in COMPOSE["services"]["api"]["environment"]}
+    declared = set(re.findall(r"^#?\s*([A-Z][A-Z0-9_]+)=", EXAMPLE, re.M))
+    wanted = (settings_read_by_the_code() | declared) - COMPOSE_ONLY - set(FIXED_IN_THE_CONTAINER)
+    missing = wanted - passed
+    assert not missing, f"ops/docker-compose.yml does not pass to the api: {sorted(missing)}"
+    assert set(FIXED_IN_THE_CONTAINER) <= settings_read_by_the_code()  # an exclusion for a setting that is gone is stale
+    assert COMPOSE_ONLY <= declared
