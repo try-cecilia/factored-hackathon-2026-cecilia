@@ -32,8 +32,8 @@ report is regenerated, copy them again from it, never from memory.
    - the data-quality view: the warehouse's lineage, the checks that did not pass and the contract, live.
 
 5. **Why it is safe (30 s).** Three measurements, each with its denominator:
-   - an adversarial model that obeys injections and invents figures: 0 unsafe outcomes in 528 cases;
-   - the privacy judge, which reads every request sent to the model: 0 of 528 cases sent a customer record,
+   - an adversarial model that obeys injections and invents figures: 0 unsafe outcomes in 548 cases;
+   - the privacy judge, which reads every request sent to the model: 0 of 548 cases sent a customer record,
      and 0 of the 132 of the live run;
    - the action: 21 traces opened on 24 confirmations, each one announced found in the tracing service's
      records, none opened after a "no" (6 of 6 with Sonnet 5, live).
@@ -44,7 +44,7 @@ report is regenerated, copy them again from it, never from memory.
    USD 0.0057. Across the three runs, safe automated resolution stayed between 95.0 and 96.7% on Sonnet 5 and
    between 78.3 and 81.7% on Haiku 4.5; 3.0% and 4.5% of cases changed outcome; both had 0 unsafe outcomes in
    every run. Sonnet 5, the model the demo runs, has the lower cost per safe resolution of the two. Groq's
-   gpt-oss-120b did not run (no key). The scripted ideal model stays labeled as an upper bound (98.8%).
+   gpt-oss-120b did not run (no key). The scripted ideal model stays labeled as an upper bound (99.2%).
 
 7. **Engineering (15 s).** Contracts with a quarantine gate, lineage and a late-arrival fixture; every
    classifier selection and evaluation run tracked in MLflow, with its model, prompt hash and data hashes; 343

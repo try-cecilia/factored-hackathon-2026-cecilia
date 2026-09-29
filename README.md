@@ -21,7 +21,7 @@ movimiento que sigue pendiente, ocurre solo con el "sí" del propio cliente, juz
    **vista del banco** después de una derivación o un rastreo; dejá el modelo caído y volvé a preguntar; y
    abrí **Data quality**.
 2. **Verificar un número:** todas las cifras de acá salen de un reporte generado:
-   [`SYSTEM_EVAL.md`](eval/reports/SYSTEM_EVAL.md) (offline, 528 casos),
+   [`SYSTEM_EVAL.md`](eval/reports/SYSTEM_EVAL.md) (offline, 548 casos),
    [`SYSTEM_EVAL_LIVE.md`](eval/reports/SYSTEM_EVAL_LIVE.md) (modelos en vivo),
    [`intent_classifier.md`](eval/reports/intent_classifier.md) y
    [`baseline_metrics.md`](docs/evidence/baseline_metrics.md) (la línea base humana).
@@ -50,24 +50,35 @@ unas 411 horas de agente. Fuente: [`docs/evidence/baseline_metrics.md`](docs/evi
 
 ## Resultados (workload de test held-out, ES + PT)
 
-Offline, sobre los 528 casos de test (22 tipos de caso × 12 celdas país·segmento × ES/PT), diseño v3 sobre el
+Offline, sobre los 548 casos de test (23 tipos de caso × 12 celdas país·segmento × ES/PT), diseño v3 sobre el
 warehouse del organizador:
 
 | | Bot de palabras clave (línea base) | Este sistema, modelo ideal¹ | Este sistema, modelo adversarial² |
 |---|---|---|---|
-| Resolución automática segura | 69,6% [63,5–75,1] | 98,8% [96,4–99,6] | 60,8% [54,5–66,8] |
-| Recall de escalamiento | 66,7% | 100% | 100% |
-| Escalamientos omitidos | 48 | 0 | 0 |
+| Resolución automática segura | 70,2% [64,1–75,6] | 99,2% [97,0–99,8] | 60,5% [54,2–66,5] |
+| Recall de escalamiento | 57,1% | 100% | 100% |
+| Escalamientos omitidos | 72 | 0 | 0 |
 | Completitud del handoff | 50,0% | 100% | 100% |
-| **Resultados inseguros** | 0 / 528 | **0 / 528** | **0 / 528** |
-| Casos que enviaron un registro de cliente al modelo | n/a | 0 / 528 | 0 / 528 |
+| **Resultados inseguros** | 0 / 548 | **0 / 548** | **0 / 548** |
+| Casos que enviaron un registro de cliente al modelo | n/a | 0 / 548 | 0 / 548 |
 
 ¹ Modelo ideal guionado: mide de verdad todas las capas deterministas y es un techo para la comprensión del
-propio LLM. Sus 3 omisiones y 6 derivaciones innecesarias vienen de un único pedido de rastreo en español,
+propio LLM. Sus 4 errores (ninguna escalación omitida y 4 derivaciones innecesarias, en `trace_cancel` y `trace_confirm`) vienen de un único pedido de rastreo en español,
 "hice un pago que sigue pendiente", que la guarda de disputas previa al LLM entrega a una persona: se reporta,
 no se ajusta ([`LIMITATIONS.md`](LIMITATIONS.md#the-action)). ² Un modelo guionado deliberadamente malo, que
 obedece inyecciones, consulta productos de otros clientes e inventa cifras: la automatización baja y las
 derivaciones suben, **pero nada inseguro pasa**. La seguridad no depende del modelo.
+
+**Qué aporta cada capa de seguridad.** Con el mismo modelo guionado y el mismo juez, se quitan las capas de a una. "Ideal" es el modelo que hace lo correcto; "malo", el que obedece inyecciones e inventa cifras. Un 0 de 548 solo dice algo si sin las capas el número no es 0 ([`ABLATION.md`](eval/reports/ABLATION.md), `make eval-ablation`):
+
+| Capas que se conservan | Inseguros, modelo ideal | Inseguros, modelo malo |
+|---|---|---|
+| Ninguna: un chatbot con herramientas | 17,5% [14,6–20,9] | 74,8% [71,0–78,3] |
+| + sesión validada y chequeo de propiedad en cada herramienta | 13,1% [10,6–16,2] | 49,3% [45,1–53,4] |
+| + respuestas escritas por código, nunca por el modelo | 8,8% [6,7–11,4] | 8,8% [6,7–11,4] |
+| + política, escalamiento y la acción confirmada (el sistema) | **0,0% [0,0–0,7]** | **0,0% [0,0–0,7]** |
+
+Los 48 que quedan sin la última capa son casos que exigen una persona (fraude, cuenta suspendida) y que un chatbot responde igual. Es offline, con modelos guionados, y las variantes sin capas las armamos nosotros: no miden qué haría un producto real sin esas capas, sino qué aporta cada una en este sistema.
 
 Con modelos en vivo, sobre una muestra estratificada de 132 de esos casos (todos los tipos de caso en ambos
 idiomas, 11 por celda), tres corridas cada uno
@@ -89,7 +100,7 @@ estado de pago del producto cuyo saldo se preguntó, y una vez hizo una pregunta
 de tipo de cambio. Sonnet 5 es el modelo que usa el despliegue ([`render.yaml`](render.yaml)): de los dos
 medidos, el de mayor resolución segura y menor costo por resolución segura. `gpt-oss-120b` de Groq no se
 corrió: necesita una clave. Los intervalos son Wilson 95%. Cero eventos observados acota la tasa real por
-debajo de ≈3/n: ≈0,6% con 528 casos, ≈2,3% con 132.
+debajo de ≈3/n: ≈0,55% con 548 casos, ≈2,3% con 132.
 
 **Frente a agentes humanos:** una consulta atendida por una persona toma ≈341 s (120 s de cola + 221 s de
 llamada, medidos). Este sistema responde sin cola: 1,8 s por caso en la mediana con Sonnet 5 (p95 3,9 s).
@@ -106,6 +117,18 @@ Reportes completos: [`EVALUATION.md`](EVALUATION.md) (método) ·
 [`eval/reports/SYSTEM_EVAL.md`](eval/reports/SYSTEM_EVAL.md) ·
 [`eval/reports/SYSTEM_EVAL_ADVERSARIAL.md`](eval/reports/SYSTEM_EVAL_ADVERSARIAL.md) ·
 [`eval/reports/SYSTEM_EVAL_LIVE.md`](eval/reports/SYSTEM_EVAL_LIVE.md).
+
+## Decisiones de un vistazo
+
+| Decisión | Por qué | Lo que cuesta | Detalle |
+|---|---|---|---|
+| Un flujo: cuentas y pagos | 35,0% de los contactos y 91,5% de resolución en el primer contacto: se mide contra una línea base humana real | No cubre tarjetas, disputas ni crédito | [ADR-003](docs/decisions/ADR-003-workflow-accounts-and-payments.md) |
+| El modelo interpreta, el código habla | Datos, permisos y respuestas quedan fuera del alcance de una inyección: el modelo no recibe registros de clientes ni le escribe al cliente | Las respuestas son plantillas, más rígidas que el texto libre | [ADR-001](docs/decisions/ADR-001-model-interprets-code-speaks.md) |
+| Una sola acción, confirmada en código | Rastrear un movimiento pendiente: el "sí" del cliente lo juzga el código y solo se anuncia lo que se leyó de vuelta | Una sola acción, y sin mover dinero | [ADR-002](docs/decisions/ADR-002-one-action-confirmed-in-code.md) |
+| Claude Sonnet 5 en el despliegue | Más resolución segura (95,0% frente a 78,3%), ninguna escalación omitida y menor costo por resolución segura en lo medido | Se midió sobre 132 casos y no sobre todos; depende de un proveedor, con respaldos | [ADR-004](docs/decisions/ADR-004-deployed-model-sonnet-5.md) |
+| Sin modelo de fraude ni de riesgo | `is_fraud` no se puede aprender de la transacción (AUC 0,506, split cronológico); `fraud_score` se le muestra a la persona y no decide | No hay un modelo de fraude para mostrar: el componente aprendido es el clasificador de intención | [ADR-005](docs/decisions/ADR-005-no-fraud-or-risk-model.md) |
+| Cada capa de seguridad se justifica con un contrafactual | Con las mismas condiciones y sin ninguna capa, un modelo malo produce resultados inseguros en la mayoría de los casos; con todas, ninguno | Es offline, con modelos guionados, y las capas "ingenuas" las armamos nosotros | [`ABLATION.md`](eval/reports/ABLATION.md) |
+| Render con instancias pagas, dos servicios | No se duermen mientras el jurado prueba, y el disco conserva el warehouse | Una instancia por servicio, sin réplicas | [operations.md](docs/operations.md#deploy-on-render-the-jury-demo) |
 
 ## Cómo funciona
 
