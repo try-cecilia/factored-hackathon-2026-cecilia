@@ -120,7 +120,7 @@ test('the memory of consumed ids is short and bounded', () => {
   const store = new SessionStore(time.now)
   const id = store.start('admin-key')
   assert.equal(store.take(id), 'taken')
-  time.advance(6 * MIN)
+  time.advance(31_000)
   assert.equal(store.take(id), 'none', 'after the race window an old cookie is only an unknown one')
   for (let i = 0; i < 3000; i++) store.take(store.start(`key-${i}`))
   assert.equal(store.take(id), 'none')

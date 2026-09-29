@@ -7,7 +7,7 @@ export const ABSOLUTE_MS = 8 * 60 * 60_000
 export const MAX_SESSIONS = 200
 // Ids that were just consumed (replaced by a login or an elevation) are remembered briefly, only to tell a second request
 // that arrives with the same cookie from a cookie that was never valid.
-export const CONSUMED_MS = 5 * 60_000
+export const CONSUMED_MS = 30_000
 export const MAX_CONSUMED = 1000
 
 export type OperatorSession = {

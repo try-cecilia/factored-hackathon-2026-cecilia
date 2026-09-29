@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { after, before, describe, test } from 'node:test'
-import { ADMIN, ANA, SAME_ORIGIN, opensConsole, sessionCookie, startConsole } from './harness.ts'
+import { ADMIN, ANA, SAME_ORIGIN, cookieJar, opensConsole, sessionCookie, startConsole } from './harness.ts'
 
 let app: Awaited<ReturnType<typeof startConsole>>
 before(async () => { app = await startConsole() })
@@ -60,14 +60,39 @@ describe('a session id is never reused when the session gains rights or is repla
     }
   })
 
-  test('the loser of that race is sent back to the login with a message, and the stale cookie is cleared so a retry works', async () => {
+  test('the loser of that race only redirects with a notice: it never touches the session cookie', async () => {
     const old = sessionCookie(await post('/operador/sesion', { admin_key: ADMIN }))!
-    const [first, second] = await Promise.all([post('/operador/sesion', { admin_key: ADMIN }, old), post('/operador/sesion', { admin_key: ADMIN }, old)])
-    const loser = sessionCookie(first) ? second : first
+    const answers = await Promise.all([post('/operador/sesion', { admin_key: ADMIN }, old), post('/operador/sesion', { admin_key: ADMIN }, old)])
+    const loser = answers.find((r) => sessionCookie(r) === null)!
     assert.equal(loser.status, 303)
     assert.equal(loser.headers.get('location'), '/operador/login')
-    assert.ok(loser.headers.getSetCookie().some((c) => /flash=session_replaced/.test(c)))
-    const retry = await post('/operador/sesion', { admin_key: ADMIN }) // the browser dropped the cleared cookie
-    assert.ok(sessionCookie(retry))
+    const lines = loser.headers.getSetCookie()
+    assert.ok(lines.some((c) => /flash=session_replaced/.test(c)))
+    assert.ok(lines.every((c) => /flash=/.test(c)), `only the notice is set, not the session cookie: ${lines.join(' | ')}`)
   })
+
+  for (const order of ['winner first', 'loser first'] as const) {
+    test(`whichever response the browser applies last (${order}), it ends with the winning session, and logout leaves none`, async () => {
+      for (let round = 0; round < 5; round++) {
+        const old = sessionCookie(await post('/operador/sesion', { admin_key: ADMIN }))!
+        const answers = await Promise.all([post('/operador/sesion', { admin_key: ADMIN }, old), post('/operador/sesion', { admin_key: ADMIN }, old)])
+        const winner = answers.find((r) => sessionCookie(r) !== null)!
+        const loser = answers.find((r) => sessionCookie(r) === null)!
+        const browser = cookieJar()
+        // The browser starts with the old cookie, as it did when it sent both requests.
+        const [oldName, oldValue] = old.split('=')
+        browser.apply(new Response(null, { headers: { 'Set-Cookie': `${oldName}=${oldValue}; Path=/` } }))
+        for (const response of order === 'winner first' ? [winner, loser] : [loser, winner]) browser.apply(response)
+
+        assert.equal(browser.session(), sessionCookie(winner), 'the browser holds the winning session')
+        assert.ok(await opensConsole(app, browser.session()!))
+        const out = await app.send('/operador/salir', { method: 'POST', headers: { ...SAME_ORIGIN, Cookie: browser.header() } })
+        assert.equal(out.status, 303)
+        browser.apply(out)
+        assert.equal(browser.session(), null)
+        assert.equal(await opensConsole(app, sessionCookie(winner)!), false, 'no orphan session survives the logout')
+        assert.equal(await opensConsole(app, old), false)
+      }
+    })
+  }
 })

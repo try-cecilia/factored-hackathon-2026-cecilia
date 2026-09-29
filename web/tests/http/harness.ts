@@ -58,3 +58,28 @@ export async function opensConsole(app: { send: Awaited<ReturnType<typeof startC
   const page = await app.send('/operador/cola', { headers: { Cookie: cookie } })
   return page.status === 200
 }
+
+/** A browser's cookie jar, enough for these tests: applies Set-Cookie headers in the order responses arrive. */
+export function cookieJar() {
+  const jar = new Map<string, string>()
+  return {
+    apply(response: Response) {
+      for (const line of response.headers.getSetCookie()) {
+        const [pair, ...attributes] = line.split(';').map((part) => part.trim())
+        const at = pair.indexOf('=')
+        const name = pair.slice(0, at)
+        const gone = attributes.some((a) => /^max-age=0$/i.test(a) || /^expires=.*1970/i.test(a))
+        if (gone || at === pair.length - 1) jar.delete(name)
+        else jar.set(name, pair.slice(at + 1))
+      }
+    },
+    /** The session cookie as `name=value`, or null (the flash cookie is not a session). */
+    session() {
+      const found = [...jar].find(([name]) => /cecilai_operator$/.test(name))
+      return found ? `${found[0]}=${found[1]}` : null
+    },
+    header() {
+      return [...jar].map(([name, value]) => `${name}=${value}`).join('; ')
+    },
+  }
+}

@@ -121,7 +121,9 @@ lectura y trazas. Cómo se configuran las claves:
   que ese navegador tuviera; agregar la clave de operador también cambia el identificador y el anterior deja de valer, así
   que una cookie de solo lectura copiada no gana permisos de acción. El tope de 8 horas sigue contando desde el ingreso original. La sesión anterior se consume en un solo paso
   (tomar y borrar): de dos ingresos simultáneos con la misma cookie solo uno crea sesión; el otro vuelve al ingreso con un
-  aviso y con la cookie vieja borrada, así que puede reintentar.
+  aviso y **sin tocar la cookie de sesión** (un borrado que llegara después del Set-Cookie del ganador dejaría esa sesión
+  huérfana). Si el navegador perdió la respuesta ganadora, la cookie vieja se rechaza durante 30 segundos y luego se trata
+  como una cookie desconocida.
 - *Destino tras el ingreso.* Se decodifica y normaliza como lo haría un navegador (puntos, `%2f`, `%5c`, tabuladores,
   barras invertidas) y solo se acepta una ruta propia que no empiece con `//`; ante la duda va a `/operador/cola`.
 - *Dónde viven las claves.* Nunca en el JavaScript del navegador, en `localStorage` ni en una cookie. El servidor de la web
