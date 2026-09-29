@@ -102,3 +102,10 @@ def test_two_operators_cannot_act_on_each_others_ticket_end_to_end():
     assert client.post(f"/admin/tickets/{tid}/claim", json={}, headers=as_operator(ANA_KEY)).status_code == 200
     assert client.post(f"/admin/tickets/{tid}/approve", json={}, headers=as_operator(BETO_KEY)).status_code == 409
     assert client.post(f"/admin/tickets/{tid}/approve", json={}, headers=as_operator(ANA_KEY)).json()["status"] == "approved"
+
+
+def test_the_operator_key_identifies_its_owner_without_acting_and_the_admin_key_does_not():
+    client = TestClient(main.app)
+    assert client.get("/admin/operator/me", headers=as_operator(BETO_KEY)).json() == {"operator": "beto"}
+    assert client.get("/admin/operator/me", headers={"X-Admin-Key": ADMIN_KEY}).status_code == 401
+    assert client.get("/admin/operator/me").status_code == 401
