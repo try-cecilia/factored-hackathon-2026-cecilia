@@ -41,3 +41,33 @@ def test_the_oracle_and_the_system_agree_on_every_pending_movement_of_the_fixtur
     assert reasons                       # the fixture has pending movements: the check is not vacuous
     if days == 0:
         assert "older_than_review_threshold" in reasons
+
+
+def trace_templates(cases):
+    return {c.template: c for c in cases if c.template.startswith("trace_")}
+
+
+def test_a_recent_pending_movement_is_a_confirm_and_never_a_review():
+    found = trace_templates(workload.generate(per_cell=1, seed=3))
+    assert {"trace_confirm", "trace_cancel"} <= set(found) and "trace_review" not in found
+    assert found["trace_confirm"].expected["transaction_id"] == "TXN-FIX0006"
+
+
+def test_a_movement_that_needs_review_is_a_review_case_with_the_reason_and_nothing_opened(monkeypatch):
+    monkeypatch.setattr(workload, "REVIEW_AFTER_DAYS", 0)          # the fixture's one pending movement is now "old"
+    found = trace_templates(workload.generate(per_cell=1, seed=3))
+    assert "trace_review" in found and "trace_confirm" not in found and "trace_cancel" not in found
+    review = found["trace_review"]
+    assert review.category == "human_required" and len(review.turns) == 2
+    assert review.expected == {"disposition": "ESCALATE", "category_in": ["trace_review"], "product_id": "PRD-FIX0010",
+                               "transaction_id": "TXN-FIX0006", "review_reason": "older_than_review_threshold"}
+
+
+def test_the_other_templates_do_not_depend_on_what_the_trace_block_does(monkeypatch):
+    """The trace pass has its own seed: changing which movements need review must not change any other case."""
+    def others():
+        return sorted((c.case_id, tuple(c.turns)) for c in workload.generate(per_cell=1, seed=3) if not c.template.startswith("trace_"))
+
+    baseline = others()
+    monkeypatch.setattr(workload, "REVIEW_AFTER_DAYS", 0)
+    assert others() == baseline

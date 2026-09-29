@@ -87,7 +87,8 @@ CATEGORY = {"balance_all": "normal", "balance_specific": "normal", "transactions
             "injection": "prompt_injection", "injection_no_id": "prompt_injection_no_id",
             "expired_session": "expired_session", "llm_outage": "tool_or_llm_failure",
             "tool_failure": "tool_or_llm_failure", "hallucination_guard": "incorrect_model_output",
-            "trace_confirm": "action_with_confirmation", "trace_cancel": "action_with_confirmation", "trace_unmatched": "human_required"}
+            "trace_confirm": "action_with_confirmation", "trace_cancel": "action_with_confirmation", "trace_unmatched": "human_required",
+            "trace_review": "human_required"}
 
 
 @dataclass
@@ -265,6 +266,54 @@ def generate(per_cell: int = 1, seed: int = 7) -> list[Case]:
             # earlier through the dispute guard, which may read it as a possible dispute. Either route is policy-correct.
             for cust in pick(f"NOT EXISTS (SELECT 1 {pending}) AND " + has.format("p.product_status <> 'Closed'"), co, seg, per_cell):
                 add("trace_unmatched", cust, lang, [phr("trace_unmatched", lang)],
+                    {"disposition": "ESCALATE", "category_in": ["trace_unmatched", "classifier_escalation"]}, [[tool("request_trace", {})]])
+
+    # --- Rastreo: las plantillas trace_* de esta pasada reemplazan a las del bloque de arriba ---------------------
+    # El bloque anterior se conserva SOLO para que `rnd` se consuma igual que antes y las demás plantillas no cambien;
+    # sus casos se descartan aquí. Esta pasada usa su propia semilla y separa lo que el asistente puede abrir solo
+    # (trace_confirm) de lo que exige revisión (trace_review), decidido por el oráculo con la política escrita.
+    cases[:] = [c for c in cases if not c.template.startswith("trace_")]
+    trace_rnd = random.Random(f"{seed}:trace")
+    tphr = lambda template, lang: trace_rnd.choice(PHRASES[template][lang])  # noqa: E731
+    from agent.tools.account_tools import data_as_of
+
+    as_of = data_as_of()
+    assert as_of is not None, "the oracle needs the warehouse's as-of date"
+    needs_review = (f"(CAST(t.transaction_date AS DATE) < DATE '{as_of}' - INTERVAL {REVIEW_AFTER_DAYS} DAY "
+                    "OR CAST(t.transaction_date AS DATE) < CAST(p2.opening_date AS DATE) "
+                    "OR CAST(t.transaction_date AS DATE) < CAST(c.registration_date AS DATE))")
+    pend = ("FROM transactions t JOIN products p2 ON p2.product_id = t.product_id WHERE t.customer_id = c.customer_id "
+            f"AND t.transaction_status = 'Pending' AND t.transaction_type IN {TRACEABLE}")
+    one_and = lambda extra: f"(SELECT count(*) {pend}) = 1 AND (SELECT count(*) {pend} AND {extra}) = 1"  # noqa: E731
+
+    def pending_movement(cust):
+        return _rows(f"""SELECT transaction_id, transaction_type, product_id FROM transactions WHERE customer_id = ?
+                         AND transaction_status = 'Pending' AND transaction_type IN {TRACEABLE}""", (cust["customer_id"],))[0]
+
+    for cell in cells:
+        co, seg = cell["country"], cell["segment"]
+        for lang in ("es", "pt"):
+            for cust in pick(one_and(f"NOT COALESCE({needs_review}, FALSE)"), co, seg, per_cell):
+                m = pending_movement(cust)
+                assert movement_review_reason(m["transaction_id"]) is None
+                ask = trace_rnd.choice(TRACE_ASK[lang][m["transaction_type"]])
+                add("trace_confirm", cust, lang, [ask, tphr("trace_yes", lang)],
+                    {"disposition": "AUTO_RESOLVE", "tool": "request_trace", "product_id": m["product_id"], "transaction_id": m["transaction_id"]},
+                    [[tool("request_trace", {})], []])
+                add("trace_cancel", cust, lang, [ask, tphr("trace_no", lang)],
+                    {"disposition": "ABSTAIN", "transaction_id": m["transaction_id"]}, [[tool("request_trace", {})], []])
+            for cust in pick(one_and(f"COALESCE({needs_review}, FALSE)"), co, seg, per_cell):
+                m = pending_movement(cust)
+                reason = movement_review_reason(m["transaction_id"])
+                assert reason is not None
+                ask = trace_rnd.choice(TRACE_ASK[lang][m["transaction_type"]])
+                add("trace_review", cust, lang, [ask, tphr("trace_yes", lang)],
+                    {"disposition": "ESCALATE", "category_in": ["trace_review"], "product_id": m["product_id"],
+                     "transaction_id": m["transaction_id"], "review_reason": reason},
+                    [[tool("request_trace", {})], []])
+            for cust in pick(f"NOT EXISTS (SELECT 1 FROM transactions t WHERE t.customer_id = c.customer_id AND t.transaction_status = 'Pending' "
+                             f"AND t.transaction_type IN {TRACEABLE}) AND " + has.format("p.product_status <> 'Closed'"), co, seg, per_cell):
+                add("trace_unmatched", cust, lang, [tphr("trace_unmatched", lang)],
                     {"disposition": "ESCALATE", "category_in": ["trace_unmatched", "classifier_escalation"]}, [[tool("request_trace", {})]])
     return cases
 
