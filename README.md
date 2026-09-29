@@ -237,7 +237,7 @@ make gate            # compuerta de calidad: pisos de seguridad y evidencia vige
 |---|---|
 | El login queda en "Ingresando…" | Safari no guarda la cookie de sesión por `http`. Usá Chrome, Brave o Firefox |
 | "Forbidden" al entrar como operador | Entraste por `localhost`. La consola solo acepta el origen de `WEB_PUBLIC_ORIGIN`: usá `http://127.0.0.1:3000` |
-| Aparece el aviso **Modo limitado** y muchas consultas van a una persona | No hay clave de modelo, o se agotó el cupo gratis de Groq (~200k tokens/día). Es el modo seguro: sin el modelo, responde solo saldos simples y deriva el resto |
+| Aparece el aviso «Cecilia está limitada por ahora» y muchas consultas van a una persona | No hay clave de modelo, o se agotó el cupo gratis de Groq (~200k tokens/día). Es el modo seguro: sin el modelo, responde solo saldos simples y deriva el resto |
 | Confirmé un rastreo y no aparece en la consola | Es lo esperado: un rastreo confirmado por el cliente se abre solo. A la consola llegan solo los casos que necesitan a una persona |
 | Un caso desapareció de la cola | Ya se decidió: mirá los filtros **Decididos** o **Todos** |
 | Quiero datos limpios | `make down && make clean-volumes`, y levantá de nuevo |
