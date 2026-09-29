@@ -222,6 +222,8 @@ tests/       346 tests herméticos + fixtures
 
 ## Estado
 
+- Estado de la integración en curso (ramas, qué se probó, cómo reproducirlo y qué falta):
+  [`docs/estado-integracion.md`](docs/estado-integracion.md).
 - Construido y evaluado de punta a punta, offline y con modelos en vivo, sobre el warehouse del organizador.
   CI corre la suite hermética y verifica el reporte del clasificador. Cada selección y evaluación del
   clasificador queda registrada en MLflow: modelo, esfuerzo, hash del prompt, hashes de los datos, versión del
