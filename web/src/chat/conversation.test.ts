@@ -105,8 +105,11 @@ test('the cases are the handoffs that came with a number, newest first, once eac
 })
 
 test('case status: open ones can still change, tones follow the meaning, unknown categories get a generic name', () => {
-  assert.ok(isOpenCase('open') && isOpenCase('claimed') && !isOpenCase('approved') && !isOpenCase('stale'))
-  assert.deepEqual(['open', 'claimed', 'approved', 'rejected', 'stale', 'handed_back', 'x'].map(caseTone), ['accent', 'accent', 'success', 'danger', 'caution', 'accent', 'accent'])
+  assert.ok(isOpenCase('open') && isOpenCase('claimed') && !isOpenCase('approved') && !isOpenCase('stale') && !isOpenCase('resolved'))
+  assert.deepEqual(
+    ['open', 'claimed', 'approved', 'rejected', 'stale', 'handed_back', 'resolved', 'x'].map(caseTone),
+    ['accent', 'accent', 'success', 'danger', 'caution', 'accent', 'success', 'accent'],
+  )
   assert.equal(caseCategoryKey('theft'), 'theft')
   assert.equal(caseCategoryKey('turn_timeout'), 'pending')
   assert.equal(caseCategoryKey('something_new'), 'other')

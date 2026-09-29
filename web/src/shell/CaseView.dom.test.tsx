@@ -131,6 +131,21 @@ describe('the case view', () => {
     expect(within(dialog).getByText(/Estado consultado a las/)).toBeTruthy()
   })
 
+  it('a resolved case says so in the chat and in its view, with what comes next and the message the person left', async () => {
+    const news = 'Novedad de tu caso: un agente lo resolvió. Mensaje del agente: «Era una suscripción; ya no se cobra.»'
+    server.getCase.mockResolvedValue({ ok: true, case: { ticket_id: ticket, status: 'resolved', message: news } })
+    const user = userEvent.setup()
+    await draw()
+    expect(await within(screen.getByRole('group', { name: 'Robo o clonación de tarjeta' })).findByText(/Resuelto/)).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: /^Ver caso 55d09c14/ }))
+    const dialog = await screen.findByRole('dialog', { name: 'Robo o clonación de tarjeta' })
+    expect(await within(dialog).findByText('Resuelto')).toBeTruthy()
+    expect(within(dialog).getByText('Una persona del equipo resolvió tu caso y te dejó un mensaje.')).toBeTruthy()
+    expect(within(dialog).getByText('Si necesitas algo más, puedes seguir la consulta con Cecilia en la conversación.')).toBeTruthy()
+    expect(within(dialog).getByText(news)).toBeTruthy()
+    expect(dialog.querySelector('.case__dot')?.getAttribute('data-tone')).toBe('success')
+  })
+
   it('reopened while the service fails (503), it keeps the last known status and says the update failed', async () => {
     const user = userEvent.setup()
     await draw()
