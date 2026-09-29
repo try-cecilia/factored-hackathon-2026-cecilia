@@ -1,5 +1,5 @@
 import { Link, useNavigate, useRouter } from '@tanstack/react-router'
-import { lazy, Suspense, use, useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { lazy, Suspense, use, useCallback, useEffect, useId, useRef, useState, type ReactNode, type RefObject } from 'react'
 import type { DemoScenario } from '../chat/types'
 import { useConversation } from '../chat/ConversationProvider'
 import { LockIcon } from '../chat/icons'
@@ -22,6 +22,7 @@ import {
   ToastRegion,
 } from '../ui'
 import { CasesSection } from './CasesSection'
+import { CaseView } from './CaseView'
 import { ShellProvider } from './ShellContext'
 import { useDismiss } from './useDismiss'
 import { useMediaQuery } from './useMediaQuery'
@@ -37,14 +38,15 @@ const NARROW = '(max-width: 1179px)'
 
 /**
  * The customer's window: the sidebar (wide, or a rail, or a drawer on a phone), a bar with the page title and the language
- * switcher, the page, and, only in the demo, its own panel. Everything that changes with the conversation reads it from the provider.
+ * switcher, the page, the view of a case over it, and, only in the demo, its own panel. Everything that changes with the conversation
+ * reads it from the provider.
  * The demo's button and panel wait for the kit on their own: the rest of the window is drawn without it.
  */
 export function AppShell({ session, kit, children }: { session: Session; kit: Promise<DemoKit>; children: ReactNode }) {
   const t = useT()
   const navigate = useNavigate()
   const router = useRouter()
-  const { cases, entries, sending, send } = useConversation()
+  const { cases, entries, sending, ended, send, refreshCase } = useConversation()
   const phone = useMediaQuery(PHONE)
   const narrow = useMediaQuery(NARROW)
   const [collapsed, setCollapsed] = useState(false)
@@ -56,29 +58,41 @@ export function AppShell({ session, kit, children }: { session: Session; kit: Pr
   const setDemoOpen = useCallback((next: boolean | ((open: boolean) => boolean)) => setDemoChoice((current) => (typeof next === 'function' ? next(current ?? !narrow) : next)), [narrow])
   const [loggingOut, setLoggingOut] = useState(false)
   const [logoutFailed, setLogoutFailed] = useState(false)
+  // The case being looked at. `open` slides the view in; the case stays while it slides out, and `seen` counts the openings, so
+  // opening the same case again asks for it again.
+  const [caseView, setCaseView] = useState<{ id: string; open: boolean; seen: number } | null>(null)
+  const caseOpen = caseView?.open ?? false
+  const caseTitle = useId()
   const side = useRef<HTMLDivElement>(null)
   const demo = useRef<HTMLDivElement>(null)
+  const casePanel = useRef<HTMLDivElement>(null)
 
+  const closeCase = useCallback(() => setCaseView((view) => view && { ...view, open: false }), [])
   useDismiss(menuOpen, phone, () => setMenuOpen(false), side)
   useDismiss(demoOpen, narrow, () => setDemoOpen(false), demo)
+  // Always modal, on every screen: the view is over the page, and Escape gives the focus back to what opened it.
+  useDismiss(caseOpen, true, closeCase, casePanel)
   // Leaving the phone size closes the drawer that no longer exists.
   useEffect(() => {
     if (!phone) setMenuOpen(false)
   }, [phone])
 
-  const openCase = useCallback((ticketId: string) => {
+  // "Ver caso" in a handoff message and a case's row in the sidebar open the case's view (on a phone the drawer closes first).
+  const showCase = useCallback((ticketId: string) => {
     setMenuOpen(false)
-    // The handoff message is the case: bring it into view and leave the focus on it.
-    const message = document.getElementById(`case-msg-${ticketId}`)
-    message?.scrollIntoView({ block: 'center', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
-    message?.focus({ preventScroll: true })
+    setCaseView((view) => ({ id: ticketId, open: true, seen: (view?.seen ?? 0) + 1 }))
   }, [])
 
-  const showCase = useCallback((ticketId: string) => {
-    setMenuOpen(true)
-    setCollapsed(false)
-    requestAnimationFrame(() => document.getElementById(`case-row-${ticketId}`)?.focus())
-  }, [])
+  // From the view back to the conversation: the handoff message comes into view with the focus on it, once the view has closed
+  // and handed the focus back.
+  const showInChat = useCallback((ticketId: string) => {
+    closeCase()
+    requestAnimationFrame(() => {
+      const message = document.getElementById(`case-msg-${ticketId}`)
+      message?.scrollIntoView({ block: 'center', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
+      message?.focus({ preventScroll: true })
+    })
+  }, [closeCase])
 
   async function onLogout() {
     setLoggingOut(true)
@@ -97,14 +111,15 @@ export function AppShell({ session, kit, children }: { session: Session; kit: Pr
   // While a panel slides over the page it is modal: everything behind it is inert, and the focus stays inside it.
   const menuModal = phone && menuOpen
   const demoModal = narrow && demoOpen
-  const behind = menuModal || demoModal
+  const behind = menuModal || demoModal || caseOpen
+  const inChat = (ticketId: string) => entries.some((e) => e.role === 'assistant' && e.reply.disposition === 'ESCALATE' && e.reply.ticket_id === ticketId)
   const escalations = entries.filter((e) => e.role === 'assistant' && e.reply.disposition === 'ESCALATE').length
   const detail = [session.segment, session.country].filter(Boolean).join(' · ')
 
   return (
     <ShellProvider value={{ showCase }}>
       <a className="skip" href="#main" inert={behind ? true : undefined}>{t('common.skipToContent')}</a>
-      <div className="shell" data-menu={menuOpen ? 'open' : undefined} data-demo={demoOpen ? 'open' : undefined}>
+      <div className="shell" data-menu={menuOpen ? 'open' : undefined} data-demo={demoOpen ? 'open' : undefined} data-case={caseOpen ? 'open' : undefined}>
         <div
           id="shell-side"
           ref={side}
@@ -112,7 +127,7 @@ export function AppShell({ session, kit, children }: { session: Session; kit: Pr
           role={phone && menuOpen ? 'dialog' : undefined}
           aria-modal={phone && menuOpen ? true : undefined}
           aria-label={phone && menuOpen ? t('shell.mainNav') : undefined}
-          inert={(phone && !menuOpen) || demoModal ? true : undefined}
+          inert={(phone && !menuOpen) || demoModal || caseOpen ? true : undefined}
         >
           {phone && (
             <IconButton
@@ -146,7 +161,7 @@ export function AppShell({ session, kit, children }: { session: Session; kit: Pr
             <SidebarSection>
               <SidebarRow as={Link} to="/chat" active icon={<SidebarChatIcon />} label={t('shell.nav.chat')} />
             </SidebarSection>
-            <CasesSection cases={cases} collapsed={rail} onOpen={openCase} onExpand={() => setCollapsed(false)} />
+            <CasesSection cases={cases} collapsed={rail} onOpen={showCase} onExpand={() => setCollapsed(false)} />
           </Sidebar>
         </div>
         {phone && menuOpen && <button type="button" tabIndex={-1} className="shell__scrim" aria-label={t('shell.menu.scrim')} onClick={() => setMenuOpen(false)} />}
@@ -176,7 +191,7 @@ export function AppShell({ session, kit, children }: { session: Session; kit: Pr
         </div>
 
         <Suspense fallback={null}>
-          <DemoColumn kit={kit} panel={demo} open={demoOpen} narrow={narrow} inert={!demoOpen || menuModal} onClose={() => setDemoOpen(false)}>
+          <DemoColumn kit={kit} panel={demo} open={demoOpen} narrow={narrow} inert={!demoOpen || menuModal || caseOpen} onClose={() => setDemoOpen(false)}>
             {(scenarios) => (
               <DemoPanel
                 scenarios={scenarios}
@@ -190,6 +205,30 @@ export function AppShell({ session, kit, children }: { session: Session; kit: Pr
             )}
           </DemoColumn>
         </Suspense>
+
+        {caseOpen && <button type="button" tabIndex={-1} className="shell__scrim shell__scrim--case" aria-label={t('cases.detail.close')} onClick={closeCase} />}
+        <div
+          id="shell-case"
+          ref={casePanel}
+          className="shell__case"
+          role={caseOpen ? 'dialog' : undefined}
+          aria-modal={caseOpen ? true : undefined}
+          aria-labelledby={caseOpen ? caseTitle : undefined}
+          inert={caseOpen ? undefined : true}
+        >
+          {caseView && (
+            <CaseView
+              key={`${caseView.id}-${caseView.seen}`}
+              ticketId={caseView.id}
+              row={cases.find((c) => c.ref.ticketId === caseView.id)}
+              ended={ended}
+              titleId={caseTitle}
+              refresh={refreshCase}
+              onClose={closeCase}
+              onShowInChat={inChat(caseView.id) ? showInChat : undefined}
+            />
+          )}
+        </div>
       </div>
       <ToastRegion>{logoutFailed && <Toast variant="error" onClose={() => setLogoutFailed(false)}>{t('shell.signOutFailed')}</Toast>}</ToastRegion>
     </ShellProvider>

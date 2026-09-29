@@ -13,7 +13,7 @@ const rule = (selector: string) => {
 }
 
 test('an open drawer is visible from its first frame, so its first control can take the focus', () => {
-  for (const selector of [".shell[data-menu='open'] .shell__side", ".shell[data-demo='open'] .shell__demo"]) {
+  for (const selector of [".shell[data-menu='open'] .shell__side", ".shell[data-demo='open'] .shell__demo", ".shell[data-case='open'] .shell__case"]) {
     const block = rule(selector)
     assert.match(block, /visibility:\s*visible/, selector)
     assert.match(block, /transition:[^;]*visibility 0s(?![^;]*\d)/, `${selector} shows without waiting for the slide`)
@@ -21,7 +21,7 @@ test('an open drawer is visible from its first frame, so its first control can t
 })
 
 test('a closing drawer stays visible until the slide ends, then hides', () => {
-  for (const selector of ['.shell__side', '.shell__demo, .shell__demo[inert]']) {
+  for (const selector of ['.shell__side', '.shell__demo, .shell__demo[inert]', '.shell__case']) {
     const media = css.slice(css.indexOf('@media'))
     const block = media.slice(media.indexOf(`${selector} {`), media.indexOf('}', media.indexOf(`${selector} {`)))
     assert.match(block, /transition:[^;]*visibility 0s linear 0\.18s/, selector)

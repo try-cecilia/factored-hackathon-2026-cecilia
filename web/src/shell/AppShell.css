@@ -26,6 +26,16 @@
   .shell[data-demo='open'] .shell__demo { transform: none; visibility: visible; transition: transform 0.18s ease, visibility 0s; }
 }
 
+/* The view of a case: always over the page from the right, on paper, with a soft shadow; on a phone it takes the whole screen. */
+.shell__case {
+  position: fixed; top: 0; right: 0; bottom: 0; z-index: 40; width: min(420px, 100vw); overflow-y: auto; background: var(--color-paper);
+  box-shadow: 0 1px 1px #0F0A1414, 0 24px 50px -24px #0F0A148C; transform: translateX(100%); visibility: hidden;
+  transition: transform 0.18s ease, visibility 0s linear 0.18s;
+}
+/* Visible from the first frame (0s), so its first control can take the focus as it opens; it hides only after sliding out. */
+.shell[data-case='open'] .shell__case { transform: none; visibility: visible; transition: transform 0.18s ease, visibility 0s; }
+.shell__scrim--case { z-index: 35; }
+
 /* Phone: the sidebar is a drawer, the bar carries the menu button, and the trust note leaves. */
 @media (max-width: 759px) {
   .shell__side {
@@ -36,11 +46,12 @@
   .shell__side .ui-sidebar { width: 100%; }
   .shell__close { position: absolute; top: 12px; right: 10px; z-index: 1; }
   .shell__menu { display: inline-flex; }
+  .shell__case { width: 100vw; box-shadow: none; }
   .shell__trust { display: none; }
   .shell__bar { gap: 8px; padding: 0 12px; }
   /* The title stays for screen readers; on a phone the bar has room only for the controls. */
   .shell__title { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .shell__side, .shell__demo { transition: none; }
+  .shell__side, .shell__demo, .shell__case { transition: none; }
 }
