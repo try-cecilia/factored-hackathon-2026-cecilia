@@ -322,8 +322,11 @@ Reglas del contrato:
 - **Los parámetros son lo que la frase necesita y nada del cliente**: una categoría o una lista de categorías, la cantidad de
   productos ajenos, un motivo de revisión, el nombre del campo que falta, el tipo de error de una consulta, la probabilidad del
   clasificador. Nunca el pedido, un identificador, un monto ni un número de tarjeta; `tests/test_operator_codes.py` lo
-  comprueba escalando un pedido con un número de tarjeta. `detail` (el mensaje de una excepción de una consulta) ya viajaba en
-  `reason` y viaja igual; se muestra tal cual, porque no es traducible.
+  comprueba escalando un pedido con un número de tarjeta, y con los mensajes de una excepción de una consulta (con un id de
+  producto y una ruta de archivo adentro). **El mensaje crudo de una excepción no viaja en los parámetros**: puede traer
+  identificadores y rutas internas y está en inglés, así que `data_unavailable` lleva el campo que falta (`field`, o el código
+  `data_unavailable_unspecified` si no se sabe cuál), y `tool_failure` y `evidence_failed`, el tipo de error (`error_type`).
+  El mensaje queda solo en el texto de respaldo en inglés (`reason`, `open_questions`), como antes.
 - **Lo que ya era un identificador estable no lleva código nuevo**: el tipo de evidencia (`transaction`, `denied_request`), las
   claves de los hechos (`tool`, `result`), el motivo de revisión de `pending_action` (`older_than_review_threshold`,
   `before_product_opening`, `before_customer_registration`, `turn_timeout`), `policy_rule` y, en la traza, el resultado y el
