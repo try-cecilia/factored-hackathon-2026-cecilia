@@ -12,6 +12,7 @@ that fired, and open questions. It never carries the session token — only
 from __future__ import annotations
 
 import json
+import logging
 import os
 import threading
 import time
@@ -21,11 +22,15 @@ from pathlib import Path
 from typing import Any
 
 from agent.policy.router import Decision
+from agent import observability
 from agent.filelock import locked
-from agent.resilience import (Deadline, RetryPolicy, current_handoff, handoff_budget_seconds, handoff_deadline, retry_call,
+from agent.resilience import (Deadline, RetryPolicy, Saturated, current_handoff, handoff_budget_seconds, handoff_deadline, retry_call,
                               run_bounded)
+from agent.resilience import writes as writes_pool
 from agent.policy.signals import PRIORITY_BY_CATEGORY
 from agent.tools import account_tools
+
+logger = logging.getLogger(__name__)
 
 FRAUD_SCORE_FLAG = 70
 
@@ -60,12 +65,21 @@ ENQUEUE_RETRY = RetryPolicy(max_attempts=3, base_s=0.1, cap_s=0.5)
 
 
 class HandoffInFlight(TimeoutError):
-    """The ticket's write had begun and did not finish inside the handoff's budget: it may still land, as `ticket_id`. The
-    caller reports that id (as unverified) instead of "no ticket": a ticket that exists must never be denied."""
+    """The ticket's write had begun and did not finish inside the handoff's budget. It is an explicit state, not a ticket: the
+    caller names no ticket (only confirmed ones are named), and the write's own outcome, when it comes, is recorded by
+    `_record_late`. The customer has the trace code, and the ticket carries the same trace id."""
 
-    def __init__(self, ticket_id: str):
-        super().__init__(f"the write of ticket {ticket_id} was still running when the handoff's budget ended")
-        self.ticket_id = ticket_id
+
+def _record_late(ticket: "EscalationTicket", error: BaseException | None) -> None:
+    """The outcome of a write its caller had stopped waiting for: counted (/admin/capacity, /metrics) and logged by type."""
+    kind = "handoff_late_landed" if error is None else "handoff_late_failed"
+    observability.count_failure(kind)
+    fields = {"trace_id": ticket.trace_id, "kind": kind}
+    if error is None:
+        logger.info("a handoff write finished after its budget: the ticket exists", extra={"fields": {**fields, "ticket_id": ticket.ticket_id}})
+    else:  # no ticket exists, so nothing is named
+        logger.error("a handoff write failed after its budget (%s)", type(error).__name__,
+                     extra={"fields": {**fields, "error_type": type(error).__name__}})
 
 
 class HumanQueue:
@@ -80,43 +94,56 @@ class HumanQueue:
         id is the idempotency key: a retry first looks for the ticket, so a write that landed but reported failure is not
         filed twice. The wait for the lock is what is left of the budget, and once it is spent no write begins: a ticket never
         lands after the customer was told it did not. A write that has already begun is not cut off (half a line would be
-        worse than a late one): if it outlasts the budget, HandoffInFlight carries the id it will land under."""
+        worse than a late one): if it outlasts the budget, HandoffInFlight is raised, the write finishes on its own, and its
+        outcome is recorded when it does. The write takes a slot of `resilience.writes` until it ends; with none free it is
+        refused at once (Saturated) instead of piling up."""
         budget = current_handoff.get() or Deadline(handoff_budget_seconds())
-        tries, begun = 0, threading.Event()
+        tries = 0
+        state = {"begun": False, "given_up": False, "done": False, "error": None}
+        guard = threading.Lock()
 
         def write() -> None:
             nonlocal tries
             tries += 1
             # Between processes and threads, and never past the budget: the wait for the lock is what is left of it.
             with locked(self.path, timeout=budget.remaining()), open(self.path, "a", encoding="utf-8") as f:
-                if budget.expired:  # the lock came too late: nothing is written
-                    raise TimeoutError("handoff budget spent before the ticket could be written")
-                if tries > 1 and self.get(ticket.ticket_id) is not None:
-                    return
-                begun.set()
+                with guard:  # begins only if the caller is still waiting: either it sees the write begun, or the write never begins
+                    if budget.expired or state["given_up"]:
+                        raise TimeoutError("handoff budget spent before the ticket could be written")
+                    if tries > 1 and self.get(ticket.ticket_id) is not None:
+                        return
+                    state["begun"] = True
                 f.write(json.dumps(asdict(ticket), default=str, ensure_ascii=False) + "\n")
-            begun.clear()
-
-        outcome: dict[str, BaseException] = {}
 
         def run() -> None:
+            error: BaseException | None = None
             try:
                 retry_call(write, policy=ENQUEUE_RETRY, idempotency_key=ticket.ticket_id, deadline=budget)
-            except BaseException as exc:  # noqa: BLE001 - reported to the caller below
-                outcome["error"] = exc
+            except BaseException as exc:  # noqa: BLE001 - reported to the caller, or recorded if it stopped waiting
+                error = exc
+            finally:
+                writes_pool.release()
+            with guard:
+                state.update(done=True, error=error)
+                late = state["given_up"] and state["begun"]
+            if late:
+                _record_late(ticket, error)
 
+        if not writes_pool.try_acquire():
+            raise Saturated(f"{writes_pool.limit} ticket writes already in flight")
         worker = threading.Thread(target=run, daemon=True, name="handoff-write")
         worker.start()
         worker.join(max(0.0, budget.remaining()))
-        if worker.is_alive():
-            if begun.is_set():
-                raise HandoffInFlight(ticket.ticket_id)
-            worker.join(0.05)  # not begun: it gives up by itself at the deadline (its lock wait and retries are bounded by it)
-            if worker.is_alive() and begun.is_set():
-                raise HandoffInFlight(ticket.ticket_id)
+        with guard:
+            if not state["done"]:
+                state["given_up"] = True
+                begun = state["begun"]
+        if not state["done"]:
+            if begun:
+                raise HandoffInFlight(f"the write of a ticket for trace {ticket.trace_id} was still running at the deadline")
             raise TimeoutError("handoff budget spent before the ticket could be written")
-        if "error" in outcome:
-            raise outcome["error"]
+        if state["error"] is not None:
+            raise state["error"]
 
     def get(self, ticket_id: str) -> dict | None:
         # ponytail: linear scan of a local JSONL file; the bank's case system answers this by id

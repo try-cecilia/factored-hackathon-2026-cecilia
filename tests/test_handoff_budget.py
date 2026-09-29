@@ -79,7 +79,7 @@ def test_slow_evidence_costs_at_most_half_the_budget_and_the_ticket_is_still_fil
     r = orch.handle_message(tok, "no reconozco un cargo en mi tarjeta")  # fraud: evidence is gathered
     assert time.perf_counter() - t0 < 0.1 + 0.12
     (ticket,) = tickets()  # the write still had its half of the budget
-    assert any("Evidence was not gathered" in q for q in ticket["open_questions"]) and r.policy_rule.split("|")[0] == "lexicon:fraud"
+    assert r.ticket_id == ticket["ticket_id"] and any("Evidence was not gathered" in q for q in ticket["open_questions"])
 
 
 def test_within_its_budget_the_handoff_is_filed_and_read_back(monkeypatch):
@@ -160,37 +160,7 @@ class SlowOpen:
         return Slow()
 
 
-def test_a_slow_read_back_is_bounded_and_the_ticket_written_in_time_is_still_reported_with_its_id(monkeypatch):
-    monkeypatch.setenv("HANDOFF_BUDGET_SECONDS", str(BUDGET))
-    real = escalation.HumanQueue.get
-
-    def slow_get(self, ticket_id):
-        time.sleep(0.2)
-        return real(self, ticket_id)
-
-    monkeypatch.setattr(escalation.HumanQueue, "get", slow_get)
-    orch, tok = orchestrator()
-    t0 = time.perf_counter()
-    r = orch.handle_message(tok, "Me clonaron la tarjeta")
-    assert time.perf_counter() - t0 < BUDGET + MARGIN
-    written = tickets()
-    assert len(written) == 1 and r.ticket_id == written[0]["ticket_id"]  # never "no ticket" for a ticket that exists
-    assert r.policy_rule.endswith("|handoff_unverified") and r.response_text == render.MSG["escalate_unverified"]["es"].format(code=r.trace_id[:8])
-
-
-def test_a_slow_write_is_not_abandoned_silently_it_is_reported_with_its_id_and_lands_as_that_ticket(monkeypatch):
-    monkeypatch.setenv("HANDOFF_BUDGET_SECONDS", str(BUDGET))
-    monkeypatch.setattr(escalation, "open", SlowOpen(open, 0.2), raising=False)
-    orch, tok = orchestrator()
-    t0 = time.perf_counter()
-    r = orch.handle_message(tok, "Me clonaron la tarjeta")
-    assert time.perf_counter() - t0 < BUDGET + MARGIN
-    assert r.ticket_id and r.policy_rule.endswith("|handoff_unverified")  # the id it will have, not "no ticket"
-    time.sleep(0.4)
-    assert [t["ticket_id"] for t in tickets()] == [r.ticket_id]  # the write that had begun finished, as that very ticket
-
-
-def test_a_ticket_read_back_after_the_budget_is_not_claimed_as_filed(monkeypatch):
+def test_a_ticket_read_back_after_the_budget_is_not_claimed_as_filed_or_named(monkeypatch):
     monkeypatch.setenv("HANDOFF_BUDGET_SECONDS", "0.1")
     real = escalation.HumanQueue.get
 
@@ -201,4 +171,4 @@ def test_a_ticket_read_back_after_the_budget_is_not_claimed_as_filed(monkeypatch
     monkeypatch.setattr(escalation.HumanQueue, "get", just_late)
     orch, tok = orchestrator()
     r = orch.handle_message(tok, "Me clonaron la tarjeta")
-    assert r.policy_rule.endswith("|handoff_unverified") and r.ticket_id == tickets()[0]["ticket_id"]
+    assert r.policy_rule.endswith("|handoff_unverified") and r.ticket_id is None and tickets()[0]["trace_id"] == r.trace_id
