@@ -72,3 +72,26 @@ services:
         value: "1"
       - key: DUCKDB_MEMORY_LIMIT
         value: 192MB
+
+  # The web the jury uses (web/, TanStack Start served by web/serve.mjs): the customer chat and the operator console. It
+  # calls the API above at its public URL. Neither URL is a secret. WEB_PUBLIC_ORIGIN must be exactly the address the
+  # browser sees: the operator forms refuse posts from any other origin, and an https origin gives Secure cookies.
+  # Behind the API's edge every web user arrives from this service's address, so the API's per-client limits (logins,
+  # failed keys) count the web's users together; a private API behind the web would count them one by one.
+  - type: web
+    name: cecil-ai
+    runtime: docker
+    dockerfilePath: ./ops/Dockerfile.web
+    dockerContext: ./web
+    plan: 0.5c-512mb        # paid: it never sleeps while the jury tries it
+    region: oregon
+    healthCheckPath: /_healthz
+    autoDeployTrigger: "off"  # deploy by hand, like the API
+    envVars:
+      - key: AGENT_API_URL
+        value: https://x-payments-agent.onrender.com
+      - key: WEB_PUBLIC_ORIGIN
+        value: https://cecil-ai.onrender.com
+      # The end user's address, set by Render's Cloudflare edge and unforgeable (the API reads the same header)
+      - key: TRUSTED_CLIENT_IP_HEADER
+        value: CF-Connecting-IP

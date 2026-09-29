@@ -173,11 +173,9 @@ take longer than five seconds return HTTP 503 with `{"status":"unavailable"}`.
 It reports the backend's response as-is, including the current backend's
 `status: ok` when `data_as_of` says data is unavailable.
 
-The new frontend is a setup skeleton. Authentication and chat are still in the
-existing Python UI. `ops/Dockerfile.web` builds it into an image (locked install, build, then a runtime with only its
-production dependencies, unprivileged, served by `web/serve.mjs`; `AGENT_API_URL` is read at run time) and the compose stack
-runs it. The container and Render deployment below continue to serve Python; hosting the TanStack server in production is
-still a separate setup (LIMITATIONS.md).
+The web frontend holds the customer's sign-in and chat and the operator console. `ops/Dockerfile.web` builds it into an image
+(locked install, build, then a runtime with only its production dependencies, unprivileged, served by `web/serve.mjs`;
+`AGENT_API_URL` is read at run time), the compose stack runs it, and the Render Blueprint below runs it as a second service.
 
 ## Deploy (container)
 
@@ -235,11 +233,16 @@ boot would (a partial build, a stale WAL) and checks the next boot loads again.
 
 ## Deploy on Render (the jury demo)
 
-`render.yaml` is the Blueprint: one Docker web service on a paid instance
-(`0.5c-512mb`; the free one sleeps and has no disk), a 1 GB disk at
-`/app/data/warehouse`, `DEMO_MODE=1`, generated secrets for the test IdP, the
-admin key and the metrics token, its health check on `/readyz`, HSTS on, and the caps below. Render is one place to run the
-image, not a requirement: `make up` runs the same image locally.
+`render.yaml` is the Blueprint, with two Docker web services. Render is one place to run the images, not a requirement:
+`make up` runs the same images locally.
+- **The API** (`x-payments-agent`): a paid instance (`0.5c-512mb`; the free one sleeps and has no disk), a 1 GB disk at
+  `/app/data/warehouse`, `DEMO_MODE=1`, generated secrets for the test IdP, the admin key and the metrics token, its health
+  check on `/readyz`, HSTS on, one DuckDB thread and a 192MB cap for the first boot's load (see "Deploy (container)"), and the
+  caps below.
+- **The web** (`cecil-ai`): `ops/Dockerfile.web` with `web/` as its context, the same instance type, its health check on
+  `/_healthz`. It calls the API at its public URL (`AGENT_API_URL`) and `WEB_PUBLIC_ORIGIN` is its own public URL: both are
+  fixed in `render.yaml` (neither is a secret), so renaming either service means updating them. Its users reach the API
+  from the web's address, so the API's per-client limits (logins, failed keys) count them together.
 1. In Render: New > Blueprint, pick the repository and branch. When asked, fill
    `ANTHROPIC_API_KEY` (a key with a spend limit set at the provider), optionally
    `GROQ_API_KEY`, and the organizer's `AWS_*` and `DATASET_BUCKET`. Without those
@@ -253,7 +256,8 @@ image, not a requirement: `make up` runs the same image locally.
    turns auto-deploy off, so a push never restarts the instance, and with it the
    sessions, the day's budget count and the demo's fault flags, while the jury
    is using it.
-4. Check it from any machine: `python ops/container_smoke.py https://<service>.onrender.com`.
+4. Check it from any machine: `python ops/container_smoke.py https://<service>.onrender.com` for the API, then `/login` and
+   `/operador/login` on the web.
    With the admin key (Render dashboard > Environment), `/admin/llm_budget`
    shows today's model spend.
 
