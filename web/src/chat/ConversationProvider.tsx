@@ -184,7 +184,7 @@ export function ConversationProvider({ sessionRef, initial, children }: { sessio
       if (result.ok) {
         patch(id, { delivery: 'sent', failure: undefined })
         edits.current += 1
-        setEntries((all) => [...all, { id: nextId.current++, role: 'assistant', reply: result.reply, at: Date.now() }])
+        setEntries((all) => [...all, { id: nextId.current++, role: 'assistant', reply: result.reply, at: Date.now(), to: id }])
         if (splitCaseNews(result.reply.response_text).news.length > 0) refreshCases()
         return result.reply
       }

@@ -184,6 +184,54 @@ describe('a scenario of the demo panel writes its message in the chat input', ()
     await waitFor(() => expect(input().value).toBe('Me clonaron la tarjeta'))
   })
 
+  it('a step whose message failed and was retried after other messages is answered by the retry, not lost', async () => {
+    const user = userEvent.setup()
+    sendMessage
+      .mockResolvedValueOnce({ ok: false, failure: 'timeout' })
+      .mockResolvedValueOnce({ ok: true, reply: reply('AUTO_RESOLVE', 'El dólar está a 17 pesos.') })
+      .mockResolvedValueOnce({ ok: true, reply: reply('AUTO_RESOLVE', 'Tu saldo es 10 USD.') })
+    await draw()
+    const card = await load(user, 'Dos turnos')
+    await waitFor(() => expect(input().value).toBe('¿Cuál es mi saldo?'))
+    await user.click(screen.getByRole('button', { name: 'Enviar mensaje' }))
+    await screen.findByRole('button', { name: 'Reintentar' })
+    await user.type(input(), '¿A cuánto está el dólar?')
+    await user.click(screen.getByRole('button', { name: 'Enviar mensaje' }))
+    await screen.findByText('El dólar está a 17 pesos.')
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }))
+    await screen.findByText('Tu saldo es 10 USD.')
+
+    expect(sendMessage.mock.calls[0][0].data.key).toBe(sendMessage.mock.calls[2][0].data.key)
+    expect(within(card).getByText('✓ Resuelto')).toBeTruthy()
+    expect(within(card).queryByRole('status')).toBeNull()
+    await waitFor(() => expect(input().value).toBe('Me clonaron la tarjeta'))
+  })
+
+  it('the late reply of another message is not the answer of a step that failed', async () => {
+    const user = userEvent.setup()
+    sendMessage
+      .mockResolvedValueOnce({ ok: false, failure: 'timeout' })
+      .mockResolvedValueOnce({ ok: false, failure: 'busy' })
+      .mockResolvedValueOnce({ ok: true, reply: reply('AUTO_RESOLVE', 'El dólar está a 17 pesos.') })
+    await draw()
+    const card = await load(user, 'Dos turnos')
+    await waitFor(() => expect(input().value).toBe('¿Cuál es mi saldo?'))
+    await user.clear(input())
+    await user.type(input(), '¿A cuánto está el dólar?')
+    await user.click(screen.getByRole('button', { name: 'Enviar mensaje' }))
+    await screen.findByRole('button', { name: 'Reintentar' })
+    await user.click(within(card).getByRole('button', { name: 'Volver a escribir el mensaje' }))
+    await user.click(screen.getByRole('button', { name: 'Enviar mensaje' }))
+    await waitFor(() => expect(screen.getAllByRole('button', { name: 'Reintentar' })).toHaveLength(2))
+    await user.click(screen.getAllByRole('button', { name: 'Reintentar' })[0])
+    await screen.findByText('El dólar está a 17 pesos.')
+
+    expect(sendMessage.mock.calls[0][0].data.key).toBe(sendMessage.mock.calls[2][0].data.key)
+    expect(within(card).queryByText('✓ Resuelto')).toBeNull()
+    expect(within(card).getByRole('status').textContent).toContain('no cuenta como paso')
+    expect(input().value).not.toBe('Me clonaron la tarjeta')
+  })
+
   it('asking for the step again is off while a message is on its way, so the input cannot go back a step', async () => {
     const user = userEvent.setup()
     let answer: (value: unknown) => void = () => {}

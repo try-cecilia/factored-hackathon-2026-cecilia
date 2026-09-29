@@ -25,18 +25,22 @@ function known<T extends string>(list: readonly T[], value: string): value is T 
 // DEMO_MODE only. Everything here talks to the API's /demo endpoints through the server; the customer app works
 // the same without it, and it is drawn apart, on its own panel with its own label, so nobody mistakes it for the service.
 // A scenario does not send anything: it writes its next message into the chat's input, and the person sends it from there like
-// any other; the steps below only read the conversation. A step is answered when the message sent is that step's own text; a
-// reply to any other message is not a step (the card says so), so an edited or unrelated message does not move the scenario.
+// any other; the steps below only read the conversation. A step is answered when the reply is to the step's own text; a reply to
+// any other message is not a step (the card says so), so an edited or unrelated message does not move the scenario. Each reply
+// says which message it answers (`to`), because a retry's reply comes late, after other messages; the replies are read in the
+// order they came.
 function progress(entries: Entry[], turns: string[]): { got: string[]; off: boolean } {
   const got: string[] = []
   let off = false
   entries.forEach((entry, i) => {
-    if (entry.role !== 'user') return
-    const answer = entries.slice(i + 1).find((e) => e.role !== 'note')
-    if (answer?.role !== 'assistant') return
+    if (entry.role !== 'assistant') return
+    const asked = entry.to !== undefined
+      ? entries.find((e) => e.role === 'user' && e.id === entry.to)
+      : entries.slice(0, i).reverse().find((e) => e.role === 'user')
+    if (asked?.role !== 'user') return
     const step = turns[got.length]
-    off = step === undefined || entry.text.trim() !== step.trim()
-    if (!off) got.push(answer.reply.disposition)
+    off = step === undefined || asked.text.trim() !== step.trim()
+    if (!off) got.push(entry.reply.disposition)
   })
   return { got, off }
 }
