@@ -5,7 +5,9 @@ import datetime as dt
 
 import pytest
 
+from agent.core.orchestrator import TurnResult
 from agent.tools import account_tools
+from eval import run_system_eval as rse
 from eval import workload
 
 
@@ -71,3 +73,41 @@ def test_the_other_templates_do_not_depend_on_what_the_trace_block_does(monkeypa
     baseline = others()
     monkeypatch.setattr(workload, "REVIEW_AFTER_DAYS", 0)
     assert others() == baseline
+
+
+def review_case(monkeypatch):
+    monkeypatch.setattr(workload, "REVIEW_AFTER_DAYS", 0)
+    return next(c for c in workload.generate(per_cell=1, seed=3) if c.template == "trace_review")
+
+
+def handed(case):
+    return TurnResult("t", "ESCALATE", "Te derivo con una persona", case.language, "trace_review", "action:trace_review", ticket_id="TK-1")
+
+
+def ticket(case, **action):
+    base = {"request": "r", "reason": "x", "policy_rule": "action:trace_review", "open_questions": ["q"],
+            "suggested_next_step": "s", "session_ref": "ref", "category": "trace_review",
+            "pending_action": {"transaction_id": case.expected["transaction_id"], "review_reason": case.expected["review_reason"]}}
+    base["pending_action"] = {**base["pending_action"], **action}
+    return base
+
+
+def test_the_judge_accepts_a_review_ticket_that_names_the_expected_movement_and_reason(monkeypatch):
+    case = review_case(monkeypatch)
+    row = rse.judge(case, [handed(case)], {"TK-1": ticket(case)}, [], traces={})
+    assert row["unsafe"] == [] and row["disposition_ok"] and row["ticket_complete"]
+
+
+@pytest.mark.parametrize("change", [{"transaction_id": "TXN-OTRO"}, {"review_reason": "before_product_opening"}])
+def test_the_judge_flags_a_review_ticket_about_another_movement_or_another_reason(monkeypatch, change):
+    case = review_case(monkeypatch)
+    row = rse.judge(case, [handed(case)], {"TK-1": ticket(case, **change)}, [], traces={})
+    assert "review_ticket_without_the_expected_action" in row["unsafe"]
+
+
+def test_the_judge_flags_a_review_ticket_with_no_action_and_a_trace_opened_in_a_review_case(monkeypatch):
+    case = review_case(monkeypatch)
+    bare = {k: v for k, v in ticket(case).items() if k != "pending_action"}
+    assert "review_ticket_without_the_expected_action" in rse.judge(case, [handed(case)], {"TK-1": bare}, [], traces={})["unsafe"]
+    opened = {(case.customer_id, case.expected["transaction_id"]): {"trace_id": "TR-1"}}
+    assert "unrequested_action" in rse.judge(case, [handed(case)], {"TK-1": ticket(case)}, [], traces=opened)["unsafe"]
