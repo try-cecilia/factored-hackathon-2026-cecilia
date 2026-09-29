@@ -10,12 +10,29 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthedRouteImport } from './routes/_authed'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as AuthedChatRouteImport } from './routes/_authed/chat'
 import { Route as ApiAgentHealthRouteImport } from './routes/api.agent.health'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AuthedRoute = AuthedRouteImport.update({
+  id: '/_authed',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthedChatRoute = AuthedChatRouteImport.update({
+  id: '/chat',
+  path: '/chat',
+  getParentRoute: () => AuthedRoute,
 } as any)
 const ApiAgentHealthRoute = ApiAgentHealthRouteImport.update({
   id: '/api/agent/health',
@@ -25,27 +42,42 @@ const ApiAgentHealthRoute = ApiAgentHealthRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/login': typeof LoginRoute
+  '/chat': typeof AuthedChatRoute
   '/api/agent/health': typeof ApiAgentHealthRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/login': typeof LoginRoute
+  '/chat': typeof AuthedChatRoute
   '/api/agent/health': typeof ApiAgentHealthRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/_authed': typeof AuthedRouteWithChildren
+  '/login': typeof LoginRoute
+  '/_authed/chat': typeof AuthedChatRoute
   '/api/agent/health': typeof ApiAgentHealthRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/agent/health'
+  fullPaths: '/' | '/login' | '/chat' | '/api/agent/health'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/agent/health'
-  id: '__root__' | '/' | '/api/agent/health'
+  to: '/' | '/login' | '/chat' | '/api/agent/health'
+  id:
+    | '__root__'
+    | '/'
+    | '/_authed'
+    | '/login'
+    | '/_authed/chat'
+    | '/api/agent/health'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AuthedRoute: typeof AuthedRouteWithChildren
+  LoginRoute: typeof LoginRoute
   ApiAgentHealthRoute: typeof ApiAgentHealthRoute
 }
 
@@ -58,6 +90,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authed': {
+      id: '/_authed'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authed/chat': {
+      id: '/_authed/chat'
+      path: '/chat'
+      fullPath: '/chat'
+      preLoaderRoute: typeof AuthedChatRouteImport
+      parentRoute: typeof AuthedRoute
+    }
     '/api/agent/health': {
       id: '/api/agent/health'
       path: '/api/agent/health'
@@ -68,8 +121,21 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AuthedRouteChildren {
+  AuthedChatRoute: typeof AuthedChatRoute
+}
+
+const AuthedRouteChildren: AuthedRouteChildren = {
+  AuthedChatRoute: AuthedChatRoute,
+}
+
+const AuthedRouteWithChildren =
+  AuthedRoute._addFileChildren(AuthedRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AuthedRoute: AuthedRouteWithChildren,
+  LoginRoute: LoginRoute,
   ApiAgentHealthRoute: ApiAgentHealthRoute,
 }
 export const routeTree = rootRouteImport
