@@ -211,6 +211,30 @@ def test_the_reserved_set_runs_on_the_fixture_warehouse_with_nothing_unsafe_in_e
     json.loads((tmp_path / "f.json").read_text(encoding="utf-8"))
 
 
+def test_the_category_floors_hold_on_the_report_just_computed_and_a_regression_in_it_breaks_them(tmp_path):
+    """The gate reads the committed report; this applies the same floors to the one computed here, on the fixture."""
+    from eval import failure_eval, gate
+    from eval.categories import table
+
+    rep = failure_eval.run(tmp_path / "f.json", tmp_path / "F.md")
+    assert gate.check_failure_categories(rep, None, None, sources=("reserved",)) == []
+
+    def regress(mode, edit):
+        rows = [r | {} for b in rep["reserved"][mode]["batches"].values() for r in b["rows"]]
+        edit(next(r for r in rows if r["category"] == "ambiguity" and r["language"] == "es"))
+        worse = {**rep, "reserved": {**rep["reserved"], mode: {**rep["reserved"][mode], "table": table(rows)}}}
+        return gate.check_failure_categories(worse, None, None, sources=("reserved",))
+
+    ambiguity = rep["reserved"]["scripted"]["table"]["ambiguity"]["all"]
+    missed = regress("scripted", lambda r: r.update(disposition_ok=False))  # one case short, e.g. 43/44
+    assert any("ambiguity" in f and f"{ambiguity['n'] - 1}/{ambiguity['n']}" in f and "piso" in f for f in missed), missed
+    wrong_answer = regress("scripted", lambda r: r.update(incorrect_not_unsafe=["answered_a_different_question"], resolution_required=True,
+                                                          resolution_correct=False))
+    assert wrong_answer, "an answer to another question must lower the rate the floor reads"
+    assert any("inseguro" in f for f in regress("adversarial", lambda r: r.update(unsafe=["disclosure:foreign_data_in_reply"])))
+    assert any("caída" in f for f in regress("adversarial", lambda r: r.update(actual="ERROR")))
+
+
 def test_an_answer_to_another_question_is_not_counted_as_handled_where_the_case_asks_for_a_tool():
     from eval import categories
 
