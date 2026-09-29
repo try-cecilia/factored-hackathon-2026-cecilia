@@ -21,6 +21,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+from agent.policy.notes import Note, question, text_of, wire_of
 from agent.policy.router import Decision
 from agent import observability
 from agent.filelock import locked
@@ -59,6 +60,11 @@ class EscalationTicket:
     queue: str = field(default="account_payments_l2")
     # The action an operator may approve (a trace on this movement); empty for tickets that only need a reply.
     pending_action: dict[str, Any] | None = None
+    # The codes of the texts above (agent/policy/notes.py), for the console to write them in the operator's language. The English
+    # texts stay as they are: tickets filed before these fields have none, and a text without a code is shown as it came.
+    reason_code: dict[str, Any] | None = None
+    open_question_codes: list[dict[str, Any] | None] = field(default_factory=list)  # one per open question, in its order
+    next_step_code: str | None = None
 
 
 ENQUEUE_RETRY = RetryPolicy(max_attempts=3, base_s=0.1, cap_s=0.5)
@@ -169,7 +175,7 @@ class HumanQueue:
 
 default_queue = HumanQueue()
 
-NEXT_STEP = {
+NEXT_STEP = {  # by category; the category is the code of the text (`DEFAULT_NEXT_STEP` is "default")
     "fraud": "Call the customer back on the registered number; block the card if confirmed; open a dispute case.",
     "theft": "Block the card/account immediately after identity re-verification; reissue.",
     "account_takeover": "Force credential reset and review recent logins/devices.",
@@ -186,14 +192,15 @@ NEXT_STEP = {
     "trace_unverified": "Open the trace manually and give the customer its number: the tracing service did not confirm it.",
     "trace_review": "Review the movement (see pending_action.review_reason) and approve or reject the trace the customer asked for.",
 }
+DEFAULT_NEXT_STEP = "Review and respond to the customer."
 QUEUE = {"fraud": "fraud_ops", "theft": "fraud_ops", "account_takeover": "fraud_ops", "safety": "priority_care",
          "legal_or_regulator": "complaints", "security": "security_review", "compliance_hold": "compliance",
          "trace_unmatched": "payments_ops", "trace_unverified": "payments_ops", "trace_review": "payments_ops"}
 
 
-def _evidence_for(decision: Decision, customer_id: str, actions: list[dict[str, Any]]) -> tuple[list[dict], list[str]]:
+def _evidence_for(decision: Decision, customer_id: str, actions: list[dict[str, Any]]) -> tuple[list[dict], list[Note]]:
     evidence: list[dict] = []
-    notes: list[str] = []
+    notes: list[Note] = []
     if decision.category in ("fraud", "theft", "account_takeover", "classifier_escalation"):
         try:
             recent = account_tools.recent_activity_for_review(customer_id, limit=10)
@@ -204,7 +211,7 @@ def _evidence_for(decision: Decision, customer_id: str, actions: list[dict[str, 
                                                               "transaction_country", "transaction_status", "fraud_score")}})
             evidence.sort(key=lambda e: not e["flagged"])
         except Exception as exc:  # noqa: BLE001 - evidence is best-effort; the ticket must still be filed
-            notes.append(f"Could not gather recent activity automatically: {exc}")
+            notes.append(question("evidence_failed", detail=str(exc)))
     for a in actions:
         if a.get("error_type") == "PermissionDenied":
             evidence.append({"type": "denied_request", "id": a.get("args", {}).get("product_id"), "detail": {"tool": a["tool"]}})
@@ -226,18 +233,19 @@ def escalate(
 ) -> EscalationTicket:
     with handoff_deadline() as budget:
         if budget.expired:  # best-effort by design, and never worth more time than the handoff has
-            evidence, notes = [], ["Evidence was not gathered: the handoff's time budget was spent."]
+            evidence, notes = [], [question("evidence_skipped_budget")]
         else:
             try:  # a read: bounded, and left to finish in the background if it runs over
                 evidence, notes = run_bounded(lambda: _evidence_for(decision, customer_id, actions), budget.remaining() / 2)  # never more than half: the write comes next
             except TimeoutError:
-                evidence, notes = [], ["Evidence was not gathered: it did not finish inside the handoff's time budget, or too many earlier ones are still running."]
+                evidence, notes = [], [question("evidence_skipped_slow")]
         return _file(decision, customer_id, session_ref, request, language, actions, verified_facts, prior_requests, attributes,
                      trace_id, pending_action, evidence, notes)
 
 
 def _file(decision, customer_id, session_ref, request, language, actions, verified_facts, prior_requests, attributes, trace_id,
           pending_action, evidence, notes) -> EscalationTicket:
+    questions = [*decision.open_questions, *notes]
     ticket = EscalationTicket(
         ticket_id=str(uuid.uuid4()),
         trace_id=trace_id,
@@ -251,15 +259,18 @@ def _file(decision, customer_id, session_ref, request, language, actions, verifi
         language=language,
         request=request[:500],
         prior_requests=[p[:160] for p in prior_requests[-3:]],
-        reason=decision.reason,
+        reason=text_of(decision.reason),
         policy_rule=decision.rule,
         verified_facts=verified_facts,
         evidence=evidence,
         actions_taken=actions,
-        open_questions=decision.open_questions + notes,
-        suggested_next_step=NEXT_STEP.get(decision.category, "Review and respond to the customer."),
+        open_questions=[text_of(q) for q in questions],
+        suggested_next_step=NEXT_STEP.get(decision.category, DEFAULT_NEXT_STEP),
         queue=QUEUE.get(decision.category, "account_payments_l2"),
         pending_action=pending_action,
+        reason_code=wire_of(decision.reason),
+        open_question_codes=[wire_of(q) for q in questions],
+        next_step_code=decision.category if decision.category in NEXT_STEP else "default",
     )
     default_queue.enqueue(ticket)
     return ticket
