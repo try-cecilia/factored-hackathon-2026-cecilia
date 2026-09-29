@@ -60,6 +60,9 @@ service, and as our own roadmap.
   kept). It is not exposed by the API. A warehouse loaded before
   `_source_files` existed has no hashes and fails `--verify` until it is
   ingested again, and the committed full-run quality report predates it.
+- **Rounding is detected to 9 decimals.** A value that the cast would round
+  (`200000.005` into two decimals) is quarantined, but the comparison is made
+  at 9 decimals, so a difference beyond the 9th digit is not seen.
 - **A truncated daily file is set aside whole, with no ids.** The CSV reader
   cannot align a file whose last row is short, so every row of that file goes
   to quarantine with its ids empty (only `_source_file` says where they came

@@ -190,6 +190,28 @@ def test_contracts_a_missing_required_column_fails_the_load(fresh_db, own_raw, r
     record_property("evidence", "sin la columna obligatoria `amount` la carga falla ('missing required columns') y la tabla no cambia")
 
 
+def test_contracts_a_value_that_would_be_rounded_to_fit_its_type_is_quarantined_not_stored_rounded(fresh_db, own_raw, record_property):
+    """Read from a real CSV, where the reader picks the column type itself (not the all-text table of the unit test)."""
+    build_fixture_warehouse(raw_dir=own_raw)
+    day = next((own_raw / "transactions").glob("year=2024/month=01/day=16/*.csv"))
+    rows = list(csv.reader(open(day, encoding="utf-8")))
+    at = rows[0].index("amount")
+    rows[1][at] = "200000.005"
+    rows[2][at] = "54.500"  # trailing zeros beyond the scale are the same number
+    with open(day, "w", newline="", encoding="utf-8") as f:
+        csv.writer(f).writerows(rows)
+    victim, same = rows[1][0], rows[2][0]
+    before = q(fresh_db, "SELECT amount FROM transactions WHERE transaction_id = ?", [victim])
+    _, [result] = run_pipeline(["transactions"], RunConfig(source="local", raw_dir=own_raw, only_date=datetime(2024, 1, 16).date(),
+                                                          max_quarantine_rate=0.5))
+    (reason,), = q(fresh_db, "SELECT _row_errors FROM _quarantine_transactions WHERE transaction_id = ?", [victim])
+    assert "cast:amount" in reason
+    assert q(fresh_db, "SELECT amount FROM transactions WHERE transaction_id = ?", [victim]) == before  # not overwritten with 200000.01
+    assert q(fresh_db, "SELECT amount FROM transactions WHERE transaction_id = ?", [same])[0][0] == pytest.approx(54.5)
+    assert any(c.check == "type_cast:amount" and c.failed == 1 and c.severity == "error" for c in result.checks)
+    record_property("evidence", "amount='200000.005' en un CSV real: error type_cast:amount, fila en cuarentena y no se guarda como 200000.01; '54.500' se acepta")
+
+
 def test_contracts_a_truncated_file_cannot_replace_the_rows_it_cuts_off(fresh_db, own_raw, record_property):
     build_fixture_warehouse(raw_dir=own_raw)
     served = q(fresh_db, "SELECT transaction_id, amount FROM transactions ORDER BY transaction_id")

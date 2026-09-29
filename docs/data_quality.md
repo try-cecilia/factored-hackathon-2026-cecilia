@@ -20,7 +20,9 @@ Per table, inside one transaction:
    - a missing optional column is a warning;
    - new columns are a warning, and they are **added** to the table (schema evolution), never silently dropped.
 3. **Typed staging.** Every column is `TRY_CAST` to the data dictionary's type.
-   A non-null value that fails its cast is a contract violation.
+   A non-null value that fails its cast, or that the cast would round
+   (`700.5` in an INTEGER, `200000.005` in a DECIMAL(15,2)), is a contract
+   violation; `10.500` and `700.0` are the same number and pass.
 4. **Measure.** Checks and their severity:
 
    | Check | Severity |
