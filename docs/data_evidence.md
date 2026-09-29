@@ -27,5 +27,6 @@ and legally sensitive. The escalation path built here (fraud evidence packs)
 is the bridge to that workflow. Its data needs work first: each of the 44,570
 complaints that names an affected product names a product of another customer,
 and none links to the contact it came from (Matías Enrique's audit of the
-dataset; this pipeline does not load complaints), so a disputes workflow could
-trust neither link.
+dataset). The pipeline now loads complaints for offline analysis and reports
+both limitations. The serving profile and conversational agent still expose
+neither link, so a disputes workflow could trust neither one.

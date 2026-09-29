@@ -16,8 +16,8 @@ Update/freshness policy (see docs/data_quality.md):
   idempotent (tested in tests/test_pipeline.py with a labeled fixture).
 - The serving layer reports the warehouse's as-of date with every answer.
 
-Profiles: `serving` = tables the agent queries; `analysis` = contact-center
-tables used only for the baseline/demand analysis (docs/data_evidence.md).
+Profiles: `serving` = tables the agent queries; `analysis` = contact-center and
+complaints tables used only for analysis (docs/data_evidence.md).
 """
 from __future__ import annotations
 
@@ -67,6 +67,7 @@ TABLES = [
     TableSpec("products", "flat", "products.csv", "serving", customer_scoped=True),
     TableSpec("transactions", "partitioned", "transactions", "serving", customer_scoped=True),
     TableSpec("call_center_interactions", "partitioned", "call_center_interactions", "analysis", customer_scoped=True),
+    TableSpec("complaints", "partitioned", "complaints", "analysis", customer_scoped=True),
     TableSpec("call_transcripts", "partitioned", "call_transcripts", "analysis", customer_scoped=True),
     TableSpec("satisfaction_surveys", "partitioned", "satisfaction_surveys", "analysis", customer_scoped=True),
 ]
@@ -151,7 +152,8 @@ def lineage_summary(con) -> dict:
     (`source_root`, `source_uri`: on a deploy, the organizer's bucket) and why a load failed are left out."""
     present = {r[0] for r in con.execute("SELECT table_name FROM information_schema.tables").fetchall()}
     if not {"_ingestion_log", "_partition_log", "_dq_results"} <= present:
-        return {"tables": [], "checks": {"run": 0, "errors_failed": 0, "warnings_failed": 0, "failed": []}}
+        return {"tables": [], "checks": {"run": 0, "not_run": 0,
+                                         "errors_failed": 0, "warnings_failed": 0, "failed": []}}
     last = {r[0]: r[1:] for r in con.execute(f"SELECT table_name, {', '.join(LOAD_FIELDS)} FROM ({_LAST_LOADS})").fetchall()}
     loads = {(t, s): n for t, s, n in con.execute("SELECT table_name, status, count(*) FROM _ingestion_log GROUP BY ALL").fetchall()}
     parts = {t: {"n": n, "first": str(a), "last": str(b)} for t, n, a, b in con.execute(
@@ -170,7 +172,9 @@ def lineage_summary(con) -> dict:
                              FROM _dq_results d JOIN ({_LAST_LOADS}) l USING (run_id, table_name)""").fetchall()
     failed = sorted((dict(zip(CHECK_FIELDS, c[:-1])) for c in checks if c[-1] is False),
                     key=lambda c: (order.get(c["table"], len(order)), c["check"]))
-    return {"tables": tables, "checks": {"run": len(checks), "errors_failed": sum(c["severity"] == "error" for c in failed),
+    not_run = sum(c[2] == "dependency" for c in checks)
+    return {"tables": tables, "checks": {"run": len(checks) - not_run, "not_run": not_run,
+                                         "errors_failed": sum(c["severity"] == "error" for c in failed),
                                          "warnings_failed": sum(c["severity"] == "warn" for c in failed), "failed": failed}}
 
 
@@ -353,7 +357,8 @@ def write_report(run_id: str, results: list[LoadResult], path: str, failure: dic
             "status": "failed" if failure else "success",
             "errors_failed": sum(1 for c in checks if c["severity"] == "error" and c["passed"] is False),
             "warnings_failed": sum(1 for c in checks if c["severity"] == "warn" and c["passed"] is False),
-            "checks_run": len(checks),
+            "checks_run": sum(1 for c in checks if c["category"] != "dependency"),
+            "checks_not_run": sum(1 for c in checks if c["category"] == "dependency"),
         },
         "failure": failure,
         "contract_deviations": CONTRACT_DEVIATIONS,

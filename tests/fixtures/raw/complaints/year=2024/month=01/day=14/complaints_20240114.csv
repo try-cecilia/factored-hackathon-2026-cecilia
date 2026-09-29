@@ -1,0 +1,8 @@
+complaint_id,creation_date,process_date,customer_id,case_type,category,subcategory,reception_channel,affected_product_id,related_branch_id,origin_interaction_id,description,claimed_amount,currency,priority,status,assigned_agent_id,assignment_date,first_response_date,resolution_date,closing_date,sla_breached,resolution_days,resolution,compensation_granted,resolution_satisfaction,is_repeat_complainer
+CPL-FIX0001,2024-01-14 08:00:00,2024-01-14,CLI-FIX0001,Complaint,Transactions,Cargo no reconocido,App,PRD-FIX0001,SUC-FIX01,,No reconozco el cargo,85.20,USD,High,Open,,,,,,false,,,,,false
+CPL-FIX0002,2024-01-14 09:00:00,2024-01-14,CLI-FIX0002,Request,Account,,Branch,,SUC-FIX02,,Necesito una constancia,10.00,,Low,Open,,,,,,false,,,,,false
+CPL-FIX0003,2024-01-14 10:00:00,2024-01-14,CLI-FIX0001,Claim,Payments,Cobro indebido,Email,PRD-FIX0006,,,El importe fue cobrado dos veces,100.00,USD,Critical,Escalated,AGT-MISSING,2024-01-14 10:30:00,2024-01-14 11:00:00,,,true,,,,,true
+CPL-FIX0004,2024-01-14 11:00:00,2024-01-14,CLI-FIX0003,Complaint,Products,Falla de producto,Call Center,PRD-MISSING,SUC-MISSING,INT-MISSING,El producto no funciona,,,Medium,In Process,,2024-01-14 11:15:00,,,,false,,,,,false
+CPL-FIX0005,2024-01-14 12:00:00,2024-01-14,CLI-FIX0004,Request,Service,,Web,,,,Solicito seguimiento,,,Low,Open,,,,,,false,,,,,false
+CPL-FIX0006,2024-01-14 13:00:00,2024-01-14,CLI-FIX0005,Suggestion,Experience,,App,,,,Sugiero simplificar la pantalla,,,Low,Closed,,,,,,false,,,,,false
+CPL-FIX0007,2024-01-14 14:00:00,2024-01-14,CLI-FIX9999,Complaint,Account,,Regulator,,,,No puedo acceder a la cuenta,,,High,Open,,,,,,true,,,,,true
