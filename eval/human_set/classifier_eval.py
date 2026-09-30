@@ -83,6 +83,8 @@ def read_messages(raw: Path) -> tuple[list[dict], dict]:
             continue
         people.add(sub["id"])
         for situation, text in sub["answers"].items():
+            if not str(text).strip():  # the form stores only what was written; a blank answer is not a message
+                continue
             messages.append({"message_id": f"{sub['id']}:{situation}", "situation": situation, "language": sub["lang"],
                              "country": sub.get("country"), "message": text, "person": sub["id"]})
     return messages, {"submissions": len(people), "left_out_saw_system": left_out}

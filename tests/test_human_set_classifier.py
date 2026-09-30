@@ -56,6 +56,16 @@ def test_the_sheet_leaves_out_people_who_saw_the_system_and_carries_no_system_ou
     assert (tmp_path / "again.csv").read_text(encoding="utf-8") == out.read_text(encoding="utf-8")  # fixed seed
 
 
+def test_a_blank_answer_is_not_a_message(tmp_path):
+    """The form stores only what people wrote; a blank answer in an export must not reach the sheet as a message to label."""
+    raw = tmp_path / "raw.jsonl"
+    raw.write_text(json.dumps({"id": 1, "created_at": "2026-09-29", "lang": "es", "country": "AR", "saw_system": 0,
+                               "consent_version": "x", "answers": {"fx": "a cuanto esta el dolar", "fraud": "  ", "trace": ""}}) + "\n",
+                   encoding="utf-8")
+    messages, counts = ce.read_messages(raw)
+    assert [m["situation"] for m in messages] == ["fx"] and counts == {"submissions": 1, "left_out_saw_system": 0}
+
+
 def test_kappa_matches_a_value_worked_out_by_hand():
     a = ["matches"] * 5 + ["ambiguous"] * 5
     b = ["matches"] * 3 + ["ambiguous"] * 2 + ["ambiguous"] * 3 + ["matches"] * 2
