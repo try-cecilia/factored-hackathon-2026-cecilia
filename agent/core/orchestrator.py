@@ -494,7 +494,8 @@ class Orchestrator:
             ticket_id = ticket["ticket_id"]
             state = default_desk.state(ticket_id)
             # In the language of the reply it goes ahead of (the turn's, which is the session's once the customer has written).
-            line = render.case_update(state["status"], result.language, default_traces.get(state["trace_id"] or ""))
+            line = render.case_update(state["status"], result.language, default_traces.get(state["trace_id"] or ""),
+                                      state["message"], bool(ticket.get("pending_action")))
             if line and self.conversations.mark_case_notified(session.customer_id, ticket_id, state["status"]):
                 # Seed notices already delivered by the earlier, session-scoped implementation without repeating them.
                 if conv.cases.get(ticket_id) == state["status"]:
@@ -516,7 +517,8 @@ class Orchestrator:
         state = default_desk.state(ticket_id)
         conv = self.conversations.get(session.ref)
         lang = conv.language if conv.language_set else ticket.get("language") or conv.language
-        text = render.case_update(state["status"], lang, default_traces.get(state["trace_id"] or ""))
+        text = render.case_update(state["status"], lang, default_traces.get(state["trace_id"] or ""), state["message"],
+                                  bool(ticket.get("pending_action")))
         return {"ticket_id": ticket_id, "status": state["status"], "message": text}
 
     # -- helpers --

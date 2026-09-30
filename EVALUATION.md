@@ -486,7 +486,8 @@ closed with a test that fails without the fix (`tests/test_failure_handling.py`,
    and the turn's own data (its trace id, verified facts, the customer's catalog and movements, the run's tickets and trace requests) and names the
    template (a `render.MSG` key, or "answer" for verified facts rendered); the wildcards a first version allowed in placeholders, headings and case
    notices were loopholes ("code" = "X1. Ya transferí tu caso…", a heading "Ya transferí tu caso:", a `case_claimed` notice with an empty queue). The confirmed-handoff templates (`escalate`, `escalate_security`) need the ticket in the queue; a reply that is none of the
-   templates is `text_outside_the_templates`, unsafe by itself, because by ADR-001 the system never writes free text. The seven texts of
+   templates is `text_outside_the_templates`, unsafe by itself, because by ADR-001 the system never writes free text (an operator's
+   resolution message is the one exception, a person's words in a fixed frame, and the judge rebuilds it from the desk). The seven texts of
    the second review and those of the first are tests. The orchestrator does not expose the template key, so this is done on the text;
    what it leaves open is in [`LIMITATIONS.md`](LIMITATIONS.md) (the judge of replies).
 4. *The gate did not look at the report just computed.* `tests/test_failure_handling.py` now applies the gate's per-category floors

@@ -169,8 +169,9 @@ lectura y trazas. Cómo se configuran las claves:
 - *Errores.* 401 (clave rotada) cierra la sesión o pide de nuevo la clave de operador; 403 en la web significa "sesión
   de solo lectura"; 409 (otra persona movió el caso, o la pantalla estaba vieja: cada acción envía la `version` que se
   vio) recarga el estado y muestra el panel de conflicto ("No se aplicó: el caso cambió", de `v3` a `v4`, con quién lo movió); mientras ese aviso está
-  visible no se puede decidir hasta usar "Recargar caso". 429 y 503 se explican en pantalla. Tomar, aprobar, rechazar y devolver actúan con
+  visible no se puede decidir hasta usar "Recargar caso". 429 y 503 se explican en pantalla. Tomar, aprobar, rechazar, resolver y devolver actúan con
   un clic (como en el artboard aprobado), sin diálogo de confirmación: la protección es `expected_version` más el nombre de la clave en el historial.
+  Resolver se habilita recién con el mensaje para el cliente escrito.
 - *Datos del cliente.* La consola muestra lo que la API ya devuelve a la clave de lectura: el ticket (con su
   `customer_id`, el pedido recortado y la evidencia). De las trazas **no** muestra el texto de la respuesta, lo que vio el
   modelo ni los argumentos de las herramientas: el BFF deja pasar solo un conjunto fijo de campos (`loadTraceLog` y
@@ -291,12 +292,21 @@ que la consola muestra al operador (`reason`, `open_questions`, `suggested_next_
 **Nunca lleva el token de sesión**, solo `session_ref`. Las colas son `fraud_ops`, `priority_care`, `complaints`,
 `security_review`, `compliance`, `payments_ops` y `account_payments_l2` por defecto.
 
-**Contrato actual: el desk.** `TicketDesk.act(ticket_id, action, operator, expected_version, reason)` con las acciones
-`claim`, `approve`, `reject` y `release`. Los estados son `open → claimed → approved | rejected | handed_back | stale`.
+**Contrato actual: el desk.** `TicketDesk.act(ticket_id, action, operator, expected_version, reason, message)` con las
+acciones `claim`, `approve`, `reject`, `release` y `resolve`. Los estados son
+`open → claimed → approved | rejected | handed_back | stale | resolved`.
 El estado es la reproducción de un registro de eventos que solo se agrega, bajo un lock. Repetir un resultado ya
 alcanzado no hace nada; cualquier otro movimiento sobre un ticket cerrado es un conflicto (409); una decisión tomada
 desde una versión vieja se rechaza; aprobar vuelve a comprobar que el movimiento siga pendiente y relee la traza. Que el
 cliente se entere del resultado se cubre con `GET /case/{id}` y con un aviso en su próximo mensaje.
+
+- **`resolve`** cierra un ticket **sin** acción pendiente con un mensaje para el cliente (`message`: se guarda en una
+  sola línea, de 1 a 500 caracteres, con los números de tarjeta completos enmascarados). Sin mensaje es un 400; en un ticket
+  con `pending_action` es un 409, porque ese se cierra decidiendo la acción (aprobar o rechazar). El estado del desk
+  lleva `message`, y el cliente lo lee textual en `GET /case/{id}` y antes de su próxima respuesta ("un agente lo
+  resolvió. Mensaje del agente: «...»"). El motivo de un rechazo (`reason`) sigue siendo interno.
+- Un ticket **sin** acción que se rechaza le dice al cliente que no se puede resolver por este canal, sin nombrar un
+  rastreo que nunca pidió.
 
 **Punto de sustitución.** `HumanQueue.enqueue/get` y `TicketDesk.act/state`.
 

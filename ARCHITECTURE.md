@@ -9,7 +9,8 @@ one model call per turn chooses tools. The system never gives the model a
 customer record (no balance, transaction, internal id, account number, name
 or segment). Identifiers the customer types are masked before they leave,
 and the model never writes to the customer. Every reply is rendered from
-verified tool results or fixed templates.
+verified tool results or fixed templates; the one text a person writes is an
+operator's message when they resolve a case, shown as the agent's.
 
 ## The turn, step by step
 
