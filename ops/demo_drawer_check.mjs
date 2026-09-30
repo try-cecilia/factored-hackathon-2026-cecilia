@@ -1,6 +1,6 @@
 // Checks in a real browser, on a phone (390x844), what the demo panel drawer does with a scenario: `node
-// ops/demo_drawer_check.mjs <web port> <screenshot dir>`, against `make serve-fixture` (API on API_PORT) and the web dev server
-// pointed at it (`AGENT_API_URL=http://127.0.0.1:<API_PORT> pnpm --dir web dev --port <web port> --host 127.0.0.1`).
+// ops/demo_drawer_check.mjs <web port> <screenshot dir> [reduced]` (`reduced` runs it with prefers-reduced-motion, where the
+// drawer closes at once), against `make serve-fixture` (API on API_PORT) and the web dev server pointed at it (`AGENT_API_URL=http://127.0.0.1:<API_PORT> pnpm --dir web dev --port <web port> --host 127.0.0.1`).
 // Needs `playwright-core` (`npm i playwright-core` in a scratch directory, then NODE_PATH=<its node_modules>; `npx playwright-core
 // install chromium`). It picks the sixth scenario of the list (a card below the first screen of the drawer) and loads it: the
 // drawer must close, the chat must show its first message sent and answered, the focus must be in the chat's input, and nothing
@@ -10,13 +10,13 @@
 import { chromium } from 'playwright-core'
 import { mkdirSync } from 'node:fs'
 
-const [webPort, outDir] = process.argv.slice(2)
+const [webPort, outDir, motion] = process.argv.slice(2)
 mkdirSync(outDir, { recursive: true })
 let failed = false
 const check = (ok, what) => { if (!ok) failed = true; console.log(`${ok ? 'ok  ' : 'FAIL'} ${what}`) }
 
 const browser = await chromium.launch()
-const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } })
+const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: motion === 'reduced' ? 'reduce' : 'no-preference' })
 const page = await ctx.newPage()
 await page.goto(`http://127.0.0.1:${webPort}/login`)
 await page.waitForLoadState('networkidle')
@@ -54,7 +54,8 @@ await card.scrollIntoViewIfNeeded()
 await card.getByRole('button', { name: /^(Cargar|Reiniciar)$/ }).click()
 
 // The first message goes by itself, through the chat's own send: the drawer gives the page back and the focus is in the input.
-await card.getByRole('region', { name: 'Pasos del escenario' }).waitFor({ state: 'attached' })
+// includeHidden: the drawer may already be closed (hidden) when this asks.
+await card.getByRole('region', { name: 'Pasos del escenario', includeHidden: true }).waitFor({ state: 'attached' })
 const turns = await card.locator('.demo__quote').allTextContents()
 const say = (quote) => quote.replace(/^“|”$/g, '')
 await inChat(say(turns[0])).waitFor()
