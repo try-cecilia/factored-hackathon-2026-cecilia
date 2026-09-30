@@ -1,6 +1,6 @@
 """El clasificador congelado, puntuado sobre mensajes escritos por personas ajenas al equipo.
 
-Tres pasos (docs/human_set.md define el esquema de etiquetas y la regla de que estos resultados no se usan para ajustar):
+Los pasos (docs/human_set.md define el esquema de etiquetas y la regla de que estos resultados no se usan para ajustar):
 
     python -m eval.human_set.classifier_eval sheet                 # hoja para etiquetar, sin salidas del sistema
     python -m eval.human_set.classifier_eval page --labeler NOMBRE [--labeler ...] [--only-disagreements]   # una página por persona (labeling.py)
