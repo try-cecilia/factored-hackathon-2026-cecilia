@@ -112,6 +112,7 @@ export const operator: Like<typeof es> = {
       country: 'País',
       language: 'Idioma',
       queue: 'Fila',
+      overdue: 'Vencidos',
       clear: 'Limpar filtros',
     },
     order: {
@@ -131,6 +132,7 @@ export const operator: Like<typeof es> = {
       operator: 'Operador',
     },
     ageTitle: 'Criado {date}',
+    overdue: 'Vencido: a meta de atendimento era {target}',
     empty: {
       titleOpen: 'Não há casos pendentes',
       descriptionOpen: 'Quando a assistente encaminhar um caso a uma pessoa, ele aparece aqui.',

@@ -110,6 +110,7 @@ export const operator = {
       country: 'País',
       language: 'Idioma',
       queue: 'Cola',
+      overdue: 'Vencidos',
       clear: 'Quitar filtros',
     },
     order: {
@@ -129,6 +130,7 @@ export const operator = {
       operator: 'Operador',
     },
     ageTitle: 'Creado {date}',
+    overdue: 'Vencido: el objetivo de atención era {target}',
     empty: {
       titleOpen: 'No hay casos pendientes',
       descriptionOpen: 'Cuando la asistente derive un caso a una persona, aparece acá.',

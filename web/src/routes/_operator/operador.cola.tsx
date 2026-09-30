@@ -6,11 +6,13 @@ import type { Locale } from '../../i18n/locales'
 import type { MessageKey, Translate } from '../../i18n/translate'
 import type { DeskStatus, QueueRow } from '../../server/operator.functions'
 import { Button, DataTable, PriorityChip, priorityOf, StatusIndicator, type Column, type SortState, type StatusTone } from '../../ui'
-import { ageShort, categoryName, statusKey, when } from '../-operator/format'
+import { AgeCell } from '../-operator/AgeCell'
+import { categoryName, statusKey } from '../-operator/format'
 import { useMinute } from '../-operator/now'
 import {
   countryOptions, distinct, filterTickets, filtersOf, hasFilters, inScope, isClosed, orderTickets, pageSlice, tabCounts, validateSearch, type QueueSearch, type StatusTab,
 } from '../-operator/queue'
+import { isOverdue } from '../-operator/sla'
 import { LocaleCell, Notice } from '../-operator/ui'
 
 const PAGE_SIZE = 25
@@ -50,7 +52,7 @@ function makeColumns(t: Translate, locale: Locale, now: number): Column<QueueRow
     { id: 'queue', header: t('operator.queue.columns.queue'), width: 132, mono: true, muted: true, truncate: true, sortable: true, cell: (r) => r.queue },
     { id: 'request', header: t('operator.queue.columns.request'), truncate: true, sortable: true, cell: (r) => <span title={categoryName(t, r.category)}>{r.request}</span> },
     { id: 'locale', header: t('operator.queue.columns.locale'), width: 64, mono: true, muted: true, sortable: true, cell: (r) => <LocaleCell row={r} /> },
-    { id: 'age', header: t('operator.queue.columns.age'), width: 52, align: 'end', mono: true, muted: true, sortable: true, cell: (r) => <span title={t('operator.queue.ageTitle', { date: when(r.created_at, locale) })}>{ageShort(r.created_at, now)}</span> },
+    { id: 'age', header: t('operator.queue.columns.age'), width: 64, align: 'end', mono: true, muted: true, sortable: true, cell: (r) => <AgeCell row={r} now={now} locale={locale} /> },
     { id: 'status', header: t('operator.queue.columns.status'), width: 108, sortable: true, cell: (r) => <StatusIndicator tone={tones[r.desk.status]}>{t(statusKey[r.desk.status])}</StatusIndicator> },
     { id: 'operator', header: t('operator.queue.columns.operator'), width: 92, mono: true, truncate: true, sortable: true, cell: (r) => r.desk.operator ?? '—' },
   ]
@@ -82,12 +84,15 @@ function Queue() {
     return () => document.removeEventListener('keydown', onKey)
   }, [])
 
+  const now = useMinute()
   const tickets = result.ok ? result.data : NO_ROWS
   const filters = filtersOf(search, q)
   const me = view.operator
-  const scope = useMemo(() => inScope(tickets, filters, me), [tickets, filters.view, filters.queue, filters.priority, filters.country, filters.language, filters.q, me]) // eslint-disable-line react-hooks/exhaustive-deps
+  const scope = useMemo(() => inScope(tickets, filters, me, now), [tickets, filters.view, filters.queue, filters.priority, filters.country, filters.language, filters.q, filters.overdue, me, now]) // eslint-disable-line react-hooks/exhaustive-deps
   const counts = tabCounts(scope)
-  const rows = useMemo(() => orderTickets(filterTickets(scope, filters, me), sort), [scope, filters.tab, sort, me]) // eslint-disable-line react-hooks/exhaustive-deps
+  // How many the button would show: the scope without its own filter, so it does not read 0 while it is on.
+  const overdueCount = useMemo(() => inScope(tickets, { ...filters, overdue: false }, me, now).filter((row) => isOverdue(row, now)).length, [tickets, filters.view, filters.queue, filters.priority, filters.country, filters.language, filters.q, me, now]) // eslint-disable-line react-hooks/exhaustive-deps
+  const rows = useMemo(() => orderTickets(filterTickets(scope, filters, me, now), sort), [scope, filters.tab, sort, me, now]) // eslint-disable-line react-hooks/exhaustive-deps
   const pending = scope.filter((ticket) => !isClosed(ticket)).length
   const countries = useMemo(() => countryOptions(tickets), [tickets])
   const languages = useMemo(() => distinct(tickets, (ticket) => ticket.language), [tickets])
@@ -106,7 +111,6 @@ function Queue() {
 
   const title = search.cola ?? t(search.vista === 'mias' ? 'operator.queue.title.mine' : search.vista === 'sin-asignar' ? 'operator.queue.title.unassigned' : 'operator.queue.title.all')
 
-  const now = useMinute()
   const columns = useMemo(() => makeColumns(t, locale, now), [t, locale, now])
   const openTicket = useCallback(
     (r: QueueRow) => void navigate({ to: '/operador/cola/$ticketId', params: { ticketId: r.ticket_id }, search: ((prev: QueueSearch) => prev) as never }),
@@ -157,6 +161,10 @@ function Queue() {
                 options={PRIORITIES.map((p) => ({ value: p, label: t(`table.priority.${p.toLowerCase() as Lowercase<typeof p>}`) }))} />
               <FilterSelect name={t('operator.queue.filter.country')} value={filters.country} onChange={(v) => set({ pais: v })} options={countries} />
               <FilterSelect name={t('operator.queue.filter.language')} value={search.idioma} onChange={(v) => set({ idioma: v })} options={languages.map((l) => ({ value: l, label: l.toUpperCase() }))} />
+              <button type="button" className="op-toggle" aria-pressed={filters.overdue} onClick={() => set({ vencidos: filters.overdue ? undefined : 'si' })}>
+                {t('operator.queue.filter.overdue')}
+                <span className="op-mono">{overdueCount}</span>
+              </button>
               {hasFilters(filters) && <Button variant="ghost" size="xs" onClick={clear}>{t('operator.queue.filter.clear')}</Button>}
               <div className="op-head__spacer" />
               <span className="op-order" aria-live="polite">{orderLabel}</span>

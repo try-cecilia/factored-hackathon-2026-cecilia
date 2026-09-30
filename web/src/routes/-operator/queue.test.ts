@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { DeskStatus } from '../../server/operator.functions.ts'
 import type { QueueRow } from '../../server/queue-row.ts'
-import { countryCode, countryOptions, defaultOrder, pageSlice, filterTickets, filtersOf, inScope, localeOf, orderTickets, sidebarCounts, tabCounts, validateSearch, type QueueFilters } from './queue.ts'
+import { countryCode, hasFilters, countryOptions, defaultOrder, pageSlice, filterTickets, filtersOf, inScope, localeOf, orderTickets, sidebarCounts, tabCounts, validateSearch, type QueueFilters } from './queue.ts'
 
 let n = 0
 function ticket(over: Partial<QueueRow> & { status?: DeskStatus; operator?: string | null } = {}): QueueRow {
@@ -15,7 +15,7 @@ function ticket(over: Partial<QueueRow> & { status?: DeskStatus; operator?: stri
     ...rest,
   }
 }
-const all: QueueFilters = { view: 'all', tab: 'all' }
+const all: QueueFilters = { view: 'all', tab: 'all', overdue: false }
 
 const crit = ticket({ priority: 'Critical', status: 'claimed', operator: 'ana.ruiz', queue: 'fraud_ops' })
 const high = ticket({ priority: 'High', queue: 'payments_ops', country: 'AR', language: 'pt' })
@@ -77,10 +77,10 @@ test('sidebar counts count pending work, list the seven queues and add unknown o
 
 test('search params drop what is not known and map to filters', () => {
   assert.deepEqual(validateSearch({ vista: 'x', cola: '<script>', estado: 'tomados', prioridad: 'Urgent', pais: 'MX' }), {
-    vista: undefined, cola: undefined, estado: 'tomados', prioridad: undefined, pais: 'MX', idioma: undefined,
+    vista: undefined, cola: undefined, estado: 'tomados', prioridad: undefined, pais: 'MX', idioma: undefined, vencidos: undefined,
   })
   assert.deepEqual(filtersOf({ vista: 'mias', estado: 'decididos', cola: 'fraud_ops' }, '  hola '), {
-    view: 'mine', queue: 'fraud_ops', tab: 'decided', priority: undefined, country: undefined, language: undefined, q: 'hola',
+    view: 'mine', queue: 'fraud_ops', tab: 'decided', priority: undefined, country: undefined, language: undefined, q: 'hola', overdue: false,
   })
 })
 
@@ -141,7 +141,7 @@ test('an old open case among many newer closed ones still counts as pending work
   const history = Array.from({ length: 250 }, () => ticket({ status: 'approved', operator: 'ana.ruiz' }))
   const queue = [oldOpen, ...history]
   assert.equal(sidebarCounts(queue, 'ana.ruiz').unassigned, 1)
-  assert.deepEqual(filterTickets(queue, { view: 'unassigned', tab: 'all' }, 'ana.ruiz').map((t) => t.ticket_id), [oldOpen.ticket_id])
+  assert.deepEqual(filterTickets(queue, { view: 'unassigned', tab: 'all', overdue: false }, 'ana.ruiz').map((t) => t.ticket_id), [oldOpen.ticket_id])
   assert.equal(defaultOrder(queue)[0].ticket_id, oldOpen.ticket_id)
 })
 
@@ -175,4 +175,23 @@ test('the filters and the counts do not fail on a case without priority or langu
   assert.deepEqual(filterTickets(mixed, { ...all, priority: 'Critical' }, null), [crit])
   assert.deepEqual(filterTickets(mixed, { ...all, language: 'es' }, null), [noPriority, crit])
   assert.equal(tabCounts(inScope(mixed, all, null)).all, 3)
+})
+
+// The "overdue" filter reads the clock it is given, never the real one, and it narrows the scope the tab counts are taken from.
+const NOW = Date.UTC(2026, 8, 29, 12, 0, 0)
+const waited = (minutes: number) => (NOW - minutes * 60_000) / 1000
+
+test('the overdue filter keeps only open cases past their objective, and the URL word for it is validated', () => {
+  const late = ticket({ category: 'fraud', created_at: waited(60) })
+  const fresh = ticket({ category: 'fraud', created_at: waited(2) })
+  const slowButFine = ticket({ category: 'tool_failure', created_at: waited(60) })
+  const takenLate = ticket({ category: 'fraud', created_at: waited(600), status: 'claimed', operator: 'ana.ruiz' })
+  const mixed = [fresh, slowButFine, takenLate, late]
+  const filters = filtersOf(validateSearch({ vencidos: 'si' }), '')
+  assert.equal(filters.overdue, true)
+  assert.deepEqual(filterTickets(mixed, filters, null, NOW), [late])
+  assert.deepEqual(tabCounts(inScope(mixed, filters, null, NOW)), { all: 1, open: 1, claimed: 0, decided: 0 })
+  assert.equal(filterTickets(mixed, { ...filters, overdue: false }, null, NOW).length, 4)
+  assert.equal(validateSearch({ vencidos: 'sí!' }).vencidos, undefined)
+  assert.equal(hasFilters(filters), true)
 })

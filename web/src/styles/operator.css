@@ -88,6 +88,14 @@
 .op-select[data-set] select { font-weight: var(--font-weight-semibold); }
 .op-select:focus-within { box-shadow: var(--ring-focus); }
 .op-select svg { position: absolute; right: 10px; pointer-events: none; }
+.op-toggle {
+  display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 10px; border: 0; border-radius: var(--radius-control); background: var(--color-fill-subtle);
+  color: var(--color-ink-70); font: inherit; font-size: var(--text-compact-sm); font-weight: var(--font-weight-medium); cursor: pointer;
+}
+.op-toggle:hover { color: var(--color-ink-app); }
+.op-toggle .op-mono { font-size: var(--text-compact-2xs); line-height: 12px; }
+.op-toggle[aria-pressed='true'] { background: color-mix(in srgb, var(--color-caution) 24%, transparent); color: var(--color-warning); font-weight: var(--font-weight-semibold); }
+.op-late { display: inline-flex; align-items: center; gap: 3px; color: var(--color-warning); font-weight: var(--font-weight-medium); }
 .op-order { margin-left: auto; white-space: nowrap; color: var(--color-ink-70); font-size: var(--text-compact-sm); font-weight: var(--font-weight-medium); }
 .op-table .ui-dt__table tbody td .ui-priority { vertical-align: middle; }
 .op-empty { margin: 12vh auto 0; max-width: 320px; }

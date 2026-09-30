@@ -3,6 +3,7 @@ import { clampPage } from '../../ui/table/paging.ts'
 import { priorityOf, priorityRank } from '../../ui/table/priority.ts'
 import { sortRows, type SortState } from '../../ui/table/sort.ts'
 import { CLOSED } from './format.ts'
+import { isOverdue } from './sla.ts'
 
 /** The seven queues of the desk, in the order the sidebar lists them. Any other queue that shows up in the data is added after them. */
 export const QUEUES = ['fraud_ops', 'priority_care', 'complaints', 'security_review', 'compliance', 'payments_ops', 'account_payments_l2'] as const
@@ -18,6 +19,8 @@ export type QueueFilters = {
   country?: string
   language?: string
   q?: string
+  /** Only the open cases past their attention objective (sla.ts). */
+  overdue: boolean
 }
 
 /** The URL's part of the filters. `vista`/`cola`/`estado`/`prioridad`/`pais`/`idioma` are the search params of /operador/cola. */
@@ -28,6 +31,7 @@ export type QueueSearch = {
   prioridad?: string
   pais?: string
   idioma?: string
+  vencidos?: 'si'
 }
 
 const VIEWS = { mias: 'mine', 'sin-asignar': 'unassigned' } as const
@@ -44,6 +48,7 @@ export function validateSearch(search: Record<string, unknown>): QueueSearch {
     prioridad: search.prioridad === 'Critical' || search.prioridad === 'High' || search.prioridad === 'Medium' || search.prioridad === 'Low' ? search.prioridad : undefined,
     pais: short(search.pais),
     idioma: short(search.idioma),
+    vencidos: search.vencidos === 'si' ? 'si' : undefined,
   }
 }
 
@@ -56,6 +61,7 @@ export function filtersOf(search: QueueSearch, q: string): QueueFilters {
     country: countryCode(search.pais ?? null) ?? undefined,
     language: search.idioma,
     q: q.trim() || undefined,
+    overdue: search.vencidos === 'si',
   }
 }
 
@@ -74,7 +80,7 @@ const inTab = (t: QueueRow, tab: StatusTab) =>
   tab === 'all' ? true : tab === 'open' ? t.desk.status === 'open' : tab === 'claimed' ? t.desk.status === 'claimed' : isClosed(t)
 
 /** Everything but the status tab: the scope the tab counts are taken from. */
-export function inScope(tickets: readonly QueueRow[], f: QueueFilters, me: string | null): QueueRow[] {
+export function inScope(tickets: readonly QueueRow[], f: QueueFilters, me: string | null, now = Date.now()): QueueRow[] {
   return tickets.filter(
     (t) =>
       inView(t, f.view, me) &&
@@ -82,12 +88,13 @@ export function inScope(tickets: readonly QueueRow[], f: QueueFilters, me: strin
       (!f.priority || t.priority === f.priority) &&
       (!f.country || countryCode(t.country) === f.country) &&
       (!f.language || t.language === f.language) &&
+      (!f.overdue || isOverdue(t, now)) &&
       (!f.q || matchesSearch(t, f.q)),
   )
 }
 
-export const filterTickets = (tickets: readonly QueueRow[], f: QueueFilters, me: string | null) =>
-  inScope(tickets, f, me).filter((t) => inTab(t, f.tab))
+export const filterTickets = (tickets: readonly QueueRow[], f: QueueFilters, me: string | null, now = Date.now()) =>
+  inScope(tickets, f, me, now).filter((t) => inTab(t, f.tab))
 
 export type TabCounts = Record<StatusTab, number>
 
@@ -186,4 +193,4 @@ export const localeOf = (t: QueueRow, unknown = '?') => [countryCode(t.country),
 export const distinct = (tickets: readonly QueueRow[], pick: (t: QueueRow) => string | null | undefined) =>
   [...new Set(tickets.map(pick).filter((v): v is string => Boolean(v)))].sort()
 
-export const hasFilters = (f: QueueFilters) => Boolean(f.queue || f.priority || f.country || f.language || f.q || f.view !== 'all' || f.tab !== 'all')
+export const hasFilters = (f: QueueFilters) => Boolean(f.queue || f.priority || f.country || f.language || f.q || f.overdue || f.view !== 'all' || f.tab !== 'all')
