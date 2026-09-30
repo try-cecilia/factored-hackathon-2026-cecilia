@@ -294,9 +294,10 @@ python ops/export_public.py . ../factored-hackathon-2026-<team> <redactions-file
   generated workloads, regenerated with `make workload`, and any other set,
   such as the human one, which belongs there) and every per-case eval JSON
   (`eval/reports/system_eval*.json`, regenerated with `make eval`). It also
-  removes the v2 demo video, and replaces the strings in the redactions
-  file (kept outside any repository): the organizer's bucket name and
-  account id, which early commits carried.
+  removes the v2 demo video and `CLAVES_CONSOLA.md` (the team's keys for the
+  live console), and replaces the strings in the redactions file (kept
+  outside any repository): the organizer's bucket name and account id,
+  which early commits carried, and the same console keys.
 - It removes every PDF from every commit. The organizer's documents were
   committed once, and the complete data dictionary carries their AWS keys as
   compressed text, which a scan by shape cannot read; a PDF that survives

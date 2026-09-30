@@ -20,6 +20,11 @@ def test_every_file_with_human_messages_or_customer_ids_is_removed_at_the_root_a
         assert removed(path) and removed(f"x-payments-agent/{path}"), path
 
 
+def test_the_team_console_keys_are_removed():
+    """The scan by shape does not see KEY=value without quotes, so only the path keeps these keys out."""
+    assert removed("CLAVES_CONSOLA.md") and removed("x-payments-agent/CLAVES_CONSOLA.md")
+
+
 def test_the_reports_and_the_code_stay():
     for path in ("eval/reports/HUMAN_SET.md", "eval/reports/human_set.json", "eval/reports/SYSTEM_EVAL_cases_human_cases_LIVE.md",
                  "eval/reports/SYSTEM_EVAL.md", "eval/workload.py", "eval/human_set/cases.py", "eval/human_set/labeling_page.mjs",

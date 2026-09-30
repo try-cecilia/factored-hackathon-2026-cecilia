@@ -10,6 +10,8 @@
   JSON (eval/reports/system_eval*.json, whatever its name), and the v2 demo video (dataset customers on screen), at
   the root or under any folder, since the history also has them under x-payments-agent/. The generated ones are
   rebuilt with `make workload eval`; the human set's report (eval/reports/HUMAN_SET.md) stays.
+- Removes CLAVES_CONSOLA.md from every commit: the team's read and operator keys for the live console, which the scan
+  below does not recognize by shape (KEY=value, no quotes). The redactions file carries the same keys as a second net.
 - Removes every PDF from every commit: the organizer's documents were committed once, and the complete data
   dictionary carries their AWS keys as compressed text, which the scan below cannot read. A PDF that survives
   fails the export.
@@ -34,7 +36,7 @@ from pathlib import Path
 # Each pattern also runs under any folder ("*/" prefix, fnmatch's * crosses "/"): the history carries these files at
 # the root and under x-payments-agent/, where the subtree import put them before the move to the root.
 REMOVE_GLOBS = [p for g in ("docs/demo/demo_app.webm", "eval/workload/*",  # by pattern: a new file too
-                            "eval/reports/system_eval*.json", "eval/reports/human_set_agreement.json")
+                            "eval/reports/system_eval*.json", "eval/reports/human_set_agreement.json", "CLAVES_CONSOLA.md")
                 for p in (g, "*/" + g)] + ["*.pdf"]
 SHAPES = {
     "aws_access_key": r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b",
