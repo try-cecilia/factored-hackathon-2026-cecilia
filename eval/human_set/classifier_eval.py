@@ -144,6 +144,12 @@ def agreement(a: dict[str, str], b: dict[str, str], third: dict[str, str] | None
             "note": "kappa is computed on the first two people before any disagreement is settled"}
 
 
+def read_final(path: Path) -> dict[str, tuple[str | None, str]]:
+    """message_id -> (final label, or None when unresolved; status), as write_final wrote them."""
+    with open(path, newline="", encoding="utf-8") as f:
+        return {r["message_id"]: (r["label_final"] or None, r["status"]) for r in csv.DictReader(f)}
+
+
 def write_final(rep: dict, out: Path, report_path: Path) -> None:
     out.parent.mkdir(parents=True, exist_ok=True)
     with open(out, "w", newline="", encoding="utf-8") as f:
@@ -301,8 +307,7 @@ def main() -> None:
         print(f"kappa {rep['kappa']} | agreement {100 * rep['percent_agreement']:.1f}% of {rep['n']} | {len(rep['disagreements'])} disagreements "
               f"({rep['resolved_by_third']} settled, {rep['unresolved']} unresolved) -> {FINAL}")
     else:
-        final = {r["message_id"]: (r["label_final"] or None, r["status"]) for r in csv.DictReader(open(FINAL, newline="", encoding="utf-8"))}
-        rep = score(messages, final, counts, json.loads(AGREEMENT.read_text(encoding="utf-8")))
+        rep = score(messages, read_final(FINAL), counts, json.loads(AGREEMENT.read_text(encoding="utf-8")))
         REPORT_JSON.write_text(dump(rep), encoding="utf-8")
         REPORT_MD.write_text(to_markdown(rep), encoding="utf-8")
         print(REPORT_MD.read_text(encoding="utf-8"))
