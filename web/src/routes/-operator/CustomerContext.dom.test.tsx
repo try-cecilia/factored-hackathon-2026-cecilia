@@ -19,6 +19,7 @@ const data = (over: Partial<CustomerContext> = {}): CustomerContext => ({
     { transaction_id: 'TXN-8', date: '2026-05-29T09:00:00', product_id: 'PRD-2', type: 'Purchase', amount: 12.5, currency: 'USD', merchant: 'Mercado Fixture', status: 'Approved', pending: false },
     { transaction_id: 'TXN-7', date: '2026-05-28T09:00:00', product_id: 'PRD-2', type: 'Purchase', amount: 3, currency: 'USD', merchant: 'Kiosco', status: 'Declined', pending: false },
   ],
+  pending_omitted: 0,
   cases: [{ ticket_id: 'a91f3c00-1111', category: 'fraud', queue: 'fraud_ops', priority: 'High', created_at: NOW - 86400, status: 'claimed' }],
   traces: [{ trace_id: 'TR-ABCDEF0123456789', transaction_id: 'TXN-9', status: 'open', created_at: NOW - 3600 }],
   ...over,
@@ -50,6 +51,15 @@ describe('the customer context of a case', () => {
     expect(rows[1].textContent).not.toContain('Aprobado') // approved is the plain state: not repeated on every row
     expect(rows[2].textContent).toContain('Rechazado')
     expect(container.textContent).toContain('1 pendiente(s)')
+  })
+
+  it('says how many pending movements the list leaves out, and nothing when it leaves none', () => {
+    const view = renderWithI18n(<CustomerContextView result={ok()} />)
+    expect(screen.queryByText(/pendiente\(s\) más/)).toBeNull()
+    view.rerender(<I18nProvider locale="es" messages={dictionaries.es}><CustomerContextView result={ok({ pending_omitted: 7 })} /></I18nProvider>)
+    expect(screen.getByText('y 7 pendiente(s) más')).toBeTruthy()
+    view.rerender(<I18nProvider locale="pt" messages={dictionaries.pt}><CustomerContextView result={ok({ pending_omitted: 7 })} /></I18nProvider>)
+    expect(screen.getByText('e mais 7 pendente(s)')).toBeTruthy()
   })
 
   it('lists the other cases with a link to each and the rastreos of the customer', () => {

@@ -102,6 +102,7 @@ export const operator = {
     noMovements: 'Sin movimientos.',
     pending: 'Pendiente',
     pendingCount: '{count} pendiente(s)',
+    pendingMore: 'y {count} pendiente(s) más',
     cases: 'Otros casos del cliente',
     noCases: 'Ningún otro caso.',
     traces: 'Rastreos del cliente',

@@ -27,14 +27,15 @@ from agent.tools.traces import TraceService
 logger = logging.getLogger(__name__)
 
 MOVEMENTS_SHOWN = 10  # the latest ones...
-PENDING_SHOWN = 10  # ...plus the pending ones, however old: a pending movement is what a case is often about
+PENDING_SHOWN = 100  # ...plus the pending ones, however old: a pending movement is what a case is often about. Past this cap the
+# response says how many were left out (`pending_omitted`) and the console shows "and N more"; it is far above what one customer holds.
 CASES_SHOWN = 10
 TRACES_SHOWN = 10
 
 
 def for_ticket(ticket: dict, queue: HumanQueue, desk: TicketDesk, traces: TraceService) -> dict[str, Any]:
     customer_id = ticket["customer_id"]
-    products, movements, as_of, error_type = _warehouse(customer_id)
+    products, movements, as_of, omitted, error_type = _warehouse(customer_id)
     available = products is not None
     default_audit_log.event("customer_context_read", ticket_id=ticket["ticket_id"], warehouse="ok" if available else "unavailable",
                             **({} if available else {"error_type": error_type}))
@@ -42,6 +43,7 @@ def for_ticket(ticket: dict, queue: HumanQueue, desk: TicketDesk, traces: TraceS
         "warehouse": {"available": available, "as_of": as_of},
         "products": products or [],
         "movements": movements or [],
+        "pending_omitted": omitted,
         "cases": _other_cases(ticket, queue, desk),
         "traces": _traces(customer_id, traces.path),
     }
@@ -53,8 +55,8 @@ _MOVEMENTS = """SELECT transaction_id, transaction_date, product_id, transaction
                 FROM transactions WHERE customer_id = ? {where} ORDER BY transaction_date DESC, transaction_id LIMIT ?"""
 
 
-def _warehouse(customer_id: str) -> tuple[list[dict] | None, list[dict] | None, str | None, str | None]:
-    """(products, movements, data date, None), or (None, None, None, the exception's type) when the warehouse does not answer,
+def _warehouse(customer_id: str) -> tuple[list[dict] | None, list[dict] | None, str | None, int, str | None]:
+    """(products, movements, data date, pending left out by the cap, None), or (None, None, None, 0, the exception's type) when the warehouse does not answer,
     whatever the reason. The exception is counted and logged by its type only: its message can quote a path, a query or a customer."""
     try:
         if not account_tools._rows("SELECT 1 FROM customers WHERE customer_id = ?", [customer_id]):
@@ -62,11 +64,12 @@ def _warehouse(customer_id: str) -> tuple[list[dict] | None, list[dict] | None, 
         products = account_tools._rows(_PRODUCTS, [customer_id])
         latest = account_tools._rows(_MOVEMENTS.format(where=""), [customer_id, MOVEMENTS_SHOWN])
         pending = account_tools._rows(_MOVEMENTS.format(where="AND transaction_status = 'Pending'"), [customer_id, PENDING_SHOWN])
+        pending_total = account_tools._rows("SELECT count(*) AS n FROM transactions WHERE customer_id = ? AND transaction_status = 'Pending'", [customer_id])[0]["n"]
         as_of = account_tools.data_as_of()
     except Exception as exc:
         observability.count_failure("customer_context_unavailable")
         logger.warning("customer context: the warehouse did not answer (%s)", type(exc).__name__)
-        return None, None, None, type(exc).__name__
+        return None, None, None, 0, type(exc).__name__
     products = [{"product_id": p["product_id"], "type": p["product_type"], "currency": p["currency"], "status": p["product_status"],
                  "last4": p["last4"]} for p in products]
     seen: set[str] = set()
@@ -78,7 +81,7 @@ def _warehouse(customer_id: str) -> tuple[list[dict] | None, list[dict] | None, 
         movements.append({"transaction_id": m["transaction_id"], "date": _iso(m["transaction_date"]), "product_id": m["product_id"],
                           "type": m["transaction_type"], "amount": _number(m["amount"]), "currency": m["currency"],
                           "merchant": m["merchant_name"], "status": m["transaction_status"], "pending": m["transaction_status"] == "Pending"})
-    return products, movements, _iso(as_of), None
+    return products, movements, _iso(as_of), max(pending_total - len(pending), 0), None
 
 
 def _iso(value: Any) -> str | None:

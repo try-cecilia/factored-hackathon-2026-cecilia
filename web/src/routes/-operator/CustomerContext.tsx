@@ -118,6 +118,7 @@ function ContextBody({ data, locale, caseLink, onRetry }: { data: CustomerContex
               </tbody>
             </table>
           )}
+          {data.pending_omitted > 0 && <p className="op-muted op-ctx__more">{t('operator.context.pendingMore', { count: data.pending_omitted })}</p>}
         </>
       )}
 

@@ -104,6 +104,7 @@ export const operator: Like<typeof es> = {
     noMovements: 'Sem movimentações.',
     pending: 'Pendente',
     pendingCount: '{count} pendente(s)',
+    pendingMore: 'e mais {count} pendente(s)',
     cases: 'Outros casos do cliente',
     noCases: 'Nenhum outro caso.',
     traces: 'Rastreamentos do cliente',

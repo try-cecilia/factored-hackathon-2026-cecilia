@@ -6,6 +6,7 @@ const api = {
   warehouse: { available: true, as_of: '2026-06-01' },
   products: [{ product_id: 'PRD-1', type: 'Cuenta Ahorro', currency: 'USD', status: 'Active', last4: '0001' }],
   movements: [{ transaction_id: 'TXN-1', date: '2026-05-30T10:00:00', product_id: 'PRD-1', type: 'Transfer', amount: 40, currency: 'USD', merchant: null, status: 'Pending', pending: true }],
+  pending_omitted: 0,
   cases: [{ ticket_id: 'T-1', category: 'fraud', queue: 'fraud_ops', priority: 'High', created_at: 1700000000, status: 'open' }],
   traces: [{ trace_id: 'TR-1', transaction_id: 'TXN-1', status: 'open', created_at: 1700000000 }],
 }
@@ -32,7 +33,7 @@ test('an account number can never travel: a product mark longer than four charac
 })
 
 test('a warehouse that is down keeps the rest', () => {
-  const down = { ...api, warehouse: { available: false, as_of: null }, products: [], movements: [] }
+  const down = { ...api, warehouse: { available: false, as_of: null }, products: [], movements: [], pending_omitted: 0 }
   assert.deepEqual(toCustomerContext(down), down)
 })
 
@@ -43,4 +44,9 @@ test('a body that is not the contract is not a context, and a bad row is left ou
   const partial = toCustomerContext({ ...api, cases: [{ ticket_id: 7 }, api.cases[0], null], traces: 'x' })
   assert.deepEqual(partial?.cases, [api.cases[0]])
   assert.deepEqual(partial?.traces, [])
+})
+
+test('the count of pending movements left out by the API travels, and only as a whole number that is not negative', () => {
+  assert.equal(toCustomerContext({ ...api, pending_omitted: 7 })?.pending_omitted, 7)
+  for (const bad of [-1, 2.5, '3', null, undefined]) assert.equal(toCustomerContext({ ...api, pending_omitted: bad })?.pending_omitted, 0)
 })

@@ -17,7 +17,7 @@ from agent.policy.desk import default_desk
 from agent.policy.escalation import escalate
 from agent.tools import account_tools
 from agent.tools.traces import default_traces
-from api import main
+from api import customer_context, main
 
 ADMIN = {"X-Admin-Key": "ctx-admin-key-0123456789-abcdefgh"}
 OPERATOR = {"X-Operator-Key": "ctx-ana-key-0123456789-abcdefgh"}
@@ -159,3 +159,46 @@ def test_a_warehouse_that_knows_no_such_customer_is_the_same_unavailable_answer(
     ticket_id = file_ticket("CLI-NOBODY")
     body = context(ticket_id).json()
     assert body["warehouse"]["available"] is False and body["products"] == []
+
+
+@pytest.fixture
+def busy_customer(tmp_path, monkeypatch):
+    """A copy of the fixture warehouse where CLI-FIX0004 has ten recent approved movements and, older than all of them, eleven more
+    pending ones (twelve with the fixture's own): more pending than any page would hold."""
+    import shutil
+
+    import duckdb
+
+    from agent.tools import db
+
+    copy = tmp_path / "busy.duckdb"
+    shutil.copy(db.duckdb_path(), copy)
+    con = duckdb.connect(str(copy))
+    rows = [(f"TXN-NEW-A{n:02d}", f"2024-06-{n + 1:02d} 10:00:00", "Purchase", "Approved") for n in range(10)]
+    rows += [(f"TXN-NEW-P{n:02d}", f"2023-0{n % 9 + 1}-15 10:00:00", "Transfer", "Pending") for n in range(11)]
+    for txn, when, kind, status in rows:
+        con.execute("INSERT INTO transactions (transaction_id, transaction_date, process_date, product_id, customer_id, transaction_type, amount, currency, transaction_status) "
+                    "VALUES (?, CAST(? AS TIMESTAMP), CAST(? AS DATE), 'PRD-FIX0010', ?, ?, 25, 'USD', ?)", [txn, when, when[:10], CUSTOMER, kind, status])
+    con.close()
+    db.close_all()
+    monkeypatch.setenv("DUCKDB_PATH", str(copy))
+    yield
+    db.close_all()
+
+
+def test_every_pending_movement_is_listed_however_many_and_however_old(busy_customer):
+    body = context(file_ticket()).json()
+    pending = [m for m in body["movements"] if m["pending"]]
+    assert len(pending) == 12 and {m["transaction_id"] for m in pending} >= {f"TXN-NEW-P{n:02d}" for n in range(11)} | {"TXN-FIX0006"}
+    assert len(body["movements"]) == 22 and body["pending_omitted"] == 0
+    assert [m["date"] for m in body["movements"]] == sorted((m["date"] for m in body["movements"]), reverse=True)
+
+
+def test_past_the_explicit_cap_the_response_says_how_many_pending_were_left_out(busy_customer, monkeypatch):
+    monkeypatch.setattr(customer_context, "PENDING_SHOWN", 5)
+    body = context(file_ticket()).json()
+    assert len([m for m in body["movements"] if m["pending"]]) == 5 and body["pending_omitted"] == 7
+
+
+def test_without_pending_movements_nothing_is_left_out():
+    assert context(file_ticket("CLI-FIX0001")).json()["pending_omitted"] == 0

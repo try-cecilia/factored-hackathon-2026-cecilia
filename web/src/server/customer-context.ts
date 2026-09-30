@@ -22,6 +22,8 @@ export type CustomerContext = {
   warehouse: { available: boolean; as_of: string | null }
   products: ContextProduct[]
   movements: ContextMovement[]
+  /** Pending movements the API left out of `movements` (it lists them all up to a cap). */
+  pending_omitted: number
   cases: ContextCase[]
   traces: ContextTrace[]
 }
@@ -47,6 +49,7 @@ export function toCustomerContext(raw: unknown): CustomerContext | null {
       typeof m.transaction_id === 'string'
         ? { transaction_id: m.transaction_id, date: text(m.date), product_id: text(m.product_id), type: text(m.type), amount: num(m.amount), currency: text(m.currency), merchant: text(m.merchant), status: text(m.status), pending: m.pending === true }
         : null),
+    pending_omitted: typeof body.pending_omitted === 'number' && Number.isInteger(body.pending_omitted) && body.pending_omitted > 0 ? body.pending_omitted : 0,
     cases: rows(body.cases, (c) => (typeof c.ticket_id === 'string' ? { ticket_id: c.ticket_id, category: text(c.category), queue: text(c.queue), priority: text(c.priority), created_at: num(c.created_at), status: text(c.status) } : null)),
     traces: rows(body.traces, (t) => (typeof t.trace_id === 'string' ? { trace_id: t.trace_id, transaction_id: text(t.transaction_id), status: text(t.status), created_at: num(t.created_at) } : null)),
   }
