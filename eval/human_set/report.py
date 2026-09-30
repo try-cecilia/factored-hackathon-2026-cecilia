@@ -83,6 +83,8 @@ def _systems(live: dict, meta: dict) -> tuple[dict, dict, list[dict]]:
     if "baseline" not in live["systems"] or len(names) != 1:
         raise SystemExit(f"expected the keyword bot and one live model in the report, found {sorted(live['systems'])}")
     rows = live["cases"][names[0]]
+    if not live["systems"][names[0]].get("served_by"):  # without a key the system falls back on every turn, and says so
+        raise SystemExit("no case of the live run reached a model (served_by is empty): was the model's API key set?")
     if {r["case_id"] for r in rows} != set(meta["case_ids"].values()):
         raise SystemExit(f"the live report was run on other cases than {OUT}: run make human-set-eval again")
     for name in ("baseline", names[0]):

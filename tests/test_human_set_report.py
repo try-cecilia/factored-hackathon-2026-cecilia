@@ -183,6 +183,10 @@ def test_it_refuses_an_offline_run_a_run_on_other_cases_and_two_models_at_once()
     two["systems"]["proposed (live: other)"] = two["systems"]["proposed (live)"]
     with pytest.raises(SystemExit, match="one live model"):
         hr.build(AGREEMENT, meta_for(64), two, TEXTS)
+    keyless = live_report(weak_bot(), [clean()] * 3)  # no key: every turn fell back without a model
+    keyless["systems"]["proposed (live)"]["served_by"] = {}
+    with pytest.raises(SystemExit, match="reached a model"):
+        hr.build(AGREEMENT, meta_for(64), keyless, TEXTS)
 
 
 def test_the_command_writes_the_report_and_its_json(tmp_path, monkeypatch):
