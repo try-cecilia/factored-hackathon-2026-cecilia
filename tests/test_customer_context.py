@@ -110,8 +110,7 @@ def test_when_the_warehouse_does_not_answer_it_says_so_and_still_gives_the_cases
     def down(*args, **kwargs):
         raise OSError("connection to /secret/path/bank.duckdb lost, customer CLI-FIX0004")
 
-    monkeypatch.setattr(account_tools, "get_customer_profile", down)
-    monkeypatch.setattr(account_tools, "list_transactions", down)
+    monkeypatch.setattr(account_tools, "_rows", down)
     before = observability.failure_counts().get("customer_context_unavailable", 0)
     with caplog.at_level(logging.WARNING):
         response = context(mine)
@@ -123,6 +122,37 @@ def test_when_the_warehouse_does_not_answer_it_says_so_and_still_gives_the_cases
     assert observability.failure_counts()["customer_context_unavailable"] == before + 1
     # The exception's message names a path and a customer: it stays out of the response and out of the log.
     assert "secret" not in response.text and "secret" not in caplog.text and "OSError" in caplog.text
+
+
+def test_a_failure_inside_the_warehouse_leaves_no_message_in_the_audit_log_or_its_endpoint(monkeypatch):
+    """The tools write `str(error)` to the audit log, and /admin/audit_log serves it: the context must not read through them."""
+    ticket_id = file_ticket()
+
+    def down(*args, **kwargs):
+        raise OSError("CANARY-PRIVATE /secret/customer-sensitive/bank.duckdb")
+
+    monkeypatch.setattr(account_tools, "_rows", down)
+    assert context(ticket_id).json()["warehouse"]["available"] is False
+    client = TestClient(main.app)
+    served = client.get("/admin/audit_log?limit=500", headers=ADMIN).text
+    on_disk = main.default_audit_log.path.read_text(encoding="utf-8") if main.default_audit_log.path.exists() else ""
+    assert "CANARY" not in served and "CANARY" not in on_disk and "secret" not in served + on_disk
+
+
+def test_every_read_leaves_a_record_of_the_read_with_the_ticket_and_the_outcome_only(monkeypatch):
+    ticket_id = file_ticket()
+    context(ticket_id)
+    events = [e for e in main.default_audit_log.recent() if e.get("event") == "customer_context_read"]
+    assert events and events[-1]["ticket_id"] == ticket_id and events[-1]["warehouse"] == "ok"
+    assert CUSTOMER not in json.dumps(events[-1])  # the ticket names the customer; the record does not
+
+    def down(*args, **kwargs):
+        raise OSError("CANARY")
+
+    monkeypatch.setattr(account_tools, "_rows", down)
+    context(ticket_id)
+    last = [e for e in main.default_audit_log.recent() if e.get("event") == "customer_context_read"][-1]
+    assert last["warehouse"] == "unavailable" and last["error_type"] == "OSError" and "CANARY" not in json.dumps(last)
 
 
 def test_a_warehouse_that_knows_no_such_customer_is_the_same_unavailable_answer(monkeypatch):

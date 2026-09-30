@@ -1,8 +1,11 @@
 """What an operator sees about the customer beside a case: the customer's products, latest movements, and other cases and traces.
 
-Read-only and minimal: the products are the type, currency, status and the last four digits of the number (never the number), the
-movements are what the assistant's own tools already list (`agent/tools/account_tools.py`, called as they are, and audited like any
-other read of the customer's data), and nothing carries a fraud score, a channel, a document or a contact. The cases and traces come
+Read-only and minimal: the products are the type, currency, status and the last four digits of the number (the database cuts it, so
+the number itself is never read), the movements are the customer's latest ones and the pending ones, and nothing carries a fraud score,
+a channel, a document or a contact. It reads the warehouse with the tools' own connection and freshness date (`account_tools._rows`,
+`data_as_of`) but not through the tools themselves: they write an exception's message into the audit log, which /admin/audit_log
+serves, and a message can quote a path, a query or a customer. The read is recorded here instead, as an audit event with the ticket,
+the outcome and, on a failure, the exception's type. The cases and traces come
 from the queue, the desk and the trace file, so they are there even when the warehouse is not: the warehouse's part is `warehouse`
 (available or not), and when it fails the rest is still answered.
 """
@@ -18,6 +21,7 @@ from agent import observability
 from agent.policy.desk import TicketDesk
 from agent.policy.escalation import HumanQueue
 from agent.tools import account_tools
+from agent.tools.audit import default_audit_log
 from agent.tools.traces import TraceService
 
 logger = logging.getLogger(__name__)
@@ -30,9 +34,12 @@ TRACES_SHOWN = 10
 
 def for_ticket(ticket: dict, queue: HumanQueue, desk: TicketDesk, traces: TraceService) -> dict[str, Any]:
     customer_id = ticket["customer_id"]
-    products, movements, as_of = _warehouse(customer_id)
+    products, movements, as_of, error_type = _warehouse(customer_id)
+    available = products is not None
+    default_audit_log.event("customer_context_read", ticket_id=ticket["ticket_id"], warehouse="ok" if available else "unavailable",
+                            **({} if available else {"error_type": error_type}))
     return {
-        "warehouse": {"available": products is not None, "as_of": as_of},
+        "warehouse": {"available": available, "as_of": as_of},
         "products": products or [],
         "movements": movements or [],
         "cases": _other_cases(ticket, queue, desk),
@@ -40,19 +47,28 @@ def for_ticket(ticket: dict, queue: HumanQueue, desk: TicketDesk, traces: TraceS
     }
 
 
-def _warehouse(customer_id: str) -> tuple[list[dict] | None, list[dict] | None, str | None]:
-    """(products, movements, data date), or all None when the warehouse does not answer, whatever the reason. The exception is
-    counted and logged by its type only: its message can quote a path, a query or a customer id."""
+_PRODUCTS = """SELECT product_id, product_type, currency, product_status, right(CAST(product_number AS VARCHAR), 4) AS last4
+               FROM products WHERE customer_id = ? ORDER BY product_type, opening_date, product_id"""
+_MOVEMENTS = """SELECT transaction_id, transaction_date, product_id, transaction_type, amount, currency, merchant_name, transaction_status
+                FROM transactions WHERE customer_id = ? {where} ORDER BY transaction_date DESC, transaction_id LIMIT ?"""
+
+
+def _warehouse(customer_id: str) -> tuple[list[dict] | None, list[dict] | None, str | None, str | None]:
+    """(products, movements, data date, None), or (None, None, None, the exception's type) when the warehouse does not answer,
+    whatever the reason. The exception is counted and logged by its type only: its message can quote a path, a query or a customer."""
     try:
-        profile = account_tools.get_customer_profile(customer_id)
-        latest = account_tools.list_transactions(customer_id, limit=MOVEMENTS_SHOWN)["items"]
-        pending = account_tools.list_transactions(customer_id, status="Pending", limit=PENDING_SHOWN)["items"]
+        if not account_tools._rows("SELECT 1 FROM customers WHERE customer_id = ?", [customer_id]):
+            raise LookupError("no such customer")
+        products = account_tools._rows(_PRODUCTS, [customer_id])
+        latest = account_tools._rows(_MOVEMENTS.format(where=""), [customer_id, MOVEMENTS_SHOWN])
+        pending = account_tools._rows(_MOVEMENTS.format(where="AND transaction_status = 'Pending'"), [customer_id, PENDING_SHOWN])
+        as_of = account_tools.data_as_of()
     except Exception as exc:
         observability.count_failure("customer_context_unavailable")
         logger.warning("customer context: the warehouse did not answer (%s)", type(exc).__name__)
-        return None, None, None
+        return None, None, None, type(exc).__name__
     products = [{"product_id": p["product_id"], "type": p["product_type"], "currency": p["currency"], "status": p["product_status"],
-                 "last4": p["last4"]} for p in profile["products"]]
+                 "last4": p["last4"]} for p in products]
     seen: set[str] = set()
     movements = []
     for m in sorted([*latest, *pending], key=lambda m: str(m["transaction_date"]), reverse=True):
@@ -62,7 +78,7 @@ def _warehouse(customer_id: str) -> tuple[list[dict] | None, list[dict] | None, 
         movements.append({"transaction_id": m["transaction_id"], "date": _iso(m["transaction_date"]), "product_id": m["product_id"],
                           "type": m["transaction_type"], "amount": _number(m["amount"]), "currency": m["currency"],
                           "merchant": m["merchant_name"], "status": m["transaction_status"], "pending": m["transaction_status"] == "Pending"})
-    return products, movements, _iso(profile["as_of"])
+    return products, movements, _iso(as_of), None
 
 
 def _iso(value: Any) -> str | None:
