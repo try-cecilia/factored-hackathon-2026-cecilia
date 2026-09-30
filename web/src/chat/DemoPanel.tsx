@@ -3,7 +3,7 @@ import { useI18n, useT } from '../i18n/context'
 import type { MessageKey } from '../i18n/translate'
 import { applyDemoFault, getDemoTickets, startScenario } from '../server/demo.functions'
 import { Button, IconButton } from '../ui'
-import type { Entry } from './conversation'
+import type { Entry, UserEntry } from './conversation'
 import type { DemoFault, DemoScenario, DemoTicket } from './types'
 import './DemoPanel.css'
 
@@ -46,17 +46,18 @@ function progress(entries: Entry[], turns: string[]): { got: string[]; off: bool
   return { got, off }
 }
 
-export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations, ended, send, overlay, onSessionChanged, onClose }: {
+export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations, ended, send, retry, overlay, onSessionChanged, onClose }: {
   scenarios: DemoScenario[]
   sessionRef: string
   entries: Entry[]
   pending: boolean
   escalations: number
-  /** Writes a message into the chat's input; `replace` says the person chose it, so it goes over a draft. */
   /** The session is over: no step can be sent (loading a scenario starts another). */
   ended: boolean
   /** The chat's own send: the messages of a scenario go through it, with the same key, the same state and the same retry. */
   send: (text: string) => Promise<unknown>
+  /** Sends a message that did not go through again, with the same key (the bubble's own retry). */
+  retry: (id: number) => void
   /** The panel is a drawer over the page: choosing a scenario closes it, so the input is in reach. */
   overlay: boolean
   onSessionChanged: () => Promise<void>
@@ -137,9 +138,19 @@ export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations
     if (overlay) backToChat()
   }, [active, pending, turns, send, overlay, backToChat])
 
-  // A step after the first goes with the button of the step in course.
+  // The message of the step in course that is already in the chat and has no answer: what became of it says what the button does.
+  // One that did not go through (failed, or lost its answer) is retried, with its own key: a new send would be a second message,
+  // and the API may already have the first. One the API has, or one on its way, is not sent again; the chat's bubble says so.
+  const mine = active && active.base !== null ? entries.slice(active.base) : []
+  const stepText = turns[next]?.trim()
+  const stepEntry = stepText === undefined ? undefined : [...mine].reverse().find((e): e is UserEntry =>
+    e.role === 'user' && e.text.trim() === stepText && !mine.some((a) => a.role === 'assistant' && a.to === e.id))
+  const stepState = !stepEntry ? 'new' : stepEntry.delivery === 'failed' || stepEntry.delivery === 'uncertain' ? 'retry' : 'held'
+
   function sendStep() {
-    void send(turns[next])
+    if (stepEntry && stepState === 'retry') retry(stepEntry.id)
+    else if (stepState === 'new') void send(turns[next])
+    else return
     if (overlay) backToChat()
   }
 
@@ -191,8 +202,11 @@ export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations
                             <span className="demo__muted">{t('demo.steps.expected', { what: expected ? disposition(expected) : t('demo.steps.anyOutcome') })}</span>
                             {reply && <span className={matches ? 'demo__ok' : 'demo__bad'}>{t(matches ? 'demo.steps.came' : 'demo.steps.cameWrong', { what: disposition(reply) })}</span>}
                             {active.base !== null && i === next && (
-                              <Button variant="ghost" size="sm" tinted disabled={pending || ended} onClick={sendStep}>{t('demo.steps.send', { n: i + 1 })}</Button>
+                              <Button variant="ghost" size="sm" tinted disabled={pending || ended || stepState === 'held'} onClick={sendStep}>
+                                {t(stepState === 'retry' ? 'demo.steps.retry' : 'demo.steps.send', { n: i + 1 })}
+                              </Button>
                             )}
+                            {active.base !== null && i === next && stepEntry?.delivery === 'processed' && <span className="demo__muted">{t('demo.steps.processed')}</span>}
                           </li>
                         )
                       })}

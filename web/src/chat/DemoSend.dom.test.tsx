@@ -229,6 +229,55 @@ describe('a scenario of the demo panel sends its first message through the chat'
     expect(within(card).getByRole('button', { name: 'Enviar paso 2' })).toBeTruthy()
   })
 
+  it('the button of a step whose message did not get an answer retries that message, with its key, and does not send another', async () => {
+    const user = userEvent.setup()
+    sendMessage
+      .mockResolvedValueOnce({ ok: false, failure: 'timeout' })
+      .mockResolvedValueOnce({ ok: true, reply: reply('AUTO_RESOLVE', 'Tu saldo es 10 USD.') })
+    await draw()
+    const card = await load(user, 'Dos turnos')
+    await screen.findByRole('button', { name: 'Reintentar' })
+
+    const retry = await within(card).findByRole('button', { name: 'Reintentar paso 1' })
+    expect((retry as HTMLButtonElement).disabled).toBe(false)
+    await user.click(retry)
+
+    expect(await screen.findByText('Tu saldo es 10 USD.')).toBeTruthy()
+    expect(sendMessage).toHaveBeenCalledTimes(2)
+    expect(sendMessage.mock.calls[1][0].data.key).toBe(sendMessage.mock.calls[0][0].data.key)
+    expect(screen.getAllByText('¿Cuál es mi saldo?')).toHaveLength(1)
+    expect(within(card).getByText('✓ Resuelto')).toBeTruthy()
+    expect(within(card).getByRole('button', { name: 'Enviar paso 2' })).toBeTruthy()
+  })
+
+  it('a later step that did not get an answer is retried from its card with its key, too', async () => {
+    const user = userEvent.setup()
+    sendMessage
+      .mockResolvedValueOnce({ ok: true, reply: reply('AUTO_RESOLVE', 'Tu saldo es 10 USD.') })
+      .mockResolvedValueOnce({ ok: false, failure: 'timeout' })
+      .mockResolvedValueOnce({ ok: true, reply: reply('ESCALATE', 'Te paso con una persona.') })
+    await draw()
+    const card = await load(user, 'Dos turnos')
+    await user.click(await within(card).findByRole('button', { name: 'Enviar paso 2' }))
+    await user.click(await within(card).findByRole('button', { name: 'Reintentar paso 2' }))
+
+    expect(await screen.findByText('Te paso con una persona.')).toBeTruthy()
+    expect(sendMessage).toHaveBeenCalledTimes(3)
+    expect(sendMessage.mock.calls[2][0].data.key).toBe(sendMessage.mock.calls[1][0].data.key)
+    expect(screen.getAllByText('Me clonaron la tarjeta')).toHaveLength(1)
+    expect(within(card).getByText('✓ A una persona')).toBeTruthy()
+  })
+
+  it('a step the API already has is not sent again from the card: the button is off and the card points at the chat', async () => {
+    const user = userEvent.setup()
+    sendMessage.mockResolvedValueOnce({ ok: false, failure: 'already_processed' })
+    await draw()
+    const card = await load(user, 'Dos turnos')
+    expect((await within(card).findByText(/ya llegó/)).textContent).toContain('recarga')
+    expect((within(card).getByRole('button', { name: 'Enviar paso 1' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(sendMessage).toHaveBeenCalledOnce()
+  })
+
   it('the late reply of another message is not the answer of a step that failed', async () => {
     const user = userEvent.setup()
     sendMessage
@@ -247,7 +296,7 @@ describe('a scenario of the demo panel sends its first message through the chat'
     expect(sendMessage.mock.calls[1][0].data.key).toBe(sendMessage.mock.calls[2][0].data.key)
     expect(within(card).queryByText('✓ Resuelto')).toBeNull()
     expect(within(card).getByRole('status').textContent).toContain('no cuenta como paso')
-    expect(within(card).getByRole('button', { name: 'Enviar paso 1' })).toBeTruthy()
+    expect(within(card).getByRole('button', { name: 'Reintentar paso 1' })).toBeTruthy()
   })
 
   it('the step button is off while a message is on its way, and comes back for the next step when it is answered', async () => {

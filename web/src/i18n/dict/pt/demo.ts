@@ -33,6 +33,8 @@ export const demo: Like<typeof es> = {
     came: '✓ {what}',
     cameWrong: '✗ Saiu {what}',
     send: 'Enviar passo {n}',
+    retry: 'Tentar de novo o passo {n}',
+    processed: 'A mensagem deste passo já chegou: recarregue a conversa a partir do chat.',
     offScript: 'Foi enviado outro texto: essa resposta não conta como passo. O botão do passo em curso o retoma.',
     close: 'Fechar passos',
   },

@@ -31,6 +31,8 @@ export const demo = {
     came: '✓ {what}',
     cameWrong: '✗ Salió {what}',
     send: 'Enviar paso {n}',
+    retry: 'Reintentar paso {n}',
+    processed: 'El mensaje de este paso ya llegó: recarga la conversación desde el chat.',
     offScript: 'Se envió otro texto: esa respuesta no cuenta como paso. El botón del paso en curso lo retoma.',
     close: 'Cerrar pasos',
   },

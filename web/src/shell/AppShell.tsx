@@ -46,7 +46,7 @@ export function AppShell({ session, kit, children }: { session: Session; kit: Pr
   const t = useT()
   const navigate = useNavigate()
   const router = useRouter()
-  const { sessionRef, cases, entries, sending, ended, send, refreshCase } = useConversation()
+  const { sessionRef, cases, entries, sending, ended, send, retry, refreshCase } = useConversation()
   const phone = useMediaQuery(PHONE)
   const narrow = useMediaQuery(NARROW)
   const [collapsed, setCollapsed] = useState(false)
@@ -206,6 +206,7 @@ export function AppShell({ session, kit, children }: { session: Session; kit: Pr
                 escalations={escalations}
                 ended={ended}
                 send={send}
+                retry={retry}
                 overlay={narrow}
                 onSessionChanged={() => router.invalidate()}
                 onClose={() => setDemoOpen(false)}
