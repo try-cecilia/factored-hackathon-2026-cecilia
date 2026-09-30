@@ -8,7 +8,7 @@ import { AppShell } from '../shell/AppShell'
 import { renderWithI18n } from '../test/render'
 import { ChatView } from './ChatView'
 import { ConversationProvider } from './ConversationProvider'
-import type { DemoScenario, Reply } from './types'
+import type { DemoScenario, HistoryResult, Reply } from './types'
 
 const router = vi.hoisted(() => ({ invalidate: async () => {} }))
 const sendMessage = vi.hoisted(() => vi.fn())
@@ -21,7 +21,8 @@ vi.mock('@tanstack/react-router', () => ({
 vi.mock('../server/auth.functions', () => ({ logout: vi.fn() }))
 vi.mock('../server/locale.functions', () => ({ setLocale: vi.fn() }))
 vi.mock('../server/demo.functions', () => ({ applyDemoFault: vi.fn(), getDemoTickets: async () => [], startScenario }))
-vi.mock('../server/chat.functions', () => ({ sendMessage, getHistory: vi.fn(), getCase: vi.fn() }))
+const getHistory = vi.hoisted(() => vi.fn())
+vi.mock('../server/chat.functions', () => ({ sendMessage, getHistory, getCase: vi.fn() }))
 
 const scenario = (id: string, turns: string[], expect: (string | null)[], title: string): DemoScenario => ({
   id, path: 'normal', customer_id: 'CLI-FIX0001', language: 'es', fault: null, turns, expect,
@@ -35,6 +36,8 @@ const scenarios = [
   scenario('d', ['cuatro'], ['AUTO_RESOLVE'], 'Cuarto'),
   scenario('e', ['¿Cuál es mi saldo?', 'Me clonaron la tarjeta'], ['AUTO_RESOLVE', 'ESCALATE'], 'Dos turnos'),
 ]
+// What the API kept of a session when its conversation is read: a test can make it fail.
+const history = vi.hoisted(() => ({ initial: { ok: true, cases: [], turns: [] } as HistoryResult }))
 const kit: Promise<DemoKit> = Promise.resolve({ enabled: true, scenarios })
 
 const reply = (disposition: Reply['disposition'], text: string): Reply =>
@@ -53,7 +56,7 @@ function App() {
   router.invalidate = async () => { setRef((r) => `${r}+`) }
   const session: Session = { customer_id: 'CLI-FIX0001', session_ref: ref, segment: 'Premium', country: 'México', customer_status: 'Active', expires_at: 0, expires_in: 900 }
   return (
-    <ConversationProvider sessionRef={ref} initial={{ ok: true, cases: [], turns: [] }}>
+    <ConversationProvider sessionRef={ref} initial={history.initial}>
       <AppShell session={session} kit={kit}><ChatView session={session} /></AppShell>
     </ConversationProvider>
   )
@@ -101,6 +104,8 @@ beforeEach(() => {
   globalThis.ResizeObserver = class { observe() {} disconnect() {} unobserve() {} } as unknown as typeof ResizeObserver
   startScenario.mockReset().mockResolvedValue({ ok: true })
   sendMessage.mockReset().mockReturnValue(new Promise(() => {}))
+  getHistory.mockReset()
+  history.initial = { ok: true, cases: [], turns: [] }
 })
 afterEach(() => vi.restoreAllMocks())
 
@@ -266,6 +271,29 @@ describe('a scenario of the demo panel sends its first message through the chat'
     expect(sendMessage.mock.calls[2][0].data.key).toBe(sendMessage.mock.calls[1][0].data.key)
     expect(screen.getAllByText('Me clonaron la tarjeta')).toHaveLength(1)
     expect(within(card).getByText('✓ A una persona')).toBeTruthy()
+  })
+
+  it('a history read that comes back empty does not make the card forget the message that was lost: its retry keeps the key', async () => {
+    const user = userEvent.setup()
+    history.initial = { ok: false, failure: 'unavailable' }
+    getHistory.mockResolvedValue({ ok: true, cases: [], turns: [] })
+    sendMessage
+      .mockResolvedValueOnce({ ok: false, failure: 'timeout' })
+      .mockResolvedValueOnce({ ok: true, reply: reply('AUTO_RESOLVE', 'Tu saldo es 10 USD.') })
+    await draw()
+    const card = await load(user, 'Dos turnos')
+    await screen.findByRole('button', { name: 'Reintentar' })
+
+    // The conversation could not be read: its notice offers to read it again, and what comes back does not have the message yet.
+    await user.click(document.querySelector('.chat__history button') as HTMLElement)
+    await waitFor(() => expect(getHistory).toHaveBeenCalled())
+
+    const retry = await within(card).findByRole('button', { name: 'Reintentar paso 1' })
+    await user.click(retry)
+    expect(await screen.findByText('Tu saldo es 10 USD.')).toBeTruthy()
+    expect(sendMessage).toHaveBeenCalledTimes(2)
+    expect(sendMessage.mock.calls[1][0].data.key).toBe(sendMessage.mock.calls[0][0].data.key)
+    expect(screen.getAllByText('¿Cuál es mi saldo?')).toHaveLength(1)
   })
 
   it('a step the API already has is not sent again from the card: the button is off and the card points at the chat', async () => {

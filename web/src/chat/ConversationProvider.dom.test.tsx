@@ -134,6 +134,39 @@ describe('ConversationProvider', () => {
     expect(items('user')[0].textContent).toBe('hola')
   })
 
+  it('a history that does not have a message that was not answered does not drop it: it stays, with its key, and retrying sends the same one', async () => {
+    server.sendMessage
+      .mockResolvedValueOnce({ ok: false, failure: 'timeout' })
+      .mockResolvedValueOnce(ok())
+    server.getHistory.mockResolvedValue(empty)
+    mount({ ok: false, failure: 'unavailable' })
+    const user = userEvent.setup()
+    await user.click(screen.getByText('send'))
+    await waitFor(() => expect(items('user')[0].getAttribute('data-delivery')).toBe('uncertain'))
+
+    await user.click(screen.getByText('reload'))
+    await waitFor(() => expect(screen.getByTestId('history-failed').textContent).toBe('false'))
+    expect(items('user').map((e) => e.textContent)).toEqual(['hola'])
+    expect(items('user')[0].getAttribute('data-delivery')).toBe('uncertain')
+
+    await user.click(screen.getByText('retry'))
+    await waitFor(() => expect(items('assistant')).toHaveLength(1))
+    expect(server.sendMessage.mock.calls[1][0].data.key).toBe(server.sendMessage.mock.calls[0][0].data.key)
+  })
+
+  it('a history that has the message takes its place: the local copy is not shown twice', async () => {
+    server.sendMessage.mockResolvedValueOnce({ ok: false, failure: 'timeout' })
+    server.getHistory.mockResolvedValue({ ok: true, cases: [], turns: [{ role: 'user', text: 'hola', at: 1 }, { role: 'assistant', reply: reply(), at: 2 }] })
+    mount({ ok: false, failure: 'unavailable' })
+    const user = userEvent.setup()
+    await user.click(screen.getByText('send'))
+    await waitFor(() => expect(items('user')[0].getAttribute('data-delivery')).toBe('uncertain'))
+    await user.click(screen.getByText('reload'))
+    await waitFor(() => expect(items('assistant')).toHaveLength(1))
+    expect(items('user')).toHaveLength(1)
+    expect(items('user')[0].getAttribute('data-delivery')).toBe('sent')
+  })
+
   it('another session starts another conversation, and an answer that arrives for the old one is ignored', async () => {
     let finish: (r: SendResult) => void = () => {}
     server.sendMessage.mockReturnValue(new Promise<SendResult>((resolve) => { finish = resolve }))

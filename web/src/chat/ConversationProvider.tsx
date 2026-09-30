@@ -215,10 +215,14 @@ export function ConversationProvider({ sessionRef, initial, children }: { sessio
       if (mine.session !== epoch.current || mine.edits !== edits.current) return
       if (result.ok) {
         // A message the API said it already has but whose reply is not in what it kept stays, told so: reloading cannot show it.
+        // One that did not go through (failed, or its answer got lost) stays too, with its key: a history that does not have it
+        // yet does not show that it did not arrive, and sending it again with another key would be a second message.
         const said = new Set(result.turns.flatMap((t) => (t.role === 'user' ? [t.text] : [])))
-        const gone = entriesRef.current.flatMap((e): Entry[] =>
-          e.role === 'user' && e.failure === 'already_processed' && !said.has(e.text) ? [{ ...e, failure: 'answer_gone' }] : [],
-        )
+        const gone = entriesRef.current.flatMap((e): Entry[] => {
+          if (e.role !== 'user' || said.has(e.text)) return []
+          if (e.failure === 'already_processed') return [{ ...e, failure: 'answer_gone' }]
+          return e.key && (e.delivery === 'failed' || e.delivery === 'uncertain') ? [e] : []
+        })
         const next = [...fromHistory(result.turns, nextId.current, Date.now()), ...gone]
         nextId.current += next.length + 1
         setKept(result.cases)
