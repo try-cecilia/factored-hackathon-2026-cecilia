@@ -13,8 +13,8 @@ type Props = Omit<TicketPanelProps, 'ticket' | 'loadError'> & {
 
 /**
  * The case of the URL. When a read fails after the case was already on screen (the API went away for a moment), the panel
- * stays mounted with the last data it had, so the operator does not lose a 409 notice, a reason being typed or a pending
- * action; the failure shows inside the panel. A case that was never read shows the error instead.
+ * stays mounted with the last data it had, so the operator does not lose a 409 notice, a reason or message being typed or a
+ * pending action; the failure shows inside the panel. A case that was never read shows the error instead.
  */
 export function TicketScreen({ ticketId, result, ...panel }: Props) {
   const t = useT()

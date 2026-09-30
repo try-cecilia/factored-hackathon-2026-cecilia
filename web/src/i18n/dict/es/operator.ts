@@ -221,6 +221,12 @@ export const operator = {
       placeholder: 'Opcional, lo ven los demás operadores',
       lockedBy: 'Solo {name} puede indicar un motivo',
     },
+    message: {
+      label: 'Mensaje para el cliente · lo ve en su caso y en el chat',
+      unassigned: 'Tomar el caso para escribir el mensaje',
+      placeholder: 'Qué se hizo y qué sigue, en pocas palabras. Sin datos de otros clientes.',
+      lockedBy: 'Solo {name} puede resolver este caso',
+    },
     footer: {
       notAssigned: 'Sin asignar',
       auditedAs: 'Auditado como {name}',
@@ -234,6 +240,7 @@ export const operator = {
       approve: 'Aprobar rastreo',
       reject: 'Rechazar',
       release: 'Devolver a la asistente',
+      resolve: 'Resolver',
       reload: 'Recargar caso',
       copy: 'Copiar resumen',
       copied: 'Resumen copiado',
@@ -243,6 +250,7 @@ export const operator = {
         approve: 'Aprobando…',
         reject: 'Rechazando…',
         release: 'Devolviendo…',
+        resolve: 'Resolviendo…',
       },
     },
     result: {
@@ -250,6 +258,7 @@ export const operator = {
       reject: 'Caso rechazado.',
       release: 'Caso devuelto a la asistente.',
       approve: 'Rastreo aprobado.',
+      resolve: 'Caso resuelto.',
     },
     banner: {
       traceOpened: 'Rastreo abierto',
@@ -419,7 +428,7 @@ export const operator = {
   login: {
     eyebrow: 'Consola de operador',
     title: 'Ingresar',
-    lead: 'Con la clave de lectura se ven la cola y el monitoreo. Para tomar, aprobar, rechazar o devolver casos, sumar la clave de operador. Se envían una sola vez al servidor y no se guardan ni vuelven al navegador.',
+    lead: 'Con la clave de lectura se ven la cola y el monitoreo. Para tomar, aprobar, rechazar, resolver o devolver casos, sumar la clave de operador. Se envían una sola vez al servidor y no se guardan ni vuelven al navegador.',
     expired: 'La sesión venció por inactividad. Ingresar de nuevo para seguir.',
     labelRead: 'Clave de lectura',
     labelOperator: 'Clave de operador',

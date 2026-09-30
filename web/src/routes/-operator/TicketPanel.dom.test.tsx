@@ -47,6 +47,15 @@ describe('unassigned', () => {
     expect(button(/Tomar caso/)).toBeNull()
     expect(screen.getByRole('form', { name: 'Clave de operador' })).toBeTruthy()
   })
+
+  it('without an action to approve, the message for the customer waits for someone to take the case', () => {
+    setup(ticket('open', { pending_action: null }))
+    const box = screen.getByLabelText(/Mensaje para el cliente/) as HTMLTextAreaElement
+    expect(box.disabled).toBe(true)
+    expect(box.placeholder).toBe('Tomar el caso para escribir el mensaje')
+    expect(button(/^Resolver/)).toBeNull()
+    expect(screen.queryByLabelText(/Motivo del rechazo/)).toBeNull()
+  })
 })
 
 describe('claimed', () => {
@@ -55,6 +64,9 @@ describe('claimed', () => {
     const { act } = setup(t)
     const user = userEvent.setup()
     expect(disabled(screen.getByLabelText(/Motivo del rechazo/))).toBe(false)
+    // Resolving is for cases without an action: this one closes by approving or rejecting it.
+    expect(button(/^Resolver/)).toBeNull()
+    expect(screen.queryByLabelText(/Mensaje para el cliente/)).toBeNull()
     await user.click(button(/Aprobar rastreo/)!)
     expect(act).toHaveBeenLastCalledWith('approve', { expectedVersion: 2, reason: undefined })
     await user.type(screen.getByLabelText(/Motivo del rechazo/), '  duplicado ')
@@ -64,10 +76,25 @@ describe('claimed', () => {
     expect(act).toHaveBeenLastCalledWith('release', { expectedVersion: 2, reason: undefined })
   })
 
-  it('without an action to approve there is no approve button', () => {
-    setup(ticket('claimed', { pending_action: null }, { version: 1 }))
+  it('without an action to approve, the holder resolves it with a message for the customer or hands it back; there is nothing to reject', async () => {
+    const { act } = setup(ticket('claimed', { pending_action: null }, { version: 1 }))
+    const user = userEvent.setup()
     expect(button(/Aprobar rastreo/)).toBeNull()
-    expect(button(/^Rechazar/)).toBeTruthy()
+    expect(button(/^Rechazar/)).toBeNull()
+    expect(screen.queryByLabelText(/Motivo del rechazo/)).toBeNull()
+    const box = screen.getByLabelText(/Mensaje para el cliente/) as HTMLTextAreaElement
+    expect(box.maxLength).toBe(500)
+    expect(disabled(button(/^Resolver/))).toBe(true)
+    await user.type(box, '  ')
+    expect(disabled(button(/^Resolver/))).toBe(true) // blank is not a message
+    await user.type(box, 'Listo. ')
+    expect(screen.getByText('9/500')).toBeTruthy()
+    await user.click(button(/^Resolver/)!)
+    expect(act).toHaveBeenLastCalledWith('resolve', { expectedVersion: 1, message: 'Listo.' })
+    expect(await screen.findByText('Caso resuelto.')).toBeTruthy()
+    expect(box.value).toBe('')
+    await user.click(button(/Devolver a la asistente/)!)
+    expect(act).toHaveBeenLastCalledWith('release', { expectedVersion: 1 })
   })
 
   it('someone else holds it: nobody else can decide it', () => {
@@ -76,6 +103,14 @@ describe('claimed', () => {
     expect(button(/^Rechazar/)).toBeNull()
     expect(button(/Devolver a la asistente/)).toBeNull()
     expect(screen.getAllByText(/Tomado por diego\.m/).length).toBeGreaterThan(0)
+  })
+
+  it('someone else holds a case without an action: nobody else can resolve it', () => {
+    setup(ticket('claimed', { pending_action: null }, { operator: 'diego.m', version: 1 }))
+    expect(button(/^Resolver/)).toBeNull()
+    const box = screen.getByLabelText(/Mensaje para el cliente/) as HTMLTextAreaElement
+    expect(box.disabled).toBe(true)
+    expect(box.placeholder).toBe('Solo diego.m puede resolver este caso')
   })
 })
 
@@ -116,6 +151,20 @@ describe('version conflict (409)', () => {
     ]
     rerender(<I18nProvider locale="es" messages={dictionaries.es}><TicketPanel ticket={ticket('resolved', { pending_action: null }, { operator: 'diego.m', version: 2, message: 'Listo.', history })} view={view} act={act} reload={reload} /></I18nProvider>)
     expect((await screen.findByRole('alert')).textContent).toMatch(/v0.*v2.*diego\.m lo resolvió/)
+  })
+
+  it('on a case without an action, what stays locked is resolving, and the message is kept', async () => {
+    const act = vi.fn<TicketPanelProps['act']>(async () => ({ ok: false, status: 409, message: 'the ticket changed' }))
+    setup(ticket('claimed', { pending_action: null }, { version: 2 }), undefined, { act })
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText(/Mensaje para el cliente/), 'Listo.')
+    await user.click(button(/^Resolver/)!)
+    await screen.findByText('No se aplicó: el caso cambió')
+    expect(disabled(button(/^Resolver/))).toBe(true)
+    expect(button(/Aprobar rastreo|^Rechazar/)).toBeNull()
+    const box = screen.getByLabelText(/Mensaje para el cliente/) as HTMLTextAreaElement
+    expect(box.disabled).toBe(true)
+    expect(box.value).toBe('Listo.')
   })
 
   it('any other failure is explained without locking the screen', async () => {

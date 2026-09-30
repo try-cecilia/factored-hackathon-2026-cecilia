@@ -31,6 +31,9 @@ export type TicketPanelProps = {
 
 type Flash = { tone: 'ok' | 'error'; title?: string; text: string; detail?: string }
 
+// The API's limit for the message a resolution leaves the customer.
+const MESSAGE_MAX = 500
+
 const tones: Record<DeskState['status'], StatusTone> = { open: 'open', claimed: 'info', approved: 'success', rejected: 'danger', handed_back: 'neutral', stale: 'caution', resolved: 'success' }
 
 /** The ticket desk of the operator console: what the case is, what the assistant did, and what the operator can do next. */
@@ -38,6 +41,7 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
   const t = useT()
   const { locale } = useI18n()
   const [reason, setReason] = useState('')
+  const [message, setMessage] = useState('')
   const [pending, setPending] = useState<DeskAction | 'reload' | null>(null)
   const [flash, setFlash] = useState<Flash | null>(null)
   const [conflict, setConflictNow] = useState<Conflict | null>(() => conflictOf(ticket.ticket_id))
@@ -63,10 +67,15 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
     setPending(action)
     setFlash(null)
     try {
-      const result = await act(action, { expectedVersion: desk.version, reason: action === 'reject' ? reason.trim() || undefined : undefined })
+      const result = await act(action, {
+        expectedVersion: desk.version,
+        reason: action === 'reject' ? reason.trim() || undefined : undefined,
+        message: action === 'resolve' ? message.trim() : undefined,
+      })
       if (result.ok) {
         setConflict(null)
         setReason('')
+        setMessage('')
         setFlash({ tone: 'ok', text: t(`operator.ticket.result.${action}` as MessageKey) })
       } else if (result.status === 409) {
         setConflict({ seen: desk.version, detail: result.message })
@@ -107,7 +116,14 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
     : t(`operator.ticket.state.${{ approved: 'approvedBy', rejected: 'rejectedBy', handed_back: 'handedBackBy', stale: 'staleBy', resolved: 'resolvedBy' }[desk.status]}` as MessageKey, { name: last?.operator ?? who })
 
   const pendingAction = ticket.pending_action
-  const canApprove = mine && !locked && pendingAction !== null
+  // A case that carries an action closes by approving or rejecting that action; any other one, by resolving it with a message.
+  const decisions: readonly DeskAction[] = pendingAction ? ['approve', 'reject'] : ['resolve']
+  // Who may write in the box of a decision, said in its placeholder.
+  const hint = (box: 'reason' | 'message') =>
+    !view.canAct ? t('operator.ticket.footer.readOnly')
+    : desk.status === 'open' ? t(`operator.ticket.${box}.unassigned`)
+    : mine ? t(`operator.ticket.${box}.placeholder`)
+    : t(`operator.ticket.${box}.lockedBy`, { name: who })
 
   return (
     <article className="op-ticket" aria-labelledby="op-ticket-title" data-state={desk.status}>
@@ -162,7 +178,7 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
 
         {pendingAction && <PendingCard ticket={ticket} />}
 
-        {!closed && (
+        {!closed && pendingAction && (
           <section className="op-block">
             <label htmlFor="op-reason"><h2>{t('operator.ticket.reason.label')}</h2></label>
             <textarea
@@ -173,12 +189,27 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
               maxLength={300}
               rows={2}
               disabled={!mine || locked}
-              placeholder={
-                !view.canAct ? t('operator.ticket.footer.readOnly')
-                : desk.status === 'open' ? t('operator.ticket.reason.unassigned')
-                : mine ? t('operator.ticket.reason.placeholder')
-                : t('operator.ticket.reason.lockedBy', { name: who })
-              }
+              placeholder={hint('reason')}
+            />
+          </section>
+        )}
+
+        {!closed && !pendingAction && (
+          <section className="op-block">
+            <div className="op-block__head">
+              <label htmlFor="op-message"><h2>{t('operator.ticket.message.label')}</h2></label>
+              <span id="op-message-count" className="op-mono op-muted">{`${message.length}/${MESSAGE_MAX}`}</span>
+            </div>
+            <textarea
+              id="op-message"
+              className="op-input"
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              maxLength={MESSAGE_MAX}
+              rows={3}
+              disabled={!mine || locked}
+              placeholder={hint('message')}
+              aria-describedby="op-message-count"
             />
           </section>
         )}
@@ -319,7 +350,7 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
           {conflict && (
             <>
               <Button size="sm" onClick={() => void reloadNow()} loading={pending === 'reload'}>{t('operator.ticket.actions.reload')}</Button>
-              {(desk.status === 'open' ? (['claim'] as const) : canApprove || mine ? (['approve', 'reject'] as const) : []).map((a) => (
+              {(desk.status === 'open' ? (['claim'] as const) : mine ? decisions : []).map((a) => (
                 <Button key={a} size="sm" variant="ghost" tinted disabled>{t(`operator.ticket.actions.${a}` as MessageKey)}</Button>
               ))}
             </>
@@ -337,10 +368,14 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
           )}
           {!conflict && mine && (
             <>
-              {pendingAction && (
-                <Button size="sm" onClick={() => void run('approve')} loading={pending === 'approve'} disabled={busy}>{pending === 'approve' ? t('operator.ticket.actions.sending.approve') : t('operator.ticket.actions.approve')}</Button>
+              {pendingAction ? (
+                <>
+                  <Button size="sm" onClick={() => void run('approve')} loading={pending === 'approve'} disabled={busy}>{pending === 'approve' ? t('operator.ticket.actions.sending.approve') : t('operator.ticket.actions.approve')}</Button>
+                  <Button size="sm" variant="ghost" tinted onClick={() => void run('reject')} loading={pending === 'reject'} disabled={busy}>{pending === 'reject' ? t('operator.ticket.actions.sending.reject') : t('operator.ticket.actions.reject')}</Button>
+                </>
+              ) : (
+                <Button size="sm" onClick={() => void run('resolve')} loading={pending === 'resolve'} disabled={busy || !message.trim()}>{pending === 'resolve' ? t('operator.ticket.actions.sending.resolve') : t('operator.ticket.actions.resolve')}</Button>
               )}
-              <Button size="sm" variant="ghost" tinted onClick={() => void run('reject')} loading={pending === 'reject'} disabled={busy}>{pending === 'reject' ? t('operator.ticket.actions.sending.reject') : t('operator.ticket.actions.reject')}</Button>
               <span className="op-head__spacer" />
               <Button size="sm" variant="ghost" muted onClick={() => void run('release')} loading={pending === 'release'} disabled={busy}>{pending === 'release' ? t('operator.ticket.actions.sending.release') : t('operator.ticket.actions.release')}</Button>
             </>

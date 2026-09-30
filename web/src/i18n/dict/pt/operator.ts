@@ -223,6 +223,12 @@ export const operator: Like<typeof es> = {
       placeholder: 'Opcional, os outros operadores veem',
       lockedBy: 'Só {name} pode informar um motivo',
     },
+    message: {
+      label: 'Mensagem para o cliente · ele vê no caso e no chat',
+      unassigned: 'Assumir o caso para escrever a mensagem',
+      placeholder: 'O que foi feito e o que vem a seguir, em poucas palavras. Sem dados de outros clientes.',
+      lockedBy: 'Só {name} pode resolver este caso',
+    },
     footer: {
       notAssigned: 'Sem responsável',
       auditedAs: 'Auditado como {name}',
@@ -236,6 +242,7 @@ export const operator: Like<typeof es> = {
       approve: 'Aprovar rastreio',
       reject: 'Rejeitar',
       release: 'Devolver à assistente',
+      resolve: 'Resolver',
       reload: 'Recarregar caso',
       copy: 'Copiar resumo',
       copied: 'Resumo copiado',
@@ -245,6 +252,7 @@ export const operator: Like<typeof es> = {
         approve: 'Aprovando…',
         reject: 'Rejeitando…',
         release: 'Devolvendo…',
+        resolve: 'Resolvendo…',
       },
     },
     result: {
@@ -252,6 +260,7 @@ export const operator: Like<typeof es> = {
       reject: 'Caso rejeitado.',
       release: 'Caso devolvido à assistente.',
       approve: 'Rastreio aprovado.',
+      resolve: 'Caso resolvido.',
     },
     banner: {
       traceOpened: 'Rastreio aberto',
@@ -417,7 +426,7 @@ export const operator: Like<typeof es> = {
   login: {
     eyebrow: 'Console de operador',
     title: 'Entrar',
-    lead: 'Com a chave de leitura você vê a fila e o monitoramento. Para assumir, aprovar, rejeitar ou devolver casos, some a chave de operador. Elas são enviadas uma única vez ao servidor e não são guardadas nem voltam ao navegador.',
+    lead: 'Com a chave de leitura você vê a fila e o monitoramento. Para assumir, aprovar, rejeitar, resolver ou devolver casos, some a chave de operador. Elas são enviadas uma única vez ao servidor e não são guardadas nem voltam ao navegador.',
     expired: 'A sessão expirou por inatividade. Entrar de novo para continuar.',
     labelRead: 'Chave de leitura',
     labelOperator: 'Chave de operador',
