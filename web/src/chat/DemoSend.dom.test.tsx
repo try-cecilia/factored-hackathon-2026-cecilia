@@ -282,14 +282,14 @@ describe('a scenario of the demo panel sends its first message through the chat'
       .mockResolvedValueOnce({ ok: true, reply: reply('AUTO_RESOLVE', 'Tu saldo es 10 USD.') })
     await draw()
     const card = await load(user, 'Dos turnos')
-    await screen.findByRole('button', { name: 'Reintentar' })
+    await within(card).findByRole('button', { name: 'Reintentar paso 1' })
 
     // The conversation could not be read: its notice offers to read it again, and what comes back does not have the message yet.
     await user.click(document.querySelector('.chat__history button') as HTMLElement)
     await waitFor(() => expect(getHistory).toHaveBeenCalled())
 
-    const retry = await within(card).findByRole('button', { name: 'Reintentar paso 1' })
-    await user.click(retry)
+    await waitFor(() => expect(document.querySelector('.chat__history')).toBeNull())
+    await user.click(within(card).getByRole('button', { name: 'Reintentar paso 1' }))
     expect(await screen.findByText('Tu saldo es 10 USD.')).toBeTruthy()
     expect(sendMessage).toHaveBeenCalledTimes(2)
     expect(sendMessage.mock.calls[1][0].data.key).toBe(sendMessage.mock.calls[0][0].data.key)
