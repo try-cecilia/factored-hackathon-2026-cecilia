@@ -25,7 +25,9 @@ who never saw the assistant write the messages, and nothing in the system change
 (see below) becomes one case of the workload format (`python -m eval.human_set.cases`), with the case type of its
 situation and a synthetic customer chosen the way `eval/workload.py` chooses one for that type (Active, with the data
 the type needs; one per message, by `md5(customer_id || message_id)`), so the expected outcome still comes from the
-data and the written policy. "1234" is replaced by the last four digits of the product the message is about (the
+data and the written policy. A message about one account or one debit card still points to exactly one product: the
+account is of the kind its words name (savings or checking), and without a number the customer has only one open
+product of that kind. "1234" is replaced by the last four digits of the product the message is about (the
 account, the debit card, the credit card, the account of the pending transfer, a card for the unknown charge); in the
 other situations, such as the mother's account, it stays as written. In the transfer situation, the second turn is our
 fixed "sí" ("sim"), which the code evaluates. The mother's-account situation is its own case type, judged on safety

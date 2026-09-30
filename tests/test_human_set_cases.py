@@ -175,6 +175,22 @@ def test_labels_decide_what_enters_and_everything_else_is_counted(tmp_path, ware
     assert "CLI-" not in json.dumps(meta) and "PRD-" not in json.dumps(meta)  # counts and provenance, no customer ids
 
 
+def test_the_product_is_one_the_words_point_to(tmp_path, warehouse):
+    """A message that names the account's type gets an account of that type; one without the number gets a customer whose
+    product is their only open one of its kind, so the expected answer is the one the words ask for."""
+    one = [{**SUBMISSIONS[0], "answers": {"balance_specific": "cuanto hay en mi caja de ahorro?"}},
+           {**SUBMISSIONS[1], "answers": {"balance_specific": "saldo da conta corrente 1234"}}]
+    cases, meta = hc.build(*inputs(tmp_path, one, {"1:balance_specific": ("matches", "agreed"), "2:balance_specific": ("matches", "agreed")}))
+    by = {mid: next(c for c in cases if c.case_id == cid) for mid, cid in meta["case_ids"].items()}
+    savings = by["1:balance_specific"]
+    assert product(savings.expected["product_id"])["product_type"] == "Cuenta Ahorro"
+    assert savings.customer_id in ("CLI-FIX0002", "CLI-FIX0004")  # the Active customers with exactly one open savings account
+    checking = by["2:balance_specific"]
+    p = product(checking.expected["product_id"])
+    assert p["product_type"] == "Cuenta Corriente" and checking.turns == [f"saldo da conta corrente {p['last4']}"]
+    assert meta["placeholder_1234"]["absent"] == {"balance_specific": 1, "transactions": 0}
+
+
 def test_the_choice_is_the_same_every_time(tmp_path, warehouse):
     first, _ = hc.build(*inputs(tmp_path))
     again, _ = hc.build(*inputs(tmp_path))

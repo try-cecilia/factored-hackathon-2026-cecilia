@@ -9,6 +9,8 @@ it for the situation's case type, so the expected outcome still comes from the w
 - **Customer.** An Active customer whose data the case type needs (a debit card with movements, one credit card with its
   payment data, one pending transfer the assistant may trace without a person...), picked deterministically per message
   (`ORDER BY md5(customer_id || message_id)`). A situation that no customer fits fails loudly instead of losing messages.
+  A message about one account or one debit card must point to it: the account is of the kind its words name (savings
+  or checking), and a message that wrote no number gets a customer whose product is their only open one of that kind.
 - **"1234".** The form asks people to write 1234 wherever an account or card number goes. In the situations about one
   product (an account, the debit card, the credit card, the traced transfer's account, the card of the unknown charge)
   it becomes that product's last four digits, however it was spaced; elsewhere, as in "my mother's account 1234", it
@@ -34,7 +36,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from agent.tools import account_tools
-from eval import workload
+from eval import leakage, workload
 from eval.human_set.classifier_eval import FINAL, RAW, read_final, read_messages
 from eval.workload import Case
 
@@ -44,7 +46,10 @@ CATEGORY = {**workload.CATEGORY, "family_account": "foreign_account_request"}
 CONFIRM = {"es": "sí", "pt": "sim"}  # our fixed answer to the proposed trace, which the code evaluates, not the model
 # "1234" however it is spaced or split ("1 2 3 4", "12-34"), but not inside a longer number.
 PLACEHOLDER = re.compile(r"(?<!\d)1[\s.-]{0,2}2[\s.-]{0,2}3[\s.-]{0,2}4(?!\d)")
-SHOWS_1234 = ("balance_specific", "transactions")  # the situations whose text on the form carries the number
+# The situations about one product the person has to name (the form shows its number), the kinds of product each is
+# about, and the words that narrow an account to one kind (matched without case or accents).
+NAMED = {"balance_specific": ("Cuenta Ahorro", "Cuenta Corriente"), "transactions": ("Tarjeta Débito",)}
+KIND_WORDS = {"ahorro": "Cuenta Ahorro", "poupanca": "Cuenta Ahorro", "corriente": "Cuenta Corriente", "corrente": "Cuenta Corriente"}
 
 OPEN = "p.product_status <> 'Closed'"
 UNIQUE_LAST4 = ("(SELECT count(*) FROM products q WHERE q.customer_id = p.customer_id "
@@ -119,11 +124,24 @@ def _trace_condition() -> str:
             f"(SELECT count(*) {pend} AND t.transaction_type = 'Transfer' AND NOT COALESCE({needs_review}, FALSE)) = 1")
 
 
+def _named(situation: str, message: str) -> str:
+    """For a message about one product it has to name: the product is of the kind its words say (savings or checking),
+    and when it carries no number, the customer's only open product of that kind, so the words point to exactly one."""
+    words = leakage.normalize(message)
+    kinds = [k for w, k in KIND_WORDS.items() if w in words and k in NAMED[situation]] or list(NAMED[situation])
+    among = "(" + ", ".join(f"'{k}'" for k in kinds) + ")"
+    only = ("" if PLACEHOLDER.search(message) else f" AND (SELECT count(*) FROM products q WHERE q.customer_id = p.customer_id "
+                                                  f"AND q.product_status <> 'Closed' AND q.product_type IN {among}) = 1")
+    return f" AND p.product_type IN {among}{only}"
+
+
 def _facts(m: dict) -> tuple[str, dict, dict]:
     """(case type, the customer, what the case is about: product, last four digits, movement, country)."""
     if m["situation"] not in SITUATIONS:
         raise ValueError(f"{m['message_id']}: {m['situation']!r} is not a situation of the form")
     template, has, about = SITUATIONS[m["situation"]]
+    if m["situation"] in NAMED:
+        about += _named(m["situation"], m["message"])
     where = _trace_condition() if template == "trace_confirm" else has
     if about:
         where += f" AND EXISTS (SELECT 1 FROM products p WHERE p.customer_id = c.customer_id AND {about})"
@@ -196,7 +214,7 @@ def build(raw: Path, labels: Path) -> tuple[list[Case], dict]:
         "by_final_label": {label: n for label in ("matches", "ambiguous") if (n := sum(lab == label for _, lab in kept))},
         "dropped": dict(sorted(dropped.items())),
         "placeholder_1234": {"replaced": replaced, "absent": {s: sum(m["situation"] == s and not PLACEHOLDER.search(m["message"])
-                                                                     for m, _ in kept) for s in SHOWS_1234}},
+                                                                     for m, _ in kept) for s in NAMED}},
         "near_identical_to_training": sum(c.turns[0] in leaks for c in cases),
         "case_ids": {m["message_id"]: c.case_id for (m, _), c in zip(kept, cases)},
         "labels": {m["message_id"]: label for m, label in kept},
