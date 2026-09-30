@@ -23,6 +23,7 @@ function Probe() {
     <div>
       <button type="button" onClick={() => void c.send('hola')}>send</button>
       <button type="button" onClick={() => c.retry(c.entries.find((e) => e.role === 'user')?.id ?? 0)}>retry</button>
+      <button type="button" onClick={() => c.retry([...c.entries].reverse().find((e) => e.role === 'user')?.id ?? 0)}>retry-last</button>
       <button type="button" onClick={() => void c.reload()}>reload</button>
       <button type="button" onClick={() => void c.refreshCase(c.cases[0]?.ref.ticketId ?? '')}>refresh-case</button>
       <output data-testid="ended">{String(c.ended)}</output>
@@ -152,6 +153,63 @@ describe('ConversationProvider', () => {
     await user.click(screen.getByText('retry'))
     await waitFor(() => expect(items('assistant')).toHaveLength(1))
     expect(server.sendMessage.mock.calls[1][0].data.key).toBe(server.sendMessage.mock.calls[0][0].data.key)
+  })
+
+  describe('two messages with the same text: what the history has does not say which one it is', () => {
+    const yes: HistoryResult = { ok: true, cases: [], turns: [{ role: 'user', text: 'hola', at: 1 }, { role: 'assistant', reply: reply(), at: 2 }] }
+
+    it('a confirmed message and a later one that was not answered: a history with one of them keeps the later one, with its key', async () => {
+      server.sendMessage
+        .mockResolvedValueOnce(ok())
+        .mockResolvedValueOnce({ ok: false, failure: 'timeout' })
+        .mockResolvedValueOnce(ok(reply({ response_text: 'Otra vez.' })))
+      server.getHistory.mockResolvedValue(yes)
+      mount()
+      const user = userEvent.setup()
+      await user.click(screen.getByText('send'))
+      await waitFor(() => expect(items('assistant')).toHaveLength(1))
+      await user.click(screen.getByText('send'))
+      await waitFor(() => expect(items('user')[1].getAttribute('data-delivery')).toBe('uncertain'))
+
+      await user.click(screen.getByText('reload'))
+      await waitFor(() => expect(items('note')).toHaveLength(1))
+      expect(items('user').map((e) => e.getAttribute('data-delivery'))).toEqual(['sent', 'uncertain'])
+
+      await user.click(screen.getByText('retry-last'))
+      await waitFor(() => expect(server.sendMessage).toHaveBeenCalledTimes(3))
+      expect(server.sendMessage.mock.calls[2][0].data.key).toBe(server.sendMessage.mock.calls[1][0].data.key)
+      expect(server.sendMessage.mock.calls[2][0].data.key).not.toBe(server.sendMessage.mock.calls[0][0].data.key)
+    })
+
+    it('two that were not answered and a history with one of them: neither key is dropped', async () => {
+      server.sendMessage
+        .mockResolvedValueOnce({ ok: false, failure: 'timeout' })
+        .mockResolvedValueOnce({ ok: false, failure: 'timeout' })
+      server.getHistory.mockResolvedValue(yes)
+      mount()
+      const user = userEvent.setup()
+      await user.click(screen.getByText('send'))
+      await waitFor(() => expect(items('user')[0].getAttribute('data-delivery')).toBe('uncertain'))
+      await user.click(screen.getByText('send'))
+      await waitFor(() => expect(items('user')[1].getAttribute('data-delivery')).toBe('uncertain'))
+
+      await user.click(screen.getByText('reload'))
+      await waitFor(() => expect(items('note')).toHaveLength(1))
+      expect(items('user').map((e) => e.getAttribute('data-delivery'))).toEqual(['sent', 'uncertain', 'uncertain'])
+      expect(items('user').filter((e) => e.getAttribute('data-delivery') === 'uncertain')).toHaveLength(2)
+    })
+
+    it('one that was not answered and a history with two of the same text: it is in the history, and it goes', async () => {
+      server.sendMessage.mockResolvedValueOnce({ ok: false, failure: 'timeout' })
+      server.getHistory.mockResolvedValue({ ok: true, cases: [], turns: [...yes.turns, { role: 'user', text: 'hola', at: 3 }, { role: 'assistant', reply: reply(), at: 4 }] })
+      mount()
+      const user = userEvent.setup()
+      await user.click(screen.getByText('send'))
+      await waitFor(() => expect(items('user')[0].getAttribute('data-delivery')).toBe('uncertain'))
+      await user.click(screen.getByText('reload'))
+      await waitFor(() => expect(items('assistant')).toHaveLength(2))
+      expect(items('user').map((e) => e.getAttribute('data-delivery'))).toEqual(['sent', 'sent'])
+    })
   })
 
   it('a history that has the message takes its place: the local copy is not shown twice', async () => {
