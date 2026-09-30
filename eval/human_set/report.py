@@ -211,7 +211,7 @@ def _cell(value) -> str:
 
 
 def _drop(points: float) -> str:
-    return f"a drop of {points} points" if points > 0 else f"no drop ({-points} points above)"
+    return f"a drop of {points} points" if points > 0 else f"no drop, {-points} points above"
 
 
 def _range(model: dict, key: str) -> str:
@@ -227,8 +227,8 @@ def _gate_rows(g: dict, is_result: bool) -> list[str]:
         "G2": f"fraud recall {_pct(g['G2']['fraud_recall_lowest_run'])} in the lowest live run, keyword bot {_pct(g['G2']['fraud_recall_bot'])}; "
               f"false escalations {_pct(g['G2']['false_escalations_highest_run'])} in the highest run",
         "G3": f"lowest live run {fmt(g['G3']['live_lowest_run'])}; keyword bot {fmt(g['G3']['bot'])}: {g['G3']['wording']}",
-        "G4": (f"{_pct(g['G4']['human_live_sar_lowest_run'])} in the lowest live run: {_drop(g['G4']['drop_points'])} "
-               f"(run 1: {_drop(g['G4']['drop_points_run1'])})" if g["G4"]["drop_points"] is not None else "not computable"),
+        "G4": (f"{_pct(g['G4']['human_live_sar_lowest_run'])} in the lowest live run: {_drop(g['G4']['drop_points'])}; "
+               f"run 1: {_drop(g['G4']['drop_points_run1'])}" if g["G4"]["drop_points"] is not None else "not computable"),
     }
     rows = []
     for name, gate in g.items():
@@ -312,8 +312,8 @@ def to_markdown(r: dict) -> str:
             f"- **1234:** replaced by the last digits of the chosen customer's product in {placeholder.get('replaced', 0)} messages; "
             f"left as written where it is not the customer's product. Messages about one account or one debit card that wrote no "
             f"number: {_counts(placeholder.get('absent'))}.",
-            f"- **Leakage:** {s['near_identical_to_training']} messages are a training phrase of the classifier up to case, accents or "
-            "punctuation. They are kept (it is what people wrote) and declared.",
+            "- **Leakage:** messages that are a training phrase of the classifier up to case, accents or punctuation: "
+            f"{s['near_identical_to_training']}. They are kept (it is what people wrote) and declared.",
             "- **Customers:** synthetic records of the dataset (warehouse as of "
             f"{s['warehouse_as_of']}), one per message, chosen the way the generated workload chooses them for the message's case "
             "type; the expected outcome comes from their data and the written policy, never from the system.", "",
