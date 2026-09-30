@@ -202,3 +202,19 @@ def test_past_the_explicit_cap_the_response_says_how_many_pending_were_left_out(
 
 def test_without_pending_movements_nothing_is_left_out():
     assert context(file_ticket("CLI-FIX0001")).json()["pending_omitted"] == 0
+
+
+def test_with_freshness_enforced_a_warehouse_older_than_its_limit_is_unavailable_not_current(monkeypatch, caplog):
+    """The tools refuse stale data when FRESHNESS_ENFORCE=1; reading around them must keep that: the fixture's data is from 2024."""
+    ticket_id = file_ticket()
+    monkeypatch.setenv("FRESHNESS_ENFORCE", "1")
+    monkeypatch.setenv("FRESHNESS_SLO_HOURS", "36")
+    with caplog.at_level(logging.WARNING):
+        body = context(ticket_id).json()
+    assert body["warehouse"] == {"available": False, "as_of": None}
+    assert body["products"] == [] and body["movements"] == []
+    last = [e for e in main.default_audit_log.recent() if e.get("event") == "customer_context_read"][-1]
+    assert last["warehouse"] == "unavailable" and last["error_type"] == "DataUnavailable"
+    assert "exceeds freshness" not in json.dumps(last) + caplog.text  # the type only, not the message
+    monkeypatch.delenv("FRESHNESS_ENFORCE")
+    assert context(ticket_id).json()["warehouse"]["available"] is True

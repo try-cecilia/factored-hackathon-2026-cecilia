@@ -2,8 +2,8 @@
 
 Read-only and minimal: the products are the type, currency, status and the last four digits of the number (the database cuts it, so
 the number itself is never read), the movements are the customer's latest ones and the pending ones, and nothing carries a fraud score,
-a channel, a document or a contact. It reads the warehouse with the tools' own connection and freshness date (`account_tools._rows`,
-`data_as_of`) but not through the tools themselves: they write an exception's message into the audit log, which /admin/audit_log
+a channel, a document or a contact. It reads the warehouse with the tools' own connection, freshness date and freshness limit (`account_tools._rows`,
+`data_as_of`, `_check_freshness`) but not through the tools themselves: they write an exception's message into the audit log, which /admin/audit_log
 serves, and a message can quote a path, a query or a customer. The read is recorded here instead, as an audit event with the ticket,
 the outcome and, on a failure, the exception's type. The cases and traces come
 from the queue, the desk and the trace file, so they are there even when the warehouse is not: the warehouse's part is `warehouse`
@@ -59,6 +59,7 @@ def _warehouse(customer_id: str) -> tuple[list[dict] | None, list[dict] | None, 
     """(products, movements, data date, pending left out by the cap, None), or (None, None, None, 0, the exception's type) when the warehouse does not answer,
     whatever the reason. The exception is counted and logged by its type only: its message can quote a path, a query or a customer."""
     try:
+        account_tools._check_freshness()  # with FRESHNESS_ENFORCE=1 the tools refuse data older than the limit; so does this
         if not account_tools._rows("SELECT 1 FROM customers WHERE customer_id = ?", [customer_id]):
             raise LookupError("no such customer")
         products = account_tools._rows(_PRODUCTS, [customer_id])
