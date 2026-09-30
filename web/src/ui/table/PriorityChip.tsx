@@ -1,10 +1,10 @@
 import type { ReactNode } from 'react'
 import { useT } from '../../i18n/context'
 import './PriorityChip.css'
-import type { Priority, StatusTone } from './priority'
+import type { KnownPriority, StatusTone } from './priority'
 
-/** Ticket priority. Critical is the only solid chip; amber is Medium's tone and nothing else here. */
-export function PriorityChip({ priority, children, className }: { priority: Priority; children?: ReactNode; className?: string }) {
+/** Ticket priority. Critical is the only solid chip; amber is Medium's tone and nothing else here. `unknown` is a case that has none. */
+export function PriorityChip({ priority, children, className }: { priority: KnownPriority; children?: ReactNode; className?: string }) {
   const t = useT()
   return (
     <span className={['ui-priority', `ui-priority--${priority}`, className].filter(Boolean).join(' ')}>

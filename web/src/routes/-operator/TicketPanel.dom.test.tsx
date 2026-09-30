@@ -199,3 +199,132 @@ describe('portuguese', () => {
     expect(screen.getByText('Solicitação')).toBeTruthy()
   })
 })
+
+// What the operator reads of the assistant's own decision: written from the codes of the case, in the operator's language, and the
+// English text of the API wherever the case has no code (or one this console does not know).
+describe('the texts of the case', () => {
+  const english = {
+    reason: 'The customer confirmed a trace, but the movement needs a person\'s approval (older_than_review_threshold).',
+    policy_rule: 'action:trace_review',
+    open_questions: ['Approve or reject the trace: older_than_review_threshold.', 'Could not gather recent activity automatically: IO Error: Cannot open file "C:/srv/data/warehouse/bank.duckdb"'],
+    suggested_next_step: 'Review the movement (see pending_action.review_reason) and approve or reject the trace the customer asked for.',
+    verified_facts: [{ tool: 'get_payment_status', result: { status: 'pending' } }],
+    evidence: [{ type: 'denied_request', id: 'P-9', detail: { tool: 'get_account_summary' } }],
+  }
+  const codes: Pick<Ticket, 'reason_code' | 'open_question_codes' | 'next_step_code'> = {
+    reason_code: { code: 'trace_review', params: { review_reason: 'older_than_review_threshold' } },
+    open_question_codes: [{ code: 'decide_trace', params: { review_reason: 'older_than_review_threshold' } }, { code: 'evidence_failed', params: { error_type: 'OperationalError' } }],
+    next_step_code: 'trace_review',
+  }
+  const view = { canAct: true, operator: 'ana.ruiz' }
+  const panel = (t: Ticket, locale: 'es' | 'pt') =>
+    renderWithI18n(<TicketPanel ticket={t} view={view} act={vi.fn()} reload={vi.fn(async () => true)} />, locale)
+  const block = (heading: string) => screen.getByRole('heading', { name: heading }).closest('section') as HTMLElement
+
+  it('in Spanish, from the codes', () => {
+    panel(ticket('open', { ...english, ...codes }), 'es')
+    expect(screen.getByText(/^El cliente confirmó un rastreo, pero el movimiento necesita la aprobación de una persona \(Pendiente desde hace más tiempo/)).toBeTruthy()
+    expect(screen.getByText(/regla Rastreo: lo decide una persona$/)).toBeTruthy()
+    const questions = within(block('Preguntas abiertas')).getAllByRole('listitem').map((li) => li.textContent)
+    expect(questions).toEqual(['Aprobar o rechazar el rastreo: Pendiente desde hace más tiempo del que admite un rastreo simple.', 'No se pudo reunir la actividad reciente automáticamente (OperationalError).'])
+    expect(within(block('Próximo paso sugerido')).getByText(/^Revisar el movimiento \(ver el motivo de revisión\)/)).toBeTruthy()
+    expect(screen.queryByText(/Approve or reject|Review the movement|Could not gather/)).toBeNull()
+  })
+
+  it('in Portuguese, from the codes', () => {
+    panel(ticket('open', { ...english, ...codes }), 'pt')
+    expect(screen.getByText(/^O cliente confirmou um rastreio, mas a movimentação precisa da aprovação de uma pessoa/)).toBeTruthy()
+    const questions = within(block('Perguntas em aberto')).getAllByRole('listitem').map((li) => li.textContent)
+    expect(questions).toEqual(['Aprovar ou rejeitar o rastreio: Pendente há mais tempo do que um rastreio simples admite.', 'Não foi possível reunir a atividade recente automaticamente (OperationalError).'])
+    expect(within(block('Próximo passo sugerido')).getByText(/^Revisar a movimentação/)).toBeTruthy()
+  })
+
+  // What a lookup raised is English and can carry ids and paths: the code carries the field or the type of error, so the operator
+  // reads one sentence in their language, and the message stays in the English fallback (which the panel does not show over a code).
+  const rawMessage = 'unexpected failure in get_account_summary: OperationalError: IO Error: Cannot open file "C:/srv/data/warehouse/bank.duckdb"'
+  const failed = {
+    reason: `Tool failure: ${rawMessage}`,
+    open_questions: ['A lookup failed; answer requires a manual check.'],
+    suggested_next_step: 'Answer manually from the core system and report the lookup that failed.',
+    reason_code: { code: 'tool_failure', params: { error_type: 'ToolError' } },
+    open_question_codes: [{ code: 'manual_check', params: {} }],
+    next_step_code: 'tool_failure',
+  }
+  const missing = {
+    reason: 'Data needed for a verified answer is unavailable: balance missing for product PRD-AB12CD34EF56',
+    open_questions: ["Look up 'current_balance' in the core system."],
+    suggested_next_step: 'Look up the missing data in the core system and answer the customer.',
+    reason_code: { code: 'data_unavailable', params: { field: 'current_balance' } },
+    open_question_codes: [{ code: 'lookup_field', params: { field: 'current_balance' } }],
+    next_step_code: 'data_unavailable',
+  }
+  it.each([
+    ['es', failed, 'Falló una consulta (ToolError): hace falta una verificación manual.'],
+    ['pt', failed, 'Falhou uma consulta (ToolError): é preciso uma verificação manual.'],
+    ['es', missing, 'Falta un dato necesario para responder con verificación: current_balance.'],
+    ['pt', missing, 'Falta um dado necessário para responder com verificação: current_balance.'],
+  ] as const)('a lookup that failed reads as one sentence in %s, without the English message (%#)', (locale, texts, sentence) => {
+    panel(ticket('open', texts), locale)
+    expect(screen.getByText(sentence, { exact: false })).toBeTruthy() // the reason shares its line with the rule
+    const page = document.body.textContent ?? ''
+    for (const raw of ['PRD-AB12CD34EF56', 'bank.duckdb', 'C:/srv', 'balance missing', 'Cannot open file', 'Tool failure', 'Data needed']) expect(page).not.toContain(raw)
+  })
+
+  it('a missing data with no field named reads without a placeholder', () => {
+    const unspecified = { ...missing, reason_code: { code: 'data_unavailable_unspecified', params: {} } }
+    panel(ticket('open', unspecified), 'es')
+    expect(screen.getByText('Falta un dato necesario para responder con verificación.', { exact: false })).toBeTruthy()
+    expect(document.body.textContent).not.toContain('balance missing')
+  })
+
+  it('the evidence type, the keys of the facts and the review reason are written too', () => {
+    panel(ticket('open', { ...english, ...codes }), 'es')
+    expect(screen.getByRole('heading', { name: 'Pedido denegado · P-9' })).toBeTruthy()
+    expect(within(block('Hechos verificados')).getByText(/^Herramienta: get_payment_status · Resultado: /)).toBeTruthy()
+    expect(within(screen.getByRole('region', { name: 'Rastrear movimiento' })).getByText('Pendiente desde hace más tiempo del que admite un rastreo simple').getAttribute('title')).toBe('older_than_review_threshold')
+  })
+
+  it.each(['es', 'pt'] as const)('a case filed before the codes shows the English text as it came (%s)', (locale) => {
+    panel(ticket('open', english), locale)
+    expect(screen.getByText(english.reason, { exact: false })).toBeTruthy()
+    for (const question of english.open_questions) expect(screen.getByText(question)).toBeTruthy()
+    expect(screen.getByText(english.suggested_next_step)).toBeTruthy()
+  })
+
+  it('a code the console does not know shows the English text, question by question', () => {
+    const odd: typeof codes = { reason_code: { code: 'from_the_future' }, open_question_codes: [null, { code: 'also_new', params: {} }], next_step_code: 'nobody_knows_me' }
+    panel(ticket('open', { ...english, ...odd }), 'es')
+    expect(screen.getByText(english.reason, { exact: false })).toBeTruthy()
+    for (const question of english.open_questions) expect(screen.getByText(question)).toBeTruthy()
+    expect(screen.getByText(english.suggested_next_step)).toBeTruthy()
+  })
+
+  it('the summary the operator copies is in their language too', async () => {
+    const user = userEvent.setup() // installs its own clipboard, which the panel writes to
+    panel(ticket('claimed', { ...english, ...codes }, { operator: 'ana.ruiz', version: 1 }), 'pt')
+    await user.click(screen.getByRole('button', { name: /Copiar resumo/ }))
+    const summary = await navigator.clipboard.readText()
+    expect(summary).toContain('Motivo: O cliente confirmou um rastreio')
+    expect(summary).toContain('Próximo passo: Revisar a movimentação')
+  })
+})
+
+// A case that arrives without a priority or a language is drawn, and says so: the header does not break and does not invent them.
+describe('a case without priority or language', () => {
+  it.each([['es', 'Desconocida', 'Desconocido'], ['pt', 'Desconhecida', 'Desconhecido']] as const)('is drawn and marked (%s)', (locale, priority, language) => {
+    const incomplete = ticket('open', { priority: undefined, language: undefined })
+    renderWithI18n(<TicketPanel ticket={incomplete} view={{ canAct: true, operator: 'ana.ruiz' }} act={vi.fn()} reload={vi.fn(async () => true)} />, locale)
+    expect(screen.getByText(priority).className).toContain('ui-priority--unknown')
+    expect(screen.getByText(new RegExp(`MX · ${language}`))).toBeTruthy()
+    expect(screen.getByText(incomplete.request)).toBeTruthy()
+  })
+
+  it('the summary does not print "undefined"', async () => {
+    const user = userEvent.setup()
+    renderWithI18n(<TicketPanel ticket={ticket('claimed', { priority: null }, { operator: 'ana.ruiz', version: 1 })} view={{ canAct: true, operator: 'ana.ruiz' }} act={vi.fn()} reload={vi.fn(async () => true)} />)
+    await user.click(screen.getByRole('button', { name: /Copiar resumen/ }))
+    const summary = await navigator.clipboard.readText()
+    expect(summary).toContain('Prioridad: Desconocida')
+    expect(summary).not.toContain('undefined')
+  })
+})

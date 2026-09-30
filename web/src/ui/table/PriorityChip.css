@@ -6,6 +6,7 @@
 .ui-priority--critical { background: var(--color-danger); color: var(--color-paper); }
 .ui-priority--high { background: color-mix(in srgb, var(--color-danger) 12%, transparent); color: var(--color-danger); }
 .ui-priority--medium { background: color-mix(in srgb, var(--color-caution) 24%, transparent); color: var(--color-warning); }
+.ui-priority--unknown { background: color-mix(in srgb, var(--color-ink) 4%, transparent); color: var(--color-ink-70); font-style: italic; }
 .ui-priority--low { background: color-mix(in srgb, var(--color-ink) 6%, transparent); color: var(--color-ink-70); }
 
 .ui-status { display: flex; align-items: center; gap: 6px; }
