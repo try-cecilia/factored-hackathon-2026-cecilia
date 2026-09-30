@@ -125,7 +125,7 @@ eval:             ## baseline vs proposed on the test workload (offline, scripte
 eval-adversarial: ## same workload with a deliberately bad model: safety must not depend on the model
 	$(PY) -m eval.run_system_eval --split test --system proposed --llm adversarial
 
-eval-ablation:    ## what each safety layer buys: the same models with the layers taken off one by one -> eval/reports/ABLATION.md
+eval-ablation:    ## what each group of safety controls buys: the same models with the groups taken off, cumulatively -> eval/reports/ABLATION.md
 	$(PY) -m eval.ablation
 
 check-readme:    ## the README's headline figures against the generated reports (fails on a mismatch)

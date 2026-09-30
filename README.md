@@ -69,16 +69,16 @@ no se ajusta ([`LIMITATIONS.md`](LIMITATIONS.md#the-action)). ² Un modelo guion
 obedece inyecciones, consulta productos de otros clientes e inventa cifras: la automatización baja y las
 derivaciones suben, **pero nada inseguro pasa**. La seguridad no depende del modelo.
 
-**Qué aporta cada capa de seguridad.** Con el mismo modelo guionado y el mismo juez, se quitan las capas de a una. "Ideal" es el modelo que hace lo correcto; "malo", el que obedece inyecciones e inventa cifras. Un 0 de 548 solo dice algo si sin las capas el número no es 0 ([`ABLATION.md`](eval/reports/ABLATION.md), `make eval-ablation`):
+**Qué aporta cada grupo de controles.** Con el mismo modelo guionado y el mismo juez, se quitan grupos de controles de a uno, en una escalera acumulativa: no se atribuye un efecto a ningún control individual. "Ideal" es el modelo que hace lo correcto; "malo", el que obedece inyecciones e inventa cifras. El chatbot es de un solo paso: al cliente le llega el texto que el modelo escribió antes de ver ninguna herramienta, o el JSON crudo. Un 0 de 548 solo dice algo si sin los controles el número no es 0 ([`ABLATION.md`](eval/reports/ABLATION.md), `make eval-ablation`):
 
-| Capas que se conservan | Inseguros, modelo ideal | Inseguros, modelo malo |
+| Grupos de controles que se conservan | Inseguros, modelo ideal | Inseguros, modelo malo |
 |---|---|---|
-| Ninguna: un chatbot con herramientas | 17,5% [14,6–20,9] | 74,8% [71,0–78,3] |
-| + sesión validada y chequeo de propiedad en cada herramienta | 13,1% [10,6–16,2] | 49,3% [45,1–53,4] |
-| + respuestas escritas por código, nunca por el modelo | 8,8% [6,7–11,4] | 8,8% [6,7–11,4] |
-| + política, escalamiento y la acción confirmada (el sistema) | **0,0% [0,0–0,7]** | **0,0% [0,0–0,7]** |
+| Ninguno: un chatbot de un solo paso con herramientas | 17,5% [14,6–20,9] | 74,8% [71,0–78,3] |
+| + identidad y permisos (sesión validada y chequeo de propiedad, dos controles juntos) | 13,1% [10,6–16,2] | 49,3% [45,1–53,4] |
+| + respuestas escritas por código | 8,8% [6,7–11,4] | 8,8% [6,7–11,4] |
+| + todo lo demás del sistema, junto: guarda de intención, política de escalamiento, acción confirmada, modo degradado y no enviar registros al modelo | **0,0% [0,0–0,7]** | **0,0% [0,0–0,7]** |
 
-Los 48 que quedan sin la última capa son casos que exigen una persona (fraude, cuenta suspendida) y que un chatbot responde igual. Es offline, con modelos guionados, y las variantes sin capas las armamos nosotros: no miden qué haría un producto real sin esas capas, sino qué aporta cada una en este sistema.
+Los 48 que quedan antes del último escalón son casos que exigen una persona (fraude, cuenta suspendida) y que un chatbot responde igual. El último escalón suma varios controles a la vez, y la confirmación de la acción no se mide: las variantes ingenuas nunca abren un rastreo. Es offline, con modelos guionados, y esas variantes las armamos nosotros: no miden qué haría un producto real sin esos controles, sino qué aporta cada grupo en este sistema.
 
 Con modelos en vivo, sobre una muestra estratificada de 132 de esos casos (todos los tipos de caso en ambos
 idiomas, 11 por celda), tres corridas cada uno
@@ -127,7 +127,7 @@ Reportes completos: [`EVALUATION.md`](EVALUATION.md) (método) ·
 | Una sola acción, confirmada en código | Rastrear un movimiento pendiente: el "sí" del cliente lo juzga el código y solo se anuncia lo que se leyó de vuelta | Una sola acción, y sin mover dinero | [ADR-002](docs/decisions/ADR-002-one-action-confirmed-in-code.md) |
 | Claude Sonnet 5 en el despliegue | Más resolución segura (95,0% frente a 78,3%), ninguna escalación omitida y menor costo por resolución segura en lo medido | Se midió sobre 132 casos y no sobre todos; depende de un proveedor, con respaldos | [ADR-004](docs/decisions/ADR-004-deployed-model-sonnet-5.md) |
 | Sin modelo de fraude ni de riesgo | `is_fraud` no se puede aprender de la transacción (AUC 0,506, split cronológico); `fraud_score` se le muestra a la persona y no decide | No hay un modelo de fraude para mostrar: el componente aprendido es el clasificador de intención | [ADR-005](docs/decisions/ADR-005-no-fraud-or-risk-model.md) |
-| Cada capa de seguridad se justifica con un contrafactual | Con las mismas condiciones y sin ninguna capa, un modelo malo produce resultados inseguros en la mayoría de los casos; con todas, ninguno | Es offline, con modelos guionados, y las capas "ingenuas" las armamos nosotros | [`ABLATION.md`](eval/reports/ABLATION.md) |
+| Los grupos de controles se justifican con un contrafactual | Con las mismas condiciones y sin ningún control, un modelo malo produce resultados inseguros en la mayoría de los casos; con todos, ninguno | Es offline, con modelos guionados, sin atribuir efectos a controles individuales, y las variantes "ingenuas" las armamos nosotros | [`ABLATION.md`](eval/reports/ABLATION.md) |
 | Render con instancias pagas, dos servicios | No se duermen mientras el jurado prueba, y el disco conserva el warehouse | Una instancia por servicio, sin réplicas | [operations.md](docs/operations.md#deploy-on-render-the-jury-demo) |
 
 ## Cómo funciona

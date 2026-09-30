@@ -1,22 +1,29 @@
-"""Ablation: what each safety layer buys, measured with the same models and the same judge.
+"""Ablation: what each group of safety controls buys, measured with the same models and the same judge.
 
     python -m eval.ablation [--split test] [--limit N]
 
 The system's zero unsafe outcomes mean little next to a keyword baseline that also has zero. The counterfactual is
-a model wired to the tools with the safety layers taken off one by one. Each rung adds a layer to the one before:
+a model wired to the tools with groups of safety controls taken off. The ladder is cumulative: each rung keeps the
+controls of the one below and adds a group, and no effect is attributed to any single control inside a group.
 
-    naive-plain         the model's text goes to the customer, tools trust whatever product id the model passes,
-                        and no session is checked (a plain tool-calling chatbot)
-    naive-identity      + the session is validated and every tool checks that the product is the customer's
-    naive-code-replies  + the model's text never reaches the customer: the reply is rendered from verified facts
-    proposed            + the intent guard, the escalation policy, the one confirmed action and the degraded mode
+    naive-plain         a single-step chatbot: the model's text, written before it sees any tool result, goes to the
+                        customer (or the raw tool JSON when it wrote none); tools trust whatever product id the model
+                        passes; no session is checked
+    naive-identity      + identity and permissions: the session is validated AND every tool checks the product is the
+                        customer's (two controls in one rung)
+    naive-code-replies  + replies written by code: the model's text never reaches the customer, the reply is rendered
+                        from verified facts
+    proposed            + everything else the real system has, together: the intent guard, the escalation policy, the one
+                        confirmed action, the degraded mode and never sending a customer record to the model
                         (the real system, unchanged)
 
 Every rung runs twice: with the ideal scripted model and with the deliberately bad one (obeys injections, asks for
-other customers' products, invents figures). A layer that matters shows up as unsafe outcomes that disappear at its rung.
+other customers' products, invents figures). A group that matters shows up as unsafe outcomes that disappear at its rung.
 
-What this does not measure: the naive rungs never open a trace (the one action is a property of the real system), and
-their "reply" when the model writes no text is the raw tool result, which is what a chatbot that relays tool output shows.
+What this does not measure: the naive rungs never open a trace, so the confirmation of the one action is not measured
+at all (the last rung's gain comes from the other controls in its group); the chatbot is single-step, and the second
+model call it makes exists only to record which data would reach the model, its answer is discarded; and its "reply" when
+the model writes no text is the raw tool result.
 `text_outside_the_templates` is dropped from the naive rungs: their replies are free text by construction, so counting it
 would only restate the design. Everything else is the same judge as `eval/run_system_eval.py`.
 """
@@ -65,8 +72,9 @@ def _plain(value):
 
 
 class NaiveAgent:
-    """A model wired to the read tools, with only the layers its rung names. One call for the tools, one to hand the
-    results back to the model (which is what a tool loop does, and what the judge's records-sent check reads)."""
+    """A single-step chatbot wired to the read tools, with only the controls its rung names. The customer gets the text the
+    model wrote before it saw any tool result (or the raw tool JSON). The second model call, with the tool results, is made
+    only so that the judge's records-sent check sees what would reach the model: its answer is discarded."""
 
     def __init__(self, store, llm, rung: str, customer_id: str, language: str):
         self.store, self.llm, self.customer_id, self.language = store, llm, customer_id, language
@@ -106,7 +114,7 @@ class NaiveAgent:
             except Exception as exc:  # noqa: BLE001 - a tool failure is an answer for the chatbot, not a crash
                 action.update({"success": False, "error_type": type(exc).__name__, "error": str(exc)})
             actions.append(action)
-        if facts:  # the tool loop: the model reads the results before it answers
+        if facts:  # measurement only: what the model would be sent with the results; its answer is not used
             self.llm.chat(self.history + [{"role": "tool", "content": _plain([f["result"] for f in facts])}], None, 0.0)
         if self.layers["code_replies"]:
             reply = render.render_answer(facts, lang, catalog) if facts else FAILED[lang]
@@ -166,6 +174,7 @@ def without_structural(row: dict) -> dict:
 
 def main() -> None:
     from eval import run_system_eval as rse
+    from eval.fingerprint import policy_fingerprint
     from eval.stats import fmt
     from eval.workload import load
 
@@ -189,10 +198,13 @@ def main() -> None:
         "# Ablation: what each safety layer buys (auto-generated)", "",
         f"Generated by `python -m eval.ablation` at {datetime.now(timezone.utc).isoformat(timespec='seconds')} on the **{a.split}** workload "
         f"({len(cases)} cases), with the same judge as `SYSTEM_EVAL.md`. **Offline**: every rung runs a scripted model, ideal or deliberately bad. "
-        "Method and what it does not measure: the docstring of `eval/ablation.py`.", "",
-        "| Rung (layers kept) | Model | Unsafe outcomes | Records sent to the model | Safe automated resolution |", "|---|---|---|---|---|"]
-    label = {"naive-plain": "plain chatbot (no layer)", "naive-identity": "+ session and ownership check",
-             "naive-code-replies": "+ replies written by code", "proposed": "+ policy, escalation, the one confirmed action (the system)"}
+        "A cumulative ladder by **groups of controls**: no effect is attributed to a single control, and the chatbot is single-step (the model's text, written "
+        "before it sees any tool result, or the raw tool JSON). The naive variants never open a trace, so the confirmation of the one action is not measured. "
+        "Method and limits: the docstring of `eval/ablation.py`.", "",
+        "| Rung (groups of controls kept) | Model | Unsafe outcomes | Records sent to the model | Safe automated resolution |", "|---|---|---|---|---|"]
+    label = {"naive-plain": "single-step chatbot (no control)", "naive-identity": "+ identity and permissions (session and ownership)",
+             "naive-code-replies": "+ replies written by code",
+             "proposed": "the full system (adds intent guard, escalation, confirmed action, degraded mode, no records to the model)"}
     for rung in [*RUNGS, "proposed"]:
         for mode in ("scripted", "adversarial"):
             m = out[(rung, mode)]
@@ -205,8 +217,12 @@ def main() -> None:
             lines.append(f"| {label[rung]} | {'ideal' if mode == 'scripted' else 'bad'} | " + " | ".join(str(by.get(k, 0)) for k in kinds) + " |")
     md = "\n".join(lines) + "\n"
     Path("eval/reports").mkdir(parents=True, exist_ok=True)
-    Path("eval/reports/ABLATION.md").write_text(md, encoding="utf-8")
-    Path("eval/reports/ablation.json").write_text(json.dumps({f"{r}/{m}": {k: v[k] for k in HEADLINE} for (r, m), v in out.items()}, indent=2), encoding="utf-8")
+    scope = "" if a.split == "test" and not a.limit else f"_{a.split}" + (f"_limit{a.limit}" if a.limit else "")  # a partial run never overwrites the report
+    Path(f"eval/reports/ABLATION{scope}.md").write_text(md, encoding="utf-8")
+    meta = {"policy_sha256": policy_fingerprint(), "split": a.split, "limit": a.limit, "n_cases": len(cases),
+            "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}  # what the numbers were measured on, and on which code
+    Path(f"eval/reports/ablation{scope}.json").write_text(
+        json.dumps({"meta": meta, "results": {f"{r}/{m}": {k: v[k] for k in HEADLINE} for (r, m), v in out.items()}}, indent=2), encoding="utf-8")
     sys.stdout.reconfigure(encoding="utf-8")
     print(md)
 

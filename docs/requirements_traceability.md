@@ -72,7 +72,7 @@ sintéticos; nada de esto es una medición en producción.
 | Versiones de modelo y prompt, y variabilidad entre corridas | ✅ | `prompt_sha256`, versión de prompt, tres corridas con modelos en vivo | [`SYSTEM_EVAL_LIVE.md`](../eval/reports/SYSTEM_EVAL_LIVE.md) |
 | Juez de respuestas con rúbrica validada | ✅ | No se usa un LLM como juez: el juez reconstruye determinísticamente las respuestas que el sistema podía enviar | [LIMITATIONS](../LIMITATIONS.md), ítem 5 de "Not yet measured" |
 | Modelos en vivo sobre toda la carga | 🟡 | Solo una muestra estratificada de 132 de 548 casos; las cotas de seguridad son ≈2,3%, no cero | [LIMITATIONS](../LIMITATIONS.md#not-yet-measured) |
-| Qué aporta cada capa de seguridad (contrafactual) | ✅ | Los mismos modelos, ideal y malo, con las capas quitadas de a una: sin capas, el modelo malo produce resultados inseguros en la mayoría de los casos; con todas, 0 | `make eval-ablation` → [`ABLATION.md`](../eval/reports/ABLATION.md) |
+| Qué aporta cada grupo de controles de seguridad (contrafactual) | ✅ | Los mismos modelos, ideal y malo, con grupos de controles quitados en una escalera acumulativa, sin atribuir efectos individuales: sin controles, el modelo malo produce resultados inseguros en la mayoría de los casos; con todos, 0. Las variantes ingenuas no abren rastreos, así que la confirmación de la acción no se mide | `make eval-ablation` → [`ABLATION.md`](../eval/reports/ABLATION.md) |
 | Medición offline etiquetada como tal | ✅ | Todos los reportes lo declaran; nada se presenta como mejora medida en producción | [EVALUATION](../EVALUATION.md) |
 | Sesión de red team sobre la demo desplegada | ⬜ | Protocolo listo ([red_team.md](red_team.md)); falta correr la sesión y generar `eval/reports/RED_TEAM.md` | Pendiente |
 

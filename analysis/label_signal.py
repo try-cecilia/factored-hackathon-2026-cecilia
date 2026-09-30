@@ -38,7 +38,8 @@ def main() -> None:
     score, y = s["fraud_score"].astype(float), s["is_fraud"].astype(bool)
     auc_score = roc_auc_score(y, score)
     flagged = score >= FRAUD_SCORE_FLAG
-    precision, recall = float((y & flagged).sum() / max(flagged.sum(), 1)), float((y & flagged).sum() / y.sum())
+    hits, scored, scored_frauds = int((y & flagged).sum()), len(y), int(y.sum())  # fraud rows without a score cannot be flagged by it
+    precision = hits / max(int(flagged.sum()), 1)
 
     cols = ", ".join(c for c in LIVE if c not in ("hour", "weekday")) + ", " + ", ".join(AFTER_THE_FACT)
     df = con.execute(f"""WITH picked AS (
@@ -62,9 +63,12 @@ def main() -> None:
         f"`python -m analysis.label_signal` at {datetime.now(timezone.utc).isoformat(timespec='seconds')} on the full warehouse: "
         f"{n:,} transactions, {frauds:,} with `is_fraud` ({frauds / n:.3%}).", "",
         "## The organizer's `fraud_score` against `is_fraud`", "",
-        f"- AUC: **{auc_score:.3f}** (0.5 is a coin).",
-        f"- At the flag threshold the system uses (`fraud_score >= {FRAUD_SCORE_FLAG}`): precision **{precision:.1%}**, recall **{recall:.1%}** "
-        f"({int(flagged.sum()):,} movements flagged).", "",
+        f"- The score is missing on {n - scored:,} transactions, {frauds - scored_frauds:,} of them fraud. Everything below about the score is over the "
+        f"{scored:,} that have one ({scored_frauds:,} of the {frauds:,} fraud rows).",
+        f"- AUC over the rows with a score: **{auc_score:.3f}** (0.5 is a coin).",
+        f"- At the flag threshold the system uses (`fraud_score >= {FRAUD_SCORE_FLAG}`): {int(flagged.sum()):,} movements flagged, precision "
+        f"**{precision:.1%}** ({hits:,}/{int(flagged.sum()):,}). Recall is **{hits / scored_frauds:.1%}** of the frauds that have a score "
+        f"({hits:,}/{scored_frauds:,}) and **{hits / frauds:.1%}** of all frauds ({hits:,}/{frauds:,}).", "",
         "## Can `is_fraud` be learned from the transaction?", "",
         f"Gradient boosting, a chronological 70/30 split of every fraud row and {NEGATIVES:,} sampled legitimate ones, AUC on the later 30%:", "",
         "| Features | AUC |", "|---|---|",

@@ -1,11 +1,12 @@
 # Signal in the fraud labels (auto-generated)
 
-`python -m analysis.label_signal` at 2026-09-29T23:02:24+00:00 on the full warehouse: 4,425,008 transactions, 4,316 with `is_fraud` (0.098%).
+`python -m analysis.label_signal` at 2026-09-30T08:02:04+00:00 on the full warehouse: 4,425,008 transactions, 4,316 with `is_fraud` (0.098%).
 
 ## The organizer's `fraud_score` against `is_fraud`
 
-- AUC: **0.847** (0.5 is a coin).
-- At the flag threshold the system uses (`fraud_score >= 70`): precision **100.0%**, recall **29.2%** (999 movements flagged).
+- The score is missing on 885,157 transactions, 891 of them fraud. Everything below about the score is over the 3,539,851 that have one (3,425 of the 4,316 fraud rows).
+- AUC over the rows with a score: **0.847** (0.5 is a coin).
+- At the flag threshold the system uses (`fraud_score >= 70`): 999 movements flagged, precision **100.0%** (999/999). Recall is **29.2%** of the frauds that have a score (999/3,425) and **23.1%** of all frauds (999/4,316).
 
 ## Can `is_fraud` be learned from the transaction?
 

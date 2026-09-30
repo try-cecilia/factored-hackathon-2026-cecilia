@@ -12,9 +12,11 @@
   category, country, type and category, trained on the earlier 70% of a chronological sample of every fraud row (4,316 of
   4,425,008 transactions) and scored on the later 30%: AUC **0.506**. Adding the columns that describe what happened
   after the fact (status, response code), which a real-time decision cannot see: **0.508**. That is a coin.
-- **`fraud_score` agrees with `is_fraud`** (AUC 0.847). At the threshold the system uses to flag a movement for the
-  reviewer (`fraud_score >= 70`), precision is **100%** and recall **29.2%**. A score that is never wrong when it fires
-  and misses most fraud is what a score built from the label looks like. We did not verify how the organizer produced it, so we
+- **`fraud_score` agrees with `is_fraud`** (AUC 0.847, over the 3,539,851 transactions that have a score; it is missing
+  on 885,157, of which 891 are fraud). At the threshold the system uses to flag a movement for the reviewer
+  (`fraud_score >= 70`), precision is **100%** (999/999). Recall is **29.2%** of the frauds that have a score (999/3,425)
+  and **23.1%** of all frauds (999/4,316). A score that is never wrong when it fires and misses most fraud is what a
+  score built from the label looks like. We did not verify how the organizer produced it, so we
   do not treat it as a signal independent of the label.
 
 ## Decision

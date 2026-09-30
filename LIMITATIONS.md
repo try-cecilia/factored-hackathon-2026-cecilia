@@ -119,7 +119,7 @@ service, and as our own roadmap.
   are therefore the latest state, not what was true when a past contact or
   transaction happened, so they are never used as historical features.
 - **No fraud model.** `fraud_score`/`is_fraud` are shown to the human reviewer
-  as evidence but don't drive automated decisions. Measured: `is_fraud` is not learnable from the transaction (AUC 0.506 on a chronological split, [label_signal.md](docs/evidence/label_signal.md)), and `fraud_score >= 70` has 100% precision but 29.2% recall, which is how a score built from the label behaves ([ADR-005](docs/decisions/ADR-005-no-fraud-or-risk-model.md)). This workflow escalates
+  as evidence but don't drive automated decisions. Measured: `is_fraud` is not learnable from the transaction (AUC 0.506 on a chronological split, [label_signal.md](docs/evidence/label_signal.md)), and `fraud_score >= 70` has 100% precision (999/999) but recalls 23.1% of all frauds (999/4,316; 29.2% of those that carry a score), which is how a score built from the label behaves ([ADR-005](docs/decisions/ADR-005-no-fraud-or-risk-model.md)). This workflow escalates
   fraud; it doesn't adjudicate it.
 
 ## Security and privacy
