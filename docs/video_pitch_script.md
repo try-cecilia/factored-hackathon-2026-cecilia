@@ -6,10 +6,11 @@ app with `python -m ops.record_demo <URL> demo.webm <repo URL>` (about 2 minutes
 come from `eval/reports/SYSTEM_EVAL.md`, `SYSTEM_EVAL_ADVERSARIAL.md` and `SYSTEM_EVAL_LIVE.md` (2026-09-28); if a
 report is regenerated, copy them again from it, never from memory.
 
-1. **Hook (15 s).** "A third of this bank's contacts are filed as transactional: account and payment questions.
+1. **Hook (20 s).** "A third of this bank's contacts are filed as transactional: account and payment questions.
    Agents already resolve 91% of them on the first contact, yet customers rate the service under 3 out of 5, and
    every one of those calls starts with two minutes in a queue. We built the assistant that answers them in
-   seconds, and that only says what it can verify." (Do not say the wait causes the score: the data's wait is
+   seconds, that only says what it can verify, that acts once and only on the customer's yes, and that hands over
+   to a person, with the evidence, when it should not act."(Do not say the wait causes the score: the data's wait is
    120 s for every reason, so it cannot show that.)
 
 2. **The problem, measured (20 s).** The contact-reason and CSAT tables from `docs/evidence/baseline_metrics.md`:
