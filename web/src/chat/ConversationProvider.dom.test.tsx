@@ -24,6 +24,9 @@ function Probe() {
       <button type="button" onClick={() => void c.send('hola')}>send</button>
       <button type="button" onClick={() => c.retry(c.entries.find((e) => e.role === 'user')?.id ?? 0)}>retry</button>
       <button type="button" onClick={() => c.retry([...c.entries].reverse().find((e) => e.role === 'user')?.id ?? 0)}>retry-last</button>
+      <button type="button" onClick={() => void c.send('chau')}>send-b</button>
+      <button type="button" onClick={() => c.retry(c.entries.find((e) => e.role === 'user' && e.text === 'chau')?.id ?? 0)}>retry-b</button>
+      <button type="button" onClick={() => c.retry(c.entries.find((e) => e.role === 'user' && e.text === 'hola')?.id ?? 0)}>retry-a</button>
       <button type="button" onClick={() => void c.reload()}>reload</button>
       <button type="button" onClick={() => void c.refreshCase(c.cases[0]?.ref.ticketId ?? '')}>refresh-case</button>
       <output data-testid="ended">{String(c.ended)}</output>
@@ -199,21 +202,77 @@ describe('ConversationProvider', () => {
       expect(items('user').filter((e) => e.getAttribute('data-delivery') === 'uncertain')).toHaveLength(2)
     })
 
-    it('one that was not answered and a history with two of the same text: it is in the history, and it goes', async () => {
+    it('an older message of the same text that was never loaded here: the one that was not answered still stays, with its key', async () => {
+      server.sendMessage
+        .mockResolvedValueOnce({ ok: false, failure: 'timeout' })
+        .mockResolvedValueOnce(ok(reply({ response_text: 'Otra vez.' })))
+      server.getHistory.mockResolvedValue(yes)
+      // The conversation could not be read when the page loaded: the older "hola" is only in the API.
+      mount({ ok: false, failure: 'unavailable' })
+      const user = userEvent.setup()
+      await user.click(screen.getByText('send'))
+      await waitFor(() => expect(items('user')[0].getAttribute('data-delivery')).toBe('uncertain'))
+
+      await user.click(screen.getByText('reload'))
+      await waitFor(() => expect(items('note')).toHaveLength(1))
+      expect(items('user').map((e) => e.getAttribute('data-delivery'))).toEqual(['sent', 'uncertain'])
+
+      await user.click(screen.getByText('retry-last'))
+      await waitFor(() => expect(server.sendMessage).toHaveBeenCalledTimes(2))
+      expect(server.sendMessage.mock.calls[1][0].data.key).toBe(server.sendMessage.mock.calls[0][0].data.key)
+    })
+
+    it('in a history of 40 entries, with the same text inside it, the message that was not answered stays with its key', async () => {
+      const filler = Array.from({ length: 19 }, (_, i) => [
+        { role: 'user' as const, text: `pregunta ${i}`, at: 2 * i },
+        { role: 'assistant' as const, reply: reply(), at: 2 * i + 1 },
+      ]).flat()
+      const window: HistoryResult = { ok: true, cases: [], turns: [...yes.turns, ...filler] }
+      expect(window.ok && window.turns.length).toBe(40)
       server.sendMessage.mockResolvedValueOnce({ ok: false, failure: 'timeout' })
-      server.getHistory.mockResolvedValue({ ok: true, cases: [], turns: [...yes.turns, { role: 'user', text: 'hola', at: 3 }, { role: 'assistant', reply: reply(), at: 4 }] })
-      mount()
+      server.getHistory.mockResolvedValue(window)
+      mount({ ok: false, failure: 'unavailable' })
       const user = userEvent.setup()
       await user.click(screen.getByText('send'))
       await waitFor(() => expect(items('user')[0].getAttribute('data-delivery')).toBe('uncertain'))
       await user.click(screen.getByText('reload'))
-      await waitFor(() => expect(items('assistant')).toHaveLength(2))
-      expect(items('user').map((e) => e.getAttribute('data-delivery'))).toEqual(['sent', 'sent'])
+      await waitFor(() => expect(items('note')).toHaveLength(1))
+      expect(items('user').filter((e) => e.getAttribute('data-delivery') === 'uncertain')).toHaveLength(1)
+    })
+
+    it('a message the API has but whose answer is gone stays told so through the reloads that follow, and so does the next one', async () => {
+      server.sendMessage
+        .mockResolvedValueOnce({ ok: false, failure: 'timeout' })
+        .mockResolvedValueOnce({ ok: false, failure: 'already_processed' })
+        .mockResolvedValueOnce({ ok: false, failure: 'timeout' })
+        .mockResolvedValueOnce({ ok: false, failure: 'already_processed' })
+      server.getHistory.mockResolvedValue(empty)
+      mount()
+      const user = userEvent.setup()
+      const failures = () => items('user').map((e) => e.getAttribute('data-failure'))
+      await user.click(screen.getByText('send'))
+      await waitFor(() => expect(items('user')[0].getAttribute('data-delivery')).toBe('uncertain'))
+      await user.click(screen.getByText('retry-a'))
+      await waitFor(() => expect(failures()).toEqual(['already_processed']))
+      await user.click(screen.getByText('reload'))
+      await waitFor(() => expect(failures()).toEqual(['answer_gone']))
+
+      await user.click(screen.getByText('send-b'))
+      await waitFor(() => expect(failures()).toEqual(['answer_gone', 'timeout']))
+      await user.click(screen.getByText('retry-b'))
+      await waitFor(() => expect(failures()).toEqual(['answer_gone', 'already_processed']))
+      await user.click(screen.getByText('reload'))
+      await waitFor(() => expect(failures()).toEqual(['answer_gone', 'answer_gone']))
+      await user.click(screen.getByText('reload'))
+      await waitFor(() => expect(server.getHistory).toHaveBeenCalledTimes(3))
+      expect(failures()).toEqual(['answer_gone', 'answer_gone'])
     })
   })
 
-  it('a history that has the message takes its place: the local copy is not shown twice', async () => {
-    server.sendMessage.mockResolvedValueOnce({ ok: false, failure: 'timeout' })
+  it('a history that has the message does not take its place: the one that was not answered stays until it is retried', async () => {
+    server.sendMessage
+      .mockResolvedValueOnce({ ok: false, failure: 'timeout' })
+      .mockResolvedValueOnce({ ok: false, failure: 'already_processed' })
     server.getHistory.mockResolvedValue({ ok: true, cases: [], turns: [{ role: 'user', text: 'hola', at: 1 }, { role: 'assistant', reply: reply(), at: 2 }] })
     mount({ ok: false, failure: 'unavailable' })
     const user = userEvent.setup()
@@ -221,8 +280,11 @@ describe('ConversationProvider', () => {
     await waitFor(() => expect(items('user')[0].getAttribute('data-delivery')).toBe('uncertain'))
     await user.click(screen.getByText('reload'))
     await waitFor(() => expect(items('assistant')).toHaveLength(1))
-    expect(items('user')).toHaveLength(1)
-    expect(items('user')[0].getAttribute('data-delivery')).toBe('sent')
+    // It cannot be told from what the history has: it stays, with its key, and retrying it settles it.
+    expect(items('user').map((e) => e.getAttribute('data-delivery'))).toEqual(['sent', 'uncertain'])
+    await user.click(screen.getByText('retry-last'))
+    await waitFor(() => expect(items('user')[1].getAttribute('data-failure')).toBe('already_processed'))
+    expect(server.sendMessage.mock.calls[1][0].data.key).toBe(server.sendMessage.mock.calls[0][0].data.key)
   })
 
   it('another session starts another conversation, and an answer that arrives for the old one is ignored', async () => {

@@ -214,28 +214,19 @@ export function ConversationProvider({ sessionRef, initial, children }: { sessio
       const result = await getHistory()
       if (mine.session !== epoch.current || mine.edits !== edits.current) return
       if (result.ok) {
-        // What the conversation has that the history may not show. The history has no keys and no positions, only texts, so a
-        // text is counted, not looked up: each message already confirmed (read back, sent, or one the API said it has) takes one
-        // of the occurrences of its text first. A message that did not go through (failed, or its answer got lost) is taken as
-        // persisted only if the occurrences left cover every such message of that text; if not, it is not known which one the
-        // history has, and all of them stay, with their keys: sending again with the same key is safe (the API answers it once),
-        // and the cost of keeping one is a bubble more. A message the API said it already has but whose reply is not in what it
-        // kept stays, told so: reloading cannot show it.
-        const left = new Map<string, number>()
-        for (const t of result.turns) if (t.role === 'user') left.set(t.text, (left.get(t.text) ?? 0) + 1)
-        const users = entriesRef.current.filter((e): e is UserEntry => e.role === 'user')
-        const kept = new Map<number, Entry>()
-        for (const e of users) {
-          if (e.delivery !== 'sent' && e.failure !== 'already_processed') continue
-          const n = left.get(e.text) ?? 0
-          if (n > 0) left.set(e.text, n - 1)
-          else if (e.failure === 'already_processed') kept.set(e.id, { ...e, failure: 'answer_gone' })
-        }
-        const open = users.filter((e) => e.key && (e.delivery === 'failed' || e.delivery === 'uncertain'))
-        for (const e of open) {
-          if ((left.get(e.text) ?? 0) < open.filter((o) => o.text === e.text).length) kept.set(e.id, e)
-        }
-        const gone = users.flatMap((e) => kept.get(e.id) ?? [])
+        // What the conversation has that the history may not show. The history has no keys and no positions, only texts, and it
+        // is bounded, so it cannot say which of two messages of the same text it holds, or whether an older one was ever loaded
+        // here: it never settles a message. Whatever has a key and did not get its answer (failed, or its answer got lost) stays,
+        // with the key, until it is retried: the API answers a repeated key once, and settles it then. The cost of keeping one is
+        // a bubble more. A message the API said it already has stays too, told so once its reply is not in what the history kept
+        // (`answer_gone`), and it stays told so through the reloads that follow; if the history does have the text, it is shown.
+        const said = new Set(result.turns.flatMap((t) => (t.role === 'user' ? [t.text] : [])))
+        const gone = entriesRef.current.flatMap((e): Entry[] => {
+          if (e.role !== 'user') return []
+          if (e.failure === 'answer_gone') return [e]
+          if (e.failure === 'already_processed') return said.has(e.text) ? [] : [{ ...e, failure: 'answer_gone' }]
+          return e.key && (e.delivery === 'failed' || e.delivery === 'uncertain') ? [e] : []
+        })
         const next = [...fromHistory(result.turns, nextId.current, Date.now()), ...gone]
         nextId.current += next.length + 1
         setKept(result.cases)
