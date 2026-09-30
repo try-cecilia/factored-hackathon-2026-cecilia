@@ -6,7 +6,7 @@ service, and as our own roadmap.
 ## Not yet measured
 
 1. **The live models, beyond a sample.** Claude Sonnet 5 and Haiku 4.5 ran on
-   132 of the 528 held-out test cases, three runs each
+   132 of the 548 held-out test cases, three runs each
    ([`eval/reports/SYSTEM_EVAL_LIVE.md`](eval/reports/SYSTEM_EVAL_LIVE.md)).
    The intervals are wide (Sonnet 5's safe automated resolution is 95.0%
    [86.3–98.3]), a segment or country cell holds 15–20 in-scope cases, and
@@ -68,8 +68,8 @@ service, and as our own roadmap.
   sentences). Same-author bias between training and held-out text is likely.
   - Next: sample real (consented, redacted) chat logs, have humans label them,
     and re-run `make train-eval`.
-- **Small held-out sets.** 85 utterances in the classifier test split; 528
-  cases per system split, with 1–3 phrasings per case type and language.
+- **Small held-out sets.** 85 utterances in the classifier test split; 548
+  cases in the test split (552 in dev), with 1–3 phrasings per case type and language.
   Intervals are wide (e.g. escalation recall 93.3% [70.2–98.8]).
 - **Known misses.** "vou processar o banco" escapes the escalation guard, and
   slang is weak (33%). Both are reported, and neither was tuned away on test
@@ -119,7 +119,7 @@ service, and as our own roadmap.
   are therefore the latest state, not what was true when a past contact or
   transaction happened, so they are never used as historical features.
 - **No fraud model.** `fraud_score`/`is_fraud` are shown to the human reviewer
-  as evidence but don't drive automated decisions. This workflow escalates
+  as evidence but don't drive automated decisions. Measured: `is_fraud` is not learnable from the transaction (AUC 0.506 on a chronological split, [label_signal.md](docs/evidence/label_signal.md)), and `fraud_score >= 70` has 100% precision (999/999) but recalls 23.1% of all frauds (999/4,316; 29.2% of those that carry a score), which is how a score built from the label behaves ([ADR-005](docs/decisions/ADR-005-no-fraud-or-risk-model.md)). This workflow escalates
   fraud; it doesn't adjudicate it.
 
 ## Security and privacy
@@ -209,8 +209,8 @@ service, and as our own roadmap.
   in the pre-LLM guard uses the same reader. The reserved failure set has it as its one open failure in each language
   (`foreign_id_spelled`): the text reaches the model unmasked, the tool layer refuses the product (`PermissionDenied`,
   handed to a person as a security case), so nothing of another customer's is shown. Organizer ids look like
-  `***REMOVED***`: written in lowercase without a split ("prd 04di2iny5hzt") they are masked, but split once
-  ("prd 04di 2iny5hzt") they are not. Reported, not tuned: masking more would also hide ordinary words, and the
+  `CLI-AB12CD34EF56` (an invented shape): written in lowercase without a split ("prd ab12cd34ef56") they are masked, but split once
+  ("prd ab12 cd34ef56") they are not. Reported, not tuned: masking more would also hide ordinary words, and the
   ownership check downstream holds either way.
 - **A tool call has no clock of its own.** The orchestrator bounds the model call and the number of tool calls, not the
   time of a tool. The evaluation injects a timeout as the exception a client would raise, and the system hands that to
@@ -335,8 +335,8 @@ service, and as our own roadmap.
   the classifier was kept. That choice was made after seeing the test split.
 - On the system test split the same guard reads one of the workload's trace
   requests, "hice un pago que sigue pendiente", as a possible dispute (p =
-  0.62 ≥ τ = 0.55): 6 of the 48 confirm and cancel cases go to a person on the
-  first turn. That is why the ideal model reaches 98.8% and not 100%. It
+  0.62 ≥ τ = 0.55): of the confirm and cancel cases, 4 go wrong (2 confirmations end as a
+  balance or out-of-scope reading, 2 cancellations go to a person on the first turn). That is why the ideal model reaches 99.2% and not 100%. It
   shows on dev as well (4 cases). The candidate fix is the one above,
   retraining with trace examples, which cost a fraud report; so it stays
   reported, not tuned.

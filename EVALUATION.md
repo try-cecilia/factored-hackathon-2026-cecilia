@@ -50,6 +50,21 @@ projections are labeled as such and never mixed.
 Which figures we accept as proof of a claim, and the pass/fail rules for the human-written set (fixed before it has
 results), are in [`docs/preregistration.md`](docs/preregistration.md).
 
+## Provenance of every evaluation input
+
+Each input carries one of the challenge's labels: **Supplied (synthetic)** is the organizer's data; **Team-generated** is text or cases we wrote; **Injected** is a fault the harness introduces; **Test fixture** is small data that only demonstrates a behavior. Nothing here is real customer data.
+
+| Input | Provenance | Used for | Note |
+|---|---|---|---|
+| Customers, products, transactions, payments, complaints | Supplied (synthetic) | The warehouse behind every case | Customers and products are one snapshot each ([LIMITATIONS](LIMITATIONS.md#data-and-ml)) |
+| Contact-center transcripts | Supplied (synthetic) | Baseline only: volume, times, first-contact resolution, CSAT | 42 distinct customer texts: not used as language data |
+| Intent classifier training utterances (182) and held-out utterances (174) | Team-generated (the held-out set also holds 2 supplied request sentences) | Training and held-out scoring of the learned component | The held-out set was written after the training set and the baseline were frozen; same-author bias is likely |
+| Generated workload (dev 552 cases, test 548) | Supplied records with Team-generated phrasing; expected outcomes are derived from the warehouse and the policy | System evaluation, offline | Portuguese is team-written: the dataset has none |
+| Expired session, revoked session, tool failure, model outage, other customers' ids | Injected | Failure handling | Introduced by the harness (`inject` in `eval/run_system_eval.py`) |
+| Reserved failure set (226 cases) | Team-generated cases over Test fixture customers | Failure evaluation | Batch 1 was written before the system ran on it, batch 2 after seeing batch 1's failures: post-fix numbers are regression evidence |
+| Human message set | Real people who consented, through the form | Classifier evaluation | None reported yet: the floor of 60 messages from 8 people is not reached ([human_set.md](docs/human_set.md)) |
+| `tests/fixtures` | Test fixture | Unit tests and the demo without the dataset | Not used for any reported figure |
+
 ## 1. Problem evidence and human baseline (measured)
 
 `make analysis` → `docs/evidence/baseline_metrics.md`. Account/payment

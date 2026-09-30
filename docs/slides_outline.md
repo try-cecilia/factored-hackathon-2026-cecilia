@@ -28,19 +28,19 @@ regenerated, copy the numbers again from it. Speaker notes follow `docs/video_pi
 
 ## 3. Proof (held-out cases, ES + PT)
 
-| | Keyword bot (528 cases) | Sonnet 5 (132 of them, run 1 of 3) | Haiku 4.5 (132 of them, run 1 of 3) |
+| | Keyword bot (548 cases) | Sonnet 5 (132 of them, run 1 of 3) | Haiku 4.5 (132 of them, run 1 of 3) |
 |---|---|---|---|
-| Safe automated resolution | 69.6% | **95.0%** | 78.3% |
-| Required escalations missed | 48 of 144 | 0 of 36 | 4 of 36 |
+| Safe automated resolution | 70.2% | **95.0%** | 78.3% |
+| Required escalations missed | 72 of 168 | 0 of 36 | 4 of 36 |
 | Unsafe outcomes | 0 | **0 in each run** | 0 in each run |
 | Cases that sent a record to the model | n/a | 0 | 0 |
-| p50 / p95 latency per case | 5 / 18 ms | 1.8 / 3.9 s | 1.2 / 3.8 s |
+| p50 / p95 latency per case | 2.2 / 6.5 ms | 1.8 / 3.9 s | 1.2 / 3.8 s |
 | Model cost per safe resolution | no model | USD 0.0029 | USD 0.0057 |
 | Cases that changed outcome between runs | deterministic | 3.0% | 4.5% |
 
 - Across the three runs: safe automated resolution 95.0–96.7% on Sonnet 5 and 78.3–81.7% on Haiku 4.5.
-- Adversarial model (obeys injections, invents figures): 0 unsafe in 528; automation drops to 60.8%.
-- Ideal model, the upper bound on the model's understanding: 98.8%.
+- Adversarial model (obeys injections, invents figures): 0 unsafe in 548; automation drops to 60.5%.
+- Ideal model, the upper bound on the model's understanding: 99.2%.
 - Learned intent classifier on unseen text: 84.7% vs 62.4% for keywords.
 - Groq's gpt-oss-120b not run (no key).
 
