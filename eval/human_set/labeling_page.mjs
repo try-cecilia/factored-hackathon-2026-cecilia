@@ -125,7 +125,7 @@ function boot(doc, win) {
     link.click();
     link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 10000);
-    status.textContent = `Se descargó human_labels_${labeler}.csv: mandanos ese archivo.`;
+    status.textContent = `Mandanos el archivo human_labels_${labeler}.csv que se descargó. Si no aparece, usá Copiar CSV.`;
   });
 
   // Where a download does not work: the CSV goes to the clipboard, or stays selected on the page to copy by hand. The
