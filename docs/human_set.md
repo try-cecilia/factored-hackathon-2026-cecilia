@@ -56,7 +56,8 @@ results are reported whatever they are: they are not used to change the prompt, 
 
 ## The pipeline, in order
 
-Every file below lives in `eval/workload/` (which the public export removes), except the reports.
+The data files below live in `eval/workload/`; the public export removes them and the agreement report, and keeps
+`HUMAN_SET.md` and `human_set.json`.
 
 1. **Export** (whoever holds the Cloudflare token file, `CLOUDFLARE_SECRETS`): `make human-set-export` writes
    `eval/workload/human_raw.jsonl`.
@@ -70,14 +71,15 @@ Every file below lives in `eval/workload/` (which the public export removes), ex
 4. **Send** (same person): each labeler gets only their own page, in private.
 5. **Label** (the two labelers, each alone, without talking about it until both have sent their file): every message,
    then the CSV back to the sender, who puts it in `eval/workload/`.
-6. **Agreement** (whoever builds the set): `make human-set-agreement A=... B=...` prints Cohen's kappa of the two
-   **before** any disagreement is settled, writes the final labels (`human_labels_final.csv`) and lists the
-   disagreements in `eval/reports/human_set_agreement.json`. A disagreement without a third opinion is left out and
-   counted.
+6. **Agreement** (whoever builds the set): `make human-set-agreement A=eval/workload/human_labels_a.csv
+   B=eval/workload/human_labels_b.csv` prints Cohen's kappa of the two **before** any disagreement is settled, writes
+   the final labels (`human_labels_final.csv`) and lists the disagreements in `eval/reports/human_set_agreement.json`.
+   A disagreement without a third opinion is left out and counted.
 7. **Third person** (someone who is neither labeler): `make human-set-pages LABELERS=name DISAGREEMENTS=1` builds a
-   page with only the disagreements, labeled blind; then step 6 again with `THIRD=human_labels_name.csv`.
-8. **Cases** (whoever builds the set): `make human-set-cases` reads the full warehouse and writes `human_cases.jsonl`
-   and its provenance, `human_cases_meta.json` (counts, what was dropped and why, message id to case id).
+   page with only the disagreements, labeled blind; then step 6 again with `THIRD=eval/workload/human_labels_name.csv`.
+8. **Cases** (whoever builds the set): `make human-set-cases` reads the full warehouse (the one `DUCKDB_PATH` points
+   at, as for `make eval`) and writes `human_cases.jsonl` and its provenance, `human_cases_meta.json` (counts, what
+   was dropped and why, message id to case id).
 9. **Evaluation** (whoever holds the model key): `make human-set-eval`, the standard `run_system_eval --cases` run: the
    keyword bot once and the live model (Sonnet 5) three times on the same cases. It spends model credit, about USD 1
    to 2, and stops without the key.
