@@ -7,9 +7,13 @@ regenerated, copy the numbers again from it. Speaker notes follow `docs/video_pi
 ## 0. Cover
 - "Account and payment questions, answered in seconds, only with verified data": balances, movements, payment
   status and exchange rates, in Spanish and Portuguese, for Mexico, Colombia and Argentina.
+- For customers of a retail bank who wait in a queue to ask about a balance or a payment: an assistant that only says
+  what it can verify, acts once and only on the customer's yes, and hands over to a person, with evidence, when it
+  should not act.
 - Team [name] · [deployed URL].
 
 ## 1. The problem, measured
+- Who has it: the customers, and the bank's contact center: about **411 agent hours a month** (median) on these contacts.
 - Account and payment questions are **35%** of 686K contacts, the largest reason.
 - They are the simplest: **91.5%** resolved on first contact, 221 s calls.
 - Yet customers rate it **2.91/5** (NPS −70), and every call starts with **120 s** in the queue.
