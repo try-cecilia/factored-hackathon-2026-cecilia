@@ -1,10 +1,12 @@
-// Checks in a real browser, on a phone (390x844), that the demo panel drawer reopens on the scenario in course: `node
+// Checks in a real browser, on a phone (390x844), what the demo panel drawer does with a scenario: `node
 // ops/demo_drawer_check.mjs <web port> <screenshot dir>`, against `make serve-fixture` (API on API_PORT) and the web dev server
-// pointed at it (`AGENT_API_URL=http://127.0.0.1:<API_PORT> pnpm --dir web dev --port <web port>`).
+// pointed at it (`AGENT_API_URL=http://127.0.0.1:<API_PORT> pnpm --dir web dev --port <web port> --host 127.0.0.1`).
 // Needs `playwright-core` (`npm i playwright-core` in a scratch directory, then NODE_PATH=<its node_modules>; `npx playwright-core
-// install chromium`). It picks the sixth scenario of the list (a card below the first screen of the drawer), loads it, sends nothing,
-// and reopens the drawer: the card must be inside the drawer's visible area, the focus must be on it (inside the drawer), and the
-// steps must be visible. Exits 1 if anything fails.
+// install chromium`). It picks the sixth scenario of the list (a card below the first screen of the drawer) and loads it: the
+// drawer must close, the chat must show its first message sent and answered, the focus must be in the chat's input, and nothing
+// must be drawn above the list. Reopening the drawer, the card must be inside its visible area with the focus on it, the steps
+// visible, Tab and Shift+Tab must go on from it without losing the scroll, and, if the scenario has a second step, its button
+// sends it and closes the drawer again. Exits 1 if anything fails.
 import { chromium } from 'playwright-core'
 import { mkdirSync } from 'node:fs'
 
@@ -28,11 +30,28 @@ const drawer = page.locator('#shell-demo')
 const cards = drawer.getByRole('article')
 const card = cards.nth(5)
 const title = await card.getAttribute('aria-label')
+const chat = page.locator('.chat-log')
+const inChat = (text) => chat.getByText(text, { exact: true })
+const answers = () => card.locator('.demo__ok, .demo__bad')
+// The focus comes a frame after the drawer closes.
+const inputFocused = () => page.waitForFunction(() => document.activeElement?.tagName === 'TEXTAREA', null, { timeout: 3000 }).then(() => true, () => false)
+const stepButton = (n) => card.getByRole('button', { name: `Enviar paso ${n}` })
 await card.scrollIntoViewIfNeeded()
-await card.getByRole('button').first().click()
-await page.waitForFunction(() => document.querySelector('textarea')?.value.length > 0)
-check(await page.evaluate(() => document.activeElement?.tagName === 'TEXTAREA'), `"${title}": the input holds its message and has the focus`)
+await card.getByRole('button', { name: /^(Cargar|Reiniciar)$/ }).click()
+
+// The first message goes by itself, through the chat's own send: the drawer gives the page back and the focus is in the input.
+await card.getByRole('region', { name: 'Pasos del escenario' }).waitFor({ state: 'attached' })
+const turns = await card.locator('.demo__quote').allTextContents()
+const say = (quote) => quote.replace(/^“|”$/g, '')
+await inChat(say(turns[0])).waitFor()
+check(true, `"${title}": its first message is in the chat, sent`)
 check(await drawer.evaluate((el) => el.hasAttribute('inert')), 'the drawer closed and is out of reach')
+check(await inputFocused(), 'the focus is in the chat input')
+check(await page.evaluate(() => document.querySelector('textarea')?.value === ''), 'the input was not written into')
+await answers().first().waitFor({ state: 'attached', timeout: 15000 })
+check((await answers().count()) === 1, 'the first message was answered, and the card shows it')
+await page.waitForTimeout(400)
+await page.screenshot({ path: `${outDir}/demo-prearmado-movil-es-1-enviado.png` })
 
 await page.getByRole('button', { name: 'Demo' }).click()
 await page.waitForTimeout(500) // the drawer slides in
@@ -40,12 +59,13 @@ const box = await card.boundingBox()
 const view = await drawer.boundingBox()
 const inside = box && view && box.y >= view.y && box.y + Math.min(box.height, 1) <= view.y + view.height && box.x >= view.x
 check(!!inside, `the active card is inside the drawer's visible area (card y=${Math.round(box?.y ?? -1)}, drawer ${Math.round(view?.y ?? -1)}..${Math.round((view?.y ?? 0) + (view?.height ?? 0))})`)
+check((await drawer.getByRole('region').first().getAttribute('aria-label')) === 'Escenarios guiados', 'above the list there is still nothing but the scenarios')
 const steps = drawer.getByRole('region', { name: 'Pasos del escenario' })
 const stepsBox = await steps.boundingBox()
 check(!!stepsBox && stepsBox.y >= view.y && stepsBox.y < view.y + view.height, 'its steps are visible')
 check(await card.evaluate((el) => document.activeElement === el), 'the focus is on the active card')
 check(await drawer.evaluate((el) => !el.hasAttribute('inert') && el.contains(document.activeElement)), 'the focus is inside the open drawer')
-await page.screenshot({ path: `${outDir}/demo-prearmado-movil-es-4-reabrir-en-tarjeta.png` })
+await page.screenshot({ path: `${outDir}/demo-prearmado-movil-es-2-reabrir-en-tarjeta.png` })
 
 // Tab from the card goes on to the first control inside it, and the drawer keeps its scroll (it does not jump back to the head).
 const scrollOf = () => drawer.evaluate((el) => { let p = el; while (p && p.scrollHeight <= p.clientHeight) p = p.parentElement; return p ? p.scrollTop : 0 })
@@ -61,6 +81,25 @@ await page.getByRole('button', { name: 'Demo' }).click()
 await page.waitForTimeout(500)
 await page.keyboard.press('Shift+Tab')
 check(await page.evaluate(() => { const a = document.activeElement; return !!a && a.tagName === 'BUTTON' && a.getAttribute('aria-label') !== 'Cerrar' && !!a.closest('article') }), 'Shift+Tab from the card goes to the control of the scenario above it')
+
+// The next step is sent with a click on its card; the drawer closes over the chat and the answer comes there.
+if (turns.length > 1) {
+  await page.keyboard.press('Escape')
+  await page.getByRole('button', { name: 'Demo' }).click()
+  await page.waitForTimeout(500)
+  await stepButton(2).scrollIntoViewIfNeeded()
+  check(await stepButton(2).isEnabled(), 'the button of step 2 is on its card, enabled')
+  await stepButton(2).click()
+  await inChat(say(turns[1])).waitFor()
+  check(true, 'step 2 is in the chat, sent')
+  check(await drawer.evaluate((el) => el.hasAttribute('inert')), 'the drawer closed again')
+  check(await inputFocused(), 'the focus is in the chat input')
+  await answers().nth(1).waitFor({ state: 'attached', timeout: 15000 })
+  await page.waitForTimeout(400)
+  await page.screenshot({ path: `${outDir}/demo-prearmado-movil-es-3-paso-enviado.png` })
+} else {
+  console.log('note the scenario has one step: no second step to send')
+}
 
 await browser.close()
 process.exit(failed ? 1 : 0)
