@@ -3,6 +3,7 @@
 Tres pasos (docs/human_set.md define el esquema de etiquetas y la regla de que estos resultados no se usan para ajustar):
 
     python -m eval.human_set.classifier_eval sheet                 # hoja para etiquetar, sin salidas del sistema
+    python -m eval.human_set.classifier_eval page --labeler NOMBRE [--labeler ...] [--only-disagreements]   # una página por persona (labeling.py)
     python -m eval.human_set.classifier_eval agreement A.csv B.csv [--third C.csv]   # kappa y etiquetas finales
     python -m eval.human_set.classifier_eval score                 # el clasificador y la línea base sobre lo etiquetado
 
@@ -39,6 +40,7 @@ from agent.llm.intent_classifier import load_rows
 from agent.policy import intent_guard
 from agent.policy.signals import contains_escalation_signal, escalation_categories
 from eval import leakage
+from eval.human_set import labeling
 from eval.stats import fmt, rate
 
 RAW = Path("eval/workload/human_raw.jsonl")
@@ -272,6 +274,9 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("sheet")
+    pg = sub.add_parser("page", help=f"one labeling page per person, from the sheet -> {SHEET.parent}/human_labeling_<name>.html")
+    pg.add_argument("--labeler", action="append", required=True, help="once per person")
+    pg.add_argument("--only-disagreements", action="store_true", help=f"the third person's page: the disagreements in {AGREEMENT}")
     ag = sub.add_parser("agreement")
     ag.add_argument("a")
     ag.add_argument("b")
@@ -279,6 +284,12 @@ def main() -> None:
     sub.add_parser("score")
     args = ap.parse_args()
     sys.stdout.reconfigure(encoding="utf-8")
+    if args.cmd == "page":  # needs the sheet only, not the answers
+        only = ({d["message_id"] for d in json.loads(AGREEMENT.read_text(encoding="utf-8"))["disagreements"]}
+                if args.only_disagreements else None)
+        for path in labeling.write_pages(args.labeler, SHEET, only):
+            print(f"{path}: send it to that person only")
+        return
     messages, counts = read_messages(RAW)
     if args.cmd == "sheet":
         write_sheet(messages, SHEET)
