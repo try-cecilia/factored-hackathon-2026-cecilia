@@ -278,6 +278,36 @@ describe('a scenario of the demo panel sends its first message through the chat'
     expect(sendMessage).toHaveBeenCalledOnce()
   })
 
+  it('the step button goes off with the composer when the session runs out on the clock, before the API says so', async () => {
+    const user = userEvent.setup()
+    sendMessage.mockResolvedValue({ ok: true, reply: reply('AUTO_RESOLVE', 'Tu saldo es 10 USD.') })
+    // The session's countdown ticks every five seconds: its ticks are held to be run by hand, and only the date is faked, so the
+    // queries and the user go on with real timers.
+    const ticks: (() => void)[] = []
+    const real = globalThis.setInterval
+    vi.spyOn(globalThis, 'setInterval').mockImplementation(((fn: () => void, ms?: number) => {
+      if (ms === 5_000) { ticks.push(fn); return 0 as unknown as ReturnType<typeof setInterval> }
+      return real(fn, ms)
+    }) as typeof setInterval)
+    await draw()
+    const card = await load(user, 'Dos turnos')
+    const step = await within(card).findByRole('button', { name: 'Enviar paso 2' })
+    expect((step as HTMLButtonElement).disabled).toBe(false)
+
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      vi.setSystemTime(Date.now() + 901_000)
+      await act(async () => { ticks.forEach((tick) => tick()) })
+    } finally {
+      vi.useRealTimers()
+    }
+
+    await waitFor(() => expect(input().disabled).toBe(true))
+    expect((within(card).getByRole('button', { name: 'Enviar paso 2' }) as HTMLButtonElement).disabled).toBe(true)
+    await user.click(within(card).getByRole('button', { name: 'Enviar paso 2' }))
+    expect(sendMessage).toHaveBeenCalledOnce()
+  })
+
   it('the late reply of another message is not the answer of a step that failed', async () => {
     const user = userEvent.setup()
     sendMessage

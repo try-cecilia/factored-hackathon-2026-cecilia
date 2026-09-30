@@ -2,6 +2,7 @@ import { Link, useNavigate, useRouter } from '@tanstack/react-router'
 import { lazy, Suspense, use, useCallback, useEffect, useId, useRef, useState, type ReactNode, type RefObject } from 'react'
 import type { DemoScenario } from '../chat/types'
 import { useConversation } from '../chat/ConversationProvider'
+import { useSessionNotice } from '../chat/useSessionNotice'
 import { LockIcon } from '../chat/icons'
 import { useT } from '../i18n/context'
 import { logout, type Session } from '../server/auth.functions'
@@ -47,6 +48,9 @@ export function AppShell({ session, kit, children }: { session: Session; kit: Pr
   const navigate = useNavigate()
   const router = useRouter()
   const { sessionRef, cases, entries, sending, ended, send, retry, refreshCase } = useConversation()
+  // The same end the chat's composer goes by: what is over for the composer is over for the demo panel's step buttons.
+  const notice = useSessionNotice(session)
+  const over = ended || notice === 0
   const phone = useMediaQuery(PHONE)
   const narrow = useMediaQuery(NARROW)
   const [collapsed, setCollapsed] = useState(false)
@@ -204,7 +208,7 @@ export function AppShell({ session, kit, children }: { session: Session; kit: Pr
                 entries={entries}
                 pending={sending}
                 escalations={escalations}
-                ended={ended}
+                ended={over}
                 send={send}
                 retry={retry}
                 overlay={narrow}
