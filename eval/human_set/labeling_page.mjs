@@ -128,14 +128,16 @@ function boot(doc, win) {
     status.textContent = `Se descargó human_labels_${labeler}.csv: mandanos ese archivo.`;
   });
 
-  // Where a download does not work: the CSV goes to the clipboard, or stays selected on the page to copy by hand.
+  // Where a download does not work: the CSV goes to the clipboard, or stays selected on the page to copy by hand. The
+  // clipboard gets the text itself: a text box turns every CRLF into LF (read_labels takes either).
   copy.addEventListener("click", async () => {
-    out.value = toCsv(rows, labels);
+    const csv = toCsv(rows, labels);
+    out.value = csv;
     out.hidden = false;
     out.select();
     let copied = false;
     try {
-      await win.navigator.clipboard.writeText(out.value);
+      await win.navigator.clipboard.writeText(csv);
       copied = true;
     } catch {
       try {
