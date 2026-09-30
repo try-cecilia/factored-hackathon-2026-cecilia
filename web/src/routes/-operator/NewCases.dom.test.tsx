@@ -59,19 +59,19 @@ describe('new cases', () => {
     expect(screen.queryByText('Nuevo')).toBeNull()
   })
 
-  it('a case that arrives is marked, counted, announced politely and put in the tab title', () => {
+  it('a case that arrives is marked, counted, announced politely and put in the tab title', async () => {
     const view = renderWithI18n(tree(ok('a'), ['a']))
     view.rerender(page(tree(ok('a', 'b'), ['a', 'b'])))
     expect(screen.getByTestId('badge').textContent).toBe('+1' + '1 caso nuevo')
     expect(screen.getByText('+1').getAttribute('aria-hidden')).toBe('true')
-    expect(status().textContent).toBe('1 caso nuevo')
+    await waitFor(() => expect(status().textContent).toBe('1 caso nuevo'))
     expect(status().getAttribute('aria-live')).toBe('polite')
     expect(document.title).toBe('(1) Cola · Cecilai')
     expect(screen.getByText('b').textContent).toBe('bNuevo')
     expect(screen.getByText('a').textContent).toBe('a')
 
     view.rerender(page(tree(ok('a', 'b', 'c', 'd'), ['a', 'b', 'c', 'd'])))
-    expect(status().textContent).toBe('3 casos nuevos')
+    await waitFor(() => expect(status().textContent).toBe('3 casos nuevos'))
     expect(document.title).toBe('(3) Cola · Cecilai')
   })
 
@@ -86,10 +86,10 @@ describe('new cases', () => {
     expect(screen.queryByRole('button', { name: 'Marcar como vistos' })).toBeNull()
   })
 
-  it('speaks Portuguese to a Portuguese operator', () => {
+  it('speaks Portuguese to a Portuguese operator', async () => {
     const view = renderWithI18n(tree(ok('a'), ['a']), 'pt')
     view.rerender(page(tree(ok('a', 'b', 'c'), ['a', 'b', 'c']), 'pt'))
-    expect(status().textContent).toBe('2 novos casos')
+    await waitFor(() => expect(status().textContent).toBe('2 novos casos'))
     expect(screen.getAllByText('Novo')).toHaveLength(2)
   })
 
@@ -115,12 +115,27 @@ describe('new cases', () => {
   it('does not announce again when the count goes down, and speaks again when it goes up', async () => {
     const view = renderWithI18n(tree(ok('a'), ['a']))
     view.rerender(page(tree(ok('a', 'b', 'c'), ['a', 'b', 'c'])))
-    expect(status().textContent).toBe('2 casos nuevos')
+    await waitFor(() => expect(status().textContent).toBe('2 casos nuevos'))
     view.rerender(page(tree(ok('a', 'b'), ['a', 'b']))) // c left the queue
-    expect(status().textContent).toBe('2 casos nuevos')
+    await waitFor(() => expect(status().textContent).toBe('2 casos nuevos'))
     expect(document.title).toBe('(1) Cola · Cecilai')
     view.rerender(page(tree(ok('a', 'b', 'e', 'f'), ['a', 'b', 'e', 'f'])))
-    expect(status().textContent).toBe('3 casos nuevos')
+    await waitFor(() => expect(status().textContent).toBe('3 casos nuevos'))
+  })
+
+  it('a rise back to a count already announced is announced again: the region is emptied, then says it', async () => {
+    const view = renderWithI18n(tree(ok('a'), ['a']))
+    const heard: string[] = []
+    new MutationObserver(() => heard.push(status().textContent ?? '')).observe(status(), { childList: true, characterData: true, subtree: true })
+    view.rerender(page(tree(ok('a', 'b', 'c'), ['a', 'b', 'c'])))
+    await waitFor(() => expect(status().textContent).toBe('2 casos nuevos'))
+    view.rerender(page(tree(ok('a', 'b', 'c'), ['a', 'b', 'c'], <Opens id="b" />))) // one of them is opened: 1 new
+    await waitFor(() => expect(document.title).toBe('(1) Cola · Cecilai'))
+    view.rerender(page(tree(ok('a', 'b', 'c', 'd'), ['a', 'b', 'c', 'd'], <Opens id="b" />))) // another arrives: 2 again
+    await waitFor(() => expect(document.title).toBe('(2) Cola · Cecilai'))
+    await waitFor(() => expect(heard.filter((text) => text === '2 casos nuevos')).toHaveLength(2))
+    expect(heard).toContain('') // and between the two the region was empty, which is what makes a screen reader read it again
+    await waitFor(() => expect(status().textContent).toBe('2 casos nuevos'))
   })
 
   it('a case someone already decided is not new', () => {
@@ -130,22 +145,22 @@ describe('new cases', () => {
     expect(document.title).toBe('Cola · Cecilai')
   })
 
-  it('opening a case marks it seen, and does not turn the rest of the queue into news', () => {
+  it('opening a case marks it seen, and does not turn the rest of the queue into news', async () => {
     const view = renderWithI18n(tree(ok('a', 'b'), ['a', 'b'], <Opens id="a" />))
     expect(screen.getByTestId('badge').textContent).toBe('')
     view.rerender(page(tree(ok('a', 'b', 'c'), ['a', 'b', 'c'], <Opens id="a" />)))
-    expect(status().textContent).toBe('1 caso nuevo')
+    await waitFor(() => expect(status().textContent).toBe('1 caso nuevo'))
     view.rerender(page(tree(ok('a', 'b', 'c'), ['a', 'b', 'c'], <Opens id="c" />)))
     expect(screen.getByTestId('badge').textContent).toBe('')
     expect(document.title).toBe('Cola · Cecilai')
   })
 
-  it('a failed read keeps what was counted', () => {
+  it('a failed read keeps what was counted', async () => {
     const view = renderWithI18n(tree(ok('a'), ['a']))
     view.rerender(page(tree(ok('a', 'b'), ['a', 'b'])))
     view.rerender(page(tree({ ok: false, status: 503 }, ['a', 'b'])))
     expect(document.title).toBe('(1) Cola · Cecilai')
-    expect(status().textContent).toBe('1 caso nuevo')
+    await waitFor(() => expect(status().textContent).toBe('1 caso nuevo'))
   })
 
   it('remembers what was seen in the tab across a reload', () => {

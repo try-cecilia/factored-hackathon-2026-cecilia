@@ -85,20 +85,39 @@ function useTabTitleCount(count: number) {
 
 const phrase = (t: ReturnType<typeof useT>, count: number) => (count === 1 ? t('operator.new.one') : t('operator.new.other', { count }))
 
+// How long the region stays empty before it says the new count. A live region is read when its text changes, so a rise to a number
+// it already said (2, then 1, then 2) has to pass through empty; a screen reader needs a moment between the two to notice.
+const REPEAT_GAP_MS = 150
+
 /**
  * The polite announcement, for screen readers only: a live region that is always in the page (one that appears with its text is
- * often not read), never moving the focus. It speaks when the count goes up, not when it goes down, and clears at zero.
+ * often not read), never moving the focus. It speaks when the count goes up, whatever number that is, not when it goes down, and
+ * clears at zero.
  */
 export function NewCasesAnnouncer() {
   const t = useT()
   const { count } = useNewCases()
-  const [spoken, setSpoken] = useState(0)
+  const [spoken, setSpoken] = useState(0) // what the region says now
+  const [asked, setAsked] = useState(0) // what it will say after being emptied
   const [last, setLast] = useState(0)
   if (count !== last) {
     setLast(count)
-    if (count === 0) setSpoken(0)
-    else if (count > last) setSpoken(count)
+    if (count === 0) {
+      setSpoken(0)
+      setAsked(0)
+    } else if (count > last) {
+      setSpoken(0)
+      setAsked(count)
+    } else if (asked > 0) setAsked(count) // it fell while waiting to speak: say the number that is true now
   }
+  useEffect(() => {
+    if (asked === 0) return
+    const timer = setTimeout(() => {
+      setSpoken(asked)
+      setAsked(0)
+    }, REPEAT_GAP_MS)
+    return () => clearTimeout(timer)
+  }, [asked])
   return <div className="sr-only" role="status" aria-live="polite">{spoken > 0 ? phrase(t, spoken) : ''}</div>
 }
 
