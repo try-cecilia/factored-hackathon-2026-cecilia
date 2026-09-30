@@ -1,4 +1,20 @@
-# LATAM Bank — Consultas de cuentas y pagos con IA como primera línea
+# Cuentas y pagos en segundos, solo con datos verificados
+
+**Para quién y qué problema.** Clientes de un banco minorista de México, Colombia y Argentina que preguntan por su
+saldo, sus movimientos o si un pago se acreditó. Es el motivo de contacto más grande, el 35,0% de 686 mil contactos:
+cada llamada empieza con 120 s de cola y dura 221 s, y aun así se califica 2,91 sobre 5. Para el banco son unas 411
+horas de agente al mes (mediana). No afirmamos que la espera cause la nota: en estos datos la espera es la misma para
+todos los motivos.
+
+**Qué lo hace distinto.**
+1. **Solo dice lo que puede verificar.** El modelo interpreta y el código habla: el modelo nunca recibe un registro de
+   cliente y nunca le escribe al cliente.
+2. **Actúa una sola vez, y con el "sí" del cliente.** Rastrea un movimiento pendiente solo si el cliente lo confirma
+   (lo juzga el código) y lo anuncia únicamente después de leerlo de vuelta. Cuando no debe actuar, pasa a una persona
+   con la evidencia.
+3. **Cada capa de seguridad está medida.** Con el mismo modelo y el mismo juez se quitan las capas de a una
+   ([ablación](#resultados-workload-de-test-held-out-es--pt)): sin ellas un modelo malo produce resultados
+   inseguros; con todas, ninguno.
 
 Factored AI & Data Hackathon 2026. Un sistema de atención al cliente funcional para un flujo bancario
 acotado: **consultas de cuentas y pagos** (saldos, transacciones, estado de pagos y mora, tipos de cambio)

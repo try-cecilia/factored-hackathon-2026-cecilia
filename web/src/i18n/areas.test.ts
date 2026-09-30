@@ -56,7 +56,7 @@ function closure(entries: string[]): Set<string> {
       const spec = imported ?? loaded
       if (typeOnly || !spec) continue
       const target = resolveSpec(file, spec)
-      if (!target || /\/(i18n|server|ui\/gallery)\//.test(target)) continue
+      if (!target || /\/(i18n|server|ui\/gallery)\//.test(target.replaceAll('\\', '/'))) continue
       if (!target.endsWith('index.ts') || names === undefined) {
         queue.push(target)
         continue

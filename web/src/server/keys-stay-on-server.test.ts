@@ -1,15 +1,16 @@
 import assert from 'node:assert/strict'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 
 // A guard on the shape of the code, not a proof: the operator's keys are typed into plain HTML forms posted to the
 // server, so no client file may read, hold or send them.
-const root = new URL('..', import.meta.url).pathname
+const root = fileURLToPath(new URL('..', import.meta.url)).replaceAll('\\', '/')
 
 function files(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
-    const path = join(dir, name)
+    const path = join(dir, name).replaceAll('\\', '/')
     return statSync(path).isDirectory() ? files(path) : [path]
   })
 }

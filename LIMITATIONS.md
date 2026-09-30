@@ -312,6 +312,9 @@ service, and as our own roadmap.
 - **The local model is wired, not measured.** The compose stack can start Ollama and pass the API `LLM_PROVIDERS=local`, and the
   profile was verified with a 0.5 GB model. No evaluation has run against any local model (`gpt-oss:20b` or a smaller one),
   and on macOS Docker runs models on CPU only.
+- **The operator screen is tested in pieces, never driven whole.** Its API and components pass their tests
+  ([`docs/operator_screen_eval.md`](docs/operator_screen_eval.md)), but nobody has walked queue, claim, approve in a
+  browser, and it has had no keyboard or screen-reader pass.
 - **Voice is not built.** 85% of account/payment contacts are phone calls; this
   system serves the 15% on text channels until speech-to-text and
   text-to-speech are added.
