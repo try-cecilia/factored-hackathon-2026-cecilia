@@ -485,7 +485,8 @@ def human_queue(limit: int = 20) -> list[dict]:
 
 class DeskAction(BaseModel):
     expected_version: int | None = None  # the version the operator saw; a newer one refuses the decision
-    reason: str | None = Field(default=None, max_length=300)
+    reason: str | None = Field(default=None, max_length=300)  # reject: a note for the other operators, never the customer
+    message: str | None = Field(default=None, max_length=500)  # resolve: what the customer reads (one line, card numbers masked)
 
 
 @app.get("/admin/operator/me")
@@ -503,12 +504,13 @@ def ticket(ticket_id: str) -> dict:
 
 
 @app.post("/admin/tickets/{ticket_id}/{action}")
-def ticket_action(ticket_id: str, action: Literal["claim", "approve", "reject", "release"], body: DeskAction,
+def ticket_action(ticket_id: str, action: Literal["claim", "approve", "reject", "release", "resolve"], body: DeskAction,
                   operator: str = Depends(require_operator)) -> dict:
-    """An operator takes a ticket, approves or rejects the action it carries, or hands the conversation back.
-    Who acted is the name of the key they presented; the body cannot say otherwise."""
+    """An operator takes a ticket, approves or rejects the action it carries, resolves one that carries none with a
+    message for the customer, or hands the conversation back. Who acted is the name of the key they presented; the
+    body cannot say otherwise."""
     try:
-        return default_desk.act(ticket_id, action, operator, body.expected_version, body.reason)
+        return default_desk.act(ticket_id, action, operator, body.expected_version, body.reason, body.message)
     except NotFound as exc:
         raise HTTPException(404, str(exc)) from None
     except Conflict as exc:

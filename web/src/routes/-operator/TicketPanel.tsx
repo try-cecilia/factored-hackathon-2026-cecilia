@@ -2,12 +2,13 @@ import { useState, type ReactNode } from 'react'
 import { useI18n, useT } from '../../i18n/context'
 import type { MessageKey } from '../../i18n/translate'
 import type { DeskAction, DeskState, Result, Ticket } from '../../server/operator.functions'
-import { Button, IconButton, PriorityChip, StatusIndicator, type Priority, type StatusTone } from '../../ui'
+import { Button, IconButton, PriorityChip, priorityOf, StatusIndicator, type StatusTone } from '../../ui'
 import { AlertCircleIcon, AlertTriangleIcon, CheckIcon, InfoCircleIcon } from '../../ui/messages/icons'
 import { CloseIcon } from '../../ui/table/icons'
 import { ago, clock, CLOSED, explainKey, money, shortStamp, when } from './format'
-import { FRAUD_SCORE_FLAG, isFlagged, scoreLabel, ticketSummary } from './summary'
+import { FRAUD_SCORE_FLAG, isFlagged, resolutionMessage, scoreLabel, ticketSummary } from './summary'
 import { conflictOf, holdConflict, type Conflict } from './conflicts'
+import { evidenceTypeName, keyName, nextStepText, questionTexts, reasonText, reviewReasonName, ruleName } from './notes'
 import { KeyValues } from './ui'
 
 export type TicketPanelProps = {
@@ -15,7 +16,7 @@ export type TicketPanelProps = {
   /** Who is looking: `canAct` is a session with an operator key, and `operator` is the name that key carries. */
   view: { canAct: boolean; operator: string | null }
   /** Sends one action. The panel always passes the version it is showing. */
-  act: (action: DeskAction, input: { expectedVersion: number; reason?: string }) => Promise<Result<DeskState>>
+  act: (action: DeskAction, input: { expectedVersion: number; reason?: string; message?: string }) => Promise<Result<DeskState>>
   /** Reads the ticket again from the server. `true` only when the case was read and is now on screen. */
   reload: (minVersion: number) => Promise<boolean>
   /** Status of the last read of this case when it failed: the panel keeps what it has and says it is not fresh. */
@@ -30,13 +31,17 @@ export type TicketPanelProps = {
 
 type Flash = { tone: 'ok' | 'error'; title?: string; text: string; detail?: string }
 
-const tones: Record<DeskState['status'], StatusTone> = { open: 'open', claimed: 'info', approved: 'success', rejected: 'danger', handed_back: 'neutral', stale: 'caution' }
+// The API's limit for the message a resolution leaves the customer.
+const MESSAGE_MAX = 500
+
+const tones: Record<DeskState['status'], StatusTone> = { open: 'open', claimed: 'info', approved: 'success', rejected: 'danger', handed_back: 'neutral', stale: 'caution', resolved: 'success' }
 
 /** The ticket desk of the operator console: what the case is, what the assistant did, and what the operator can do next. */
 export function TicketPanel({ ticket, view, act, reload, loadError, onClose, keyForm, traceLink }: TicketPanelProps) {
   const t = useT()
   const { locale } = useI18n()
   const [reason, setReason] = useState('')
+  const [message, setMessage] = useState('')
   const [pending, setPending] = useState<DeskAction | 'reload' | null>(null)
   const [flash, setFlash] = useState<Flash | null>(null)
   const [conflict, setConflictNow] = useState<Conflict | null>(() => conflictOf(ticket.ticket_id))
@@ -62,10 +67,15 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
     setPending(action)
     setFlash(null)
     try {
-      const result = await act(action, { expectedVersion: desk.version, reason: action === 'reject' ? reason.trim() || undefined : undefined })
+      const result = await act(action, {
+        expectedVersion: desk.version,
+        reason: action === 'reject' ? reason.trim() || undefined : undefined,
+        message: action === 'resolve' ? message.trim() : undefined,
+      })
       if (result.ok) {
         setConflict(null)
         setReason('')
+        setMessage('')
         setFlash({ tone: 'ok', text: t(`operator.ticket.result.${action}` as MessageKey) })
       } else if (result.status === 409) {
         setConflict({ seen: desk.version, detail: result.message })
@@ -103,17 +113,24 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
   const state =
     desk.status === 'open' ? t('operator.ticket.state.unassigned')
     : desk.status === 'claimed' ? (mine ? t('operator.ticket.state.claimedByYou') : t('operator.ticket.state.claimedBy', { name: who }))
-    : t(`operator.ticket.state.${{ approved: 'approvedBy', rejected: 'rejectedBy', handed_back: 'handedBackBy', stale: 'staleBy' }[desk.status]}` as MessageKey, { name: last?.operator ?? who })
+    : t(`operator.ticket.state.${{ approved: 'approvedBy', rejected: 'rejectedBy', handed_back: 'handedBackBy', stale: 'staleBy', resolved: 'resolvedBy' }[desk.status]}` as MessageKey, { name: last?.operator ?? who })
 
   const pendingAction = ticket.pending_action
-  const canApprove = mine && !locked && pendingAction !== null
+  // A case that carries an action closes by approving or rejecting that action; any other one, by resolving it with a message.
+  const decisions: readonly DeskAction[] = pendingAction ? ['approve', 'reject'] : ['resolve']
+  // Who may write in the box of a decision, said in its placeholder.
+  const hint = (box: 'reason' | 'message') =>
+    !view.canAct ? t('operator.ticket.footer.readOnly')
+    : desk.status === 'open' ? t(`operator.ticket.${box}.unassigned`)
+    : mine ? t(`operator.ticket.${box}.placeholder`)
+    : t(`operator.ticket.${box}.lockedBy`, { name: who })
 
   return (
     <article className="op-ticket" aria-labelledby="op-ticket-title" data-state={desk.status}>
       <header className="op-ticket__head">
         <div className="op-ticket__id">
           <h1 id="op-ticket-title" className="op-mono">{ticket.ticket_id.slice(0, 8)}</h1>
-          <PriorityChip priority={ticket.priority.toLowerCase() as Priority} />
+          <PriorityChip priority={priorityOf(ticket.priority)} />
           <span className="op-mono op-muted">{ticket.queue}</span>
           <span className="op-head__spacer" />
           {conflict ? (
@@ -129,7 +146,7 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
           <StatusIndicator tone={tones[desk.status]}><strong>{state}</strong></StatusIndicator>
           <span className="op-muted">
             {t('operator.ticket.meta', { age: ago(ticket.created_at, locale) })}
-            {[ticket.country, ticket.language.toUpperCase(), ticket.segment].filter(Boolean).map((part) => ` · ${part}`)}
+            {[ticket.country, ticket.language ? ticket.language.toUpperCase() : t('operator.queue.unknownLanguage'), ticket.segment].filter(Boolean).map((part) => ` · ${part}`)}
           </span>
         </p>
       </header>
@@ -150,7 +167,7 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
         <section className="op-block" aria-label={t('operator.ticket.request')}>
           <h2>{t('operator.ticket.request')}</h2>
           <p className="op-request">{ticket.request}</p>
-          <p className="op-muted">{t('operator.ticket.reasonLine', { reason: ticket.reason, rule: ticket.policy_rule })}</p>
+          <p className="op-muted">{t('operator.ticket.reasonLine', { reason: reasonText(t, ticket), rule: ruleName(t, ticket.policy_rule) })}</p>
           {ticket.prior_requests.length > 0 && (
             <>
               <h3>{t('operator.ticket.priorRequests')}</h3>
@@ -161,7 +178,7 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
 
         {pendingAction && <PendingCard ticket={ticket} />}
 
-        {!closed && (
+        {!closed && pendingAction && (
           <section className="op-block">
             <label htmlFor="op-reason"><h2>{t('operator.ticket.reason.label')}</h2></label>
             <textarea
@@ -172,12 +189,27 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
               maxLength={300}
               rows={2}
               disabled={!mine || locked}
-              placeholder={
-                !view.canAct ? t('operator.ticket.footer.readOnly')
-                : desk.status === 'open' ? t('operator.ticket.reason.unassigned')
-                : mine ? t('operator.ticket.reason.placeholder')
-                : t('operator.ticket.reason.lockedBy', { name: who })
-              }
+              placeholder={hint('reason')}
+            />
+          </section>
+        )}
+
+        {!closed && !pendingAction && (
+          <section className="op-block">
+            <div className="op-block__head">
+              <label htmlFor="op-message"><h2>{t('operator.ticket.message.label')}</h2></label>
+              <span id="op-message-count" className="op-mono op-muted">{`${message.length}/${MESSAGE_MAX}`}</span>
+            </div>
+            <textarea
+              id="op-message"
+              className="op-input"
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              maxLength={MESSAGE_MAX}
+              rows={3}
+              disabled={!mine || locked}
+              placeholder={hint('message')}
+              aria-describedby="op-message-count"
             />
           </section>
         )}
@@ -223,8 +255,8 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
             )}
             {otherEvidence.map((e, i) => (
               <div key={i}>
-                <h3>{e.type}{e.id ? ` · ${e.id}` : ''}</h3>
-                <KeyValues data={e.detail} />
+                <h3>{evidenceTypeName(t, e.type)}{e.id ? ` · ${e.id}` : ''}</h3>
+                <KeyValues data={e.detail} label={(key) => keyName(t, key)} />
               </div>
             ))}
           </section>
@@ -237,7 +269,7 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
               {ticket.verified_facts.map((fact, i) => (
                 <li key={i}>
                   <CheckIcon size={10} />
-                  <span className="op-mono">{Object.entries(fact).map(([k, v]) => `${k}: ${typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v)}`).join(' · ')}</span>
+                  <span className="op-mono">{Object.entries(fact).map(([k, v]) => `${keyName(t, k)}: ${typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v)}`).join(' · ')}</span>
                 </li>
               ))}
             </ul>
@@ -247,13 +279,13 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
         {ticket.open_questions.length > 0 && (
           <section className="op-block">
             <h2>{t('operator.ticket.openQuestions')}</h2>
-            <ul className="op-bullets">{ticket.open_questions.map((q, i) => <li key={i}>{q}</li>)}</ul>
+            <ul className="op-bullets">{questionTexts(t, ticket).map((q, i) => <li key={i}>{q}</li>)}</ul>
           </section>
         )}
 
         <section className="op-block">
           <h2>{t('operator.ticket.nextStep')}</h2>
-          <p className="op-callout">{ticket.suggested_next_step}</p>
+          <p className="op-callout">{nextStepText(t, ticket)}</p>
         </section>
 
         {ticket.actions_taken.length > 0 && (
@@ -279,12 +311,15 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
                 : h.status === 'rejected' ? t('operator.ticket.historyItem.reject', { name })
                 : h.status === 'handed_back' ? t('operator.ticket.historyItem.release', { name })
                 : h.status === 'stale' ? t('operator.ticket.state.staleBy', { name })
+                : h.status === 'resolved' ? t('operator.ticket.historyItem.resolve', { name })
                 : t('operator.ticket.historyItem.other', { action: h.action, name })
-              const reasonText = typeof h.detail.reason === 'string' && h.detail.reason ? h.detail.reason : null
+              // A rejection carries the operator's internal reason; a resolution, the message the customer got.
+              const said = h.detail.reason || h.detail.message
+              const quoted = typeof said === 'string' && said ? said : null
               return (
                 <li key={i}>
                   <StatusIndicator tone={tones[h.status as DeskState['status']] ?? 'neutral'}>
-                    <span>{text}{reasonText && <em className="op-muted"> — “{reasonText}”</em>}</span>
+                    <span>{text}{quoted && <em className="op-muted"> — “{quoted}”</em>}</span>
                   </StatusIndicator>
                   <span className={conflict && version === desk.version && version !== conflict.seen ? 'op-mono op-danger' : 'op-mono op-muted'} title={when(h.ts, locale)}>
                     {t('operator.ticket.versionAge', { n: version, age: ago(h.ts, locale) })}
@@ -315,7 +350,7 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
           {conflict && (
             <>
               <Button size="sm" onClick={() => void reloadNow()} loading={pending === 'reload'}>{t('operator.ticket.actions.reload')}</Button>
-              {(desk.status === 'open' ? (['claim'] as const) : canApprove || mine ? (['approve', 'reject'] as const) : []).map((a) => (
+              {(desk.status === 'open' ? (['claim'] as const) : mine ? decisions : []).map((a) => (
                 <Button key={a} size="sm" variant="ghost" tinted disabled>{t(`operator.ticket.actions.${a}` as MessageKey)}</Button>
               ))}
             </>
@@ -333,10 +368,14 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
           )}
           {!conflict && mine && (
             <>
-              {pendingAction && (
-                <Button size="sm" onClick={() => void run('approve')} loading={pending === 'approve'} disabled={busy}>{pending === 'approve' ? t('operator.ticket.actions.sending.approve') : t('operator.ticket.actions.approve')}</Button>
+              {pendingAction ? (
+                <>
+                  <Button size="sm" onClick={() => void run('approve')} loading={pending === 'approve'} disabled={busy}>{pending === 'approve' ? t('operator.ticket.actions.sending.approve') : t('operator.ticket.actions.approve')}</Button>
+                  <Button size="sm" variant="ghost" tinted onClick={() => void run('reject')} loading={pending === 'reject'} disabled={busy}>{pending === 'reject' ? t('operator.ticket.actions.sending.reject') : t('operator.ticket.actions.reject')}</Button>
+                </>
+              ) : (
+                <Button size="sm" onClick={() => void run('resolve')} loading={pending === 'resolve'} disabled={busy || !message.trim()}>{pending === 'resolve' ? t('operator.ticket.actions.sending.resolve') : t('operator.ticket.actions.resolve')}</Button>
               )}
-              <Button size="sm" variant="ghost" tinted onClick={() => void run('reject')} loading={pending === 'reject'} disabled={busy}>{pending === 'reject' ? t('operator.ticket.actions.sending.reject') : t('operator.ticket.actions.reject')}</Button>
               <span className="op-head__spacer" />
               <Button size="sm" variant="ghost" muted onClick={() => void run('release')} loading={pending === 'release'} disabled={busy}>{pending === 'release' ? t('operator.ticket.actions.sending.release') : t('operator.ticket.actions.release')}</Button>
             </>
@@ -375,7 +414,7 @@ function ConflictBanner({ conflict, ticket }: { conflict: Conflict; ticket: Tick
   const { desk } = ticket
   const last = desk.history.at(-1)
   const moved = desk.version !== conflict.seen && last
-  const what = last ? t(`operator.ticket.banner.conflictWhat.${(['claim', 'approve', 'reject', 'release'] as const).includes(last.action as never) ? last.action : 'other'}` as MessageKey) : ''
+  const what = last ? t(`operator.ticket.banner.conflictWhat.${(['claim', 'approve', 'reject', 'release', 'resolve'] as const).includes(last.action as never) ? last.action : 'other'}` as MessageKey) : ''
   return (
     <Banner tone="danger" title={t('operator.ticket.banner.conflictTitle')}>
       {moved ? t('operator.ticket.banner.conflictBody', { seen: conflict.seen, now: desk.version, who: last.operator, what, time: clock(last.ts, locale) }) : t('operator.ticket.banner.conflictGeneric')}
@@ -387,7 +426,9 @@ function ConflictBanner({ conflict, ticket }: { conflict: Conflict; ticket: Tick
 function OutcomeBanner({ ticket }: { ticket: Ticket }) {
   const t = useT()
   const { status, trace_id } = ticket.desk
+  const message = resolutionMessage(ticket.desk)
   if (status === 'approved') return <Banner tone="success" title={t('operator.ticket.banner.traceOpened')}>{trace_id ? t('operator.ticket.banner.traceOpenedBody', { id: trace_id }) : undefined}</Banner>
+  if (status === 'resolved') return <Banner tone="success" title={t('operator.ticket.banner.resolvedTitle')}>{message ? t('operator.ticket.banner.resolvedBody', { message }) : undefined}</Banner>
   if (status === 'stale') return <Banner tone="caution" title={t('operator.ticket.banner.staleTitle')}>{t('operator.ticket.banner.staleBody')}</Banner>
   if (status === 'rejected') return <Banner tone="neutral" title={t('operator.ticket.banner.rejectedTitle')}>{t('operator.ticket.banner.rejectedBody')}</Banner>
   return <Banner tone="neutral" title={t('operator.ticket.banner.handedBackTitle')}>{t('operator.ticket.banner.handedBackBody')}</Banner>
@@ -410,7 +451,7 @@ function PendingCard({ ticket }: { ticket: Ticket }) {
     [t('operator.ticket.pending.product'), <span className="op-mono">{p.product_id}</span>],
     [t('operator.ticket.pending.amount'), <span className="op-mono op-strong">{p.movement ? money(p.movement.amount, p.movement.currency) : '—'}</span>],
     ...(p.age_days != null ? [[t('operator.ticket.pending.date'), t('operator.ticket.pending.dateValue', { days: p.age_days })] as [string, ReactNode]] : []),
-    ...(p.review_reason ? [[t('operator.ticket.pending.reviewReason'), <span className="op-mono">{p.review_reason}</span>] as [string, ReactNode]] : []),
+    ...(p.review_reason ? [[t('operator.ticket.pending.reviewReason'), <span title={p.review_reason}>{reviewReasonName(t, p.review_reason)}</span>] as [string, ReactNode]] : []),
     ...(!CLOSED.includes(status) ? [[t('operator.ticket.pending.ifApproved'), t('operator.ticket.pending.ifApprovedValue')] as [string, ReactNode]] : []),
     ...(typeof rejectedWith === 'string' && rejectedWith ? [[t('operator.ticket.pending.reasonGiven'), rejectedWith] as [string, ReactNode]] : []),
   ]

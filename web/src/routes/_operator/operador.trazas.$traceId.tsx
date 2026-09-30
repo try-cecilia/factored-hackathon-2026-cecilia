@@ -5,6 +5,7 @@ import { loadTrace } from '../../server/operator.functions'
 import { IconButton, StatusIndicator, type StatusTone } from '../../ui'
 import { CloseIcon } from '../../ui/table/icons'
 import { categoryName, dispositionName, ms, usd, when } from '../-operator/format'
+import { attemptOutcomeName, attemptReasonName, errorTypeName, ruleName } from '../-operator/notes'
 import { isAutomatic } from '../-operator/refresh'
 import { DataTable } from '../../ui'
 import { KeyValues, Notice, Stat } from '../-operator/ui'
@@ -51,7 +52,10 @@ function TracePage() {
         <div className="op-ticket__body">
           <section className="op-block">
             <h2>{t('monitor.traces.decision')}</h2>
-            <p>{t('monitor.traces.rule')} <span className="op-mono">{trace.policy_rule || '—'}</span></p>
+            <p>
+              {t('monitor.traces.rule')} {ruleName(t, trace.policy_rule)}
+              {trace.policy_rule && ruleName(t, trace.policy_rule) !== trace.policy_rule && <> <span className="op-mono op-muted">({trace.policy_rule})</span></>}
+            </p>
             <dl className="op-stats">
               <Stat text name={t('monitor.traces.language')} value={trace.language} />
               <Stat text name={t('monitor.traces.segment')} value={trace.segment ?? '—'} />
@@ -85,10 +89,10 @@ function TracePage() {
             {trace.usage && <KeyValues data={trace.usage} />}
             {(trace.llm_steps as Step[] | undefined)?.map((s, i) => (
               <div key={i}>
-                <h3>{t('monitor.traces.step', { n: s.step ?? i, outcome: s.outcome ?? '—' })}</h3>
+                <h3>{t('monitor.traces.step', { n: s.step ?? i, outcome: attemptOutcomeName(t, s.outcome) })}</h3>
                 <ul className="op-plain">
                   {(s.attempts ?? []).map((a, j) => (
-                    <li key={j}><span className="op-mono">{a.provider}</span> · {a.outcome}{a.reason ? ` (${a.reason})` : ''}</li>
+                    <li key={j}><span className="op-mono">{a.provider}</span> · {attemptOutcomeName(t, a.outcome)}{a.reason ? ` (${attemptReasonName(t, a.reason)})` : ''}</li>
                   ))}
                 </ul>
               </div>
@@ -110,7 +114,7 @@ function TracePage() {
                 getRowId={(a) => String(a.key)}
                 columns={[
                   { id: 'tool', header: t('monitor.traces.tool'), mono: true, rowHeader: true, truncate: true, cell: (a) => a.tool_name },
-                  { id: 'outcome', header: t('monitor.traces.outcome'), width: 96, cell: (a) => (a.success ? t('monitor.traces.toolOk') : a.error_type ?? t('monitor.traces.toolFailed')) },
+                  { id: 'outcome', header: t('monitor.traces.outcome'), width: 184, truncate: true, cell: (a) => (a.success ? t('monitor.traces.toolOk') : a.error_type ? <span title={a.error_type}>{errorTypeName(t, a.error_type)}</span> : t('monitor.traces.toolFailed')) },
                   { id: 'duration', header: t('monitor.traces.duration'), width: 76, align: 'end', mono: true, cell: (a) => ms(a.duration_ms) },
                 ]}
               />

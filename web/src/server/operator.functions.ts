@@ -1,4 +1,5 @@
 import { createServerFn } from '@tanstack/react-start'
+import { parseDeskAction } from './desk-action'
 import { adminRead, operatorAct, type Result } from './operator-api'
 import { publicOrigins } from './origin-check'
 import { operatorSessionState, takeFlash } from './operator-session'
@@ -9,8 +10,8 @@ export type { QueueRow, Result }
 // `unknown` does not cross the server-function boundary; the JSON the API sends does.
 export type Json = string | number | boolean | null | Json[] | { [key: string]: Json }
 
-export type DeskAction = 'claim' | 'approve' | 'reject' | 'release'
-export type DeskStatus = 'open' | 'claimed' | 'approved' | 'rejected' | 'handed_back' | 'stale'
+export type DeskAction = 'claim' | 'approve' | 'reject' | 'release' | 'resolve'
+export type DeskStatus = 'open' | 'claimed' | 'approved' | 'rejected' | 'handed_back' | 'stale' | 'resolved'
 
 export type DeskState = {
   ticket_id: string
@@ -19,6 +20,8 @@ export type DeskState = {
   trace_id: string | null
   version: number
   history: { action: string; status: string; operator: string; ts: number; detail: Record<string, Json> }[]
+  /** What the customer was told when the case was resolved; null otherwise. An older API leaves it out. */
+  message?: string | null
 }
 
 export type PendingAction = {
@@ -30,18 +33,22 @@ export type PendingAction = {
   movement?: { transaction_type?: string; amount?: number | string; currency?: string }
 }
 
+/** A text for the operator as a stable code with its parameters. */
+export type TextCode = { code: string; params?: Record<string, string | number> }
+
 export type Ticket = {
   ticket_id: string
   trace_id: string | null
   created_at: number
   category: string
-  priority: string
+  // A case that reaches the console without them (an old or incomplete record) must still be drawn: both may be missing.
+  priority?: string | null
   queue: string
   customer_id: string
   session_ref: string
   segment: string | null
   country: string | null
-  language: string
+  language?: string | null
   request: string
   prior_requests: string[]
   reason: string
@@ -51,6 +58,10 @@ export type Ticket = {
   actions_taken: Record<string, Json>[]
   open_questions: string[]
   suggested_next_step: string
+  // The codes of the three texts above (agent/policy/notes.py). A case filed before them has none: the console shows the English text.
+  reason_code?: TextCode | null
+  open_question_codes?: (TextCode | null)[]
+  next_step_code?: string | null
   pending_action: PendingAction | null
   desk: DeskState
 }
@@ -98,23 +109,14 @@ export const loadTicket = createServerFn({ method: 'GET' })
   .validator((input: unknown) => ({ id: idOf(input, 'ticket_id'), auto: autoOf(input as { auto?: boolean } | undefined) }))
   .handler(({ data }) => adminRead<Ticket>(`/admin/tickets/${data.id}`, !data.auto))
 
+// `reason` is the internal note of a rejection; `message`, what the customer reads when the case is resolved.
 export const actOnTicket = createServerFn({ method: 'POST' })
-  .validator((input: unknown) => {
-    const { action, expected_version, reason } = (input ?? {}) as Record<string, unknown>
-    if (!['claim', 'approve', 'reject', 'release'].includes(action as string)) throw new Error('action is not valid')
-    if (expected_version !== undefined && !Number.isInteger(expected_version)) throw new Error('expected_version must be an integer')
-    const note = clean(reason).slice(0, 300)
-    return {
-      ticket_id: idOf(input, 'ticket_id'),
-      action: action as DeskAction,
-      expected_version: expected_version as number | undefined,
-      reason: note || undefined,
-    }
-  })
+  .validator((input: unknown) => ({ ticket_id: idOf(input, 'ticket_id'), ...parseDeskAction(input) }))
   .handler(({ data }) =>
     operatorAct<DeskState>(`/admin/tickets/${data.ticket_id}/${data.action}`, {
       expected_version: data.expected_version,
       reason: data.reason,
+      message: data.message,
     }),
   )
 

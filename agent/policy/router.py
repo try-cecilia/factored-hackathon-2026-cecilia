@@ -13,6 +13,7 @@ from enum import Enum
 from typing import Any
 
 from agent.policy import intent_guard
+from agent.policy.notes import Note, question, reason
 from agent.policy.signals import escalation_categories, normalize
 from agent.tools.errors import (
     DataUnavailable,
@@ -36,10 +37,10 @@ IN_SCOPE_INTENTS = {"balance_inquiry", "transaction_lookup", "payment_status", "
 @dataclass
 class Decision:
     disposition: Disposition
-    reason: str
+    reason: str | Note  # a Note carries the code the operator console translates; a plain string is shown as written
     category: str = "none"
     missing_slots: list[str] = field(default_factory=list)
-    open_questions: list[str] = field(default_factory=list)
+    open_questions: list[str | Note] = field(default_factory=list)
     rule: str = ""  # which policy rule fired — shown in traces/tickets as the explanation
 
 
@@ -55,28 +56,27 @@ def pre_llm(text: str, customer_status: str | None, answering_clarification: boo
     The safety lexicon still runs on every turn."""
     reading = intent_guard.read(text)
     if customer_status == "Suspended":
-        return Decision(Disposition.ESCALATE, "Customer is under an account suspension (compliance hold).",
-                        "compliance_hold", open_questions=["Confirm the reason for the suspension before disclosing account data."],
+        return Decision(Disposition.ESCALATE, reason("compliance_hold"),
+                        "compliance_hold", open_questions=[question("confirm_suspension_reason")],
                         rule="customer_status == Suspended"), reading
     cats = escalation_categories(text)
     if cats:
-        return Decision(Disposition.ESCALATE, f"Safety signal in the request: {', '.join(cats)}.", cats[0],
-                        open_questions=["Confirm whether the customer's card/account must be blocked.",
-                                        "Verify identity with a stronger factor before acting."],
+        return Decision(Disposition.ESCALATE, reason("safety_signal", categories=", ".join(cats)), cats[0],
+                        open_questions=[question("confirm_block"), question("verify_identity")],
                         rule=f"lexicon:{cats[0]}"), reading
     if reading.escalate and not answering_clarification:
         return Decision(Disposition.ESCALATE,
-                        f"Intent classifier flags possible fraud/dispute (p={reading.p_escalation:.2f} >= {reading.threshold:.2f}).",
+                        reason("classifier_flag", p=f"{reading.p_escalation:.2f}", threshold=f"{reading.threshold:.2f}"),
                         "classifier_escalation",
-                        open_questions=["Classifier-only signal: confirm with the customer what happened."],
+                        open_questions=[question("confirm_classifier_signal")],
                         rule="intent_classifier:requires_escalation"), reading
     return None, reading
 
 
 def foreign_reference(product_ids: list[str]) -> Decision:
     """The message names products owned by another customer (checked in the tool layer, before the model runs)."""
-    return Decision(Disposition.ESCALATE, f"The request names {len(product_ids)} product(s) owned by another customer.", "security",
-                    open_questions=["Possible unauthorized-access or prompt-injection attempt; review the trace."],
+    return Decision(Disposition.ESCALATE, reason("foreign_reference", count=len(product_ids)), "security",
+                    open_questions=[question("review_unauthorized_access")],
                     rule="reference_to_foreign_product")
 
 
@@ -91,15 +91,16 @@ def after_tool(error: Exception | None) -> Decision | None:
         return Decision(Disposition.CLARIFY, str(error), "resource_not_found", missing_slots=["product_id"],
                         rule="tool_error:ResourceNotFound")
     if isinstance(error, PermissionDenied):
-        return Decision(Disposition.ESCALATE, "Ownership check failed: the request targets a resource the customer does not own.",
-                        "security", open_questions=["Possible unauthorized-access or prompt-injection attempt; review the trace."],
+        return Decision(Disposition.ESCALATE, reason("ownership_check_failed"),
+                        "security", open_questions=[question("review_unauthorized_access")],
                         rule="tool_error:PermissionDenied")
     if isinstance(error, DataUnavailable):
-        return Decision(Disposition.ESCALATE, f"Data needed for a verified answer is unavailable: {error}", "data_unavailable",
-                        open_questions=[f"Look up '{error.field or 'the missing field'}' in the core system."],
+        unavailable = reason("data_unavailable", str(error), field=error.field) if error.field else reason("data_unavailable_unspecified", str(error))
+        return Decision(Disposition.ESCALATE, unavailable, "data_unavailable",
+                        open_questions=[question("lookup_field", field=error.field) if error.field else question("lookup_missing_field")],
                         rule="tool_error:DataUnavailable")
-    return Decision(Disposition.ESCALATE, f"Tool failure: {error}", "tool_failure",
-                    open_questions=["A lookup failed; answer requires a manual check."], rule=f"tool_error:{type(error).__name__}")
+    return Decision(Disposition.ESCALATE, reason("tool_failure", str(error), error_type=type(error).__name__), "tool_failure",
+                    open_questions=[question("manual_check")], rule=f"tool_error:{type(error).__name__}")
 
 
 def no_tool_answer(reading: intent_guard.IntentReading, text: str) -> Decision:
@@ -116,14 +117,14 @@ def no_tool_answer(reading: intent_guard.IntentReading, text: str) -> Decision:
 
 
 def llm_unavailable(attempts: list[dict[str, Any]]) -> Decision:
-    return Decision(Disposition.ESCALATE, "No LLM provider available within the turn budget.", "llm_unavailable",
-                    open_questions=["Answer manually; the automated assistant was unavailable."], rule="llm_unavailable")
+    return Decision(Disposition.ESCALATE, reason("llm_unavailable"), "llm_unavailable",
+                    open_questions=[question("answer_manually_unavailable")], rule="llm_unavailable")
 
 
 def turn_timeout() -> Decision:
     """The turn's time budget ran out between the model's answer and the lookup: nothing was looked up or done."""
-    return Decision(Disposition.ESCALATE, "The turn's time budget ran out before the lookup could run.", "turn_timeout",
-                    open_questions=["Answer manually; the automated assistant ran out of time."], rule="turn_timeout")
+    return Decision(Disposition.ESCALATE, reason("turn_timeout"), "turn_timeout",
+                    open_questions=[question("answer_manually_timeout")], rule="turn_timeout")
 
 
 # --- the one action: tracing a pending movement (D3) ------------------------------------------------------------
@@ -164,8 +165,8 @@ def trace_step(result: dict) -> Decision:
     or hand it to a person when nothing of theirs is pending."""
     items = result["items"]
     if not items:
-        return Decision(Disposition.ESCALATE, "The customer reports a movement that did not arrive, and none of theirs is pending.",
-                        "trace_unmatched", open_questions=["Check the movement with payments operations or the sending bank."],
+        return Decision(Disposition.ESCALATE, reason("trace_unmatched"),
+                        "trace_unmatched", open_questions=[question("check_movement")],
                         rule="action:trace_unmatched")
     if len(items) > 1:
         return Decision(Disposition.CLARIFY, f"{len(items)} pending movements match; the customer picks one.",
@@ -183,15 +184,15 @@ def trace_opened() -> Decision:
 
 
 def trace_unverified() -> Decision:
-    return Decision(Disposition.ESCALATE, "The customer confirmed, but the tracing service did not confirm the trace.",
-                    "trace_unverified", open_questions=["Open the trace manually and give the customer its number."],
+    return Decision(Disposition.ESCALATE, reason("trace_unverified"),
+                    "trace_unverified", open_questions=[question("open_trace_manually")],
                     rule="action:trace_unverified")
 
 
-def trace_review(reason: str) -> Decision:
+def trace_review(review_reason: str) -> Decision:
     """The customer confirmed, but this movement is old or contradicts their records: a person approves the trace."""
-    return Decision(Disposition.ESCALATE, f"The customer confirmed a trace, but the movement needs a person's approval ({reason}).",
-                    "trace_review", open_questions=[f"Approve or reject the trace: {reason}."], rule="action:trace_review")
+    return Decision(Disposition.ESCALATE, reason("trace_review", review_reason=review_reason),
+                    "trace_review", open_questions=[question("decide_trace", review_reason=review_reason)], rule="action:trace_review")
 
 
 def trace_cancelled() -> Decision:

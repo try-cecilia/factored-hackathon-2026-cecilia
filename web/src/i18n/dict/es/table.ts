@@ -24,6 +24,7 @@ export const table = {
     high: 'Alta',
     medium: 'Media',
     low: 'Baja',
+    unknown: 'Desconocida',
   },
   sample: {
     titles: {

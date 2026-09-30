@@ -18,7 +18,7 @@ A numeric grounding check then compared the model's figures against the tool res
 The model only understands the request and chooses tools. The system never gives it a customer record, and the model never writes to the customer.
 
 1. **One model call per turn.** It returns tool calls: up to two, run in parallel. Tool results never go back to the model.
-2. **Every reply is rendered in code**, from verified tool results or fixed ES/PT templates (`agent/core/render.py`). The model's prose is discarded. No figure and no claimed action can come from it, so the grounding verifier had nothing left to check and was removed.
+2. **Every reply is rendered in code**, from verified tool results or fixed ES/PT templates (`agent/core/render.py`). The model's prose is discarded. No figure and no claimed action can come from it, so the grounding verifier had nothing left to check and was removed. The one text not written by the code is a person's: when an operator resolves a case, their message reaches the customer as written (on one line, card numbers masked), inside a fixed frame that says an agent wrote it ("Mensaje del agente: «...»").
 3. **What the model sees:**
    - the customer's words, masked by `agent/llm/privacy.py` after normalizing Unicode dashes, fullwidth and invisible characters (so `PRD–FIX0006`, an id glued to a word, or `5000–000–004` are caught like their plain forms):
      - the customer's own product ids become their alias;
@@ -43,7 +43,7 @@ Gains:
 - **Compliance by construction, and measured.**
   - `tests/test_privacy.py` runs a whole multi-turn conversation: balances, movements, payment status, a product clarification and its answer. It asserts that none of the customer's records reaches the model. Those records are the balances, amounts, merchants, internal ids, account numbers, name, document, email, phone and segment, all read straight from the warehouse.
   - The evaluation harness runs the same check on every case of every run (`records_sent_to_model`), including the adversarial model and live models.
-- **No hallucinated figure or unverified action can reach a customer.** This is a property of the architecture, not the output of a check that could miss.
+- **No hallucinated figure or unverified action can reach a customer.** This is a property of the architecture, not the output of a check that could miss. It is about the model: an operator's resolution message is a person's word, marked as such, and what it says is the operator's responsibility.
 - **Half the model calls.** v2 made about 2 calls per resolved turn: choose tools, then phrase. v3 makes 1. On Claude, the tools and the fixed rules are also prompt-cached: about 1.7K of about 2.1K input tokens per call, billed at a tenth of the input price (`tokens (cached)` in the live smoke report).
 - **Injection handling no longer depends on the model**, as point 5 explains.
 

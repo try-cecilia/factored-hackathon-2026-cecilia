@@ -1,6 +1,6 @@
 import type { QueueRow } from '../../server/queue-row.ts'
 import { clampPage } from '../../ui/table/paging.ts'
-import { priorityRank } from '../../ui/table/priority.ts'
+import { priorityOf, priorityRank } from '../../ui/table/priority.ts'
 import { sortRows, type SortState } from '../../ui/table/sort.ts'
 import { CLOSED } from './format.ts'
 
@@ -115,17 +115,20 @@ export function sidebarCounts(tickets: readonly QueueRow[], me: string | null): 
   }
 }
 
+// A case without a priority (or with one that is not one of the four) ranks after every known one: it is not made a priority it does not have.
+const rankOf = (t: QueueRow) => priorityRank(priorityOf(t.priority))
+
 /** Pending work first, most urgent first, then the one that has waited longest; closed work last, latest first. */
 export function defaultOrder(tickets: readonly QueueRow[]): QueueRow[] {
   return [...tickets].sort((a, b) => {
     const closed = Number(isClosed(a)) - Number(isClosed(b))
     if (closed) return closed
     if (isClosed(a)) return b.created_at - a.created_at
-    return priorityRank(a.priority.toLowerCase()) - priorityRank(b.priority.toLowerCase()) || a.created_at - b.created_at
+    return rankOf(a) - rankOf(b) || a.created_at - b.created_at
   })
 }
 
-const STATUS_ORDER = ['open', 'claimed', 'approved', 'rejected', 'handed_back', 'stale']
+const STATUS_ORDER = ['open', 'claimed', 'approved', 'resolved', 'rejected', 'handed_back', 'stale']
 
 /** Column order chosen in the header. `age` ascending is the youngest first, so its value is the creation time upside down. */
 export function orderTickets(tickets: readonly QueueRow[], sort: SortState): QueueRow[] {
@@ -133,7 +136,7 @@ export function orderTickets(tickets: readonly QueueRow[], sort: SortState): Que
   return sortRows(tickets, sort, (t, key) => {
     switch (key) {
       case 'priority':
-        return priorityRank(t.priority.toLowerCase())
+        return rankOf(t)
       case 'ticket':
         return t.ticket_id
       case 'queue':
@@ -141,7 +144,7 @@ export function orderTickets(tickets: readonly QueueRow[], sort: SortState): Que
       case 'request':
         return t.request
       case 'locale':
-        return `${t.country ?? ''}${t.language}`
+        return `${t.country ?? ''}${t.language ?? ''}`
       case 'age':
         return -t.created_at
       case 'status':
@@ -177,9 +180,10 @@ export function pageSlice<T>(rows: readonly T[], page: number, pageSize: number)
   return { page: current, rows: rows.slice((current - 1) * pageSize, current * pageSize) }
 }
 
-export const localeOf = (t: QueueRow) => [countryCode(t.country), t.language.toUpperCase()].filter(Boolean).join('·')
+/** Country code and language; a case without a language says so (`unknown`) instead of leaving it out. */
+export const localeOf = (t: QueueRow, unknown = '?') => [countryCode(t.country), t.language ? t.language.toUpperCase() : unknown].filter(Boolean).join('·')
 
-export const distinct = (tickets: readonly QueueRow[], pick: (t: QueueRow) => string | null) =>
+export const distinct = (tickets: readonly QueueRow[], pick: (t: QueueRow) => string | null | undefined) =>
   [...new Set(tickets.map(pick).filter((v): v is string => Boolean(v)))].sort()
 
 export const hasFilters = (f: QueueFilters) => Boolean(f.queue || f.priority || f.country || f.language || f.q || f.view !== 'all' || f.tab !== 'all')

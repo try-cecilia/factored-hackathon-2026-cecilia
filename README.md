@@ -223,10 +223,12 @@ Entrá a **http://127.0.0.1:3000/operador/login**:
 En la cola aparecen los casos que derivó el asistente. Pasos para probar:
 1. Abrí un caso y tocá **Tomar caso**. Para decidir hay que tomarlo antes.
 2. Decidí:
-   - **Aprobar rastreo**: solo aparece si el caso trae una acción, por ejemplo un rastreo que el asistente no pudo abrir solo.
-   - **Rechazar**: con motivo opcional.
+   - **Aprobar rastreo** o **Rechazar** (con un motivo opcional que solo ven los operadores): aparecen si el caso trae
+     una acción, por ejemplo un rastreo que el asistente no pudo abrir solo.
+   - **Resolver**: en los casos sin acción, con un mensaje para el cliente, que lo ve en su caso y en el chat.
    - **Devolver a la asistente**.
-3. Volvé al chat del cliente y escribí algo. Antes de la respuesta aparece la novedad del caso ("un agente ya lo tomó…").
+3. Volvé al chat del cliente y escribí algo. Antes de la respuesta aparece la novedad del caso ("un agente ya lo tomó…",
+   o el mensaje con el que lo resolviste).
 4. Para ver el **conflicto 409**, abrí otra ventana privada, entrá con otro operador de `OPERATOR_KEYS` (agregá uno si hace falta,
    `nombre=clave` separado por coma) e intentá tomar el mismo caso.
 

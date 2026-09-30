@@ -21,6 +21,7 @@ export const cases: Like<typeof es> = {
     rejected: 'Recusado',
     handed_back: 'Devolvido à Cecilia',
     stale: 'Sem alterações necessárias',
+    resolved: 'Resolvido',
     unknown: 'Em andamento',
   },
   detail: {
@@ -52,6 +53,7 @@ export const cases: Like<typeof es> = {
       rejected: 'Uma pessoa analisou o seu caso e não pôde seguir com o pedido.',
       handed_back: 'Uma pessoa analisou o seu caso e o devolveu para a Cecilia.',
       stale: 'Na análise, a movimentação já não aparecia como pendente.',
+      resolved: 'Uma pessoa da equipe resolveu o seu caso e deixou uma mensagem para você.',
       unknown: 'O seu caso está em andamento.',
     },
     whatNext: {
@@ -61,6 +63,7 @@ export const cases: Like<typeof es> = {
       rejected: 'Se precisar de mais ajuda, você pode falar com a central de atendimento do banco.',
       handed_back: 'Você pode continuar o atendimento com a Cecilia na conversa.',
       stale: 'Não é preciso fazer mais nada.',
+      resolved: 'Se precisar de mais alguma coisa, você pode continuar o atendimento com a Cecilia na conversa.',
       unknown: 'Quando mudar, o status é atualizado aqui.',
     },
   },

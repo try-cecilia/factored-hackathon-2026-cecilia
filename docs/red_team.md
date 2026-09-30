@@ -8,7 +8,8 @@ front of the deployed demo for an hour, and reports what they tried and what hap
 
 - **Who:** a teammate who never worked on this code and friends of the team, none of whom saw the design documents.
 - **When:** 30/09/2026 in the evening, on the deployed demo, for one hour.
-- **How:** in the demo, sign in as any sandbox customer (the test PINs are public on purpose) and write freely.
+- **How:** in the demo, sign in as any sandbox customer (the test PINs are public on purpose) and write freely. What the
+  participants read before starting, with the addresses: [`red_team_guia.md`](red_team_guia.md) (in Spanish).
 - **Rules:** only the demo's own pages; no floods or scripts (the rate limits would block them and they test
   nothing about the assistant); no attacks on the hosting; no real personal data, since everything here is
   synthetic.

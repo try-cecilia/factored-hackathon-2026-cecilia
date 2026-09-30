@@ -355,3 +355,10 @@ service, and as our own roadmap.
 - Replies are rendered from templates, not written by the model. They read
   more like a statement than a conversation. That is the price of "no figure
   or action the model invented can reach a customer".
+- The operator's side stops at one decision. A case without an action is
+  resolved with one message to the customer, who reads it in the case view and
+  ahead of their next reply. There are no intermediate states ("waiting for
+  the customer", "contacted") and no live chat between operator and customer:
+  that needs a push channel (websockets) through the API, the web server and
+  the hosting. Both are next steps; the resolution message is the one update a
+  customer gets today.

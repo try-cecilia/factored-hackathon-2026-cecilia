@@ -1,8 +1,9 @@
 """El clasificador congelado, puntuado sobre mensajes escritos por personas ajenas al equipo.
 
-Tres pasos (docs/human_set.md define el esquema de etiquetas y la regla de que estos resultados no se usan para ajustar):
+Los pasos (docs/human_set.md define el esquema de etiquetas y la regla de que estos resultados no se usan para ajustar):
 
     python -m eval.human_set.classifier_eval sheet                 # hoja para etiquetar, sin salidas del sistema
+    python -m eval.human_set.classifier_eval page --labeler NOMBRE [--labeler ...] [--only-disagreements]   # una página por persona (labeling.py)
     python -m eval.human_set.classifier_eval agreement A.csv B.csv [--third C.csv]   # kappa y etiquetas finales
     python -m eval.human_set.classifier_eval score                 # el clasificador y la línea base sobre lo etiquetado
 
@@ -39,6 +40,7 @@ from agent.llm.intent_classifier import load_rows
 from agent.policy import intent_guard
 from agent.policy.signals import contains_escalation_signal, escalation_categories
 from eval import leakage
+from eval.human_set import labeling
 from eval.stats import fmt, rate
 
 RAW = Path("eval/workload/human_raw.jsonl")
@@ -83,6 +85,8 @@ def read_messages(raw: Path) -> tuple[list[dict], dict]:
             continue
         people.add(sub["id"])
         for situation, text in sub["answers"].items():
+            if not str(text).strip():  # the form stores only what was written; a blank answer is not a message
+                continue
             messages.append({"message_id": f"{sub['id']}:{situation}", "situation": situation, "language": sub["lang"],
                              "country": sub.get("country"), "message": text, "person": sub["id"]})
     return messages, {"submissions": len(people), "left_out_saw_system": left_out}
@@ -138,6 +142,12 @@ def agreement(a: dict[str, str], b: dict[str, str], third: dict[str, str] | None
             "disagreements": disagreements, "resolved_by_third": sum(s == "resolved" for _, s in final.values()),
             "unresolved": sum(s == "unresolved" for _, s in final.values()), "final": final,
             "note": "kappa is computed on the first two people before any disagreement is settled"}
+
+
+def read_final(path: Path) -> dict[str, tuple[str | None, str]]:
+    """message_id -> (final label, or None when unresolved; status), as write_final wrote them."""
+    with open(path, newline="", encoding="utf-8") as f:
+        return {r["message_id"]: (r["label_final"] or None, r["status"]) for r in csv.DictReader(f)}
 
 
 def write_final(rep: dict, out: Path, report_path: Path) -> None:
@@ -270,6 +280,9 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("sheet")
+    pg = sub.add_parser("page", help=f"one labeling page per person, from the sheet -> {SHEET.parent}/human_labeling_<name>.html")
+    pg.add_argument("--labeler", action="append", required=True, help="once per person")
+    pg.add_argument("--only-disagreements", action="store_true", help=f"the third person's page: the disagreements in {AGREEMENT}")
     ag = sub.add_parser("agreement")
     ag.add_argument("a")
     ag.add_argument("b")
@@ -277,6 +290,12 @@ def main() -> None:
     sub.add_parser("score")
     args = ap.parse_args()
     sys.stdout.reconfigure(encoding="utf-8")
+    if args.cmd == "page":  # needs the sheet only, not the answers
+        only = ({d["message_id"] for d in json.loads(AGREEMENT.read_text(encoding="utf-8"))["disagreements"]}
+                if args.only_disagreements else None)
+        for path in labeling.write_pages(args.labeler, SHEET, only):
+            print(f"{path}: send it to that person only")
+        return
     messages, counts = read_messages(RAW)
     if args.cmd == "sheet":
         write_sheet(messages, SHEET)
@@ -288,8 +307,7 @@ def main() -> None:
         print(f"kappa {rep['kappa']} | agreement {100 * rep['percent_agreement']:.1f}% of {rep['n']} | {len(rep['disagreements'])} disagreements "
               f"({rep['resolved_by_third']} settled, {rep['unresolved']} unresolved) -> {FINAL}")
     else:
-        final = {r["message_id"]: (r["label_final"] or None, r["status"]) for r in csv.DictReader(open(FINAL, newline="", encoding="utf-8"))}
-        rep = score(messages, final, counts, json.loads(AGREEMENT.read_text(encoding="utf-8")))
+        rep = score(messages, read_final(FINAL), counts, json.loads(AGREEMENT.read_text(encoding="utf-8")))
         REPORT_JSON.write_text(dump(rep), encoding="utf-8")
         REPORT_MD.write_text(to_markdown(rep), encoding="utf-8")
         print(REPORT_MD.read_text(encoding="utf-8"))

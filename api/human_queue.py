@@ -1,9 +1,9 @@
 """What the operator's queue lists: the latest tickets plus every ticket that still needs a person, however old.
 
 A ticket that is open or claimed is work nobody has decided; if it fell off with its age, nobody would see it. Approved,
-rejected, handed back and stale ones are history, so only the latest of those travel. The desk file is read once for the
-whole list (not once per ticket), and each ticket's state is still replayed by `TicketDesk.state`, so versions, stale and
-history mean exactly what they do everywhere else.
+rejected, handed back, stale and resolved ones are history, so only the latest of those travel. The desk file is read once
+for the whole list (not once per ticket), and each ticket's state is still replayed by `TicketDesk.state`, so versions,
+stale and history mean exactly what they do everywhere else.
 """
 from __future__ import annotations
 

@@ -169,8 +169,9 @@ lectura y trazas. Cómo se configuran las claves:
 - *Errores.* 401 (clave rotada) cierra la sesión o pide de nuevo la clave de operador; 403 en la web significa "sesión
   de solo lectura"; 409 (otra persona movió el caso, o la pantalla estaba vieja: cada acción envía la `version` que se
   vio) recarga el estado y muestra el panel de conflicto ("No se aplicó: el caso cambió", de `v3` a `v4`, con quién lo movió); mientras ese aviso está
-  visible no se puede decidir hasta usar "Recargar caso". 429 y 503 se explican en pantalla. Tomar, aprobar, rechazar y devolver actúan con
+  visible no se puede decidir hasta usar "Recargar caso". 429 y 503 se explican en pantalla. Tomar, aprobar, rechazar, resolver y devolver actúan con
   un clic (como en el artboard aprobado), sin diálogo de confirmación: la protección es `expected_version` más el nombre de la clave en el historial.
+  Resolver se habilita recién con el mensaje para el cliente escrito.
 - *Datos del cliente.* La consola muestra lo que la API ya devuelve a la clave de lectura: el ticket (con su
   `customer_id`, el pedido recortado y la evidencia). De las trazas **no** muestra el texto de la respuesta, lo que vio el
   modelo ni los argumentos de las herramientas: el BFF deja pasar solo un conjunto fijo de campos (`loadTraceLog` y
@@ -285,18 +286,81 @@ archivos JSONL.
 las acciones realizadas, la evidencia y las preguntas abiertas. Campos: `ticket_id`, `trace_id`, `category`, `priority`,
 `queue`, `customer_id`, `session_ref`, `segment`, `country`, `language`, `request` (máximo 500 caracteres),
 `prior_requests` (las últimas 3, cortadas a 160), `reason`, `policy_rule`, `verified_facts`, `evidence`,
-`actions_taken`, `open_questions`, `suggested_next_step` y, si hay una acción que aprobar, `pending_action`.
+`actions_taken`, `open_questions`, `suggested_next_step` y, si hay una acción que aprobar, `pending_action`. Los tres textos
+que la consola muestra al operador (`reason`, `open_questions`, `suggested_next_step`) viajan además como código, en
+`reason_code`, `open_question_codes` y `next_step_code` (más abajo).
 **Nunca lleva el token de sesión**, solo `session_ref`. Las colas son `fraud_ops`, `priority_care`, `complaints`,
 `security_review`, `compliance`, `payments_ops` y `account_payments_l2` por defecto.
 
-**Contrato actual: el desk.** `TicketDesk.act(ticket_id, action, operator, expected_version, reason)` con las acciones
-`claim`, `approve`, `reject` y `release`. Los estados son `open → claimed → approved | rejected | handed_back | stale`.
+**Contrato actual: el desk.** `TicketDesk.act(ticket_id, action, operator, expected_version, reason, message)` con las
+acciones `claim`, `approve`, `reject`, `release` y `resolve`. Los estados son
+`open → claimed → approved | rejected | handed_back | stale | resolved`.
 El estado es la reproducción de un registro de eventos que solo se agrega, bajo un lock. Repetir un resultado ya
 alcanzado no hace nada; cualquier otro movimiento sobre un ticket cerrado es un conflicto (409); una decisión tomada
 desde una versión vieja se rechaza; aprobar vuelve a comprobar que el movimiento siga pendiente y relee la traza. Que el
 cliente se entere del resultado se cubre con `GET /case/{id}` y con un aviso en su próximo mensaje.
 
+- **`resolve`** cierra un ticket **sin** acción pendiente con un mensaje para el cliente (`message`: se guarda en una
+  sola línea, de 1 a 500 caracteres, con los números de tarjeta completos enmascarados). Sin mensaje es un 400; en un ticket
+  con `pending_action` es un 409, porque ese se cierra decidiendo la acción (aprobar o rechazar). El estado del desk
+  lleva `message`, y el cliente lo lee textual en `GET /case/{id}` y antes de su próxima respuesta ("un agente lo
+  resolvió. Mensaje del agente: «...»"). El motivo de un rechazo (`reason`) sigue siendo interno.
+- Un ticket **sin** acción que se rechaza le dice al cliente que no se puede resolver por este canal, sin nombrar un
+  rastreo que nunca pidió.
+
 **Punto de sustitución.** `HumanQueue.enqueue/get` y `TicketDesk.act/state`.
+
+**Los textos del operador viajan como códigos.** El modelo nunca le escribe al cliente (ADR-001), y el texto que lee el
+operador tampoco lo escribe el modelo: sale del código de política. Ese texto estaba en inglés en `router.py` y
+`escalation.py`, y la consola lo mostraba tal cual aunque el operador trabajara en español o en portugués. Ahora cada
+ticket lleva el texto en inglés de siempre y, al lado, su código con los parámetros:
+
+| Campo | Qué es |
+| --- | --- |
+| `reason_code` | `{code, params}` o `null`. Es el código de `reason`. |
+| `open_question_codes` | Lista con un `{code, params}` (o `null`) por cada elemento de `open_questions`, en el mismo orden. Las notas de evidencia que suma `escalate` van al final, con su código también. |
+| `next_step_code` | La categoría del caso, o `default`. Es el código de `suggested_next_step` (sin parámetros). |
+
+Reglas del contrato:
+
+- **El texto en inglés se conserva** (`reason`, `open_questions`, `suggested_next_step`). Es el respaldo: un ticket guardado antes
+  de los códigos no tiene los campos nuevos (no se reescribe nada al leerlo), un texto suelto sin código lleva `null`, y la
+  consola muestra el inglés cuando el código no existe en su diccionario o le faltan datos para armar la frase. Nunca queda
+  vacío ni se oculta.
+- **El texto en inglés sale del mismo catálogo que el código** (`agent/policy/notes.py`, una línea por código con sus
+  `{parámetros}`), así que no pueden diverger.
+- **Los parámetros son lo que la frase necesita y nada del cliente**: una categoría o una lista de categorías, la cantidad de
+  productos ajenos, un motivo de revisión, el nombre del campo que falta, el tipo de error de una consulta, la probabilidad del
+  clasificador. Nunca el pedido, un identificador, un monto ni un número de tarjeta; `tests/test_operator_codes.py` lo
+  comprueba escalando un pedido con un número de tarjeta, y con los mensajes de una excepción de una consulta (con un id de
+  producto y una ruta de archivo adentro). **El mensaje crudo de una excepción no viaja en los parámetros**: puede traer
+  identificadores y rutas internas y está en inglés, así que `data_unavailable` lleva el campo que falta (`field`, o el código
+  `data_unavailable_unspecified` si no se sabe cuál), y `tool_failure` y `evidence_failed`, el tipo de error (`error_type`).
+  El mensaje queda solo en el texto de respaldo en inglés (`reason`, `open_questions`), como antes.
+- **Lo que ya era un identificador estable no lleva código nuevo**: el tipo de evidencia (`transaction`, `denied_request`), las
+  claves de los hechos (`tool`, `result`), el motivo de revisión de `pending_action` (`older_than_review_threshold`,
+  `before_product_opening`, `before_customer_registration`, `turn_timeout`), `policy_rule` y, en la traza, el resultado y el
+  motivo de cada intento del modelo y el `error_type` de las herramientas. La consola los traduce con la misma técnica, y lo que
+  no conoce lo muestra como llegó.
+
+**En la consola.** `web/src/routes/-operator/notes.ts` escribe cada texto en el idioma del operador con los diccionarios
+`operator.codes.{reason,question,step}` y `operator.terms.*` (`web/src/i18n/dict/{es,pt}/operator.ts`), que viajan en el área
+del operador, que es la que carga la ruta, y también en la del detalle de la traza. `TicketPanel` los usa para el motivo, las
+preguntas abiertas, el próximo paso, el tipo de evidencia, las claves de los hechos y el motivo de revisión; `summary.ts`, para
+el resumen que el operador copia; y el detalle de la traza, para la regla, los intentos y los errores.
+
+**Cómo se agrega un código.**
+
+1. Una línea en el catálogo de su tipo en `agent/policy/notes.py`: `REASONS` (el motivo), `QUESTIONS` (una pregunta abierta), con
+   su texto en inglés y los `{parámetros}`. El próximo paso es `NEXT_STEP` de `escalation.py`, con la categoría como código.
+2. Usarlo donde se decide: `reason("codigo", parametro=...)` para el motivo y `question("codigo", ...)` para la pregunta, en el
+   `Decision` de `router.py`. Un `Decision` con un texto suelto sigue funcionando, pero sin código.
+3. Su traducción al español y al portugués en `operator.codes.<tipo>.<codigo>` de `dict/es/operator.ts` y `dict/pt/operator.ts`
+   (los mismos `{parámetros}` en los dos idiomas). Un motivo de revisión nuevo va en `operator.terms.reviewReason`, un
+   `policy_rule` nuevo en `operator.terms.rule` y en `wholeRules` o `ruleFamilies` de `notes.ts`.
+
+`tests/test_operator_codes.py` falla mientras un código del catálogo no tenga traducción en los dos idiomas y comprueba que cada
+pregunta lleve su código en su lugar.
 
 **Lo que la consola recibe de la cola.** `loadQueue` (`web/src/server/operator.functions.ts`) lee `/admin/human_queue?limit=200` (los 200 tickets más nuevos y, sin importar su antigüedad, todos los que siguen `open` o
 `claimed`: un caso que nadie decidió no sale de la cola por viejo, pero sí sale con la retención: pasados los 90 días el ticket
@@ -305,7 +369,10 @@ deja el archivo y la API ya no lo ve) y devuelve al navegador `QueueRow` (`web/s
 lo que usan la tabla, sus filtros, las pestañas y los contadores del sidebar, y la cola se relee cada 30 s. La evidencia,
 los hechos verificados, las acciones, las preguntas abiertas, la acción pendiente y el historial del desk viajan solo con
 el caso abierto (`loadTicket`, `/admin/tickets/{id}`). Una columna o un filtro que necesite otro campo lo agrega a
-`QueueRow` y a `toQueueRow`; `queue-row.test.ts` falla si la fila empieza a llevar algo del caso.
+`QueueRow` y a `toQueueRow`; `queue-row.test.ts` falla si la fila empieza a llevar algo del caso. La cola tolera un caso sin
+`priority` o sin `language` (un registro viejo o incompleto): se dibuja con "Desconocida" en la prioridad y, en el idioma, con `?` a la vista y "Desconocido" para lectores de pantalla y
+en el `title` (el ancho de la columna no alcanza para la palabra; en el panel del caso sí se lee completa), sin ocultarlo y sin asignarle una prioridad que no tiene, y en el orden por defecto queda después de los que sí la
+tienen (`queue.ts`, `priorityOf` del kit).
 
 **En producción.** El sistema de casos del banco. Necesita: alta idempotente por `ticket_id`; transiciones con
 concurrencia optimista por versión; adjuntar evidencia; y la retención que fije el banco (aquí 90 días es un sustituto).

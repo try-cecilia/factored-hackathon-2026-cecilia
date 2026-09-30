@@ -12,7 +12,7 @@ export const MAX_CONSUMED = 1000
 
 export type OperatorSession = {
   adminKey: string // reads: queue, tickets, monitoring (X-Admin-Key)
-  operatorKey?: string // acts: claim, approve, reject, release (X-Operator-Key)
+  operatorKey?: string // acts: claim, approve, reject, release, resolve (X-Operator-Key)
   operator?: string // the name the API gave that key
   createdAt: number
   lastSeen: number

@@ -182,6 +182,7 @@ export function caseTone(status: string): CaseTone {
     case 'claimed':
       return 'accent'
     case 'approved':
+    case 'resolved':
       return 'success'
     case 'rejected':
       return 'danger'

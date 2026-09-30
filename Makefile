@@ -11,6 +11,7 @@ AGENT_API_URL ?= http://127.0.0.1:$(API_PORT)
 .PHONY: gate validate-data-ml lineage operator-labels retention test-resilience loadtest loadtest-fixture loadtest-http setup ingest ingest-demo analysis label-signal train-eval workload eval eval-adversarial eval-ablation check-readme eval-failures eval-failures-live eval-live-sample eval-live-sample-report eval-failures-local eval-live live-smoke test serve docker-build all mlflow-ui
 .PHONY: web-setup serve-web web-build web-typecheck web-test serve-fixture serve-all-fixture serve-all
 .PHONY: env env-check env-fill evidence up down clean-volumes monitoring-up up-llm-local up-llm-host up-dataset lock lock-check alerts-check compose-e2e
+.PHONY: human-set-export human-set-sheet human-set-pages human-set-agreement human-set-cases human-set-eval human-set-report
 COMPOSE = docker compose -f ops/docker-compose.yml --env-file .env
 GPU_FILE = $(if $(GPU),-f ops/docker-compose.gpu.yml)
 # The model-serving choices below only set what the API is told; the `local` provider itself is agent/llm/client.py's
@@ -157,6 +158,32 @@ EVAL_MODELS ?= anthropic:claude-sonnet-5,anthropic:claude-haiku-4-5,groq:openai/
 
 eval-live:        ## live models compared on one 132-case sample (3 per case type and language), 3 repeats each (a model without its API key is skipped)
 	$(PY) -m eval.run_system_eval --split test --system proposed --llm live --repeats 3 --limit 132 --models $(EVAL_MODELS)
+
+# The human-written set, in order (docs/human_set.md). Its files live in eval/workload/, which the public export removes.
+HUMAN_SET_MODEL ?= anthropic:claude-sonnet-5
+
+human-set-export: ## the form's answers -> eval/workload/human_raw.jsonl (needs the Cloudflare token file, CLOUDFLARE_SECRETS)
+	$(PY) -m eval.human_set.cloud export
+
+human-set-sheet:  ## the labeling sheet: the messages of people who never saw the system, shuffled, no system output -> eval/workload/human_labeling_sheet.csv
+	$(PY) -m eval.human_set.classifier_eval sheet
+
+human-set-pages:  ## one labeling page per person: make human-set-pages LABELERS="ana beto" (DISAGREEMENTS=1: the third person's page, only the disagreements)
+	@test -n "$(LABELERS)" || { echo 'usage: make human-set-pages LABELERS="name1 name2" [DISAGREEMENTS=1]'; exit 1; }
+	$(PY) -m eval.human_set.classifier_eval page $(foreach l,$(LABELERS),--labeler $(l)) $(if $(DISAGREEMENTS),--only-disagreements)
+
+human-set-agreement: ## kappa of the two labelers before settling, and the final labels: make human-set-agreement A=a.csv B=b.csv [THIRD=c.csv]
+	@test -n "$(A)" && test -n "$(B)" || { echo "usage: make human-set-agreement A=labels_a.csv B=labels_b.csv [THIRD=labels_c.csv]"; exit 1; }
+	$(PY) -m eval.human_set.classifier_eval agreement $(A) $(B) $(if $(THIRD),--third $(THIRD))
+
+human-set-cases:  ## the labeled messages as workload cases, customers from the full warehouse -> eval/workload/human_cases.jsonl
+	$(PY) -m eval.human_set.cases
+
+human-set-eval:   ## LIVE, spends model credit (about USD 1 to 2): the keyword bot once and the live model (HUMAN_SET_MODEL, Sonnet 5) 3 times on the human cases; stops without its API key
+	$(PY) -m eval.run_system_eval --cases eval/workload/human_cases.jsonl --system both --llm live --repeats 3 --models $(HUMAN_SET_MODEL)
+
+human-set-report: ## the pre-registered gates G0 to G4 and the report of the human set -> eval/reports/HUMAN_SET.md (no model calls)
+	$(PY) -m eval.human_set.report
 
 gate:            ## compuerta de calidad: pisos de seguridad y evidencia vigente, más la validación de datos y ML; no deja archivos modificados (la corre el CI)
 	$(PY) -m eval.gate

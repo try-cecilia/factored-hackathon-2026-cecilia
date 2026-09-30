@@ -5,7 +5,7 @@ import { SidebarCasesIcon, SidebarEmpty, SidebarRow, SidebarSection } from '../u
 
 type Translate = ReturnType<typeof useT>
 
-const STATUSES = ['open', 'claimed', 'approved', 'rejected', 'handed_back', 'stale'] as const
+const STATUSES = ['open', 'claimed', 'approved', 'rejected', 'handed_back', 'stale', 'resolved'] as const
 
 export function statusLabel(t: Translate, row: CaseRow): string {
   if (row.state.state === 'loading') return t('cases.loading')

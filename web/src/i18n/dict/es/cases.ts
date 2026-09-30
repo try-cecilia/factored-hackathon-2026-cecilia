@@ -19,6 +19,7 @@ export const cases = {
     rejected: 'Rechazado',
     handed_back: 'Devuelto a Cecilia',
     stale: 'Sin cambios necesarios',
+    resolved: 'Resuelto',
     unknown: 'En curso',
   },
   /** The case view: opened from "Ver caso" and from the case's row in the sidebar. */
@@ -51,6 +52,7 @@ export const cases = {
       rejected: 'Una persona revisó tu caso y no pudo seguir adelante con el pedido.',
       handed_back: 'Una persona revisó tu caso y lo devolvió a Cecilia.',
       stale: 'Al revisarlo, el movimiento ya no figuraba como pendiente.',
+      resolved: 'Una persona del equipo resolvió tu caso y te dejó un mensaje.',
       unknown: 'Tu caso está en curso.',
     },
     whatNext: {
@@ -60,6 +62,7 @@ export const cases = {
       rejected: 'Si necesitas más ayuda, puedes comunicarte con la línea de atención del banco.',
       handed_back: 'Puedes seguir la consulta con Cecilia en la conversación.',
       stale: 'No hace falta hacer nada más.',
+      resolved: 'Si necesitas algo más, puedes seguir la consulta con Cecilia en la conversación.',
       unknown: 'Cuando cambie, el estado se actualiza aquí.',
     },
   },

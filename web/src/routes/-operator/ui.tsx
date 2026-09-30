@@ -1,9 +1,10 @@
 import { useRouter } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 import { useT } from '../../i18n/context'
-import type { Result } from '../../server/operator.functions'
+import type { QueueRow, Result } from '../../server/operator.functions'
 import { Button, EmptyState } from '../../ui'
 import { explainKey } from './format'
+import { localeOf } from './queue'
 
 /** The BFF or the API said no: what happened and the one way out (sign in again, or try again). */
 export function Notice({ status, acting, children }: { status?: number; acting?: boolean; children?: ReactNode }) {
@@ -82,7 +83,8 @@ export function Bars({ data, total, names }: { data: Record<string, number>; tot
 const scalar = (value: unknown) =>
   value === null || value === undefined || value === '' ? '—' : typeof value === 'object' ? JSON.stringify(value) : String(value)
 
-export function KeyValues({ data }: { data: Record<string, unknown> }) {
+/** `label` writes a key in the operator's language; without it the keys show as they came. */
+export function KeyValues({ data, label }: { data: Record<string, unknown>; label?: (key: string) => string }) {
   const t = useT()
   const entries = Object.entries(data)
   if (!entries.length) return <p className="op-muted">{t('operator.noData')}</p>
@@ -90,7 +92,7 @@ export function KeyValues({ data }: { data: Record<string, unknown> }) {
     <dl className="op-kv">
       {entries.map(([key, value]) => (
         <div key={key}>
-          <dt>{key}</dt>
+          <dt>{label ? label(key) : key}</dt>
           <dd className={typeof value === 'object' && value !== null ? 'op-mono' : undefined}>{scalar(value)}</dd>
         </div>
       ))}
@@ -100,3 +102,17 @@ export function KeyValues({ data }: { data: Record<string, unknown> }) {
 
 /** Small mono chip for ids and codes next to a label. */
 export const Code = ({ children }: { children: ReactNode }) => <span className="op-mono">{children}</span>
+
+/** Country and language of a queue row. Without a language the column shows `MX·?`, which is all the width has room for; the words
+ * ("Desconocido") are for screen readers (once: the `title` sits on the hidden mark) and for a long press, so the case does not read as having a language it does not have. */
+export function LocaleCell({ row }: { row: QueueRow }) {
+  const t = useT()
+  if (row.language) return <>{localeOf(row)}</>
+  const full = localeOf(row, t('operator.queue.unknownLanguage'))
+  return (
+    <>
+      <span aria-hidden="true" title={full}>{localeOf(row)}</span>
+      <span className="sr-only">{full}</span>
+    </>
+  )
+}

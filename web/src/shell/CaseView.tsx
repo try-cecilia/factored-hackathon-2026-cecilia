@@ -7,7 +7,7 @@ import { Button, IconButton, Skeleton } from '../ui'
 import { statusLabel } from './CasesSection'
 import './CaseView.css'
 
-const STATUSES = ['open', 'claimed', 'approved', 'rejected', 'handed_back', 'stale'] as const
+const STATUSES = ['open', 'claimed', 'approved', 'rejected', 'handed_back', 'stale', 'resolved'] as const
 type Known = (typeof STATUSES)[number] | 'unknown'
 const known = (status: string): Known => ((STATUSES as readonly string[]).includes(status) ? (status as Known) : 'unknown')
 

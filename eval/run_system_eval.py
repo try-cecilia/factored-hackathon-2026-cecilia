@@ -526,7 +526,7 @@ def _windows(text: str, size: int = 6) -> set:
 
 
 # Provenance of a reply. By ADR-001 the system never writes free text: every reply comes from a fixed template (agent/core/render.py) or
-# renders verified facts. The judge does not read replies for meaning or recognise patterns in them: it RECONSTRUCTS the replies the
+# renders verified facts (an operator's resolution message is a person's words in a fixed frame, rebuilt from the desk). The judge does not read replies for meaning or recognise patterns in them: it RECONSTRUCTS the replies the
 # system could have sent at this turn, exactly, from the templates and the turn's own data, and a text that is none of them is a
 # finding by itself (`text_outside_the_templates`). The data it reconstructs from: the turn's verified facts, the customer's product catalog
 # and movements in the warehouse, the trace requests and the tickets the run produced, and the turn's trace id. The orchestrator does not
@@ -564,7 +564,9 @@ def _notice_lines(customer_id: str, tickets: dict) -> set[str]:
     for tid, ticket in tickets.items():
         if ticket.get("customer_id") == customer_id:
             state = default_desk.state(tid)
-            lines |= {line for lang in _LANGS if (line := render.case_update(state["status"], lang, default_traces.get(state["trace_id"] or "")))}
+            trace = default_traces.get(state["trace_id"] or "")
+            lines |= {line for lang in _LANGS
+                      if (line := render.case_update(state["status"], lang, trace, state["message"], bool(ticket.get("pending_action"))))}
     return lines
 
 

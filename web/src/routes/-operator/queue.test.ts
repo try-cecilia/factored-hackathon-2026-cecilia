@@ -126,6 +126,16 @@ test('a page past the end is brought back to the last one, with its rows', () =>
   assert.equal(pageSlice(rows, 0, 25).page, 1)
 })
 
+test('a resolved case is decided work: in the decided tab, out of the pending counts, and sorted with the closed ones', () => {
+  const resolved = ticket({ priority: 'Critical', status: 'resolved', operator: 'ana.ruiz', created_at: 990 })
+  const queue = [...rows, resolved]
+  assert.deepEqual(tabCounts(queue), { all: 7, open: 3, claimed: 1, decided: 3 })
+  assert.equal(sidebarCounts(queue, 'ana.ruiz').allOpen, 4)
+  // Closed work goes last, latest first: resolved (990), stale (950), approved (900).
+  assert.deepEqual(defaultOrder(queue).slice(-3), [resolved, stale, done])
+  assert.deepEqual(orderTickets([resolved, crit, done], { key: 'status', direction: 'asc' }).map((t) => t.desk.status), ['claimed', 'approved', 'resolved'])
+})
+
 test('an old open case among many newer closed ones still counts as pending work and stays in the unassigned view', () => {
   const oldOpen = ticket({ created_at: 1, priority: 'Low' })
   const history = Array.from({ length: 250 }, () => ticket({ status: 'approved', operator: 'ana.ruiz' }))
@@ -133,4 +143,36 @@ test('an old open case among many newer closed ones still counts as pending work
   assert.equal(sidebarCounts(queue, 'ana.ruiz').unassigned, 1)
   assert.deepEqual(filterTickets(queue, { view: 'unassigned', tab: 'all' }, 'ana.ruiz').map((t) => t.ticket_id), [oldOpen.ticket_id])
   assert.equal(defaultOrder(queue)[0].ticket_id, oldOpen.ticket_id)
+})
+
+// A case that reached the console without a priority or a language (an old or incomplete record) is still drawn: it says so, it does
+// not take down the ordering or the rendering of the whole queue, and it does not pass for a priority it does not have.
+const noPriority = ticket({ priority: undefined, created_at: 20 })
+const nullPriority = ticket({ priority: null, created_at: 30 })
+const noLanguage = ticket({ priority: 'High', language: undefined, country: null })
+
+test('a case without priority does not break the default order and goes after the ones that have one', () => {
+  const sorted = defaultOrder([noPriority, medNew, nullPriority, crit, done])
+  assert.deepEqual(sorted.map((t) => t.ticket_id), [crit, medNew, noPriority, nullPriority, done].map((t) => t.ticket_id))
+})
+
+test('ordering by priority or by locale tolerates the missing values, and the case keeps its (missing) priority', () => {
+  for (const direction of ['asc', 'desc'] as const) {
+    assert.equal(orderTickets([noPriority, crit, noLanguage], { key: 'priority', direction }).length, 3)
+    assert.equal(orderTickets([noPriority, crit, noLanguage], { key: 'locale', direction }).length, 3)
+  }
+  assert.equal(noPriority.priority, undefined)
+})
+
+test('the locale of a case without language is marked, not hidden and not made up', () => {
+  assert.equal(localeOf(noLanguage), '?')
+  assert.equal(localeOf(ticket({ country: 'México', language: null })), 'MX·?')
+  assert.equal(localeOf(noLanguage, 'Desconocido'), 'Desconocido')
+})
+
+test('the filters and the counts do not fail on a case without priority or language', () => {
+  const mixed = [noPriority, noLanguage, crit]
+  assert.deepEqual(filterTickets(mixed, { ...all, priority: 'Critical' }, null), [crit])
+  assert.deepEqual(filterTickets(mixed, { ...all, language: 'es' }, null), [noPriority, crit])
+  assert.equal(tabCounts(inScope(mixed, all, null)).all, 3)
 })

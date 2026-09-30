@@ -37,13 +37,19 @@ MSG = {
                            "pt": "Você já tem aberto o pedido de rastreamento {tid} para a {mov}. A equipe de operações responde em até {sla} dias úteis desde a abertura."},
     "trace_cancelled": {"es": "Entendido, no abrí ningún pedido. Si más adelante lo necesitas, pídemelo.",
                         "pt": "Entendido, não abri nenhum pedido. Se precisar depois, é só pedir."},
-    # What the customer is told when a person acts on their case (agent/policy/desk.py); no operator name or note.
+    # What the customer is told when a person acts on their case (agent/policy/desk.py). Never the operator's name or a
+    # rejection's note, which are internal; a resolution's message is the one text a person writes for the customer.
     "case_claimed": {"es": "Novedad de tu caso: un agente ya lo tomó y lo está revisando.",
                      "pt": "Novidade do seu caso: um atendente já assumiu e está analisando."},
     "case_approved": {"es": "Novedad de tu caso: un agente aprobó el rastreo y abrió el pedido {tid}. Operaciones responde en hasta {sla} días hábiles.",
                       "pt": "Novidade do seu caso: um atendente aprovou o rastreamento e abriu o pedido {tid}. A equipe de operações responde em até {sla} dias úteis."},
     "case_rejected": {"es": "Novedad de tu caso: un agente lo revisó y no pudo abrir el rastreo. Si necesitas más ayuda, puedes comunicarte con la línea de atención del banco.",
                       "pt": "Novidade do seu caso: um atendente analisou e não conseguiu abrir o rastreamento. Se precisar de mais ajuda, entre em contato com a central de atendimento do banco."},
+    # A rejected ticket that carried no trace: nothing was asked to be opened, so nothing is said about one.
+    "case_rejected_plain": {"es": "Novedad de tu caso: un agente lo revisó y no puede resolverlo por este canal. Si necesitas más ayuda, puedes comunicarte con la línea de atención del banco.",
+                            "pt": "Novidade do seu caso: um atendente analisou e não pode resolvê-lo por este canal. Se precisar de mais ajuda, entre em contato com a central de atendimento do banco."},
+    "case_resolved": {"es": "Novedad de tu caso: un agente lo resolvió. Mensaje del agente: «{message}»",
+                      "pt": "Novidade do seu caso: um atendente resolveu. Mensagem do atendente: «{message}»"},
     "case_handed_back": {"es": "Novedad de tu caso: un agente lo devolvió al asistente. Cuéntame en qué más puedo ayudarte.",
                          "pt": "Novidade do seu caso: um atendente devolveu ao assistente. Conte como posso ajudar."},
     "case_stale": {"es": "Novedad de tu caso: al revisarlo, el movimiento ya no figura como pendiente, así que no hizo falta abrir un rastreo.",
@@ -61,12 +67,15 @@ STATUS = {"es": {"Active": "activa", "Blocked": "bloqueada", "Closed": "cerrada"
                  "Approved": "aprovada", "Declined": "recusada", "Pending": "pendente", "Reversed": "estornada"}}
 
 
-def case_update(status: str, lang: str, trace: dict | None = None) -> str | None:
-    """The customer-facing line for what a person did with their ticket, or None for a status with nothing to say."""
-    entry = MSG.get(f"case_{status}")
+def case_update(status: str, lang: str, trace: dict | None = None, message: str | None = None,
+                had_action: bool = True) -> str | None:
+    """The customer-facing line for what a person did with their ticket, or None for a status with nothing to say.
+    `message` is a resolution's words to the customer; `had_action` says whether the ticket carried a trace to decide."""
+    entry = MSG.get("case_rejected_plain" if status == "rejected" and not had_action else f"case_{status}")
     if entry is None:
         return None
-    return entry[lang].format(tid=(trace or {}).get("trace_id", ""), sla=(trace or {}).get("sla_business_days", ""))
+    return entry[lang].format(tid=(trace or {}).get("trace_id", ""), sla=(trace or {}).get("sla_business_days", ""),
+                              message=message or "")
 
 
 def money(v: Any, cur: str) -> str:

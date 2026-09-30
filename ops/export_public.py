@@ -2,11 +2,14 @@
 
     python ops/export_public.py SOURCE_REPO TARGET_DIR REDACTIONS_FILE
 
-- Removes from every commit what is organizer row-level data or out of date: every case file under eval/workload
-  (the generated workloads and any other set, such as the human one: customer ids, digits of real products),
-  every per-case eval JSON (eval/reports/system_eval*.json, whatever its name), and the v2 demo video (dataset
-  customers on screen), at the root or under any folder, since the history also has them under
-  x-payments-agent/. The generated ones are rebuilt with `make workload eval`.
+- Removes from every commit what is organizer row-level data, what carries the human-written messages, or what is
+  out of date: everything under eval/workload/ (the generated workloads, and every file of the human set: the
+  form's answers, the labeling sheet, each labeler's page and labels, the final labels, the cases and their
+  provenance; customer ids, digits of real products, and every message, of which the consent lets the report
+  quote only some), the label agreement report (it lists each disagreement word for word), every per-case eval
+  JSON (eval/reports/system_eval*.json, whatever its name), and the v2 demo video (dataset customers on screen), at
+  the root or under any folder, since the history also has them under x-payments-agent/. The generated ones are
+  rebuilt with `make workload eval`; the human set's report (eval/reports/HUMAN_SET.md) stays.
 - Removes every PDF from every commit: the organizer's documents were committed once, and the complete data
   dictionary carries their AWS keys as compressed text, which the scan below cannot read. A PDF that survives
   fails the export.
@@ -30,8 +33,8 @@ from pathlib import Path
 
 # Each pattern also runs under any folder ("*/" prefix, fnmatch's * crosses "/"): the history carries these files at
 # the root and under x-payments-agent/, where the subtree import put them before the move to the root.
-REMOVE_GLOBS = [p for g in ("docs/demo/demo_app.webm",
-                            "eval/workload/*.jsonl", "eval/reports/system_eval*.json")  # by pattern: a new file too
+REMOVE_GLOBS = [p for g in ("docs/demo/demo_app.webm", "eval/workload/*",  # by pattern: a new file too
+                            "eval/reports/system_eval*.json", "eval/reports/human_set_agreement.json")
                 for p in (g, "*/" + g)] + ["*.pdf"]
 SHAPES = {
     "aws_access_key": r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b",
