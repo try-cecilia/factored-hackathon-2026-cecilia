@@ -140,7 +140,7 @@ describe('a scenario of the demo panel sends its first message through the chat'
     expect(screen.queryByText('Respuesta de antes')).toBeNull()
     expect(screen.getByText('¿Cuál es mi saldo?')).toBeTruthy()
     expect(sendMessage).toHaveBeenCalledOnce()
-    expect(within(card).getByText('✓ Resuelto')).toBeTruthy()
+    expect(await within(card).findByText('✓ Resuelto')).toBeTruthy()
   })
 
   it('the reply fills the step, and the next one waits in the card to be sent with a click, not in the input', async () => {
@@ -151,7 +151,7 @@ describe('a scenario of the demo panel sends its first message through the chat'
 
     expect(await screen.findByText('Tu saldo es 10 USD.')).toBeTruthy()
     expect(sendMessage).toHaveBeenCalledOnce()
-    expect(within(card).getByText('✓ Resuelto')).toBeTruthy()
+    expect(await within(card).findByText('✓ Resuelto')).toBeTruthy()
     expect(input().value).toBe('')
     expect((within(card).getByRole('button', { name: 'Enviar paso 2' }) as HTMLButtonElement).disabled).toBe(false)
   })
@@ -185,7 +185,7 @@ describe('a scenario of the demo panel sends its first message through the chat'
     await user.type(input(), 'mi propio borrador')
     await act(async () => { answer({ ok: true, reply: reply('AUTO_RESOLVE', 'Tu saldo es 10 USD.') }) })
     expect(await screen.findByText('Tu saldo es 10 USD.')).toBeTruthy()
-    expect(within(card).getByText('✓ Resuelto')).toBeTruthy()
+    expect(await within(card).findByText('✓ Resuelto')).toBeTruthy()
     expect(input().value).toBe('mi propio borrador')
   })
 
@@ -229,7 +229,7 @@ describe('a scenario of the demo panel sends its first message through the chat'
     await screen.findByText('Tu saldo es 10 USD.')
 
     expect(sendMessage.mock.calls[0][0].data.key).toBe(sendMessage.mock.calls[2][0].data.key)
-    expect(within(card).getByText('✓ Resuelto')).toBeTruthy()
+    expect(await within(card).findByText('✓ Resuelto')).toBeTruthy()
     expect(within(card).queryByRole('status')).toBeNull()
     expect(within(card).getByRole('button', { name: 'Enviar paso 2' })).toBeTruthy()
   })
@@ -251,7 +251,7 @@ describe('a scenario of the demo panel sends its first message through the chat'
     expect(sendMessage).toHaveBeenCalledTimes(2)
     expect(sendMessage.mock.calls[1][0].data.key).toBe(sendMessage.mock.calls[0][0].data.key)
     expect(screen.getAllByText('¿Cuál es mi saldo?')).toHaveLength(1)
-    expect(within(card).getByText('✓ Resuelto')).toBeTruthy()
+    expect(await within(card).findByText('✓ Resuelto')).toBeTruthy()
     expect(within(card).getByRole('button', { name: 'Enviar paso 2' })).toBeTruthy()
   })
 
@@ -270,7 +270,7 @@ describe('a scenario of the demo panel sends its first message through the chat'
     expect(sendMessage).toHaveBeenCalledTimes(3)
     expect(sendMessage.mock.calls[2][0].data.key).toBe(sendMessage.mock.calls[1][0].data.key)
     expect(screen.getAllByText('Me clonaron la tarjeta')).toHaveLength(1)
-    expect(within(card).getByText('✓ A una persona')).toBeTruthy()
+    expect(await within(card).findByText('✓ A una persona')).toBeTruthy()
   })
 
   it('a history read that comes back empty does not make the card forget the message that was lost: its retry keeps the key', async () => {
@@ -294,6 +294,79 @@ describe('a scenario of the demo panel sends its first message through the chat'
     expect(sendMessage).toHaveBeenCalledTimes(2)
     expect(sendMessage.mock.calls[1][0].data.key).toBe(sendMessage.mock.calls[0][0].data.key)
     expect(screen.getAllByText('¿Cuál es mi saldo?')).toHaveLength(1)
+  })
+
+  it('a reload whose window no longer holds a step that was confirmed does not take it back: it is not offered again, and the retry keeps its key', async () => {
+    const user = userEvent.setup()
+    history.initial = { ok: false, failure: 'unavailable' }
+    // The API keeps the last 40 entries: what comes back is others' conversation, without the scenario's first step.
+    const foreign = Array.from({ length: 20 }, (_, i) => [
+      { role: 'user' as const, text: `ajena ${i}`, at: 2 * i },
+      { role: 'assistant' as const, reply: reply('AUTO_RESOLVE', `respuesta ${i}`), at: 2 * i + 1 },
+    ]).flat()
+    getHistory.mockResolvedValue({ ok: true, cases: [], turns: foreign })
+    sendMessage
+      .mockResolvedValueOnce({ ok: true, reply: reply('AUTO_RESOLVE', 'Tu saldo es 10 USD.') })
+      .mockResolvedValueOnce({ ok: false, failure: 'timeout' })
+      .mockResolvedValueOnce({ ok: true, reply: reply('ESCALATE', 'Te paso con una persona.') })
+    await draw()
+    const card = await load(user, 'Dos turnos')
+    expect(await within(card).findByText('✓ Resuelto')).toBeTruthy()
+    await user.click(await within(card).findByRole('button', { name: 'Enviar paso 2' }))
+    await within(card).findByRole('button', { name: 'Reintentar paso 2' })
+
+    await user.click(document.querySelector('.chat__history button') as HTMLElement)
+    expect(await screen.findByText('ajena 19')).toBeTruthy()
+    expect(screen.queryByText('Tu saldo es 10 USD.')).toBeNull()
+
+    expect(within(card).queryByRole('button', { name: 'Enviar paso 1' })).toBeNull()
+    expect(within(card).getByText('✓ Resuelto')).toBeTruthy()
+    await user.click(within(card).getByRole('button', { name: 'Reintentar paso 2' }))
+    expect(await within(card).findByText('✓ A una persona')).toBeTruthy()
+    expect(sendMessage).toHaveBeenCalledTimes(3)
+    expect(sendMessage.mock.calls[2][0].data.key).toBe(sendMessage.mock.calls[1][0].data.key)
+    expect(sendMessage.mock.calls[2][0].data.message).toBe('Me clonaron la tarjeta')
+  })
+
+  it('a step the API has whose message a reload dropped from the conversation is retried with its own key, not sent as new', async () => {
+    const user = userEvent.setup()
+    history.initial = { ok: false, failure: 'unavailable' }
+    getHistory.mockResolvedValue({ ok: true, cases: [], turns: [{ role: 'user', text: '¿Cuál es mi saldo?', at: 1 }, { role: 'assistant', reply: reply('AUTO_RESOLVE', 'Tu saldo es 10 USD.'), at: 2 }] })
+    sendMessage
+      .mockResolvedValueOnce({ ok: false, failure: 'timeout' })
+      .mockResolvedValueOnce({ ok: false, failure: 'already_processed' })
+      .mockResolvedValueOnce({ ok: true, reply: reply('AUTO_RESOLVE', 'Tu saldo es 10 USD.') })
+    await draw()
+    const card = await load(user, 'Dos turnos')
+    await user.click(await within(card).findByRole('button', { name: 'Reintentar paso 1' }))
+    await within(card).findByText(/ya llegó/)
+    await user.click(document.querySelector('.chat__history button') as HTMLElement)
+    await waitFor(() => expect(document.querySelector('.chat__history')).toBeNull())
+
+    const again = await within(card).findByRole('button', { name: 'Reintentar paso 1' })
+    expect(within(card).queryByRole('button', { name: 'Enviar paso 1' })).toBeNull()
+    await user.click(again)
+    expect(await within(card).findByText('✓ Resuelto')).toBeTruthy()
+    expect(sendMessage).toHaveBeenCalledTimes(3)
+    expect(sendMessage.mock.calls[2][0].data.key).toBe(sendMessage.mock.calls[0][0].data.key)
+  })
+
+  it('restarting the scenario starts its steps from zero, in the new session', async () => {
+    const user = userEvent.setup()
+    sendMessage
+      .mockResolvedValueOnce({ ok: true, reply: reply('AUTO_RESOLVE', 'Tu saldo es 10 USD.') })
+      .mockReturnValueOnce(new Promise(() => {}))
+    await draw()
+    const card = await load(user, 'Dos turnos')
+    expect(await within(card).findByText('✓ Resuelto')).toBeTruthy()
+
+    await user.click(within(card).getByRole('button', { name: 'Reiniciar' }))
+
+    await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(2))
+    expect(sendMessage.mock.calls[1][0].data.message).toBe('¿Cuál es mi saldo?')
+    expect(sendMessage.mock.calls[1][0].data.key).not.toBe(sendMessage.mock.calls[0][0].data.key)
+    expect(within(card).queryByText('✓ Resuelto')).toBeNull()
+    expect((within(card).getByRole('button', { name: 'Enviar paso 1' }) as HTMLButtonElement).disabled).toBe(true)
   })
 
   it('a step the API already has is not sent again from the card: the button is off and the card points at the chat', async () => {

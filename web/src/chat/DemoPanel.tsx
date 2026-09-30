@@ -1,18 +1,22 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useI18n, useT } from '../i18n/context'
 import type { MessageKey } from '../i18n/translate'
 import { applyDemoFault, getDemoTickets, startScenario } from '../server/demo.functions'
 import { Button, IconButton } from '../ui'
 import type { Entry, UserEntry } from './conversation'
+import { newMessageKey } from './key'
 import type { DemoFault, DemoScenario, DemoTicket } from './types'
 import './DemoPanel.css'
 
 /**
  * The scenario in course. `from` is the session it was chosen in: the new one is there when `sessionRef` differs, and `base` is
- * how many entries that conversation already had (what comes after them can answer the steps). `started` says the first
- * message was sent.
+ * how many entries that conversation already had. `steps` is the panel's own record of what it sent, by step: the message's key
+ * (the one the API deduplicates by) and, once its reply came, the disposition. The conversation is bounded and is read again
+ * (its history keeps the last 40 entries, without keys), so the progress is never rebuilt from it: a step that was sent is not
+ * offered again as new, however the conversation was reloaded.
  */
-type Active = { scenario: DemoScenario; from: string; base: number | null; started: boolean }
+type StepRecord = { key: string; disposition: string | null }
+type Active = { scenario: DemoScenario; from: string; base: number | null; steps: StepRecord[] }
 
 const PATHS = ['normal', 'ambiguous', 'out_of_scope', 'action', 'human', 'attack', 'failure'] as const
 const DISPOSITIONS = ['AUTO_RESOLVE', 'CLARIFY', 'ABSTAIN', 'ESCALATE'] as const
@@ -25,26 +29,10 @@ function known<T extends string>(list: readonly T[], value: string): value is T 
 // DEMO_MODE only. Everything here talks to the API's /demo endpoints through the server; the customer app works
 // the same without it, and it is drawn apart, on its own panel with its own label, so nobody mistakes it for the service.
 // A scenario sends its messages through the chat's own send, like any suggestion: the first one when its session is up, the
-// next ones with the button of the step in course. The steps below read the conversation. A step is answered when the reply is
-// to the step's own text; a reply to any other message (one the person wrote by hand) is not a step (the card says so), so an
-// unrelated message does not move the scenario. Each reply
-// says which message it answers (`to`), because a retry's reply comes late, after other messages; the replies are read in the
-// order they came.
-function progress(entries: Entry[], turns: string[]): { got: string[]; off: boolean } {
-  const got: string[] = []
-  let off = false
-  entries.forEach((entry, i) => {
-    if (entry.role !== 'assistant') return
-    const asked = entry.to !== undefined
-      ? entries.find((e) => e.role === 'user' && e.id === entry.to)
-      : entries.slice(0, i).reverse().find((e) => e.role === 'user')
-    if (asked?.role !== 'user') return
-    const step = turns[got.length]
-    off = step === undefined || asked.text.trim() !== step.trim()
-    if (!off) got.push(entry.reply.disposition)
-  })
-  return { got, off }
-}
+// next ones with the button of the step in course. Each message goes with a key the panel keeps, so a reply is the step's when
+// it answers the message with that key; a reply to any other message (one the person wrote by hand) is not a step (the card says
+// so), so an unrelated message does not move the scenario. Each reply says which message it answers (`to`), because a retry's
+// reply comes late, after other messages.
 
 export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations, ended, send, retry, overlay, onSessionChanged, onClose }: {
   scenarios: DemoScenario[]
@@ -55,7 +43,7 @@ export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations
   /** The session is over: no step can be sent (loading a scenario starts another). */
   ended: boolean
   /** The chat's own send: the messages of a scenario go through it, with the same key, the same state and the same retry. */
-  send: (text: string) => Promise<unknown>
+  send: (text: string, key?: string) => Promise<unknown>
   /** Sends a message that did not go through again, with the same key (the bubble's own retry). */
   retry: (id: number) => void
   /** The panel is a drawer over the page: choosing a scenario closes it, so the input is in reach. */
@@ -91,7 +79,7 @@ export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations
     try {
       const result = await startScenario({ data: { id: scenario.id } })
       if (!result.ok) return setNote('demo.scenarios.failed')
-      setActive({ scenario, from: sessionRef, base: null, started: false })
+      setActive({ scenario, from: sessionRef, base: null, steps: [] })
       setModelDown(scenario.fault === 'llm_outage')
       await onSessionChanged()
     } catch {
@@ -115,13 +103,34 @@ export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations
   }
 
   const turns = active?.scenario.turns ?? []
-  const { got, off } = active && active.base !== null ? progress(entries.slice(active.base), turns) : { got: [] as string[], off: false }
-  const next = got.length
+  const steps = active?.steps ?? []
+  let next = 0
+  while (steps[next]?.disposition) next++
+  const got = steps.slice(0, next).map((r) => r.disposition as string)
+  // A reply that is not to a step's message: the last one, when it is to a message written by hand (one with a key that is not a step's).
+  const lastReply = [...entries].reverse().find((e) => e.role === 'assistant')
+  const asked = lastReply?.role === 'assistant' && lastReply.to !== undefined ? entries.find((e) => e.role === 'user' && e.id === lastReply.to) : undefined
+  const off = !!active && active.base !== null && asked?.role === 'user' && asked.key !== null && !steps.some((r) => r.key === asked.key)
 
   // The new session is the scenario's: from then on its replies are the steps' answers.
   useEffect(() => {
     setActive((a) => (a && a.base === null && sessionRef !== a.from ? { ...a, base: entries.length } : a))
   }, [sessionRef, entries.length])
+
+  // A step is answered when the reply to its message (found by key) comes; the disposition is kept, so a reload that drops it
+  // from the conversation does not take the progress with it.
+  useEffect(() => {
+    if (!active || active.base === null) return
+    const answered = new Map<number, string>()
+    active.steps.forEach((r, i) => {
+      if (r.disposition) return
+      const user = entries.find((e): e is UserEntry => e.role === 'user' && e.key === r.key)
+      const reply = user && entries.find((e) => e.role === 'assistant' && e.to === user.id)
+      if (reply?.role === 'assistant') answered.set(i, reply.reply.disposition)
+    })
+    if (answered.size === 0) return
+    setActive((a) => a && { ...a, steps: a.steps.map((r, i) => (answered.has(i) ? { ...r, disposition: answered.get(i) as string } : r)) })
+  }, [active, entries])
 
   // On a phone the drawer covers the chat: once a message is sent it closes, and the focus goes to the chat's input (the drawer's
   // own close would give it back to the button that opened it, and that comes a render later).
@@ -130,26 +139,32 @@ export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations
     requestAnimationFrame(() => document.getElementById('composer-input')?.focus())
   }, [onClose])
 
-  // The scenario's first message is sent as soon as its session is up.
-  useEffect(() => {
-    if (!active || active.base === null || active.started || pending || turns.length === 0) return
-    setActive({ ...active, started: true })
-    void send(turns[0])
-    if (overlay) backToChat()
-  }, [active, pending, turns, send, overlay, backToChat])
+  const start = useCallback((step: number, key: string) => {
+    setActive((a) => a && { ...a, steps: [...a.steps.slice(0, step), { key, disposition: null }] })
+    void send(active?.scenario.turns[step] ?? '', key)
+  }, [send, active?.scenario])
 
-  // The message of the step in course that is already in the chat and has no answer: what became of it says what the button does.
-  // One that did not go through (failed, or lost its answer) is retried, with its own key: a new send would be a second message,
-  // and the API may already have the first. One the API has, or one on its way, is not sent again; the chat's bubble says so.
-  const mine = active && active.base !== null ? entries.slice(active.base) : []
-  const stepText = turns[next]?.trim()
-  const stepEntry = stepText === undefined ? undefined : [...mine].reverse().find((e): e is UserEntry =>
-    e.role === 'user' && e.text.trim() === stepText && !mine.some((a) => a.role === 'assistant' && a.to === e.id))
-  const stepState = !stepEntry ? 'new' : stepEntry.delivery === 'failed' || stepEntry.delivery === 'uncertain' ? 'retry' : 'held'
+  // The scenario's first message is sent as soon as its session is up (once per scenario in course, also with effects run twice).
+  const first = useRef<Active | null>(null)
+  useEffect(() => {
+    if (!active || active.base === null || active.steps.length > 0 || pending || turns.length === 0 || first.current === active) return
+    first.current = active
+    start(0, newMessageKey())
+    if (overlay) backToChat()
+  }, [active, pending, turns, start, overlay, backToChat])
+
+  // The message of the step in course, by its key, says what the button does. One that did not go through (failed, or lost its
+  // answer) is retried with its own key: a new key would be a second message, and the API may already have the first. If it is no
+  // longer in the conversation (a reload dropped it) it is sent again with the same key, which the API answers once. One the API
+  // has, or one on its way, is not sent again; the chat's bubble says so. Only a step never sent goes with a new key.
+  const record = steps[next]
+  const stepEntry = record ? entries.find((e): e is UserEntry => e.role === 'user' && e.key === record.key) : undefined
+  const stepState = !record ? 'new' : !stepEntry ? 'resend' : stepEntry.delivery === 'failed' || stepEntry.delivery === 'uncertain' ? 'retry' : 'held'
 
   function sendStep() {
-    if (stepEntry && stepState === 'retry') retry(stepEntry.id)
-    else if (stepState === 'new') void send(turns[next])
+    if (stepState === 'new') start(next, newMessageKey())
+    else if (stepState === 'retry' && stepEntry) retry(stepEntry.id)
+    else if (stepState === 'resend' && record) void send(turns[next], record.key)
     else return
     if (overlay) backToChat()
   }
@@ -203,7 +218,7 @@ export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations
                             {reply && <span className={matches ? 'demo__ok' : 'demo__bad'}>{t(matches ? 'demo.steps.came' : 'demo.steps.cameWrong', { what: disposition(reply) })}</span>}
                             {active.base !== null && i === next && (
                               <Button variant="ghost" size="sm" tinted disabled={pending || ended || stepState === 'held'} onClick={sendStep}>
-                                {t(stepState === 'retry' ? 'demo.steps.retry' : 'demo.steps.send', { n: i + 1 })}
+                                {t(stepState === 'retry' || stepState === 'resend' ? 'demo.steps.retry' : 'demo.steps.send', { n: i + 1 })}
                               </Button>
                             )}
                             {active.base !== null && i === next && stepEntry?.delivery === 'processed' && <span className="demo__muted">{t('demo.steps.processed')}</span>}

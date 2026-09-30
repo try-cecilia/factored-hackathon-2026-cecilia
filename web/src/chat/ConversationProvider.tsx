@@ -25,7 +25,8 @@ export type Conversation = {
   ended: boolean
   /** The conversation could not be read back when the page loaded. */
   historyFailed: boolean
-  send: (text: string) => Promise<Reply | null>
+  /** `key` is the message's Idempotency-Key when the caller keeps it (the demo panel's steps do); without it the chat makes one. */
+  send: (text: string, key?: string) => Promise<Reply | null>
   /** Sends a message that did not go through again, with the same key: a message that did arrive is not run twice. */
   retry: (id: number) => void
   /** Reads the conversation from the API again (what the message the API already has needs). */
@@ -193,10 +194,10 @@ export function ConversationProvider({ sessionRef, initial, children }: { sessio
     return null
   }, [patch, refreshCases])
 
-  const send = useCallback((text: string) => {
+  const send = useCallback((text: string, given?: string) => {
     if (sendingRef.current) return Promise.resolve(null)
     const id = nextId.current++
-    const key = newMessageKey()
+    const key = given ?? newMessageKey()
     setEntries((all) => [...all, { id, role: 'user', text, at: Date.now(), key, delivery: 'sending' }])
     return deliver(id, text, key)
   }, [deliver])
