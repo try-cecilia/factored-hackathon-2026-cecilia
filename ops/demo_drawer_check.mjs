@@ -27,14 +27,28 @@ await page.waitForLoadState('networkidle')
 
 await page.getByRole('button', { name: 'Demo' }).click()
 const drawer = page.locator('#shell-demo')
-const cards = drawer.getByRole('article')
-const card = cards.nth(5)
+// By class, not by role: a closed drawer is inert, and a role query does not see inside it.
+const card = drawer.locator('article.demo__card').nth(5)
 const title = await card.getAttribute('aria-label')
 const chat = page.locator('.chat-log')
 const inChat = (text) => chat.getByText(text, { exact: true })
 const answers = () => card.locator('.demo__ok, .demo__bad')
+// Everything waits for its condition, with a limit long enough for a cold dev server (the first message compiles the server functions).
+const SLOW = 60000
 // The focus comes a frame after the drawer closes.
-const inputFocused = () => page.waitForFunction(() => document.activeElement?.tagName === 'TEXTAREA', null, { timeout: 3000 }).then(() => true, () => false)
+const inputFocused = () => page.waitForFunction(() => document.activeElement?.tagName === 'TEXTAREA', null, { timeout: SLOW }).then(() => true, () => false)
+// A panel that slides is settled when its box stops moving; a chat is settled when its last entry has stopped growing.
+const still = async (getBox) => {
+  let last = null
+  for (let i = 0; i < 100; i++) {
+    const box = await getBox()
+    if (box && last && box.x === last.x && box.y === last.y && box.height === last.height) return
+    last = box
+    await page.waitForTimeout(50)
+  }
+}
+const drawerSettled = () => still(() => drawer.boundingBox())
+const chatSettled = () => still(() => chat.boundingBox())
 const stepButton = (n) => card.getByRole('button', { name: `Enviar paso ${n}` })
 await card.scrollIntoViewIfNeeded()
 await card.getByRole('button', { name: /^(Cargar|Reiniciar)$/ }).click()
@@ -48,13 +62,13 @@ check(true, `"${title}": its first message is in the chat, sent`)
 check(await drawer.evaluate((el) => el.hasAttribute('inert')), 'the drawer closed and is out of reach')
 check(await inputFocused(), 'the focus is in the chat input')
 check(await page.evaluate(() => document.querySelector('textarea')?.value === ''), 'the input was not written into')
-await answers().first().waitFor({ state: 'attached', timeout: 15000 })
+await answers().first().waitFor({ state: 'attached', timeout: SLOW })
 check((await answers().count()) === 1, 'the first message was answered, and the card shows it')
-await page.waitForTimeout(400)
+await chatSettled()
 await page.screenshot({ path: `${outDir}/demo-prearmado-movil-es-1-enviado.png` })
 
 await page.getByRole('button', { name: 'Demo' }).click()
-await page.waitForTimeout(500) // the drawer slides in
+await drawerSettled() // the drawer slides in
 const box = await card.boundingBox()
 const view = await drawer.boundingBox()
 const inside = box && view && box.y >= view.y && box.y + Math.min(box.height, 1) <= view.y + view.height && box.x >= view.x
@@ -78,7 +92,7 @@ check(!!after && after.y >= view.y && after.y < view.y + view.height, 'the card 
 // Shift+Tab from the card (on a fresh reopening) goes to the control before it, not to the last of the drawer.
 await page.keyboard.press('Escape')
 await page.getByRole('button', { name: 'Demo' }).click()
-await page.waitForTimeout(500)
+await drawerSettled()
 await page.keyboard.press('Shift+Tab')
 check(await page.evaluate(() => { const a = document.activeElement; return !!a && a.tagName === 'BUTTON' && a.getAttribute('aria-label') !== 'Cerrar' && !!a.closest('article') }), 'Shift+Tab from the card goes to the control of the scenario above it')
 
@@ -86,7 +100,7 @@ check(await page.evaluate(() => { const a = document.activeElement; return !!a &
 if (turns.length > 1) {
   await page.keyboard.press('Escape')
   await page.getByRole('button', { name: 'Demo' }).click()
-  await page.waitForTimeout(500)
+  await drawerSettled()
   await stepButton(2).scrollIntoViewIfNeeded()
   check(await stepButton(2).isEnabled(), 'the button of step 2 is on its card, enabled')
   await stepButton(2).click()
@@ -94,8 +108,8 @@ if (turns.length > 1) {
   check(true, 'step 2 is in the chat, sent')
   check(await drawer.evaluate((el) => el.hasAttribute('inert')), 'the drawer closed again')
   check(await inputFocused(), 'the focus is in the chat input')
-  await answers().nth(1).waitFor({ state: 'attached', timeout: 15000 })
-  await page.waitForTimeout(400)
+  await answers().nth(1).waitFor({ state: 'attached', timeout: SLOW })
+  await chatSettled()
   await page.screenshot({ path: `${outDir}/demo-prearmado-movil-es-3-paso-enviado.png` })
 } else {
   console.log('note the scenario has one step: no second step to send')
