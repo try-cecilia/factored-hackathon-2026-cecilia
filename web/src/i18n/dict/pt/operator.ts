@@ -90,6 +90,12 @@ export const operator: Like<typeof es> = {
     actionFailed: 'Não foi possível concluir a ação. Conferir o estado do caso antes de repeti-la.',
     noPanelData: 'Ainda não há dados para este painel.',
   },
+  new: {
+    one: '1 novo caso',
+    other: '{count} novos casos',
+    row: 'Novo',
+    markSeen: 'Marcar como vistos',
+  },
   queue: {
     title: {
       all: 'Todos abertos',

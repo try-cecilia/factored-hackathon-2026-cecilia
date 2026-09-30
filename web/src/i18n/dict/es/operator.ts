@@ -88,6 +88,12 @@ export const operator = {
     actionFailed: 'No se pudo completar la acción. Revisar el estado del caso antes de repetirla.',
     noPanelData: 'Todavía no hay datos para este panel.',
   },
+  new: {
+    one: '1 caso nuevo',
+    other: '{count} casos nuevos',
+    row: 'Nuevo',
+    markSeen: 'Marcar como vistos',
+  },
   queue: {
     title: {
       all: 'Todos abiertos',

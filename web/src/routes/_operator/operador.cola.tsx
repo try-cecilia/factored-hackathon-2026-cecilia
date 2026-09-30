@@ -8,6 +8,7 @@ import type { DeskStatus, QueueRow } from '../../server/operator.functions'
 import { Button, DataTable, PriorityChip, priorityOf, StatusIndicator, type Column, type SortState, type StatusTone } from '../../ui'
 import { AgeCell } from '../-operator/AgeCell'
 import { categoryName, statusKey } from '../-operator/format'
+import { NewCasesBar, NewMark } from '../-operator/NewCases'
 import { useMinute } from '../-operator/now'
 import {
   countryOptions, distinct, filterTickets, filtersOf, hasFilters, inScope, isClosed, orderTickets, pageSlice, tabCounts, validateSearch, type QueueSearch, type StatusTab,
@@ -48,7 +49,7 @@ const rowId = (r: QueueRow) => r.ticket_id
 function makeColumns(t: Translate, locale: Locale, now: number): Column<QueueRow>[] {
   return [
     { id: 'priority', header: t('operator.queue.columns.priority'), width: 88, sortable: true, cell: (r) => <PriorityChip priority={priorityOf(r.priority)} /> },
-    { id: 'ticket', header: t('operator.queue.columns.ticket'), width: 76, mono: true, rowHeader: true, sortable: true, cell: (r) => r.ticket_id.slice(0, 8) },
+    { id: 'ticket', header: t('operator.queue.columns.ticket'), width: 92, mono: true, rowHeader: true, sortable: true, cell: (r) => <>{r.ticket_id.slice(0, 8)}<NewMark id={r.ticket_id} /></> },
     { id: 'queue', header: t('operator.queue.columns.queue'), width: 132, mono: true, muted: true, truncate: true, sortable: true, cell: (r) => r.queue },
     { id: 'request', header: t('operator.queue.columns.request'), truncate: true, sortable: true, cell: (r) => <span title={categoryName(t, r.category)}>{r.request}</span> },
     { id: 'locale', header: t('operator.queue.columns.locale'), width: 64, mono: true, muted: true, sortable: true, cell: (r) => <LocaleCell row={r} /> },
@@ -134,6 +135,7 @@ function Queue() {
         <div className="op-head">
           <h1 className={search.cola ? 'op-mono' : undefined}>{title}</h1>
           <span className="op-count" aria-label={String(pending)}>{result.ok ? pending : ''}</span>
+          <NewCasesBar />
           <div className="op-head__spacer" />
           <label className="op-search">
             <svg viewBox="0 0 20 20" width="12" height="12" aria-hidden="true" focusable="false"><circle cx="9" cy="9" r="5.5" fill="none" stroke="currentColor" strokeWidth="1.7" /><path d="M13.2 13.2 17 17" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" /></svg>
