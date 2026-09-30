@@ -13,6 +13,7 @@ export const ORIGIN = 'http://console.test'
 type Handler = { fetch(request: Request): Promise<Response> }
 
 type ApiMode = 'ok' | 'revoked' | 'forbidden' | 'error'
+type ApiRequest = { url: string; admin?: string; operator?: string }
 type Gate = { reached: Promise<void>; release: (status?: number) => void }
 
 export async function startConsole() {
@@ -20,14 +21,29 @@ export async function startConsole() {
   // until the test releases it (a slow response that arrives after other things have happened).
   let mode: ApiMode = 'ok'
   let pending: { onReach: () => void; released: Promise<number> } | null = null
+  // The customer context: what the API answers (a status and a body), a gate like `pending` for it, and every request the API saw.
+  let context: { status: number; body: unknown } = { status: 200, body: {} }
+  let contextGate: { onReach: () => void; released: Promise<number> } | null = null
+  const requests: ApiRequest[] = []
   const api: Server = createServer(async (req, res) => {
     const reply = (status: number, body: unknown) => {
       res.writeHead(status, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify(body))
     }
+    requests.push({ url: req.url ?? '', admin: req.headers['x-admin-key'] as string | undefined, operator: req.headers['x-operator-key'] as string | undefined })
     const admin = req.headers['x-admin-key'] === ADMIN
     const operator = req.headers['x-operator-key'] === ANA
     if (req.url?.startsWith('/admin/operator/me')) return operator ? reply(200, { operator: 'ana' }) : reply(401, { detail: 'invalid operator key' })
+    if (req.url?.includes('/customer_context')) {
+      let status = context.status
+      if (contextGate) {
+        const gate = contextGate
+        contextGate = null
+        gate.onReach()
+        status = await gate.released
+      }
+      return status === 200 ? reply(200, context.body) : reply(status, { detail: 'invalid admin key' })
+    }
     if (req.url?.startsWith('/admin/human_queue') && pending) {
       const gate = pending
       pending = null
@@ -62,7 +78,20 @@ export async function startConsole() {
     pending = { onReach: reached, released }
     return { reached: arrived, release }
   }
-  return { send, hold, setApi: (next: ApiMode) => void (mode = next), close: () => api.close() }
+  const holdContext = (): Gate => {
+    let release!: (status?: number) => void
+    let reached!: () => void
+    const released = new Promise<number>((done) => (release = (status = 200) => done(status)))
+    const arrived = new Promise<void>((done) => (reached = done))
+    contextGate = { onReach: reached, released }
+    return { reached: arrived, release }
+  }
+  return {
+    send, hold, holdContext, requests,
+    setApi: (next: ApiMode) => void (mode = next),
+    setContext: (next: { status?: number; body?: unknown }) => void (context = { status: next.status ?? 200, body: next.body ?? context.body }),
+    close: () => api.close(),
+  }
 }
 
 /** What a browser submitting the console's own form sends. */
