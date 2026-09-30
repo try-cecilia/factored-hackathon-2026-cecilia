@@ -46,7 +46,7 @@ export function AppShell({ session, kit, children }: { session: Session; kit: Pr
   const t = useT()
   const navigate = useNavigate()
   const router = useRouter()
-  const { cases, entries, sending, ended, send, refreshCase } = useConversation()
+  const { sessionRef, cases, entries, sending, ended, send, refreshCase } = useConversation()
   const phone = useMediaQuery(PHONE)
   const narrow = useMediaQuery(NARROW)
   const [collapsed, setCollapsed] = useState(false)
@@ -200,7 +200,7 @@ export function AppShell({ session, kit, children }: { session: Session; kit: Pr
             {(scenarios) => (
               <DemoPanel
                 scenarios={scenarios}
-                sessionRef={session.session_ref}
+                sessionRef={sessionRef}
                 entries={entries}
                 pending={sending}
                 escalations={escalations}

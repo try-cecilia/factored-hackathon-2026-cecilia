@@ -16,6 +16,8 @@ export type CaseRead = 'ready' | 'not_found' | 'error' | 'ended' | 'superseded'
 export type CaseRow = { ref: CaseRef; state: CaseState }
 
 export type Conversation = {
+  /** The session the conversation below belongs to: it changes in the same render as the entries do, not before. */
+  sessionRef: string
   entries: Entry[]
   /** A message is on its way: one turn at a time. */
   sending: boolean
@@ -233,8 +235,8 @@ export function ConversationProvider({ sessionRef, initial, children }: { sessio
   const cases = useMemo<CaseRow[]>(() => refs.map((ref) => ({ ref, state: states[ref.ticketId] ?? { state: 'loading' } })), [refs, states])
 
   const value = useMemo<Conversation>(
-    () => ({ entries, sending, ended, historyFailed, send, retry, reload, cases, refreshCases, refreshCase: loadCase }),
-    [entries, sending, ended, historyFailed, send, retry, reload, cases, refreshCases, loadCase],
+    () => ({ sessionRef: current, entries, sending, ended, historyFailed, send, retry, reload, cases, refreshCases, refreshCase: loadCase }),
+    [current, entries, sending, ended, historyFailed, send, retry, reload, cases, refreshCases, loadCase],
   )
   return <ConversationContext value={value}>{children}</ConversationContext>
 }

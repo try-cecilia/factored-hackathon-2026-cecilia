@@ -59,6 +59,28 @@ function App() {
   )
 }
 
+// The route gives the shell its session before the loader gives the provider the session's history: for a moment the panel lives
+// in the new session while the conversation is still the old one, which has turns of its own.
+function LaggingApp() {
+  const [shell, setShell] = useState('s1')
+  const [conversation, setConversation] = useState('s1')
+  router.invalidate = async () => {
+    setShell((r) => `${r}+`)
+    await new Promise((resolve) => setTimeout(resolve, 60))
+    setConversation((r) => `${r}+`)
+  }
+  const session: Session = { customer_id: 'CLI-FIX0001', session_ref: shell, segment: 'Premium', country: 'México', customer_status: 'Active', expires_at: 0, expires_in: 900 }
+  const old = conversation === 's1'
+  const turns = old
+    ? [{ role: 'user' as const, text: 'algo de antes', at: 1 }, { role: 'assistant' as const, reply: reply('AUTO_RESOLVE', 'Respuesta de antes'), at: 2 }]
+    : []
+  return (
+    <ConversationProvider sessionRef={conversation} initial={{ ok: true, cases: [], turns }}>
+      <AppShell session={session} kit={kit}><ChatView session={session} /></AppShell>
+    </ConversationProvider>
+  )
+}
+
 async function draw(locale: 'es' | 'pt' = 'es') {
   let drawn: ReturnType<typeof renderWithI18n> | undefined
   await act(async () => { drawn = renderWithI18n(<App />, locale) })
@@ -100,6 +122,20 @@ describe('a scenario of the demo panel sends its first message through the chat'
     expect(within(card).getByRole('region', { name: 'Pasos del escenario' })).toBeTruthy()
     expect(within(aside).getAllByRole('region')[0].getAttribute('aria-label')).toBe('Escenarios guiados')
     expect(within(aside).getAllByRole('region', { name: 'Pasos del escenario' })).toHaveLength(1)
+  })
+
+  it('the first message waits for the conversation of the new session: it is not sent into the old one, and its reply is not lost', async () => {
+    const user = userEvent.setup()
+    sendMessage.mockResolvedValue({ ok: true, reply: reply('AUTO_RESOLVE', 'Tu saldo es 10 USD.') })
+    await act(async () => { renderWithI18n(<LaggingApp />, 'es') })
+    expect(screen.getByText('Respuesta de antes')).toBeTruthy()
+    const card = await load(user, 'Dos turnos')
+
+    expect(await screen.findByText('Tu saldo es 10 USD.')).toBeTruthy()
+    expect(screen.queryByText('Respuesta de antes')).toBeNull()
+    expect(screen.getByText('¿Cuál es mi saldo?')).toBeTruthy()
+    expect(sendMessage).toHaveBeenCalledOnce()
+    expect(within(card).getByText('✓ Resuelto')).toBeTruthy()
   })
 
   it('the reply fills the step, and the next one waits in the card to be sent with a click, not in the input', async () => {
