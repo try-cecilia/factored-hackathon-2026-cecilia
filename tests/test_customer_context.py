@@ -1,0 +1,131 @@
+"""The customer's context beside a case: products, latest movements and the customer's other cases and traces, read-only.
+
+It answers only to the admin key (what the queue already reads with), leaves the desk and the queue untouched, sends account numbers
+as their last four digits, and, when the warehouse does not answer, says so and still gives what the files hold.
+"""
+from __future__ import annotations
+
+import json
+import logging
+
+import pytest
+from fastapi.testclient import TestClient
+
+from agent import observability
+from agent.policy import router
+from agent.policy.desk import default_desk
+from agent.policy.escalation import escalate
+from agent.tools import account_tools
+from agent.tools.traces import default_traces
+from api import main
+
+ADMIN = {"X-Admin-Key": "ctx-admin-key-0123456789-abcdefgh"}
+OPERATOR = {"X-Operator-Key": "ctx-ana-key-0123456789-abcdefgh"}
+CUSTOMER = "CLI-FIX0004"  # has products of several kinds and the fixture's one pending transfer (TXN-FIX0006)
+
+
+@pytest.fixture(autouse=True)
+def stores(tmp_path, monkeypatch):
+    for var, name in (("HUMAN_QUEUE_PATH", "queue"), ("HUMAN_DESK_PATH", "desk"), ("TRACE_REQUESTS_PATH", "traces"), ("AUDIT_LOG_PATH", "audit")):
+        monkeypatch.setenv(var, str(tmp_path / f"{name}.jsonl"))
+    monkeypatch.setenv("ADMIN_API_KEY", ADMIN["X-Admin-Key"])
+    monkeypatch.setenv("OPERATOR_KEYS", f"ana={OPERATOR['X-Operator-Key']}")
+    monkeypatch.setattr(main, "operator_fail_limiter", main.RateLimiter(100, 60))
+
+
+def file_ticket(customer: str = CUSTOMER, request: str = "no llegó") -> str:
+    return escalate(router.trace_review("older_than_review_threshold"), customer, "ref", request, "es", [], [], [], {}, None).ticket_id
+
+
+def context(ticket_id: str, headers=ADMIN):
+    return TestClient(main.app).get(f"/admin/tickets/{ticket_id}/customer_context", headers=headers)
+
+
+def test_it_lists_the_customers_products_masked_and_the_movements_with_the_pending_one_marked():
+    body = context(file_ticket()).json()
+    assert body["warehouse"]["available"] is True and body["warehouse"]["as_of"]
+    assert body["products"], "the customer has products"
+    assert {tuple(sorted(p)) for p in body["products"]} == {("currency", "last4", "product_id", "status", "type")}
+    assert all(len(p["last4"]) == 4 for p in body["products"])
+    pending = [m for m in body["movements"] if m["pending"]]
+    assert [m["transaction_id"] for m in pending] == ["TXN-FIX0006"]
+    assert {m["status"] for m in pending} == {"Pending"}
+    assert all(set(m) == {"transaction_id", "date", "product_id", "type", "amount", "currency", "merchant", "status", "pending"} for m in body["movements"])
+    assert [m["date"] for m in body["movements"]] == sorted((m["date"] for m in body["movements"]), reverse=True)
+
+
+def test_no_full_account_or_card_number_leaves_the_api():
+    body = context(file_ticket()).text
+    for number in ("4000000001", "4000000002", "5000000004", "4000000003"):
+        assert number not in body
+    assert "product_number" not in body
+
+
+def test_it_holds_nothing_of_other_customers():
+    body = context(file_ticket()).json()
+    owned = {p["product_id"] for p in body["products"]}
+    assert owned and all(m["product_id"] in owned for m in body["movements"])
+    assert "CLI-FIX0001" not in json.dumps(body)
+
+
+def test_the_other_cases_of_the_same_customer_are_listed_with_their_state_and_this_one_is_not():
+    mine, older, other_customer = file_ticket(), file_ticket(request="otra vez"), file_ticket("CLI-FIX0001")
+    default_desk.act(older, "claim", "ana")
+    cases = context(mine).json()["cases"]
+    assert [c["ticket_id"] for c in cases] == [older]
+    assert cases[0]["status"] == "claimed" and set(cases[0]) == {"ticket_id", "category", "queue", "priority", "created_at", "status"}
+    assert other_customer not in json.dumps(cases)
+
+
+def test_the_customers_traces_are_listed_and_only_theirs():
+    default_traces.open(CUSTOMER, "TXN-FIX0006", "PRD-FIX0010", "ref")
+    default_traces.open("CLI-FIX0001", "TXN-FIX0001", "PRD-FIX0001", "ref")
+    traces = context(file_ticket()).json()["traces"]
+    assert [(t["transaction_id"], t["status"]) for t in traces] == [("TXN-FIX0006", "open")]
+    assert set(traces[0]) == {"trace_id", "transaction_id", "status", "created_at"}
+
+
+def test_only_the_admin_key_reads_it_and_a_ticket_that_does_not_exist_is_a_404():
+    ticket_id = file_ticket()
+    client = TestClient(main.app)
+    path = f"/admin/tickets/{ticket_id}/customer_context"
+    assert client.get(path).status_code == 401
+    assert client.get(path, headers=OPERATOR).status_code == 401  # the operator key acts, it does not read
+    assert client.get(path, headers={"X-Session-Token": "0" * 24}).status_code == 401
+    assert client.get("/admin/tickets/T-0000-nope/customer_context", headers=ADMIN).status_code == 404
+    assert client.get(path, headers=ADMIN).status_code == 200
+
+
+def test_reading_it_changes_nothing():
+    ticket_id = file_ticket()
+    before = (default_desk.state(ticket_id), main.default_queue.path.read_text(encoding="utf-8"))
+    context(ticket_id)
+    assert (default_desk.state(ticket_id), main.default_queue.path.read_text(encoding="utf-8")) == before
+
+
+def test_when_the_warehouse_does_not_answer_it_says_so_and_still_gives_the_cases_and_traces(monkeypatch, caplog):
+    mine, older = file_ticket(), file_ticket(request="otra vez")
+    default_traces.open(CUSTOMER, "TXN-FIX0006", "PRD-FIX0010", "ref")
+
+    def down(*args, **kwargs):
+        raise OSError("connection to /secret/path/bank.duckdb lost, customer CLI-FIX0004")
+
+    monkeypatch.setattr(account_tools, "get_customer_profile", down)
+    monkeypatch.setattr(account_tools, "list_transactions", down)
+    before = observability.failure_counts().get("customer_context_unavailable", 0)
+    with caplog.at_level(logging.WARNING):
+        response = context(mine)
+    body = response.json()
+    assert response.status_code == 200
+    assert body["warehouse"] == {"available": False, "as_of": None}
+    assert body["products"] == [] and body["movements"] == []
+    assert [c["ticket_id"] for c in body["cases"]] == [older] and len(body["traces"]) == 1
+    assert observability.failure_counts()["customer_context_unavailable"] == before + 1
+    # The exception's message names a path and a customer: it stays out of the response and out of the log.
+    assert "secret" not in response.text and "secret" not in caplog.text and "OSError" in caplog.text
+
+
+def test_a_warehouse_that_knows_no_such_customer_is_the_same_unavailable_answer(monkeypatch):
+    ticket_id = file_ticket("CLI-NOBODY")
+    body = context(ticket_id).json()
+    assert body["warehouse"]["available"] is False and body["products"] == []

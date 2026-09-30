@@ -27,6 +27,8 @@ export type TicketPanelProps = {
   keyForm?: ReactNode
   /** Link to the trace of the turn that filed the case. */
   traceLink?: ReactNode
+  /** The customer's context (read on its own: see CustomerContext.tsx). */
+  context?: ReactNode
 }
 
 type Flash = { tone: 'ok' | 'error'; title?: string; text: string; detail?: string }
@@ -37,7 +39,7 @@ const MESSAGE_MAX = 500
 const tones: Record<DeskState['status'], StatusTone> = { open: 'open', claimed: 'info', approved: 'success', rejected: 'danger', handed_back: 'neutral', stale: 'caution', resolved: 'success' }
 
 /** The ticket desk of the operator console: what the case is, what the assistant did, and what the operator can do next. */
-export function TicketPanel({ ticket, view, act, reload, loadError, onClose, keyForm, traceLink }: TicketPanelProps) {
+export function TicketPanel({ ticket, view, act, reload, loadError, onClose, keyForm, traceLink, context }: TicketPanelProps) {
   const t = useT()
   const { locale } = useI18n()
   const [reason, setReason] = useState('')
@@ -275,6 +277,8 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
             </ul>
           </section>
         )}
+
+        {context}
 
         {ticket.open_questions.length > 0 && (
           <section className="op-block">
