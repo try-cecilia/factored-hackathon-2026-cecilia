@@ -10,7 +10,7 @@ report is regenerated, copy them again from it, never from memory.
    Agents already resolve 91% of them on the first contact, yet customers rate the service under 3 out of 5, and
    every one of those calls starts with two minutes in a queue. We built the assistant that answers them in
    seconds, that only says what it can verify, that acts once and only on the customer's yes, and that hands over
-   to a person, with the evidence, when it should not act."(Do not say the wait causes the score: the data's wait is
+   to a person, with the evidence, when it should not act." (Do not say the wait causes the score: the data's wait is
    120 s for every reason, so it cannot show that.)
 
 2. **The problem, measured (20 s).** The contact-reason and CSAT tables from `docs/evidence/baseline_metrics.md`:
