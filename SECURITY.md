@@ -37,20 +37,21 @@ promise about response time: this is a prototype with no on-call.
 | API headers: CSP, `nosniff`, no framing, no referrer, `no-store`; CORS off by default, wildcard refused | Implemented | `api/security.py`, `tests/test_security.py` |
 | Session cookie: `httpOnly`, `SameSite=Lax`, `Secure` and `__Host-` on https | Implemented | `web/src/server/cookie-policy.ts` |
 | Origin check on operator form posts | Implemented | `web/src/server/origin-check.ts` |
+| Web headers: `nosniff`, no framing, referrer policy, a CSP without `script-src`, HSTS on an https origin | Implemented, CSP partial | `web/serve.mjs`, `web/tests/http/serve.test.ts` |
 | Tool audit, traces, tickets with a one-way session reference; retention loop that audits itself | Implemented; the records still hold customer data | `ops/retention.py`, `docs/operations.md` |
 | Containers run unprivileged (API drops to `agent` with `setpriv`; web runs as `web`) | Implemented | `ops/entrypoint.sh`, `ops/Dockerfile.web` |
 | Dependencies pinned with hashes | Implemented | `requirements.txt`, `pnpm-lock.yaml`, `make lock-check` |
-| Dependency vulnerability scanning or an update bot | **Not implemented** | |
+| Dependency vulnerability scanning: `pip-audit` and `pnpm audit` fail the build on a known vulnerability | Implemented; no update bot | `.github/workflows/ci.yml` (`audit`) |
 | Secret scanning | Partial: every blob is scanned when the public repository is exported, not in CI | `ops/export_public.py` |
-| CI actions pinned by commit SHA | **Not implemented**: pinned by tag (`@v4`) | `.github/workflows/ci.yml` |
+| CI actions pinned by commit SHA | Implemented | `.github/workflows/ci.yml` |
 | Red-team of the assistant (injection, other customers' ids, unauthorized access) | Done, on the assistant only | `tests/test_red_team.py`, `docs/red_team.md` |
 | Penetration test, TLS and header test of the live deployment | **Not done** | |
 
 ## Known gaps
 
-1. **No dependency vulnerability scanning**, and no secret scanning in CI (V14.2.1).
-2. **The web server sends no Content-Security-Policy and no HSTS** (V14.4.3, V14.4.5). The API does. TLS itself is
-   Render's edge and we have not tested it.
+1. **No secret scanning in CI** (V14.2.1 is met for dependencies only). Secrets are scanned only at the public export.
+2. **The web server's CSP has no `script-src`**, because pinning the pages' inline scripts needs a nonce per response and we
+   cannot check one without a browser (V14.4.3). The API's CSP is complete. TLS itself is Render's edge and we have not tested it.
 3. **Operators have no MFA.** Keys are named and static, held in the environment, rotated by hand (V4.3.1). The admin
    role is one shared read-only key.
 4. **The jury deployment runs with `DEMO_MODE=1`** (`render.yaml`), so the demo-only routes, including the one that
