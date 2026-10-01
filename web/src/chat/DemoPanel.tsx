@@ -34,7 +34,7 @@ function known<T extends string>(list: readonly T[], value: string): value is T 
 // so), so an unrelated message does not move the scenario. Each reply says which message it answers (`to`), because a retry's
 // reply comes late, after other messages.
 
-export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations, ended, send, retry, overlay, onSessionChanged, onClose }: {
+export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations, ended, send, onSend, retry, overlay, onSessionChanged, onClose }: {
   scenarios: DemoScenario[]
   sessionRef: string
   entries: Entry[]
@@ -44,6 +44,8 @@ export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations
   ended: boolean
   /** The chat's own send: the messages of a scenario go through it, with the same key, the same state and the same retry. */
   send: (text: string, key?: string) => Promise<unknown>
+  /** Tells the panel each message the chat sends and its key, so a step sent from anywhere is the step. */
+  onSend: (listener: (sent: { text: string; key: string }) => void) => () => void
   /** Sends a message that did not go through again, with the same key (the bubble's own retry). */
   retry: (id: number) => void
   /** The panel is a drawer over the page: choosing a scenario closes it, so the input is in reach. */
@@ -131,6 +133,20 @@ export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations
     if (answered.size === 0) return
     setActive((a) => a && { ...a, steps: a.steps.map((r, i) => (answered.has(i) ? { ...r, disposition: answered.get(i) as string } : r)) })
   }, [active, entries])
+
+  // A message sent from anywhere (the composer, a suggestion, a bubble's button) whose text is the step in course is that step: it
+  // is recorded with its real key, so the card does not offer it again as new and its retries go with that key. A step that
+  // already has its record is not changed by another message of the same text.
+  useEffect(() => onSend(({ text, key }) => {
+    setActive((a) => {
+      if (!a || a.base === null) return a
+      let n = 0
+      while (a.steps[n]?.disposition) n++
+      const turn = a.scenario.turns[n]
+      if (a.steps[n] || turn === undefined || turn.trim() !== text.trim()) return a
+      return { ...a, steps: [...a.steps.slice(0, n), { key, disposition: null }] }
+    })
+  }), [onSend])
 
   // On a phone the drawer covers the chat: once a message is sent it closes, and the focus goes to the chat's input (the drawer's
   // own close would give it back to the button that opened it, and that comes a render later).

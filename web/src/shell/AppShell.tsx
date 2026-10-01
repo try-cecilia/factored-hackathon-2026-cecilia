@@ -47,7 +47,7 @@ export function AppShell({ session, kit, children }: { session: Session; kit: Pr
   const t = useT()
   const navigate = useNavigate()
   const router = useRouter()
-  const { sessionRef, cases, entries, sending, ended, send, retry, refreshCase } = useConversation()
+  const { sessionRef, cases, entries, sending, ended, send, onSend, retry, refreshCase } = useConversation()
   // The same end the chat's composer goes by: what is over for the composer is over for the demo panel's step buttons.
   const notice = useSessionNotice(session)
   const over = ended || notice === 0
@@ -210,6 +210,7 @@ export function AppShell({ session, kit, children }: { session: Session; kit: Pr
                 escalations={escalations}
                 ended={over}
                 send={send}
+                onSend={onSend}
                 retry={retry}
                 overlay={narrow}
                 onSessionChanged={() => router.invalidate()}

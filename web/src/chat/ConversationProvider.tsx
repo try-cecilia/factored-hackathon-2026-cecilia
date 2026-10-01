@@ -27,6 +27,9 @@ export type Conversation = {
   historyFailed: boolean
   /** `key` is the message's Idempotency-Key when the caller keeps it (the demo panel's steps do); without it the chat makes one. */
   send: (text: string, key?: string) => Promise<Reply | null>
+  /** Tells `listener` each message the conversation sends, with its text and its key, wherever it came from (the composer, a
+   * suggestion, a bubble's button, the demo panel); returns what stops it. A retry is not told: its message was, when it was sent. */
+  onSend: (listener: (sent: { text: string; key: string }) => void) => () => void
   /** Sends a message that did not go through again, with the same key: a message that did arrive is not run twice. */
   retry: (id: number) => void
   /** Reads the conversation from the API again (what the message the API already has needs). */
@@ -194,10 +197,17 @@ export function ConversationProvider({ sessionRef, initial, children }: { sessio
     return null
   }, [patch, refreshCases])
 
+  const listeners = useRef(new Set<(sent: { text: string; key: string }) => void>())
+  const onSend = useCallback((listener: (sent: { text: string; key: string }) => void) => {
+    listeners.current.add(listener)
+    return () => void listeners.current.delete(listener)
+  }, [])
+
   const send = useCallback((text: string, given?: string) => {
     if (sendingRef.current) return Promise.resolve(null)
     const id = nextId.current++
     const key = given ?? newMessageKey()
+    listeners.current.forEach((listener) => listener({ text, key }))
     setEntries((all) => [...all, { id, role: 'user', text, at: Date.now(), key, delivery: 'sending' }])
     return deliver(id, text, key)
   }, [deliver])
@@ -244,8 +254,8 @@ export function ConversationProvider({ sessionRef, initial, children }: { sessio
   const cases = useMemo<CaseRow[]>(() => refs.map((ref) => ({ ref, state: states[ref.ticketId] ?? { state: 'loading' } })), [refs, states])
 
   const value = useMemo<Conversation>(
-    () => ({ sessionRef: current, entries, sending, ended, historyFailed, send, retry, reload, cases, refreshCases, refreshCase: loadCase }),
-    [current, entries, sending, ended, historyFailed, send, retry, reload, cases, refreshCases, loadCase],
+    () => ({ sessionRef: current, entries, sending, ended, historyFailed, send, onSend, retry, reload, cases, refreshCases, refreshCase: loadCase }),
+    [current, entries, sending, ended, historyFailed, send, onSend, retry, reload, cases, refreshCases, loadCase],
   )
   return <ConversationContext value={value}>{children}</ConversationContext>
 }

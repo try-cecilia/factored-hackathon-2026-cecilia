@@ -35,6 +35,7 @@ const scenarios = [
   scenario('c', ['tres'], ['AUTO_RESOLVE'], 'Tercero'),
   scenario('d', ['cuatro'], ['AUTO_RESOLVE'], 'Cuarto'),
   scenario('e', ['¿Cuál es mi saldo?', 'Me clonaron la tarjeta'], ['AUTO_RESOLVE', 'ESCALATE'], 'Dos turnos'),
+  scenario('f', ['¿Pueden rastrear mi transferencia?', 'Sí'], ['CLARIFY', 'AUTO_RESOLVE'], 'Rastreo'),
 ]
 // What the API kept of a session when its conversation is read: a test can make it fail.
 const history = vi.hoisted(() => ({ initial: { ok: true, cases: [], turns: [] } as HistoryResult }))
@@ -367,6 +368,83 @@ describe('a scenario of the demo panel sends its first message through the chat'
     expect(sendMessage.mock.calls[1][0].data.key).not.toBe(sendMessage.mock.calls[0][0].data.key)
     expect(within(card).queryByText('✓ Resuelto')).toBeNull()
     expect((within(card).getByRole('button', { name: 'Enviar paso 1' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('the text of the step in course written in the composer is that step: the card does not offer it again, and a retry keeps the key', async () => {
+    const user = userEvent.setup()
+    sendMessage
+      .mockResolvedValueOnce({ ok: true, reply: reply('AUTO_RESOLVE', 'Tu saldo es 10 USD.') })
+      .mockResolvedValueOnce({ ok: false, failure: 'timeout' })
+      .mockResolvedValueOnce({ ok: true, reply: reply('ESCALATE', 'Te paso con una persona.') })
+    await draw()
+    const card = await load(user, 'Dos turnos')
+    expect(await within(card).findByText('✓ Resuelto')).toBeTruthy()
+
+    await user.type(input(), 'Me clonaron la tarjeta')
+    await user.click(screen.getByRole('button', { name: 'Enviar mensaje' }))
+
+    // It is the step: sent from the composer, its retry is the card's too, with the key it went with.
+    const retry = await within(card).findByRole('button', { name: 'Reintentar paso 2' })
+    expect(within(card).queryByRole('button', { name: 'Enviar paso 2' })).toBeNull()
+    await user.click(retry)
+    expect(await within(card).findByText('✓ A una persona')).toBeTruthy()
+    expect(sendMessage).toHaveBeenCalledTimes(3)
+    expect(sendMessage.mock.calls[2][0].data.key).toBe(sendMessage.mock.calls[1][0].data.key)
+    expect(within(card).queryByRole('button', { name: /paso 2/ })).toBeNull()
+  })
+
+  it('the step in course sent from the composer and answered is marked answered: the card has nothing left to send', async () => {
+    const user = userEvent.setup()
+    sendMessage
+      .mockResolvedValueOnce({ ok: true, reply: reply('AUTO_RESOLVE', 'Tu saldo es 10 USD.') })
+      .mockResolvedValueOnce({ ok: true, reply: reply('ESCALATE', 'Te paso con una persona.') })
+    await draw()
+    const card = await load(user, 'Dos turnos')
+    expect(await within(card).findByText('✓ Resuelto')).toBeTruthy()
+
+    await user.type(input(), 'Me clonaron la tarjeta')
+    await user.click(screen.getByRole('button', { name: 'Enviar mensaje' }))
+
+    expect(await within(card).findByText('✓ A una persona')).toBeTruthy()
+    expect(within(card).queryByRole('button', { name: /paso 2/ })).toBeNull()
+    expect(sendMessage).toHaveBeenCalledTimes(2)
+  })
+
+  it("the bubble's own yes is the step: the card does not offer the step again after it", async () => {
+    const user = userEvent.setup()
+    const proposal: Reply = { ...reply('CLARIFY', 'Encontré un movimiento pendiente. ¿Quieres que abra un pedido de rastreo? Responde sí o no.'), category: 'confirm_action' }
+    sendMessage
+      .mockResolvedValueOnce({ ok: true, reply: proposal })
+      .mockResolvedValueOnce({ ok: true, reply: reply('AUTO_RESOLVE', 'Listo: abrí el pedido de rastreo.') })
+    await draw()
+    const card = await load(user, 'Rastreo')
+    expect(await within(card).findByText('✓ Pregunta')).toBeTruthy()
+
+    await user.click(await screen.findByRole('button', { name: 'Sí, rastrear' }))
+
+    expect(await within(card).findByText('✓ Resuelto')).toBeTruthy()
+    expect(sendMessage).toHaveBeenCalledTimes(2)
+    expect(sendMessage.mock.calls[1][0].data.message).toBe('Sí')
+    expect(within(card).queryByRole('button', { name: /paso 2/ })).toBeNull()
+  })
+
+  it('a message of the same text as the step in course, sent when the step already has its record, does not change it', async () => {
+    const user = userEvent.setup()
+    sendMessage
+      .mockResolvedValueOnce({ ok: false, failure: 'timeout' })
+      .mockResolvedValueOnce({ ok: true, reply: reply('AUTO_RESOLVE', 'Tu saldo es 10 USD.') })
+    await draw()
+    const card = await load(user, 'Dos turnos')
+    await within(card).findByRole('button', { name: 'Reintentar paso 1' })
+
+    await user.type(input(), '¿Cuál es mi saldo?')
+    await user.click(screen.getByRole('button', { name: 'Enviar mensaje' }))
+    await screen.findByText('Tu saldo es 10 USD.')
+
+    // The step's record is the first send's: the second, by hand, is another message, and the step is still the one that went first.
+    expect(sendMessage.mock.calls[1][0].data.key).not.toBe(sendMessage.mock.calls[0][0].data.key)
+    expect(within(card).getByRole('button', { name: 'Reintentar paso 1' })).toBeTruthy()
+    expect(within(card).queryByText('✓ Resuelto')).toBeNull()
   })
 
   it('a step the API already has is not sent again from the card: the button is off and the card points at the chat', async () => {
