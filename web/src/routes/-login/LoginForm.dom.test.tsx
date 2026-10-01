@@ -105,3 +105,48 @@ describe('the sign-in form when the API refuses the login', () => {
     expect((screen.getByRole('button', { name: 'Ingresar' }) as HTMLButtonElement).disabled).toBe(false)
   })
 })
+
+describe('the sign-in form when a field is wrong before anything is sent', () => {
+  const field = (name: string) => document.querySelector(`input[name="${name}"]`) as HTMLInputElement
+
+  async function submitWith(locale: Locale, customerId: string, pin: string) {
+    const signIn = vi.fn(async (): Promise<LoginResult> => ({ ok: true }))
+    mount(signIn, { hasSession: true, locale })
+    const user = userEvent.setup()
+    if (customerId) await user.type(await screen.findByLabelText(/^(Número de cliente)/), customerId)
+    else await screen.findByLabelText(/^(Número de cliente)/)
+    if (pin) await user.type(screen.getByLabelText('PIN'), pin)
+    await user.click(screen.getByRole('button', { name: locale === 'es' ? 'Ingresar' : 'Entrar' }))
+    expect(signIn).not.toHaveBeenCalled()
+    return user
+  }
+
+  it.each([
+    ['es', 'Falta el PIN de 6 dígitos.'],
+    ['pt', 'Falta o PIN de 6 dígitos.'],
+  ] as const)('an empty PIN is explained in the language of the page (%s), not in the browser\'s', async (locale, message) => {
+    await submitWith(locale, 'CLI-FIX0001', '')
+    expect(field('pin').validationMessage).toBe(message)
+  })
+
+  it.each([
+    ['es', 'Falta el número de cliente.'],
+    ['pt', 'Falta o número de cliente.'],
+  ] as const)('an empty customer number too (%s)', async (locale, message) => {
+    await submitWith(locale, '', '123456')
+    expect(field('customer_id').validationMessage).toBe(message)
+  })
+
+  it('a short PIN is explained as well (jsdom does not flag a too-short text typed by a script, so the customer number\'s minLength is not covered here)', async () => {
+    await submitWith('es', 'CLI-FIX0001', '123')
+    expect(field('pin').validationMessage).toBe('El PIN tiene 6 dígitos.')
+  })
+
+  it('the message goes away as soon as the person types, so it never blocks a valid value', async () => {
+    const user = await submitWith('es', 'CLI-FIX0001', '')
+    expect(field('pin').validationMessage).not.toBe('')
+    await user.type(screen.getByLabelText('PIN'), '123456')
+    expect(field('pin').validity.valid).toBe(true)
+    expect(field('pin').validationMessage).toBe('')
+  })
+})
