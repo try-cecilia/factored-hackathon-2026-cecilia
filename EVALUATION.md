@@ -462,6 +462,10 @@ With Sonnet 5 the model costs USD 0.0029 per safe resolution, about USD 1.42 a
 month for every text contact, against USD 293–1,172 a month of agent time
 avoided at 5–20 USD per hour.
 
+Where the human time goes by contact reason, and what the same arithmetic gives under assumed shifts of phone contacts to text
+(and under the lower bound of Sonnet 5's interval), is in [`docs/evidence/unit_economics.md`](docs/evidence/unit_economics.md):
+the scenarios are labeled assumptions, not forecasts.
+
 **Failure handling by category and language.** `make eval-failures` →
 [`eval/reports/FAILURE_EVAL.md`](eval/reports/FAILURE_EVAL.md) (and `failure_eval.json`). It re-measures the five kinds
 of failure the rubric names (expired sessions, unauthorized access, prompt injection, tool failures, ES/PT ambiguity) on
