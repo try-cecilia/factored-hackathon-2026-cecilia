@@ -1,4 +1,5 @@
 import { act, fireEvent, screen } from '@testing-library/react'
+import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Session } from '../server/auth.functions'
 import { ShellProvider } from '../shell/ShellContext'
@@ -62,6 +63,27 @@ describe('ChatView', () => {
     await act(() => vi.advanceTimersByTimeAsync(60_000))
     expect(screen.getByText('Tu sesión venció')).toBeTruthy()
     expect(renders.log).toBeGreaterThan(settled)
+  })
+
+  it('another object of the same session, with the same time to go, does not start the countdown again: the end never moves later', async () => {
+    let renew: (next: Session) => void = () => {}
+    function Harness() {
+      const [current, setCurrent] = useState(session)
+      renew = setCurrent
+      return (
+        <ShellProvider value={{ showCase: () => {} }}>
+          <ConversationProvider sessionRef="s1" initial={history}><ChatView session={current} /></ConversationProvider>
+        </ShellProvider>
+      )
+    }
+    renderWithI18n(<Harness />)
+    await act(() => vi.advanceTimersByTimeAsync(600_000))
+    // The route hands over a new object of the same session (a loader that ran again, with the same expires_in).
+    await act(async () => renew({ ...session }))
+    expect(screen.queryByText('Tu sesión venció')).toBeNull()
+
+    await act(() => vi.advanceTimersByTimeAsync(301_000))
+    expect(screen.getByText('Tu sesión venció')).toBeTruthy()
   })
 
   it('signing in again after the session ended comes back to the page it was on, with its query and fragment', async () => {

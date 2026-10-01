@@ -6,25 +6,9 @@ import { Button, SystemNote } from '../ui'
 import { ChatLog } from './ChatLog'
 import { Composer, type ComposerHandle } from './Composer'
 import { useConversation } from './ConversationProvider'
-import { sessionNotice } from './conversation'
+import { useSessionNotice } from './useSessionNotice'
 import { useShell } from '../shell/ShellContext'
 import './chat.css'
-
-/**
- * What the session's countdown shows (`sessionNotice`): no notice, the minutes of the notice, or over. It ticks every five
- * seconds but holds that, not the seconds, so the page renders again only when what it shows changes.
- */
-function useSessionNotice(session: Session) {
-  const [notice, setNotice] = useState(() => sessionNotice(session.expires_in))
-  useEffect(() => {
-    const deadline = Date.now() + session.expires_in * 1000
-    const tick = () => setNotice(sessionNotice(Math.round((deadline - Date.now()) / 1000)))
-    tick()
-    const timer = setInterval(tick, 5_000)
-    return () => clearInterval(timer)
-  }, [session.session_ref, session.expires_in])
-  return notice
-}
 
 function useOnline() {
   const [online, setOnline] = useState(true)
