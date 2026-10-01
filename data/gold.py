@@ -4,8 +4,9 @@
     python -m data.gold --verify               # re-check the built marts against silver; exit 1 if one has drifted
 
 Silver is what data/pipeline.py loads (typed, validated, de-duplicated). A mart is a deterministic query over silver, with
-a declared grain and two kinds of check run inside the same transaction that writes it:
+a declared grain and three kinds of check run inside the same transaction that writes it:
 
+- the columns, in order and with their types, are the contract declared in `MARTS`;
 - the grain is unique (no two rows share the grain columns, NULLs included);
 - the mart adds up to the silver rows it summarizes (row counts, and amounts where it carries them).
 
@@ -43,6 +44,10 @@ class Mart:
     # (name, SQL returning the mart's figure, SQL returning the silver figure it must equal)
     reconcile: tuple[tuple[str, str, str], ...] = field(default_factory=tuple)
     doc: str = ""
+    columns: tuple[tuple[str, str], ...] = ()  # the contract: every column the query returns, in order, with its DuckDB type
+
+
+STAMP = (("_gold_run_id", "VARCHAR"), ("_built_at", "TIMESTAMP"))  # added to every mart row by `build`
 
 
 MARTS: tuple[Mart, ...] = (
@@ -50,6 +55,9 @@ MARTS: tuple[Mart, ...] = (
         name="gold_daily_activity",
         grain=("activity_date", "transaction_country", "currency", "transaction_type", "transaction_status"),
         sources=("transactions",),
+        columns=(("activity_date", "DATE"), ("transaction_country", "VARCHAR"), ("currency", "VARCHAR"), ("transaction_type", "VARCHAR"),
+                 ("transaction_status", "VARCHAR"), ("n_transactions", "BIGINT"), ("n_customers", "BIGINT"),
+                 ("total_abs_amount", "DECIMAL(38,2)"), ("avg_abs_amount", "DOUBLE")),
         doc="Movements per day, country, currency, type and status: the daily volume and value the agent's data holds.",
         sql="""SELECT CAST(transaction_date AS DATE) AS activity_date, transaction_country, currency, transaction_type, transaction_status,
                       count(*) AS n_transactions, count(DISTINCT customer_id) AS n_customers,
@@ -64,6 +72,8 @@ MARTS: tuple[Mart, ...] = (
         name="gold_customer_summary",
         grain=("customer_id",),
         sources=("transactions",),
+        columns=(("customer_id", "VARCHAR"), ("n_transactions", "BIGINT"), ("first_transaction_at", "TIMESTAMP"), ("last_transaction_at", "TIMESTAMP"),
+                 ("n_channels", "BIGINT"), ("n_countries", "BIGINT"), ("n_currencies", "BIGINT"), ("n_products", "BIGINT")),
         doc="One row per customer with movements: how many, over what span, through how many channels, countries and products.",
         sql="""SELECT customer_id, count(*) AS n_transactions, min(transaction_date) AS first_transaction_at,
                       max(transaction_date) AS last_transaction_at, count(DISTINCT channel) AS n_channels,
@@ -79,6 +89,8 @@ MARTS: tuple[Mart, ...] = (
         name="gold_contact_demand",
         grain=("month", "country", "channel", "reason_category"),
         sources=("call_center_interactions", "customers"),
+        columns=(("month", "DATE"), ("country", "VARCHAR"), ("channel", "VARCHAR"), ("reason_category", "VARCHAR"), ("n_contacts", "BIGINT"),
+                 ("n_resolved", "BIGINT"), ("n_followup", "BIGINT"), ("avg_duration_seconds", "DOUBLE"), ("avg_wait_seconds", "DOUBLE")),
         doc="Contacts per month, customer country, channel and reason category, with resolution, follow-up and handling time: the demand the assistant would face.",
         sql="""SELECT CAST(date_trunc('month', c.interaction_date) AS DATE) AS month, cu.country, c.channel, c.reason_category,
                       count(*) AS n_contacts, count(*) FILTER (WHERE c.was_resolved) AS n_resolved,
@@ -117,6 +129,10 @@ def _source_runs(con, sources: tuple[str, ...]) -> dict[str, str | None]:
 
 def _check(con, mart: Mart) -> list[str]:
     problems = []
+    actual = [(r[0], r[1]) for r in con.execute(f"DESCRIBE {mart.name}").fetchall()]
+    if mart.columns and actual != [*mart.columns, *STAMP]:
+        problems.append("the columns differ from the contract: " + ", ".join(f"{n} {t}" for n, t in actual) + " is not " +
+                        ", ".join(f"{n} {t}" for n, t in [*mart.columns, *STAMP]))
     n, distinct = con.execute(f"SELECT count(*), (SELECT count(*) FROM (SELECT DISTINCT {', '.join(mart.grain)} FROM {mart.name})) FROM {mart.name}").fetchone()
     if n != distinct:
         problems.append(f"the grain ({', '.join(mart.grain)}) is not unique: {n} rows, {distinct} distinct")
