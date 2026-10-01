@@ -50,16 +50,25 @@ describe('the customer context of a case', () => {
     expect(rows[1].textContent).toContain('Compra · Mercado Fixture')
     expect(rows[1].textContent).not.toContain('Aprobado') // approved is the plain state: not repeated on every row
     expect(rows[2].textContent).toContain('Rechazado')
-    expect(container.textContent).toContain('1 pendiente(s)')
+    expect(container.textContent).toContain('1 pendiente')
   })
 
-  it('says how many pending movements the list leaves out, and nothing when it leaves none', () => {
-    const view = renderWithI18n(<CustomerContextView result={ok()} />)
-    expect(screen.queryByText(/pendiente\(s\) más/)).toBeNull()
-    view.rerender(<I18nProvider locale="es" messages={dictionaries.es}><CustomerContextView result={ok({ pending_omitted: 7 })} /></I18nProvider>)
-    expect(screen.getByText('y 7 pendiente(s) más')).toBeTruthy()
-    view.rerender(<I18nProvider locale="pt" messages={dictionaries.pt}><CustomerContextView result={ok({ pending_omitted: 7 })} /></I18nProvider>)
-    expect(screen.getByText('e mais 7 pendente(s)')).toBeTruthy()
+  it.each([
+    ['es', 1, '1 pendiente', 'y 1 pendiente más'],
+    ['es', 7, '7 pendientes', 'y 7 pendientes más'],
+    ['pt', 1, '1 pendente', 'e mais 1 pendente'],
+    ['pt', 100, '100 pendentes', 'e mais 100 pendentes'],
+  ] as const)('counts pending movements in the singular and the plural of the language, never as "(s)" (%s, %i)', (locale, count, counted, left) => {
+    const movements = Array.from({ length: count }, (_, i) => ({ transaction_id: `TXN-${i}`, date: '2026-05-30T10:00:00', product_id: 'PRD-1', type: 'Transfer', amount: 1, currency: 'USD', merchant: null, status: 'Pending', pending: true }))
+    const { container } = renderWithI18n(<CustomerContextView result={ok({ movements, pending_omitted: count })} />, locale)
+    expect(screen.getByText(counted)).toBeTruthy()
+    expect(screen.getByText(left)).toBeTruthy()
+    expect(container.textContent).not.toContain('(s)')
+  })
+
+  it('says nothing about movements left out when it leaves none', () => {
+    renderWithI18n(<CustomerContextView result={ok()} />)
+    expect(screen.queryByText(/pendientes? más/)).toBeNull()
   })
 
   it('lists the other cases with a link to each and the rastreos of the customer', () => {

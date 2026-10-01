@@ -222,7 +222,7 @@ monitoring and traces. How the keys are configured:
   last four digits in the database (the number is never read). It respects freshness like the tools: with `FRESHNESS_ENFORCE=1` and data
   older than `FRESHNESS_SLO_HOURS`, the warehouse block comes out `unavailable`, not current. Pending movements have an explicit cap,
   `PENDING_SHOWN = 100`, far above what a customer holds: if it were reached, the response carries `pending_omitted` and the console says
-  "y N pendiente(s) más" (and N more). The read is left in the audit log as a `customer_context_read` event with the case, the outcome
+  "y N pendientes más" (and N more, singular for one). The read is left in the audit log as a `customer_context_read` event with the case, the outcome
   (`ok` or `unavailable`) and, if it failed, only the exception's type. It carries no full number, document, contact, fraud score or
   channel; the product and movement ids are the same ones the console already shows in the pending action. If the warehouse does not answer,
   the response is still 200 with `warehouse.available: false`, and the section says that products and movements are not available and keeps

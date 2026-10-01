@@ -92,7 +92,7 @@ function ContextBody({ data, locale, caseLink, onRetry }: { data: CustomerContex
 
           <div className="op-block__head">
             <h3>{t('operator.context.movements')}</h3>
-            {pending > 0 && <span className="op-mono">{t('operator.context.pendingCount', { count: pending })}</span>}
+            {pending > 0 && <span className="op-mono">{pending === 1 ? t('operator.context.pendingCountOne') : t('operator.context.pendingCountOther', { count: pending })}</span>}
           </div>
           {data.movements.length === 0 ? <p className="op-muted">{t('operator.context.noMovements')}</p> : (
             <table className="op-ev op-ctx__moves">
@@ -118,7 +118,7 @@ function ContextBody({ data, locale, caseLink, onRetry }: { data: CustomerContex
               </tbody>
             </table>
           )}
-          {data.pending_omitted > 0 && <p className="op-muted op-ctx__more">{t('operator.context.pendingMore', { count: data.pending_omitted })}</p>}
+          {data.pending_omitted > 0 && <p className="op-muted op-ctx__more">{data.pending_omitted === 1 ? t('operator.context.pendingMoreOne') : t('operator.context.pendingMoreOther', { count: data.pending_omitted })}</p>}
         </>
       )}
 
