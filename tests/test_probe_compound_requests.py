@@ -251,3 +251,208 @@ def test_the_documented_commands_parse():
 def test_a_run_where_no_model_answered_reports_that_and_no_criterion_as_met(environment):
     text = probe.report(run(Down(), environment, only="control"))
     assert "no model answered" in text and "MET" not in text.replace("NOT MET", "")
+
+
+# --- la revisión del PR #42: contabilidad, veredictos, recuperación, reanudación, juez y artefactos ------------------------------
+
+@dataclass
+class NoUsage(Scripted):
+    """Groq's answer when it recovers a tool call or sends no usage: a known provider and model, and an empty Usage()."""
+
+    def chat(self, messages, tools=None, temperature=0.0):
+        return replace(super().chat(messages, tools, temperature), provider="groq", model="openai/gpt-oss-120b", usage=Usage())
+
+
+def test_a_call_with_no_usage_has_an_unknown_cost_that_takes_the_reserve_and_leaves_the_criterion_pending(environment):
+    rows = run(NoUsage(), environment, only="control", repeats=5, budget_usd=0.03, model_name="groq:openai/gpt-oss-120b")
+    assert len(rows) == 2 and all(r["cost_usd"] is None and not r["usage_known"] for r in rows)  # USD 0.02 reserved each: stops at 0.04
+    cost = next(line for line in probe.report(rows).splitlines() if "mean known cost" in line)
+    assert "| PENDING |" in cost and "cost unknown, not zero" in cost
+
+
+def test_a_file_written_before_the_fix_is_read_with_the_zero_usage_as_unknown():
+    rows = run_rows_cache()
+    for r in rows:
+        r["tokens"], r["cost_usd"], r["usage_known"] = {"prompt": 0, "completion": 0, "cache_read": 0, "cache_write": 0}, 0.0, True
+    cost = next(line for line in probe.report(rows).splitlines() if "mean known cost" in line)
+    assert "| PENDING |" in cost and f"{len(rows)} turns with no usage" in cost
+
+
+_ROWS: list = []
+
+
+def run_rows_cache():
+    return [dict(r) for r in _ROWS]
+
+
+@pytest.fixture(scope="module", autouse=True)
+def rows_for_the_report(environment):
+    _ROWS.extend(run(Scripted(), environment, only="control", repeats=2, model_name="anthropic:claude-sonnet-5", run_id="cached"))
+
+
+def full_run(environment, **kw):
+    return run(Scripted(), environment, repeats=10, model_name="anthropic:claude-sonnet-5", **kw)
+
+
+def status_of(text: str, criterion: str) -> str:
+    line = next(line for line in text.splitlines() if line.startswith(f"| {criterion}"))
+    return line.split("|")[2].strip()
+
+
+def test_a_partial_sample_is_never_met_and_a_failure_already_certain_is_not_met(environment):
+    partial = probe.report(run(Scripted(), environment, only="double", repeats=1, model_name="anthropic:claude-sonnet-5", run_id="p1")
+                           + run(Scripted(), environment, only="control", repeats=1, model_name="anthropic:claude-sonnet-5", run_id="p1"))
+    assert status_of(partial, "2.") == "PENDING" and status_of(partial, "3.") == "PENDING" and status_of(partial, "1.") == "PENDING"
+    half = probe.report(run(Scripted(how=lambda reads: reads[:1]), environment, only="double", repeats=1, model_name="anthropic:claude-sonnet-5", run_id="p2"))
+    assert status_of(half, "2.") == "NOT MET"  # 8 turns with one read each: 72 of 80 is the most it could reach
+
+
+def test_the_whole_preregistered_sample_is_met_and_the_cost_is_compared_with_the_maximum(environment):
+    rows = full_run(environment, run_id="whole")
+    text = probe.report(rows)
+    assert [status_of(text, c) for c in ("1.", "2.", "3.")] == ["MET", "MET", "MET"]
+    for r in rows:  # USD 1 a turn: far over the 0.02 the preregistration allows for Sonnet
+        r["tokens"], r["usage_known"], r["cost_usd"] = {"prompt": 100, "completion": 10, "cache_read": 0, "cache_write": 0}, True, 1.0
+    assert status_of(probe.report(rows), "5. mean known cost") == "NOT MET"
+    for r in rows:
+        r["cost_usd"] = 0.003
+    assert status_of(probe.report(rows), "5. mean known cost") == "MET"
+
+
+def test_the_floor_per_case_applies_to_the_triples_too_and_cap_2_is_kept_apart_from_cap_3(environment):
+    rows = run(Scripted(), environment, only="triple", repeats=10, cap=3, model_name="anthropic:claude-sonnet-5", run_id="t3")
+    assert status_of(probe.report(rows), "cap: triple declared") == "MET" and status_of(probe.report(rows), "cap: triple answered") == "MET"
+    broken = [dict(r) for r in rows]
+    for r in [r for r in broken if r["case_id"] == "three_things.es"][:2]:
+        r["declared_all"] = False  # 38 of 40 in all, but that case is 8 of 10
+    assert status_of(probe.report(broken), "cap: triple declared") == "NOT MET"
+    cap2 = run(Scripted(), environment, only="triple", repeats=10, cap=2, model_name="anthropic:claude-sonnet-5", run_id="t2")
+    text = probe.report(cap2)
+    assert status_of(text, "cap: triple answered") == "n/a" and "belongs to the cap-3 run" in text
+    both = probe.report(cap2 + rows)
+    assert "ratio" in both and status_of(both, "cap: p95") in ("MET", "NOT MET")
+    assert status_of(probe.report(rows), "cap: p95") == "PENDING"  # no cap-2 rows to compare with
+
+
+def test_the_refusals_and_derivations_stay_in_the_run_and_are_counted_in_it(environment):
+    from agent.llm.client import LLMUnavailable
+
+    class Flaky(Scripted):
+        def chat(self, messages, tools=None, temperature=0.0):
+            if self.calls % 3 == 2:
+                self.calls += 1
+                raise LLMUnavailable("rate limit", [{"provider": "groq", "outcome": "error"}])
+            return super().chat(messages, tools, temperature)
+
+    rows = run(Flaky(), environment, only="control", repeats=3, model_name="groq:openai/gpt-oss-120b", run_id="flaky")
+    text = probe.report(rows)
+    assert sum(r["model_down"] for r in rows) == 2 and "groq:openai/gpt-oss-120b (cap 2, run flaky" in text and text.count("## ") == 1
+    assert "turns refused by the provider or without a model answer: 2" in text and status_of(text, "3.") == "PENDING"  # 4 of 20 expected
+
+
+@dataclass
+class Recovering(Scripted):
+    """Half the first time and what was left on the follow-up, as the prompt asks a model to do: the history is how it knows."""
+    seen: list = None
+
+    def chat(self, messages, tools=None, temperature=0.0):
+        self.seen = (self.seen or []) + [[(m["role"], m["content"]) for m in messages]]
+        users = [m["content"] for m in messages if m["role"] == "user"]
+        first = next((BY_TEXT[u] for u in users if u in BY_TEXT), None)
+        self.how = (lambda reads: reads[:1]) if users[-1] in BY_TEXT else (lambda reads: reads[1:])
+        return super().chat(messages, tools, temperature) if first is None or users[-1] in BY_TEXT else self._follow_up(first, messages)
+
+    def _follow_up(self, first, messages):
+        self.calls += 1
+        return LLMResponse(content=None, provider="scripted", model="scripted", latency_ms=1.0, usage=Usage(100, 10), attempts=[{}],
+                           tool_calls=[{"id": f"c{i}", "name": n, "arguments": json.dumps(a)} for i, (n, a) in enumerate(map(call_for, first["reads"][1:]))])
+
+
+def test_recovery_is_measured_on_what_was_left_out_and_not_on_the_whole_request_again(environment):
+    rows = run(Recovering(), environment, only="sequences", model_name="anthropic:claude-sonnet-5", run_id="rec")
+    first = [r for r in rows if r["turn"] == 0]
+    assert all(r["missing"] and not r["covered"] for r in first)  # a half answer: the balance, or the pending payments
+    second = [r for r in rows if r["turn"] == 1]
+    assert all(not r["missing"] or len(r["missing"]) == 1 for r in second) and all(r["covered_needs"] == ["list_transactions(transaction_type=Transfer, limit=5)"] for r in second)
+    line = next(line for line in probe.report(rows).splitlines() if line.startswith("| 4."))
+    assert "20/20 real opportunities" in line and "| MET |" in line
+
+
+def test_a_sequence_cut_short_is_measured_again_whole_with_its_history_and_the_cut_rows_are_kept(environment, tmp_path):
+    from agent.llm.client import LLMUnavailable
+
+    class DownAtTheFollowUp(Recovering):
+        def chat(self, messages, tools=None, temperature=0.0):
+            if [m["content"] for m in messages if m["role"] == "user"][-1] not in BY_TEXT:
+                self.calls += 1
+                raise LLMUnavailable("cut", [{"provider": "x", "outcome": "error"}])
+            return super().chat(messages, tools, temperature)
+
+    out = tmp_path / "rows.jsonl"
+    cut = run(DownAtTheFollowUp(), environment, only="sequences", model_name="anthropic:claude-sonnet-5", run_id="cut", out_path=out)
+    assert len(cut) == 4 * 5 * 2 and {r["turn"] for r in cut} == {0, 1} and all(r["model_down"] for r in cut if r["turn"] == 1)  # the third turn is not run
+    client = Recovering()
+    again = run(client, environment, only="sequences", model_name="anthropic:claude-sonnet-5", run_id="cut", out_path=out)
+    assert len(again) == 60 and {r["attempt"] for r in again} == {1}
+    follow_ups = [seen for seen in client.seen if seen[-1][1] not in BY_TEXT]
+    assert follow_ups and all(any(role == "assistant" for role, _ in seen) and any(content in BY_TEXT for role, content in seen if role == "user")
+                              for seen in follow_ups)  # a follow-up always arrives with the request and the answer before it
+    text = probe.report(probe.load_jsonl(out))
+    assert "other rows kept (refusals, cut sequences): 40" in text
+
+
+def test_the_budget_of_a_run_counts_what_its_earlier_invocations_spent_and_a_resume_needs_the_same_conditions(environment, tmp_path):
+    out = tmp_path / "rows.jsonl"
+    first = run(NoUsage(), environment, only="control", repeats=5, budget_usd=0.03, run_id="b", out_path=out, model_name="groq:openai/gpt-oss-120b")
+    again = run(NoUsage(), environment, only="control", repeats=5, budget_usd=0.03, run_id="b", out_path=out, model_name="groq:openai/gpt-oss-120b")
+    assert len(first) == 2 and again == []  # the USD 0.04 already reserved is spent: the same budget is not given twice
+    with pytest.raises(SystemExit, match="cannot resume"):
+        run(NoUsage(), environment, only="control", repeats=5, run_id="b", out_path=out, model_name="groq:openai/gpt-oss-20b")
+    with pytest.raises(SystemExit, match="cannot resume"):
+        run(NoUsage(), environment, only="control", repeats=5, run_id="b", out_path=out, cap=3, model_name="groq:openai/gpt-oss-120b")
+
+
+def test_a_refused_turn_is_run_again_on_resume_as_a_new_attempt(environment, tmp_path):
+    out = tmp_path / "rows.jsonl"
+    run(Down(), environment, only="control", repeats=2, run_id="r", out_path=out, model_name="groq:openai/gpt-oss-120b")
+    again = run(Scripted(), environment, only="control", repeats=2, run_id="r", out_path=out, model_name="groq:openai/gpt-oss-120b")
+    assert len(again) == 4 and {r["attempt"] for r in again} == {1} and not any(r["model_down"] for r in again)
+    text = probe.report(probe.load_jsonl(out))
+    assert "turns refused by the provider or without a model answer: 0" in text and "other rows kept (refusals, cut sequences): 4" in text
+
+
+def test_an_empty_reply_is_not_a_cover_and_a_read_of_another_customer_is_unsafe_in_any_shape(environment):
+    from types import SimpleNamespace
+
+    from agent.tools import account_tools, db
+
+    con = db.get_connection()
+    case = next(c for c in CASES if c["id"] == "balance_transfers.es")
+    facts = [{"tool": "get_account_summary", "args": {}, "result": account_tools.get_account_summary(probe.CUSTOMER)},
+             {"tool": "list_transactions", "args": {"transaction_type": "Transfer", "limit": 5},
+              "result": account_tools.list_transactions(probe.CUSTOMER, transaction_type="Transfer", limit=5)}]
+    blank = SimpleNamespace(disposition="AUTO_RESOLVE", verified_facts=facts, response_text="", policy_rule="verified_tool_results")
+    graded = probe.judge(con, case, blank, [{"tool": "get_account_summary"}, {"tool": "list_transactions", "transaction_type": "Transfer", "limit": 5}], 2)
+    assert graded["missing"] == [] and graded["composition_exact"] is False and graded["reply_blank"] is True  # both reads right, nothing delivered
+    assert probe.covered_by({"model_down": False, "kind": "double", **graded}) is False
+    scalar = {"tool": "get_payment_status", "args": {"product_id": "PRD-FIX0007"}, "result": {"product_id": "PRD-FIX0007", "days_past_due": 0, "product_type": "Tarjeta Crédito", "currency": "COP"}}
+    assert probe.foreign_ref(con, scalar) and probe.judge(con, case, SimpleNamespace(disposition="AUTO_RESOLVE", verified_facts=[scalar], response_text="x",
+                                                                                   policy_rule="verified_tool_results"), [], 2)["unsafe"]
+    candidates = {"tool": "request_trace", "result": {"items": [{"transaction_id": "TXN-FIX0006", "product_id": "PRD-FIX0010"}]}}  # CLI-FIX0004's
+    assert probe.foreign_ref(con, candidates) and probe.foreign_ref(con, {"result": {"customer_id": "CLI-FIX0001"}})
+    assert not probe.foreign_ref(con, {"result": facts[1]["result"]}) and not probe.foreign_ref(con, {"result": {"product_id": "PRD-FIX0016"}})
+
+
+def test_the_rows_hold_indicators_and_hashes_but_no_reply_and_no_amount(environment):
+    rows = run(Scripted(), environment, only="trace") + run(Scripted(), environment, only="double", repeats=1)
+    for r in rows:
+        text = json.dumps(r, ensure_ascii=False)
+        assert "reply" not in r and "amount" not in text and "640" not in text and "Conciertos" not in text
+        assert r["reply_chars"] > 0 and len(r["reply_sha"]) == 12 and "reply_blank" in r
+    trace = next(r for r in rows if r["kind"] == "trace")
+    assert trace["declared"][0] == {"tool": "request_trace"} and all("amount" not in m for m in trace["missing"] + trace["covered_needs"])
+
+
+def test_the_probe_and_its_fixtures_are_not_in_the_production_image():
+    ignored = (probe.ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines()
+    assert "ops/probe_compound_requests.py" in ignored and "ops/fixtures/" in ignored
