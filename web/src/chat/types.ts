@@ -80,6 +80,20 @@ export type DemoTicket = {
   reason: string
   suggested_next_step: string
   open_questions: string[]
+  // The codes of the three texts above (agent/policy/notes.py), as the operator console reads them; a ticket filed before them has none.
+  reason_code?: { code: string; params?: Record<string, string | number> } | null
+  open_question_codes?: ({ code: string; params?: Record<string, string | number> } | null)[]
+  next_step_code?: string | null
+  created_at: number
+}
+
+/** A trace request this session opened, as payments operations receives it (`POST /demo/traces`): what the bank view shows of it. */
+export type DemoTrace = {
+  trace_id: string
+  transaction_id: string
+  queue: string
+  status: string
+  sla_business_days: number
   created_at: number
 }
 

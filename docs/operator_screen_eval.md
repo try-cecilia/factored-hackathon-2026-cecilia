@@ -4,7 +4,8 @@ The operator screen is the console in `web/src/routes/-operator/`, which talks t
 This document lists what an operator can see and do there, which automated test covers each case, and what has **not**
 been walked at all. Run on 2026-09-30, Windows 11, on the code of `feat/ablation` (`403f9e1`).
 
-These are component and API tests. Nobody has driven the screen in a real browser yet (see the last section).
+These are component and API tests. On 2026-09-30 the screen was also driven in a browser, by keyboard, on the deployed
+demo (see [Walked on the deployed demo](#walked-on-the-deployed-demo-2026-09-30)).
 
 ## Results of the runs
 
@@ -54,11 +55,32 @@ Not re-run on Linux; the fix only normalizes separators, so it should behave the
 | 23 | Every route has a row in the access matrix and the matrix matches the docs | `test_access_matrix.py` | pass |
 | 24 | Keys travel in cookies set by the server and never reach client code | `cookies-operator.test.ts`, `csrf.test.ts`; static guard `keys-stay-on-server.test.ts` | pass |
 
+## Walked on the deployed demo (2026-09-30)
+
+Chromium (Playwright 1.63, headless) against https://cecil-ai.onrender.com, from 22:04 to 22:09 (UTC-3), after the
+red team session had closed, so none of its tickets was touched. On the console every control was reached with Tab or
+Shift+Tab and pressed with Enter; no mouse. Sandbox customers filed four cases for the walk (their test PINs derived
+with the read key), and after each decision the customer wrote again to see what a person did. Operator: `lautaro`.
+The script stays outside the repository, because it needs the deploy's keys.
+
+| Step | Result |
+|---|---|
+| Sign in with the read key and the operator key | pass: 2, 1 and 1 Tab presses, with a visible focus ring on both fields and the button |
+| Take a case | pass, but it takes **64 Tab presses** from the top of the case page: the navigation and the queue come first, and there is no skip link |
+| Approve a trace (`trace_review`, a transfer pending for 118 days) | pass: 1 Tab press after taking it. The customer's next message got "Ya tienes abierto el pedido de rastreo TR-D4A335369B5A709A ..." |
+| Reject a trace, with a reason | pass: 3 Tab presses. The customer got "un agente lo revisó y no pudo abrir el rastreo ..." |
+| Resolve a handoff (a stolen card), with a message | pass: 2 Tab presses. The customer got «Bloqueamos la tarjeta y te llamamos al número registrado.» |
+| Hand a case back to the assistant | pass: 1 Tab press. The customer got "un agente lo devolvió al asistente" |
+| A second screen of the same case, opened before the claim, tries to take it | pass: it locks the decision and offers "Recargar caso" |
+| The queue at 390 px wide | pass: no sideways scroll |
+| Accessible names | pass: every control was found by its role and its visible name |
+
+On the customer's side, the proposal's "Sí, rastrear" button was 2 Tab presses away.
+
 ## Not walked
 
-- **No manual run in a browser.** Nobody has done queue, claim, approve, and then the customer seeing the news, on the
-  local demo. The component tests do not show layout, focus or what the screen looks like on a phone.
-- **No screen-reader or keyboard pass** on the console.
-- **No test of two operators on the screen at once.** The API refuses the second one (case 13); how the losing
-  screen looks is covered only by the 409 lock in the component test.
+- **A screen reader.** The walk checked roles and names, not what a reader announces or in what order.
+- **Two different operators at once.** The stale-screen lock was walked with one operator in two tabs. The API
+  refuses a second operator (case 13).
+- **Other browsers and a real phone.** Only Chromium; the phone width was emulated.
 - **Load on the queue** beyond the retention cases above.

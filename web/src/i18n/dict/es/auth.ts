@@ -20,6 +20,10 @@ export const login = {
     badCredentials: 'Número de cliente o PIN incorrectos.',
     tooManyAttempts: 'Demasiados intentos. Reintentar en unos minutos.',
     unavailable: 'El servicio no está disponible en este momento.',
+    customerIdRequired: 'Falta el número de cliente.',
+    customerIdShort: 'El número de cliente tiene al menos 3 caracteres.',
+    pinRequired: 'Falta el PIN de 6 dígitos.',
+    pinShort: 'El PIN tiene 6 dígitos.',
     sessionNotSaved: 'Tu navegador no guardó la sesión. Verificar que acepte cookies de este sitio y volver a intentar. Fuera de localhost, la app debe abrirse por https.',
   },
 }

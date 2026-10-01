@@ -16,6 +16,8 @@ export type CaseRead = 'ready' | 'not_found' | 'error' | 'ended' | 'superseded'
 export type CaseRow = { ref: CaseRef; state: CaseState }
 
 export type Conversation = {
+  /** The session the conversation below belongs to: it changes in the same render as the entries do, not before. */
+  sessionRef: string
   entries: Entry[]
   /** A message is on its way: one turn at a time. */
   sending: boolean
@@ -23,7 +25,11 @@ export type Conversation = {
   ended: boolean
   /** The conversation could not be read back when the page loaded. */
   historyFailed: boolean
-  send: (text: string) => Promise<Reply | null>
+  /** `key` is the message's Idempotency-Key when the caller keeps it (the demo panel's steps do); without it the chat makes one. */
+  send: (text: string, key?: string) => Promise<Reply | null>
+  /** Tells `listener` each message the conversation sends, with its text and its key, wherever it came from (the composer, a
+   * suggestion, a bubble's button, the demo panel); returns what stops it. A retry is not told: its message was, when it was sent. */
+  onSend: (listener: (sent: { text: string; key: string }) => void) => () => void
   /** Sends a message that did not go through again, with the same key: a message that did arrive is not run twice. */
   retry: (id: number) => void
   /** Reads the conversation from the API again (what the message the API already has needs). */
@@ -170,7 +176,7 @@ export function ConversationProvider({ sessionRef, initial, children }: { sessio
       if (result.ok) {
         patch(id, { delivery: 'sent', failure: undefined })
         edits.current += 1
-        setEntries((all) => [...all, { id: nextId.current++, role: 'assistant', reply: result.reply, at: Date.now() }])
+        setEntries((all) => [...all, { id: nextId.current++, role: 'assistant', reply: result.reply, at: Date.now(), to: id }])
         if (splitCaseNews(result.reply.response_text).news.length > 0) refreshCases()
         return result.reply
       }
@@ -191,10 +197,17 @@ export function ConversationProvider({ sessionRef, initial, children }: { sessio
     return null
   }, [patch, refreshCases])
 
-  const send = useCallback((text: string) => {
+  const listeners = useRef(new Set<(sent: { text: string; key: string }) => void>())
+  const onSend = useCallback((listener: (sent: { text: string; key: string }) => void) => {
+    listeners.current.add(listener)
+    return () => void listeners.current.delete(listener)
+  }, [])
+
+  const send = useCallback((text: string, given?: string) => {
     if (sendingRef.current) return Promise.resolve(null)
     const id = nextId.current++
-    const key = newMessageKey()
+    const key = given ?? newMessageKey()
+    listeners.current.forEach((listener) => listener({ text, key }))
     setEntries((all) => [...all, { id, role: 'user', text, at: Date.now(), key, delivery: 'sending' }])
     return deliver(id, text, key)
   }, [deliver])
@@ -212,11 +225,19 @@ export function ConversationProvider({ sessionRef, initial, children }: { sessio
       const result = await getHistory()
       if (mine.session !== epoch.current || mine.edits !== edits.current) return
       if (result.ok) {
-        // A message the API said it already has but whose reply is not in what it kept stays, told so: reloading cannot show it.
+        // What the conversation has that the history may not show. The history has no keys and no positions, only texts, and it
+        // is bounded, so it cannot say which of two messages of the same text it holds, or whether an older one was ever loaded
+        // here: it never settles a message. Whatever has a key and did not get its answer (failed, or its answer got lost) stays,
+        // with the key, until it is retried: the API answers a repeated key once, and settles it then. The cost of keeping one is
+        // a bubble more. A message the API said it already has stays too, told so once its reply is not in what the history kept
+        // (`answer_gone`), and it stays told so through the reloads that follow; if the history does have the text, it is shown.
         const said = new Set(result.turns.flatMap((t) => (t.role === 'user' ? [t.text] : [])))
-        const gone = entriesRef.current.flatMap((e): Entry[] =>
-          e.role === 'user' && e.failure === 'already_processed' && !said.has(e.text) ? [{ ...e, failure: 'answer_gone' }] : [],
-        )
+        const gone = entriesRef.current.flatMap((e): Entry[] => {
+          if (e.role !== 'user') return []
+          if (e.failure === 'answer_gone') return [e]
+          if (e.failure === 'already_processed') return said.has(e.text) ? [] : [{ ...e, failure: 'answer_gone' }]
+          return e.key && (e.delivery === 'failed' || e.delivery === 'uncertain') ? [e] : []
+        })
         const next = [...fromHistory(result.turns, nextId.current, Date.now()), ...gone]
         nextId.current += next.length + 1
         setKept(result.cases)
@@ -233,8 +254,8 @@ export function ConversationProvider({ sessionRef, initial, children }: { sessio
   const cases = useMemo<CaseRow[]>(() => refs.map((ref) => ({ ref, state: states[ref.ticketId] ?? { state: 'loading' } })), [refs, states])
 
   const value = useMemo<Conversation>(
-    () => ({ entries, sending, ended, historyFailed, send, retry, reload, cases, refreshCases, refreshCase: loadCase }),
-    [entries, sending, ended, historyFailed, send, retry, reload, cases, refreshCases, loadCase],
+    () => ({ sessionRef: current, entries, sending, ended, historyFailed, send, onSend, retry, reload, cases, refreshCases, refreshCase: loadCase }),
+    [current, entries, sending, ended, historyFailed, send, onSend, retry, reload, cases, refreshCases, loadCase],
   )
   return <ConversationContext value={value}>{children}</ConversationContext>
 }
