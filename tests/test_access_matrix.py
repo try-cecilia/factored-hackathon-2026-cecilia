@@ -180,9 +180,9 @@ def test_a_key_with_non_ascii_characters_is_refused_not_a_server_error(world):
     client, _, _ = world
     for key in ("clavé-ñ".encode("latin-1"), "Ω".encode("utf-8")):
         assert client.get("/admin/ops", headers={"X-Admin-Key": key}).status_code == 401
-    # a PIN of non-ASCII digits passes the length/pattern check (a Unicode-aware \d): it must be a refusal too
+    # a PIN of non-ASCII digits is refused by the schema (the pattern is [0-9]{6}, not a Unicode-aware \d), never a server error
     r = client.post("/auth/session", json={"customer_id": CUSTOMER, "pin": "١٢٣٤٥٦"})
-    assert r.status_code == 401
+    assert r.status_code == 422
 
 
 def test_secrets_are_compared_with_a_constant_time_function(world, monkeypatch):
