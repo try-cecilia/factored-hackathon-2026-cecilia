@@ -49,6 +49,18 @@ test('the kind of the options is what the API says, not what the words before th
   assert.equal(optionAnswer(pt, 1), 'Conta Poupança ···0002')
 })
 
+test('without the kind from the API (an older reply) the options are read as before, by the sentence that introduces them', () => {
+  const es = parseOptions('Tienes varios movimientos pendientes: 1) a (X ···1); 2) b (Y ···2). ¿Cuál quieres rastrear? Responde con su número.')
+  assert.equal(es?.kind, 'movement')
+  assert.equal(optionAnswer(es!, 0), '1')
+  const pt = parseOptions('Você tem várias movimentações pendentes: 1) a (X ···1); 2) b (Y ···2). Qual quer rastrear? Responda com o número.')
+  assert.equal(pt?.kind, 'movement')
+  assert.equal(optionAnswer(pt!, 1), '2')
+  // an answered list of pending movements ahead of a question about products does not make the options movements
+  const mixed = parseOptions('Movimientos pendientes:\n- 16/01/2024: transferencia 640.00 USD (pendiente)\n\n¿Sobre cuál de tus productos? 1) Cuenta Ahorro ···0001 (USD); 2) Cuenta Ahorro ···0002 (USD)')
+  assert.equal(mixed?.kind, 'product')
+})
+
 test('text without a numbered list, or with a single item, is shown as written', () => {
   assert.equal(parseOptions('¿Me cuentas un poco más qué necesitas?'), null)
   assert.equal(parseOptions('Elige: 1) una sola opción'), null)

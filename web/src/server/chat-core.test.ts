@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import { classifyReply } from '../chat/conversation.ts'
 import { KEY_PATTERN, parseReply, parseSend, sendChat, type ChatSession, type ChatTransport } from './chat-core.ts'
 
 const KEY = '0b0c7b1e-6f43-4d59-8f5e-3f0f6a1f7c11'
@@ -106,4 +107,15 @@ test('the kind of the options of a clarification comes through, and only a known
   assert.equal(parseReply({ ...reply, disposition: 'CLARIFY', choice: 'movement' })?.choice, 'movement')
   assert.equal(parseReply({ ...reply, choice: 'other' })?.choice, undefined)
   assert.equal(parseReply({ ...reply, choice: null })?.choice, undefined)
+})
+
+test('a reply without the kind of its options (an older API, a stored replay) has none, and the screen reads the text as before', async () => {
+  const text = 'Você tem várias movimentações pendentes: 1) a (X ···1); 2) b (Y ···2). Qual quer rastrear? Responda com o número.'
+  const body = { ...reply, disposition: 'CLARIFY', language: 'pt', response_text: text }
+  for (const old of [body, { ...body, choice: null }]) {
+    const parsed = parseReply(old)
+    assert.equal(parsed?.choice, undefined)
+    const kind = classifyReply(parsed!)
+    assert.equal(kind.kind === 'clarify' && kind.options?.kind, 'movement')
+  }
 })
