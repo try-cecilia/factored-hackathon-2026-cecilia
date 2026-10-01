@@ -23,6 +23,10 @@ export const login: Like<typeof esLogin> = {
     badCredentials: 'Número de cliente ou PIN incorretos.',
     tooManyAttempts: 'Muitas tentativas. Tentar novamente em alguns minutos.',
     unavailable: 'O serviço não está disponível neste momento.',
+    customerIdRequired: 'Falta o número de cliente.',
+    customerIdShort: 'O número de cliente tem pelo menos 3 caracteres.',
+    pinRequired: 'Falta o PIN de 6 dígitos.',
+    pinShort: 'O PIN tem 6 dígitos.',
     sessionNotSaved: 'Seu navegador não guardou a sessão. Verifique se ele aceita cookies deste site e tente de novo. Fora do localhost, o app deve ser aberto por https.',
   },
 }

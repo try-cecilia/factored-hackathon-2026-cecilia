@@ -228,7 +228,7 @@
         {
           "test": "test_learned_beats_the_keyword_baseline_on_the_same_test_split_with_intervals",
           "status": "PASS",
-          "evidence": "test n=85: aprendido 84.7% [75.6–90.8] vs palabras clave 62.4% [51.7–71.9]; diferencia pareada +22.4 pts [+9.4, +35.3], McNemar p=0.001878; piso mayoritaria 17.6% [11.0–27.1]",
+          "evidence": "test n=85: aprendido 84.7% [75.6–90.8] vs palabras clave 63.5% [52.9–73.0]; diferencia pareada +21.2 pts [+8.2, +34.1], McNemar p=0.002935; piso mayoritaria 17.6% [11.0–27.1]",
           "detail": ""
         },
         {

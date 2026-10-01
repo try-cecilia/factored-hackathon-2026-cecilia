@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useT } from '../../i18n/context'
 import type { OperatorView, QueueRow, Result } from '../../server/operator.functions'
 import { IconButton, LanguageSwitcher, MenuIcon, Sidebar, SidebarBrand, SidebarPerson, SidebarRow, SidebarSection } from '../../ui'
+import { NewCasesAnnouncer, NewCasesBadge } from './NewCases'
 import { OperatorKeyForm } from './OperatorKeyForm'
 import { sidebarCounts, type QueueSearch } from './queue'
 
@@ -64,7 +65,7 @@ export function OperatorShell({ view, queue, children }: { view: Active; queue: 
           }
         >
           <SidebarSection>
-            <SidebarRow as={Link} {...toQueue({})} label={t('operator.nav.allOpen')} active={plain} meta={count(counts?.allOpen)} />
+            <SidebarRow as={Link} {...toQueue({})} label={t('operator.nav.allOpen')} active={plain} meta={<><NewCasesBadge />{count(counts?.allOpen)}</>} />
             <SidebarRow as={Link} {...toQueue({ vista: 'mias' })} label={t('operator.nav.mine')} active={onQueue && search.vista === 'mias'} meta={count(counts?.mine)} />
             <SidebarRow as={Link} {...toQueue({ vista: 'sin-asignar' })} label={t('operator.nav.unassigned')} active={onQueue && search.vista === 'sin-asignar'} meta={count(counts?.unassigned)} />
           </SidebarSection>
@@ -79,6 +80,7 @@ export function OperatorShell({ view, queue, children }: { view: Active; queue: 
           </SidebarSection>
         </Sidebar>
       </div>
+      <NewCasesAnnouncer />
       <main className="op-main" id="contenido" tabIndex={-1}>
         {children}
       </main>

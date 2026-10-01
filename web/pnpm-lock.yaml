@@ -26,6 +26,9 @@ importers:
       react-dom:
         specifier: 19.3.0
         version: 19.3.0(react@19.3.0)
+      seroval:
+        specifier: 1.6.7
+        version: 1.6.7
     devDependencies:
       '@testing-library/dom':
         specifier: 10.4.2

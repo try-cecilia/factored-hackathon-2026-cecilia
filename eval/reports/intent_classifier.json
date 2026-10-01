@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-29T14:15:15.523747+00:00",
+  "generated_at": "2026-10-01T00:43:39.082029+00:00",
   "protocol": "train=templates; held-out written after freezing train+baseline; dev=selection+threshold; test=scored once",
   "train_n": 182,
   "train_class_counts": {
@@ -184,12 +184,12 @@
     },
     {
       "tau": 0.85,
-      "recall": 0.6875,
+      "recall": 0.75,
       "false_escalation": 0.0
     },
     {
       "tau": 0.9,
-      "recall": 0.6875,
+      "recall": 0.75,
       "false_escalation": 0.0
     }
   ],
@@ -470,15 +470,15 @@
     },
     "baseline_keywords": {
       "accuracy": {
-        "k": 59,
+        "k": 60,
         "n": 88,
-        "rate": 0.6705,
+        "rate": 0.6818,
         "ci95": [
-          0.5669,
-          0.7597
+          0.5787,
+          0.7698
         ]
       },
-      "macro_f1": 0.6995,
+      "macro_f1": 0.7082,
       "per_class": {
         "balance_inquiry": {
           "precision": 0.8571,
@@ -509,7 +509,7 @@
           "support": 10
         },
         "out_of_scope": {
-          "precision": 0.3571,
+          "precision": 0.3659,
           "recall": {
             "k": 15,
             "n": 15,
@@ -519,7 +519,7 @@
               1.0
             ]
           },
-          "f1": 0.5263,
+          "f1": 0.5357,
           "support": 15
         },
         "payment_status": {
@@ -539,15 +539,15 @@
         "requires_escalation": {
           "precision": 1.0,
           "recall": {
-            "k": 11,
+            "k": 12,
             "n": 16,
-            "rate": 0.6875,
+            "rate": 0.75,
             "ci95": [
-              0.444,
-              0.8584
+              0.505,
+              0.8982
             ]
           },
-          "f1": 0.8148,
+          "f1": 0.8571,
           "support": 16
         },
         "transaction_lookup": {
@@ -567,12 +567,12 @@
       },
       "by_language": {
         "es": {
-          "k": 26,
+          "k": 27,
           "n": 40,
-          "rate": 0.65,
+          "rate": 0.675,
           "ci95": [
-            0.4951,
-            0.7787
+            0.5202,
+            0.7992
           ]
         },
         "pt": {
@@ -596,12 +596,12 @@
           ]
         },
         "colloquial": {
-          "k": 24,
+          "k": 25,
           "n": 37,
-          "rate": 0.6486,
+          "rate": 0.6757,
           "ci95": [
-            0.4876,
-            0.7817
+            0.5146,
+            0.8037
           ]
         },
         "formal": {
@@ -661,12 +661,12 @@
       },
       "by_source": {
         "team_heldout": {
-          "k": 59,
+          "k": 60,
           "n": 88,
-          "rate": 0.6705,
+          "rate": 0.6818,
           "ci95": [
-            0.5669,
-            0.7597
+            0.5787,
+            0.7698
           ]
         }
       },
@@ -715,9 +715,9 @@
           [
             0,
             0,
-            5,
+            4,
             0,
-            11,
+            12,
             0
           ],
           [
@@ -996,26 +996,26 @@
     },
     "paired_vs_keywords": {
       "n": 88,
-      "only_b_right": 23,
+      "only_b_right": 22,
       "only_a_right": 3,
-      "diff": 0.2273,
+      "diff": 0.2159,
       "diff_ci95": [
-        0.125,
-        0.3295
+        0.1136,
+        0.3182
       ],
-      "mcnemar_p": 8.8e-05,
+      "mcnemar_p": 0.000157,
       "resamples": 10000,
       "seed": 0
     },
     "escalation_guard": {
       "lexicon_only": {
         "recall": {
-          "k": 11,
+          "k": 12,
           "n": 16,
-          "rate": 0.6875,
+          "rate": 0.75,
           "ci95": [
-            0.444,
-            0.8584
+            0.505,
+            0.8982
           ]
         },
         "false_escalation": {
@@ -1027,7 +1027,7 @@
             0.0507
           ]
         },
-        "missed": 5,
+        "missed": 4,
         "missed_upper_bound_if_zero": null
       },
       "classifier_only": {
@@ -1322,14 +1322,6 @@
         "baseline": "out_of_scope",
         "learned": "requires_escalation",
         "language": "pt",
-        "style": "colloquial"
-      },
-      {
-        "utterance": "hay un retiro de cajero que no fui yo",
-        "gold": "requires_escalation",
-        "baseline": "out_of_scope",
-        "learned": "requires_escalation",
-        "language": "es",
         "style": "colloquial"
       }
     ],
@@ -1646,15 +1638,15 @@
     },
     "baseline_keywords": {
       "accuracy": {
-        "k": 53,
+        "k": 54,
         "n": 85,
-        "rate": 0.6235,
+        "rate": 0.6353,
         "ci95": [
-          0.5173,
-          0.7191
+          0.5292,
+          0.7297
         ]
       },
-      "macro_f1": 0.6496,
+      "macro_f1": 0.6576,
       "per_class": {
         "balance_inquiry": {
           "precision": 0.9091,
@@ -1685,7 +1677,7 @@
           "support": 9
         },
         "out_of_scope": {
-          "precision": 0.3182,
+          "precision": 0.3256,
           "recall": {
             "k": 14,
             "n": 15,
@@ -1695,7 +1687,7 @@
               0.9881
             ]
           },
-          "f1": 0.4746,
+          "f1": 0.4828,
           "support": 15
         },
         "payment_status": {
@@ -1715,15 +1707,15 @@
         "requires_escalation": {
           "precision": 1.0,
           "recall": {
-            "k": 12,
+            "k": 13,
             "n": 15,
-            "rate": 0.8,
+            "rate": 0.8667,
             "ci95": [
-              0.5481,
-              0.9295
+              0.6212,
+              0.9626
             ]
           },
-          "f1": 0.8889,
+          "f1": 0.9286,
           "support": 15
         },
         "transaction_lookup": {
@@ -1761,12 +1753,12 @@
           ]
         },
         "pt": {
-          "k": 21,
+          "k": 22,
           "n": 36,
-          "rate": 0.5833,
+          "rate": 0.6111,
           "ci95": [
-            0.422,
-            0.7286
+            0.4486,
+            0.7522
           ]
         }
       },
@@ -1790,12 +1782,12 @@
           ]
         },
         "colloquial": {
-          "k": 16,
+          "k": 17,
           "n": 28,
-          "rate": 0.5714,
+          "rate": 0.6071,
           "ci95": [
-            0.3907,
-            0.7349
+            0.4241,
+            0.7643
           ]
         },
         "formal": {
@@ -1873,12 +1865,12 @@
           ]
         },
         "team_heldout": {
-          "k": 51,
+          "k": 52,
           "n": 83,
-          "rate": 0.6145,
+          "rate": 0.6265,
           "ci95": [
-            0.5069,
-            0.7119
+            0.519,
+            0.7228
           ]
         }
       },
@@ -1927,9 +1919,9 @@
           [
             0,
             0,
-            3,
+            2,
             0,
-            12,
+            13,
             0
           ],
           [
@@ -2244,26 +2236,26 @@
     },
     "paired_vs_keywords": {
       "n": 85,
-      "only_b_right": 27,
+      "only_b_right": 26,
       "only_a_right": 8,
-      "diff": 0.2235,
+      "diff": 0.2118,
       "diff_ci95": [
-        0.0941,
-        0.3529
+        0.0824,
+        0.3412
       ],
-      "mcnemar_p": 0.001878,
+      "mcnemar_p": 0.002935,
       "resamples": 10000,
       "seed": 0
     },
     "escalation_guard": {
       "lexicon_only": {
         "recall": {
-          "k": 12,
+          "k": 13,
           "n": 15,
-          "rate": 0.8,
+          "rate": 0.8667,
           "ci95": [
-            0.5481,
-            0.9295
+            0.6212,
+            0.9626
           ]
         },
         "false_escalation": {
@@ -2275,7 +2267,7 @@
             0.052
           ]
         },
-        "missed": 3,
+        "missed": 2,
         "missed_upper_bound_if_zero": null
       },
       "classifier_only": {
@@ -2597,14 +2589,6 @@
         "style": "formal"
       },
       {
-        "utterance": "tem um saque que não fui eu",
-        "gold": "requires_escalation",
-        "baseline": "out_of_scope",
-        "learned": "requires_escalation",
-        "language": "pt",
-        "style": "colloquial"
-      },
-      {
         "utterance": "me estafaron por teléfono y di mis datos",
         "gold": "requires_escalation",
         "baseline": "requires_escalation",
@@ -2652,12 +2636,12 @@
   "test_without_templated_phrases": {
     "n": 79,
     "baseline_accuracy": {
-      "k": 50,
+      "k": 51,
       "n": 79,
-      "rate": 0.6329,
+      "rate": 0.6456,
       "ci95": [
-        0.5228,
-        0.7307
+        0.5356,
+        0.742
       ]
     },
     "learned_accuracy": {
@@ -2669,7 +2653,7 @@
         0.9012
       ]
     },
-    "baseline_macro_f1": 0.6582,
+    "baseline_macro_f1": 0.6663,
     "learned_macro_f1": 0.8417,
     "guard_recall": {
       "k": 14,

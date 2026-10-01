@@ -2,6 +2,7 @@ import { useRouter } from '@tanstack/react-router'
 import { useState, type FormEvent } from 'react'
 import { useT } from '../../i18n/context'
 import type { MessageKey } from '../../i18n/translate'
+import { customerDestination } from '../../server/safe-path'
 import type { DemoCustomer, LoginResult } from '../../server/auth.functions'
 import { PublicShell } from '../../shell/PublicShell'
 import { Button, QuickReplies } from '../../ui'
@@ -11,6 +12,11 @@ const messages: Record<number, MessageKey> = {
   422: 'login.errors.badCredentials',
   429: 'login.errors.tooManyAttempts',
 }
+// What a browser says of a field that is empty or too short is in the browser's language, not the page's: the page words it.
+const validation = {
+  customer_id: { valueMissing: 'login.errors.customerIdRequired', tooShort: 'login.errors.customerIdShort' },
+  pin: { valueMissing: 'login.errors.pinRequired', patternMismatch: 'login.errors.pinShort' },
+} as const satisfies Record<string, Partial<Record<keyof ValidityState, MessageKey>>>
 const unavailable: MessageKey = 'login.errors.unavailable'
 const notSaved: MessageKey = 'login.errors.sessionNotSaved'
 
@@ -30,6 +36,14 @@ export function LoginForm({ demoCustomers, target, expired, signIn }: Props) {
   const [error, setError] = useState<MessageKey | null>(null)
   const [pending, setPending] = useState(false)
 
+  function explain(event: FormEvent<HTMLInputElement>) {
+    const input = event.currentTarget
+    const messages: Partial<Record<keyof ValidityState, MessageKey>> = validation[input.name as keyof typeof validation]
+    const reason = (Object.keys(messages) as (keyof ValidityState)[]).find((key) => input.validity[key])
+    input.setCustomValidity(reason ? t(messages[reason]!) : '')
+  }
+  const clear = (event: FormEvent<HTMLInputElement>) => event.currentTarget.setCustomValidity('')
+
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setPending(true)
@@ -37,7 +51,7 @@ export function LoginForm({ demoCustomers, target, expired, signIn }: Props) {
     try {
       const result = await signIn({ customer_id: customerId, pin })
       if (result.ok) {
-        await router.navigate({ href: target ?? '/chat', replace: true })
+        await router.navigate({ href: customerDestination(target) ?? '/chat', replace: true })
         // The API said yes, so the page behind the login should have opened. If the router sent us back here, the browser did not
         // keep the session cookie (Safari with a Secure cookie over plain http, or cookies blocked): say so instead of spinning.
         if (router.state.location.pathname !== '/login') return
@@ -63,6 +77,8 @@ export function LoginForm({ demoCustomers, target, expired, signIn }: Props) {
               name="customer_id"
               value={customerId}
               onChange={(e) => setCustomerId(e.target.value)}
+              onInvalid={explain}
+              onInput={clear}
               required
               minLength={3}
               maxLength={32}
@@ -77,6 +93,8 @@ export function LoginForm({ demoCustomers, target, expired, signIn }: Props) {
               type="password"
               value={pin}
               onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              onInvalid={explain}
+              onInput={clear}
               required
               pattern="\d{6}"
               maxLength={6}
