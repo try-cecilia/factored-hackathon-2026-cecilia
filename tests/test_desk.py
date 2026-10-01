@@ -349,6 +349,21 @@ def test_the_resolve_endpoint(monkeypatch):
     assert client.get(f"/admin/tickets/{plain}", headers=admin).json()["desk"]["status"] == "resolved"
 
 
+def test_an_expected_version_that_cannot_exist_is_refused_by_the_schema_not_left_to_the_conflict_check(monkeypatch):
+    """A ticket's version counts its events, so it is never negative: -10 is a 422, not a "the ticket changed" 409, and 0 (a ticket
+    nobody has touched) and the real version still go through."""
+    monkeypatch.setenv("OPERATOR_KEYS", "ana=ana-key-0123456789-abcdefgh")
+    client = TestClient(main.app)
+    ana = {"X-Operator-Key": "ana-key-0123456789-abcdefgh"}
+    ticket_id = file_ticket()
+    for bad in (-10, -1, 10**12, 1.5, "1", True):
+        r = client.post(f"/admin/tickets/{ticket_id}/claim", json={"expected_version": bad}, headers=ana)
+        assert r.status_code == 422, bad
+    assert default_desk.state(ticket_id)["status"] == "open"  # none of them did anything
+    assert client.post(f"/admin/tickets/{ticket_id}/claim", json={"expected_version": 0}, headers=ana).status_code == 200
+    assert client.post(f"/admin/tickets/{ticket_id}/release", json={"expected_version": 1}, headers=ana).status_code == 200
+
+
 def test_the_case_endpoint_shows_a_customer_only_their_own_ticket(monkeypatch):
     ticket_id, orch, tok = file_ticket_in_session()
     monkeypatch.setattr(main.demo, "orchestrator_for", lambda token: orch)

@@ -91,6 +91,21 @@ def test_the_daily_model_budget_is_reported_to_operators_only(client, monkeypatc
     assert body == {"limit_usd": 5.0, "spent_today_usd": 1.25, "exhausted": False}
 
 
+@pytest.mark.parametrize("bad", ["CLI\x00FIX0001", "CLI-FIX0001\x00", "CLI FIX0001", "CLI-FIX0001\n", "\tCLI-FIX0001", "CLI-FIX000\u0661", "CLI-FIX0001'--", "CLI/FIX0001"])
+def test_a_customer_id_outside_the_allowed_characters_is_refused_before_any_lookup(client, bad, monkeypatch):
+    """V5.1.3: positive validation. A NUL, a control character, a space or a quote is a 422 from the schema: the login limiter,
+    the lockout counter and the warehouse never see it."""
+    monkeypatch.setattr(identity.default_identity, "login", lambda *a, **k: pytest.fail("login reached with an invalid customer id"))
+    r = client.post("/auth/session", json={"customer_id": bad, "pin": "123456"})
+    assert r.status_code == 422, repr(bad)
+    assert "customer_id" in json.dumps(r.json()["detail"])
+
+
+def test_the_shipped_customer_ids_still_log_in(client):
+    for cid in ("CLI-FIX0001", "CLI-FIX0004"):
+        assert login(client, cid=cid).status_code == 200
+
+
 def test_customer_id_alone_is_not_enough(client):
     assert client.post("/auth/session", json={"customer_id": "CLI-FIX0001"}).status_code == 422
     assert login(client, pin="000000" if derive_test_pin("CLI-FIX0001") != "000000" else "111111").status_code == 401
