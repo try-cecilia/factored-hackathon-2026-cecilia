@@ -126,9 +126,10 @@ call, measured). This system answers with no queue: 1.8 s per case at the median
 See the [summary table](EVALUATION.md#summary-human-agents-vs-keyword-bot-vs-this-system).
 
 Learned component: the intent classifier beats the keyword baseline on text it
-never saw (**84.7% vs 63.5%** accuracy on the held-out test split). As a pre-LLM guard, it raises the
-fraud/dispute recall from 86.7% to **93.3%** with **0%** false escalations:
+never saw (**84.7% vs 63.5%**† accuracy on the held-out test split). As a pre-LLM guard, it raises the
+fraud/dispute recall from 86.7% to **93.3%**† with **0%** false escalations:
 [`eval/reports/intent_classifier.md`](eval/reports/intent_classifier.md).
+† Post-hoc: two lexicon patterns were added after this split was scored and match two of its utterances, so the keyword baseline and lexicon-only figures are an upper bound ([`EVALUATION.md`](EVALUATION.md), "Contamination of the test split").
 
 Submission slides and demo video: [`docs/demo/`](docs/demo/README.md).
 
