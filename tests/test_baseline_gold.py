@@ -70,3 +70,21 @@ def test_without_the_mart_it_says_what_to_run():
     with pytest.raises(SystemExit, match="make gold"):
         gold_contacts(empty)
     empty.close()
+
+
+def test_no_text_channel_among_the_transactional_contacts_is_zero_percent_as_in_silver_and_the_economics_still_run(con):
+    con.execute("UPDATE call_center_interactions SET channel = 'Phone'")
+    con.execute("DROP TABLE gold_contact_demand")
+    build(con, only=("gold_contact_demand",))
+    assert raw_figures(con)["text_channel_pct"] == 0.0
+    assert gold_contacts(con)["text_channel_pct"] == 0.0
+    from analysis.unit_economics import scenarios
+    share = gold_contacts(con)["text_channel_pct"] / 100  # what unit_economics reads from the baseline report
+    assert scenarios(1000, share, 300, 0.5, 0.01)  # with None here it raised TypeError
+
+
+def test_with_no_transactional_contact_at_all_the_text_share_stays_undefined(con):
+    con.execute("UPDATE call_center_interactions SET reason_category = 'Consulta'")
+    con.execute("DROP TABLE gold_contact_demand")
+    build(con, only=("gold_contact_demand",))
+    assert raw_figures(con)["text_channel_pct"] is None and gold_contacts(con)["text_channel_pct"] is None

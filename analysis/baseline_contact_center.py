@@ -46,7 +46,8 @@ def gold_contacts(con) -> dict:
                                          FROM {GOLD} GROUP BY 1 ORDER BY 2 DESC"""),
         "channels": rows(con, f"""SELECT channel, sum(n_contacts)::BIGINT AS contacts, round(100.0 * sum(n_contacts) / sum(sum(n_contacts)) OVER (), 1) AS pct
                                   FROM {GOLD} WHERE {txn} GROUP BY 1 ORDER BY 2 DESC"""),
-        "text_channel_pct": con.execute(f"SELECT round(100.0 * sum(n_contacts) FILTER (WHERE channel IN {TEXT_CHANNELS}) / sum(n_contacts), 1) FROM {GOLD} WHERE {txn}").fetchone()[0],
+        # no text-channel contact is 0 %, as in silver; no transactional contact at all stays undefined (NULL)
+        "text_channel_pct": con.execute(f"SELECT round(100.0 * coalesce(sum(n_contacts) FILTER (WHERE channel IN {TEXT_CHANNELS}), 0) / sum(n_contacts), 1) FROM {GOLD} WHERE {txn}").fetchone()[0],
         "by_country": rows(con, f"""SELECT country, sum(n_contacts)::BIGINT AS contacts, round(100.0 * sum(n_contacts) / sum(sum(n_contacts)) OVER (), 1) AS pct
                                     FROM {GOLD} WHERE {txn} AND country IS NOT NULL GROUP BY 1 ORDER BY 2 DESC"""),
         "monthly_contacts_median": con.execute(f"""SELECT median(n) FROM (SELECT sum(n_contacts) AS n FROM {GOLD}
