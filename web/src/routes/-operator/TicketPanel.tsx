@@ -251,9 +251,9 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
             <Fold
               id="evidence"
               title={t('operator.ticket.sections.evidence')}
-              summary={flagged ? t('operator.ticket.sections.flagged', { count: ticket.evidence.length, flagged }) : String(ticket.evidence.length)}
+              summary={flagged ? t(flagged === 1 ? 'operator.ticket.sections.flaggedOne' : 'operator.ticket.sections.flaggedOther', { count: ticket.evidence.length, flagged }) : String(ticket.evidence.length)}
             >
-              {flagged > 0 && <p className="op-flagged-count">{t('operator.ticket.evidence.flagged', { count: flagged, threshold: FRAUD_SCORE_FLAG })}</p>}
+              {flagged > 0 && <p className="op-flagged-count">{t(flagged === 1 ? 'operator.ticket.evidence.flaggedOne' : 'operator.ticket.evidence.flaggedOther', { count: flagged, threshold: FRAUD_SCORE_FLAG })}</p>}
               {evidence.length > 0 && (
                 <div className="op-ev-scroll" tabIndex={0} role="region" aria-label={t('operator.ticket.evidence.caption')}>
                   <table className="op-ev">

@@ -282,7 +282,7 @@ describe('evidence', () => {
     }, { version: 1 }))
     expect(screen.getByRole('button', { name: /^Evidencia/ }).textContent).toContain('4 · 2 marcados')
     await unfold(/^Evidencia/)
-    expect(screen.getByText('2 marcadas · score 70+')).toBeTruthy()
+    expect(screen.getByText('2 marcados · score 70+')).toBeTruthy()
     const table = screen.getByRole('table', { name: 'Movimientos recientes del cliente' })
     const flagged = within(table).getAllByRole('row').filter((row) => row.hasAttribute('data-flagged'))
     expect(flagged.map((row) => within(row).getAllByRole('cell')[2].textContent)).toEqual(['Amazon MX · US', 'DigitalOcean · US'])
@@ -519,7 +519,7 @@ describe('the drawer, summary first', () => {
     const summary = (name: RegExp) => within(folds()).getByRole('button', { name }).textContent
     expect(summary(/^Productos/)).toContain('2 · 1 bloqueado')
     expect(summary(/^Movimientos/)).toContain('1 pendiente')
-    expect(summary(/^Evidencia/)).toContain('1 · 1 marcados')
+    expect(summary(/^Evidencia/)).toBe('Evidencia1 · 1 marcado')
     expect(summary(/^Hechos verificados/)).toContain('1')
     expect(summary(/^Otros casos/)).toContain('2 · 1 abierto')
     expect(summary(/^Preguntas abiertas/)).toContain('1')
@@ -652,6 +652,20 @@ describe('the drawer, summary first', () => {
     expect(within(body as HTMLElement).getByText('sesión sess-7e2')).toBeTruthy()
     expect(within(body as HTMLElement).getByText('Lo que hizo la asistente')).toBeTruthy()
     expect(within(body as HTMLElement).getByText('get_payment_status')).toBeTruthy()
+  })
+
+  it.each([
+    ['es', 1, '1 · 1 marcado', '1 marcado · score 70+'],
+    ['es', 2, '2 · 2 marcados', '2 marcados · score 70+'],
+    ['pt', 1, '1 · 1 sinalizada', '1 sinalizada · score 70+'],
+    ['pt', 2, '2 · 2 sinalizadas', '2 sinalizadas · score 70+'],
+  ] as const)('the flagged movements agree in number with the count (%s, %i)', async (locale, count, line, body) => {
+    const evidence = Array.from({ length: count }, (_, i) => ({ type: 'transaction', id: `tx${i}`, flagged: true, detail: { transaction_date: '2026-09-28T14:02:00', amount: 1, currency: 'USD', merchant_name: 'Amazon MX', fraud_score: 91 } }))
+    renderWithI18n(<TicketPanel ticket={ticket('open', { evidence })} view={{ canAct: true, operator: 'ana.ruiz' }} act={vi.fn()} reload={vi.fn(async () => true)} />, locale)
+    const fold = screen.getByRole('button', { name: /^Evid/ })
+    expect(fold.textContent).toContain(line)
+    await userEvent.setup().click(fold)
+    expect(screen.getByText(body)).toBeTruthy()
   })
 
   it('draws in Portuguese too', async () => {

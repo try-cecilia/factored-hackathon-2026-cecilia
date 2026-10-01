@@ -229,7 +229,8 @@ export const operator: Like<typeof es> = {
       eventsOne: '1 evento',
       eventsOther: '{count} eventos',
       traceSuffix: 'rastro',
-      flagged: '{count} · {flagged} sinalizadas',
+      flaggedOne: '{count} · 1 sinalizada',
+      flaggedOther: '{count} · {flagged} sinalizadas',
     },
     attention: {
       title: 'Requer atenção',
@@ -275,7 +276,8 @@ export const operator: Like<typeof es> = {
       movementFallback: 'movimentação',
     },
     evidence: {
-      flagged: '{count} sinalizadas · score {threshold}+',
+      flaggedOne: '1 sinalizada · score {threshold}+',
+      flaggedOther: '{count} sinalizadas · score {threshold}+',
       none: 'Este caso não traz evidências anexadas.',
       caption: 'Movimentações recentes do cliente',
       date: 'Data',

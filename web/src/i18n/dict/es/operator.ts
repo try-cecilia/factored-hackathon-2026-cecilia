@@ -227,7 +227,8 @@ export const operator = {
       eventsOne: '1 evento',
       eventsOther: '{count} eventos',
       traceSuffix: 'traza',
-      flagged: '{count} · {flagged} marcados',
+      flaggedOne: '{count} · 1 marcado',
+      flaggedOther: '{count} · {flagged} marcados',
     },
     attention: {
       title: 'Requiere atención',
@@ -273,7 +274,8 @@ export const operator = {
       movementFallback: 'movimiento',
     },
     evidence: {
-      flagged: '{count} marcadas · score {threshold}+',
+      flaggedOne: '1 marcado · score {threshold}+',
+      flaggedOther: '{count} marcados · score {threshold}+',
       none: 'Este caso no trae evidencia adjunta.',
       caption: 'Movimientos recientes del cliente',
       date: 'Fecha',
