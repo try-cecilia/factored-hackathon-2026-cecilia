@@ -22,6 +22,25 @@ change is a new commit that says so, and the report cites both versions.
 What we commit to whatever the numbers are: the report is published, the prompt, rules and classifier are not tuned on
 these messages, and messages labeled "something else" are dropped and counted.
 
+## 1b. Rule for a larger intent model (written before any is tried)
+
+No transformer or embedding model has been trained or scored for this project. If one is tried, it replaces the current
+classifier (TF-IDF + linear, `eval/models/intent_clf.joblib`) only if **all** of these hold. Fixed now; a change to the
+rule is a new dated line in section 3, not an edit after a result.
+
+| # | Rule | Pass | Today's value |
+|---|---|---|---|
+| M1 | Memory, measured in the container image and not on a laptop | the API's peak resident memory with the model loaded, plus the DuckDB cap, is at most **460 MB** (90% of the 512 MB instance in `render.yaml`) | about 170 MB process + 192 MB cap = 362 MB. The classifier and the scikit-learn stack it loads add about 130 MB on a laptop (loaded model: 229 KB on disk), so a candidate has about **100 MB** left to add |
+| M2 | Latency, one CPU | p95 of one prediction at most **50 ms**; the guard runs before a model call that takes seconds | 1.5 ms mean |
+| M3 | Better, on utterances nobody has scored | on a set of newly written utterances (the 85 of the current test split were scored once and are spent), the paired difference in accuracy against the current model has a bootstrap 95% interval above 0, **and** the runtime guard keeps at least its recall (93.3% on the current test split) with at most 5% false escalations | 84.7% accuracy [75.6-90.8] on the current test split (n=85) |
+| M4 | Selected on dev only | the candidate, its hyperparameters and its threshold are chosen on dev; the new set is scored once | |
+
+If M3's interval includes 0 the current model stays: a heavier model is not bought with an inconclusive result. A candidate
+that fails M1 or M2 is rejected for its cost whatever it scores, and the report says which rule and by how much.
+
+Whatever the outcome, the report states what deploying the candidate would cost: peak memory, image size, p95 latency
+and cold start, next to the current model's figures.
+
 ## 2. Evidence we do not accept as proof of a claim
 
 | Evidence we have | What it supports | What it does **not** support |
@@ -61,3 +80,7 @@ Add a dated line here for every change to a gate, with the reason.
   before any association with `is_fraud` was computed (the git history orders the two commits). The first run gave AUC
   0.504, which the gates word as "no detectable association"; no formula, band or weight changed afterwards. This is the
   only evaluation in the repository whose gate was fixed before its result, apart from the human-written set above.
+- **2026-10-01: rule for a larger intent model.** Section 1b was written before any larger model was trained or scored.
+  The memory budget comes from the 512 MB instance in `render.yaml` and the first boot's measurements in
+  `docs/operations.md`; the current model's figures were measured on a laptop and must be re-measured in the image before
+  a candidate is compared against them.
