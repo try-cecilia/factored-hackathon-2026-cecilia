@@ -6,7 +6,7 @@ import { Button, IconButton, PriorityChip, priorityOf, StatusIndicator, type Sta
 import { AlertCircleIcon, AlertTriangleIcon, CheckIcon, InfoCircleIcon } from '../../ui/messages/icons'
 import { CloseIcon } from '../../ui/table/icons'
 import { ago, clock, CLOSED, explainKey, money, shortStamp, when } from './format'
-import { FRAUD_SCORE_FLAG, isFlagged, resolutionMessage, scoreLabel, ticketSummary } from './summary'
+import { FRAUD_SCORE_FLAG, behaviorOf, isFlagged, resolutionMessage, scoreLabel, ticketSummary } from './summary'
 import { conflictOf, holdConflict, type Conflict } from './conflicts'
 import { evidenceTypeName, keyName, nextStepText, questionTexts, reasonText, reviewReasonName, ruleName } from './notes'
 import { KeyValues } from './ui'
@@ -231,6 +231,7 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
                     <th scope="col" className="op-ev__end">{t('operator.ticket.evidence.amount')}</th>
                     <th scope="col">{t('operator.ticket.evidence.merchant')}</th>
                     <th scope="col" className="op-ev__end">{t('operator.ticket.evidence.score')}</th>
+                    <th scope="col" className="op-ev__end">{t('operator.ticket.evidence.behavior')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -248,11 +249,18 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
                         )}
                         <span aria-hidden={isFlagged(e) || undefined}>{scoreLabel(e)}</span>
                       </td>
+                      <td className="op-mono op-ev__end">
+                        {(() => {
+                          const b = behaviorOf(e)
+                          return b ? `${Math.round(b.composite)} · ${t(`operator.ticket.evidence.band.${b.band}`)}` : <span title={t('operator.ticket.evidence.behaviorNone')}>—</span>
+                        })()}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             )}
+            {evidence.length > 0 && <p className="op-muted">{t('operator.ticket.evidence.behaviorNote')}</p>}
             {otherEvidence.map((e, i) => (
               <div key={i}>
                 <h3>{evidenceTypeName(t, e.type)}{e.id ? ` · ${e.id}` : ''}</h3>
