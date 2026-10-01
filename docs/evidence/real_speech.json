@@ -1,0 +1,1941 @@
+{
+  "generated_at": "2026-10-01T05:23:16+00:00",
+  "n_total": 1090,
+  "n_excluded": 160,
+  "n_primary": 384,
+  "n_secondary": 546,
+  "by_intent": {
+    "app_error": 63,
+    "freeze": 83,
+    "pay_bill": 68,
+    "abroad": 120,
+    "address": 81,
+    "atm_limit": 83,
+    "joint_account": 80,
+    "balance": 78,
+    "card_issues": 77,
+    "business_loan": 79,
+    "high_value_payment": 67,
+    "direct_debit": 69,
+    "latest_transactions": 66,
+    "cash_deposit": 76
+  },
+  "primary": {
+    "learned": {
+      "k": 282,
+      "n": 384,
+      "rate": 0.7344,
+      "ci95": [
+        0.688,
+        0.7761
+      ]
+    },
+    "keyword": {
+      "k": 350,
+      "n": 384,
+      "rate": 0.9115,
+      "ci95": [
+        0.8788,
+        0.9359
+      ]
+    },
+    "paired": {
+      "n": 384,
+      "only_b_right": 17,
+      "only_a_right": 85,
+      "diff": -0.1771,
+      "diff_ci95": [
+        -0.2266,
+        -0.1276
+      ],
+      "mcnemar_p": 0.0,
+      "resamples": 10000,
+      "seed": 0
+    },
+    "by_language": {
+      "es-ES": {
+        "n": 187,
+        "learned": {
+          "k": 143,
+          "n": 187,
+          "rate": 0.7647,
+          "ci95": [
+            0.699,
+            0.8198
+          ]
+        },
+        "keyword": {
+          "k": 164,
+          "n": 187,
+          "rate": 0.877,
+          "ci95": [
+            0.8222,
+            0.9166
+          ]
+        }
+      },
+      "pt-PT": {
+        "n": 197,
+        "learned": {
+          "k": 139,
+          "n": 197,
+          "rate": 0.7056,
+          "ci95": [
+            0.6385,
+            0.7648
+          ]
+        },
+        "keyword": {
+          "k": 186,
+          "n": 197,
+          "rate": 0.9442,
+          "ci95": [
+            0.9028,
+            0.9685
+          ]
+        }
+      }
+    },
+    "by_true_class": {
+      "balance_inquiry": {
+        "n": 78,
+        "learned": {
+          "k": 77,
+          "n": 78,
+          "rate": 0.9872,
+          "ci95": [
+            0.9309,
+            0.9977
+          ]
+        },
+        "keyword": {
+          "k": 75,
+          "n": 78,
+          "rate": 0.9615,
+          "ci95": [
+            0.8929,
+            0.9868
+          ]
+        }
+      },
+      "out_of_scope": {
+        "n": 240,
+        "learned": {
+          "k": 153,
+          "n": 240,
+          "rate": 0.6375,
+          "ci95": [
+            0.575,
+            0.6957
+          ]
+        },
+        "keyword": {
+          "k": 232,
+          "n": 240,
+          "rate": 0.9667,
+          "ci95": [
+            0.9356,
+            0.983
+          ]
+        }
+      },
+      "transaction_lookup": {
+        "n": 66,
+        "learned": {
+          "k": 52,
+          "n": 66,
+          "rate": 0.7879,
+          "ci95": [
+            0.6749,
+            0.8692
+          ]
+        },
+        "keyword": {
+          "k": 43,
+          "n": 66,
+          "rate": 0.6515,
+          "ci95": [
+            0.5311,
+            0.7552
+          ]
+        }
+      }
+    }
+  },
+  "secondary": {
+    "learned": {
+      "k": 170,
+      "n": 546,
+      "rate": 0.3114,
+      "ci95": [
+        0.2739,
+        0.3514
+      ]
+    },
+    "keyword": {
+      "k": 501,
+      "n": 546,
+      "rate": 0.9176,
+      "ci95": [
+        0.8915,
+        0.9378
+      ]
+    },
+    "paired": {
+      "n": 546,
+      "only_b_right": 10,
+      "only_a_right": 341,
+      "diff": -0.6062,
+      "diff_ci95": [
+        -0.6502,
+        -0.5623
+      ],
+      "mcnemar_p": 0.0,
+      "resamples": 10000,
+      "seed": 0
+    },
+    "by_language": {
+      "es-ES": {
+        "n": 225,
+        "learned": {
+          "k": 63,
+          "n": 225,
+          "rate": 0.28,
+          "ci95": [
+            0.2254,
+            0.342
+          ]
+        },
+        "keyword": {
+          "k": 205,
+          "n": 225,
+          "rate": 0.9111,
+          "ci95": [
+            0.8667,
+            0.9417
+          ]
+        }
+      },
+      "pt-PT": {
+        "n": 321,
+        "learned": {
+          "k": 107,
+          "n": 321,
+          "rate": 0.3333,
+          "ci95": [
+            0.284,
+            0.3866
+          ]
+        },
+        "keyword": {
+          "k": 296,
+          "n": 321,
+          "rate": 0.9221,
+          "ci95": [
+            0.8876,
+            0.9467
+          ]
+        }
+      }
+    },
+    "by_true_class": {
+      "out_of_scope": {
+        "n": 546,
+        "learned": {
+          "k": 170,
+          "n": 546,
+          "rate": 0.3114,
+          "ci95": [
+            0.2739,
+            0.3514
+          ]
+        },
+        "keyword": {
+          "k": 501,
+          "n": 546,
+          "rate": 0.9176,
+          "ci95": [
+            0.8915,
+            0.9378
+          ]
+        }
+      }
+    }
+  },
+  "all_scored": {
+    "learned": {
+      "k": 452,
+      "n": 930,
+      "rate": 0.486,
+      "ci95": [
+        0.454,
+        0.5181
+      ]
+    },
+    "keyword": {
+      "k": 851,
+      "n": 930,
+      "rate": 0.9151,
+      "ci95": [
+        0.8954,
+        0.9313
+      ]
+    },
+    "paired": {
+      "n": 930,
+      "only_b_right": 27,
+      "only_a_right": 426,
+      "diff": -0.429,
+      "diff_ci95": [
+        -0.4645,
+        -0.3935
+      ],
+      "mcnemar_p": 0.0,
+      "resamples": 10000,
+      "seed": 0
+    },
+    "by_language": {
+      "es-ES": {
+        "n": 412,
+        "learned": {
+          "k": 206,
+          "n": 412,
+          "rate": 0.5,
+          "ci95": [
+            0.4519,
+            0.5481
+          ]
+        },
+        "keyword": {
+          "k": 369,
+          "n": 412,
+          "rate": 0.8956,
+          "ci95": [
+            0.8624,
+            0.9216
+          ]
+        }
+      },
+      "pt-PT": {
+        "n": 518,
+        "learned": {
+          "k": 246,
+          "n": 518,
+          "rate": 0.4749,
+          "ci95": [
+            0.4322,
+            0.5179
+          ]
+        },
+        "keyword": {
+          "k": 482,
+          "n": 518,
+          "rate": 0.9305,
+          "ci95": [
+            0.9053,
+            0.9494
+          ]
+        }
+      }
+    },
+    "by_true_class": {
+      "balance_inquiry": {
+        "n": 78,
+        "learned": {
+          "k": 77,
+          "n": 78,
+          "rate": 0.9872,
+          "ci95": [
+            0.9309,
+            0.9977
+          ]
+        },
+        "keyword": {
+          "k": 75,
+          "n": 78,
+          "rate": 0.9615,
+          "ci95": [
+            0.8929,
+            0.9868
+          ]
+        }
+      },
+      "out_of_scope": {
+        "n": 786,
+        "learned": {
+          "k": 323,
+          "n": 786,
+          "rate": 0.4109,
+          "ci95": [
+            0.3771,
+            0.4457
+          ]
+        },
+        "keyword": {
+          "k": 733,
+          "n": 786,
+          "rate": 0.9326,
+          "ci95": [
+            0.9129,
+            0.9481
+          ]
+        }
+      },
+      "transaction_lookup": {
+        "n": 66,
+        "learned": {
+          "k": 52,
+          "n": 66,
+          "rate": 0.7879,
+          "ci95": [
+            0.6749,
+            0.8692
+          ]
+        },
+        "keyword": {
+          "k": 43,
+          "n": 66,
+          "rate": 0.6515,
+          "ci95": [
+            0.5311,
+            0.7552
+          ]
+        }
+      }
+    }
+  },
+  "by_dataset_intent": {
+    "abroad": {
+      "n": 120,
+      "tier": "secondary",
+      "truth": "out_of_scope",
+      "learned": {
+        "k": 40,
+        "n": 120,
+        "rate": 0.3333,
+        "ci95": [
+          0.2553,
+          0.4217
+        ]
+      },
+      "keyword": {
+        "k": 108,
+        "n": 120,
+        "rate": 0.9,
+        "ci95": [
+          0.8333,
+          0.9419
+        ]
+      }
+    },
+    "address": {
+      "n": 81,
+      "tier": "primary",
+      "truth": "out_of_scope",
+      "learned": {
+        "k": 49,
+        "n": 81,
+        "rate": 0.6049,
+        "ci95": [
+          0.4961,
+          0.7043
+        ]
+      },
+      "keyword": {
+        "k": 76,
+        "n": 81,
+        "rate": 0.9383,
+        "ci95": [
+          0.8635,
+          0.9733
+        ]
+      }
+    },
+    "app_error": {
+      "n": 63,
+      "tier": "secondary",
+      "truth": "out_of_scope",
+      "learned": {
+        "k": 29,
+        "n": 63,
+        "rate": 0.4603,
+        "ci95": [
+          0.3431,
+          0.5821
+        ]
+      },
+      "keyword": {
+        "k": 42,
+        "n": 63,
+        "rate": 0.6667,
+        "ci95": [
+          0.5437,
+          0.7705
+        ]
+      }
+    },
+    "atm_limit": {
+      "n": 83,
+      "tier": "secondary",
+      "truth": "out_of_scope",
+      "learned": {
+        "k": 34,
+        "n": 83,
+        "rate": 0.4096,
+        "ci95": [
+          0.3101,
+          0.5171
+        ]
+      },
+      "keyword": {
+        "k": 80,
+        "n": 83,
+        "rate": 0.9639,
+        "ci95": [
+          0.899,
+          0.9876
+        ]
+      }
+    },
+    "balance": {
+      "n": 78,
+      "tier": "primary",
+      "truth": "balance_inquiry",
+      "learned": {
+        "k": 77,
+        "n": 78,
+        "rate": 0.9872,
+        "ci95": [
+          0.9309,
+          0.9977
+        ]
+      },
+      "keyword": {
+        "k": 75,
+        "n": 78,
+        "rate": 0.9615,
+        "ci95": [
+          0.8929,
+          0.9868
+        ]
+      }
+    },
+    "business_loan": {
+      "n": 79,
+      "tier": "primary",
+      "truth": "out_of_scope",
+      "learned": {
+        "k": 60,
+        "n": 79,
+        "rate": 0.7595,
+        "ci95": [
+          0.6546,
+          0.8403
+        ]
+      },
+      "keyword": {
+        "k": 77,
+        "n": 79,
+        "rate": 0.9747,
+        "ci95": [
+          0.9123,
+          0.993
+        ]
+      }
+    },
+    "cash_deposit": {
+      "n": 76,
+      "tier": "secondary",
+      "truth": "out_of_scope",
+      "learned": {
+        "k": 27,
+        "n": 76,
+        "rate": 0.3553,
+        "ci95": [
+          0.257,
+          0.4674
+        ]
+      },
+      "keyword": {
+        "k": 75,
+        "n": 76,
+        "rate": 0.9868,
+        "ci95": [
+          0.9292,
+          0.9977
+        ]
+      }
+    },
+    "direct_debit": {
+      "n": 69,
+      "tier": "secondary",
+      "truth": "out_of_scope",
+      "learned": {
+        "k": 18,
+        "n": 69,
+        "rate": 0.2609,
+        "ci95": [
+          0.1719,
+          0.3751
+        ]
+      },
+      "keyword": {
+        "k": 67,
+        "n": 69,
+        "rate": 0.971,
+        "ci95": [
+          0.9003,
+          0.992
+        ]
+      }
+    },
+    "high_value_payment": {
+      "n": 67,
+      "tier": "secondary",
+      "truth": "out_of_scope",
+      "learned": {
+        "k": 9,
+        "n": 67,
+        "rate": 0.1343,
+        "ci95": [
+          0.0723,
+          0.236
+        ]
+      },
+      "keyword": {
+        "k": 66,
+        "n": 67,
+        "rate": 0.9851,
+        "ci95": [
+          0.9202,
+          0.9974
+        ]
+      }
+    },
+    "joint_account": {
+      "n": 80,
+      "tier": "primary",
+      "truth": "out_of_scope",
+      "learned": {
+        "k": 44,
+        "n": 80,
+        "rate": 0.55,
+        "ci95": [
+          0.4412,
+          0.6542
+        ]
+      },
+      "keyword": {
+        "k": 79,
+        "n": 80,
+        "rate": 0.9875,
+        "ci95": [
+          0.9325,
+          0.9978
+        ]
+      }
+    },
+    "latest_transactions": {
+      "n": 66,
+      "tier": "primary",
+      "truth": "transaction_lookup",
+      "learned": {
+        "k": 52,
+        "n": 66,
+        "rate": 0.7879,
+        "ci95": [
+          0.6749,
+          0.8692
+        ]
+      },
+      "keyword": {
+        "k": 43,
+        "n": 66,
+        "rate": 0.6515,
+        "ci95": [
+          0.5311,
+          0.7552
+        ]
+      }
+    },
+    "pay_bill": {
+      "n": 68,
+      "tier": "secondary",
+      "truth": "out_of_scope",
+      "learned": {
+        "k": 13,
+        "n": 68,
+        "rate": 0.1912,
+        "ci95": [
+          0.1153,
+          0.3001
+        ]
+      },
+      "keyword": {
+        "k": 63,
+        "n": 68,
+        "rate": 0.9265,
+        "ci95": [
+          0.8391,
+          0.9682
+        ]
+      }
+    }
+  },
+  "post_hoc": {
+    "out_of_scope_share_of_primary": {
+      "k": 240,
+      "n": 384,
+      "rate": 0.625,
+      "ci95": [
+        0.5756,
+        0.672
+      ]
+    },
+    "in_scope_only": {
+      "learned": {
+        "k": 129,
+        "n": 144,
+        "rate": 0.8958,
+        "ci95": [
+          0.8352,
+          0.9359
+        ]
+      },
+      "keyword": {
+        "k": 118,
+        "n": 144,
+        "rate": 0.8194,
+        "ci95": [
+          0.7486,
+          0.8737
+        ]
+      },
+      "paired": {
+        "n": 144,
+        "only_b_right": 14,
+        "only_a_right": 3,
+        "diff": 0.0764,
+        "diff_ci95": [
+          0.0208,
+          0.1319
+        ],
+        "mcnemar_p": 0.012726,
+        "resamples": 10000,
+        "seed": 0
+      }
+    },
+    "out_of_scope_fate": {
+      "correct": {
+        "k": 153,
+        "n": 240,
+        "rate": 0.6375,
+        "ci95": [
+          0.575,
+          0.6957
+        ]
+      },
+      "escalated_to_a_person": {
+        "k": 59,
+        "n": 240,
+        "rate": 0.2458,
+        "ci95": [
+          0.1956,
+          0.304
+        ]
+      },
+      "read_as_an_in_scope_request": {
+        "k": 28,
+        "n": 240,
+        "rate": 0.1167,
+        "ci95": [
+          0.082,
+          0.1634
+        ]
+      }
+    }
+  },
+  "confusion_primary": {
+    "balance_inquiry": {
+      "balance_inquiry": 77,
+      "requires_escalation": 1
+    },
+    "out_of_scope": {
+      "out_of_scope": 153,
+      "requires_escalation": 59,
+      "exchange_rate_inquiry": 4,
+      "transaction_lookup": 3,
+      "payment_status": 13,
+      "balance_inquiry": 8
+    },
+    "transaction_lookup": {
+      "transaction_lookup": 52,
+      "requires_escalation": 13,
+      "balance_inquiry": 1
+    }
+  },
+  "guard": {
+    "lexicon_only": {
+      "false_escalation": {
+        "k": 17,
+        "n": 930,
+        "rate": 0.0183,
+        "ci95": [
+          0.0114,
+          0.0291
+        ]
+      },
+      "by_language": {
+        "es-ES": {
+          "k": 12,
+          "n": 412,
+          "rate": 0.0291,
+          "ci95": [
+            0.0167,
+            0.0502
+          ]
+        },
+        "pt-PT": {
+          "k": 5,
+          "n": 518,
+          "rate": 0.0097,
+          "ci95": [
+            0.0041,
+            0.0224
+          ]
+        }
+      },
+      "examples": [
+        {
+          "lang": "es-ES",
+          "intent": "latest_transactions",
+          "text": "estoy realizando nuestra sección recientes y hay un par de cosas que te pago que no reconozco estos es quisiera saber el tiempo de antenas información"
+        },
+        {
+          "lang": "es-ES",
+          "intent": "latest_transactions",
+          "text": "hola me gustaría ver mis últimas transacciones porque hay un pago que no reconozco y quiere investigarlo gracias"
+        },
+        {
+          "lang": "es-ES",
+          "intent": "latest_transactions",
+          "text": "estoy mirando mi banca online y acabo de ver un pavo que desconozco y quería y me muestre un extracto de mis últimas transacciones y la hora exacta en la que se realizó el pago para saber si es mío no"
+        },
+        {
+          "lang": "es-ES",
+          "intent": "latest_transactions",
+          "text": "hola buenos días estaba revisando mi historial de compras de la aplicación de Funicamp y hay una compra que no reconozco"
+        },
+        {
+          "lang": "es-ES",
+          "intent": "latest_transactions",
+          "text": "hay un pago de ayer que no reconozco"
+        },
+        {
+          "lang": "es-ES",
+          "intent": "latest_transactions",
+          "text": "hola me puedes mostrar las últimas transacciones es que hay un pago que no reconozco y quiero quiero comprobarlo"
+        },
+        {
+          "lang": "es-ES",
+          "intent": "latest_transactions",
+          "text": "hola buenos días quería por favor que me mostrase bueno pues los últimos movimientos de mi cuenta lo que son las últimas transacciones porque hay un pago que no reconozco y quería saber de dónde viene y porque me lo han cobrado hay otros que sí que están ahí y lo reconozco pero ese no muchas"
+        },
+        {
+          "lang": "es-ES",
+          "intent": "latest_transactions",
+          "text": "me puede mostrar mis últimas transacciones hay una transacción que no reconozco"
+        },
+        {
+          "lang": "es-ES",
+          "intent": "latest_transactions",
+          "text": "hola buenas llamaba para preguntar si podría ver las últimas transacciones hechas con mi tarjeta y bueno también para decir que he visto que hay un pago me el cual no reconozco"
+        },
+        {
+          "lang": "es-ES",
+          "intent": "latest_transactions",
+          "text": "quiero ver mis últimas transacciones hay un pago que no reconozco"
+        },
+        {
+          "lang": "es-ES",
+          "intent": "latest_transactions",
+          "text": "hola muy buenas he recibido un poco que no reconozco me gustaría ver las últimas acciones que están en mi cuenta"
+        },
+        {
+          "lang": "es-ES",
+          "intent": "latest_transactions",
+          "text": "si quería conocer las últimas transacciones de mi cuenta de que hay un cargo que no reconozco bien"
+        }
+      ]
+    },
+    "classifier_only": {
+      "false_escalation": {
+        "k": 34,
+        "n": 930,
+        "rate": 0.0366,
+        "ci95": [
+          0.0263,
+          0.0507
+        ]
+      },
+      "by_language": {
+        "es-ES": {
+          "k": 14,
+          "n": 412,
+          "rate": 0.034,
+          "ci95": [
+            0.0203,
+            0.0562
+          ]
+        },
+        "pt-PT": {
+          "k": 20,
+          "n": 518,
+          "rate": 0.0386,
+          "ci95": [
+            0.0251,
+            0.0589
+          ]
+        }
+      },
+      "examples": [
+        {
+          "lang": "es-ES",
+          "intent": "address",
+          "text": "pues alguien que quiere cambiar la dirección que tiene enlazada con la cuenta de su banco"
+        },
+        {
+          "lang": "es-ES",
+          "intent": "atm_limit",
+          "text": "una calle que no conozco y he visto que hay un cajero automático de su compañía quiero retirar bien lo he dicho pero no sé cuál es la cantidad máxima que me lo puede decir"
+        },
+        {
+          "lang": "es-ES",
+          "intent": "high_value_payment",
+          "text": "hola buenos días llamaba porque estaba comprando el mobiliario nuevo para casa por internet y he intentado utilizar la tarjeta pero me dice que recibiré un mensaje en el móvil pero no sé exactamente bien bien que osea que de hacer"
+        },
+        {
+          "lang": "es-ES",
+          "intent": "high_value_payment",
+          "text": "estoy intentando hacer un pago bastante grande en línea y me dice que tengo que recibir un mensaje de texto y no sé que se supone que tienen que hacer estos mensajes con los códigos de pago que he recibido"
+        },
+        {
+          "lang": "es-ES",
+          "intent": "high_value_payment",
+          "text": "hola buenos días estoy tratando de hacer un pago bastante grande por internet y me han enviado un código del banco pero no sé que hay que hacer con este código ni dónde lo tengo que insertar"
+        },
+        {
+          "lang": "es-ES",
+          "intent": "high_value_payment",
+          "text": "quiero realizar un pago importante en línea y dice que tengo que recibir un mensaje SMS"
+        },
+        {
+          "lang": "es-ES",
+          "intent": "high_value_payment",
+          "text": "comprando aquí en Amazon de forma online y me pone que hacer una gran cantidad me enviara mi banco es código confirmación"
+        },
+        {
+          "lang": "es-ES",
+          "intent": "high_value_payment",
+          "text": "hola buenas pues mira resulta que recientemente tengo que realizar un pago de una gran suma de dinero y me dice que voy a recibir un sms de mi banco"
+        },
+        {
+          "lang": "es-ES",
+          "intent": "high_value_payment",
+          "text": "hola quiero hacer un pago importante y es una cantidad muy grande pero no veo el SMS que me han dicho que debería recibir"
+        },
+        {
+          "lang": "es-ES",
+          "intent": "direct_debit",
+          "text": "hola buenos días quería ver mis domiciliaciones bancarias creo que hay algún fallo y quise devolver una gracias"
+        },
+        {
+          "lang": "es-ES",
+          "intent": "latest_transactions",
+          "text": "hola buenos días hay un pago que no conozco en mi cuenta y me gustaría saber a qué es debido"
+        },
+        {
+          "lang": "es-ES",
+          "intent": "latest_transactions",
+          "text": "hay un pago de ayer que no reconozco"
+        }
+      ]
+    },
+    "lexicon_or_classifier (runtime)": {
+      "false_escalation": {
+        "k": 48,
+        "n": 930,
+        "rate": 0.0516,
+        "ci95": [
+          0.0391,
+          0.0678
+        ]
+      },
+      "by_language": {
+        "es-ES": {
+          "k": 24,
+          "n": 412,
+          "rate": 0.0583,
+          "ci95": [
+            0.0395,
+            0.0852
+          ]
+        },
+        "pt-PT": {
+          "k": 24,
+          "n": 518,
+          "rate": 0.0463,
+          "ci95": [
+            0.0313,
+            0.068
+          ]
+        }
+      },
+      "examples": [
+        {
+          "lang": "es-ES",
+          "intent": "address",
+          "text": "pues alguien que quiere cambiar la dirección que tiene enlazada con la cuenta de su banco"
+        },
+        {
+          "lang": "es-ES",
+          "intent": "atm_limit",
+          "text": "una calle que no conozco y he visto que hay un cajero automático de su compañía quiero retirar bien lo he dicho pero no sé cuál es la cantidad máxima que me lo puede decir"
+        },
+        {
+          "lang": "es-ES",
+          "intent": "high_value_payment",
+          "text": "hola buenos días llamaba porque estaba comprando el mobiliario nuevo para casa por internet y he intentado utilizar la tarjeta pero me dice que recibiré un mensaje en el móvil pero no sé exactamente bien bien que osea que de hacer"
+        },
+        {
+          "lang": "es-ES",
+          "intent": "high_value_payment",
+          "text": "estoy intentando hacer un pago bastante grande en línea y me dice que tengo que recibir un mensaje de texto y no sé que se supone que tienen que hacer estos mensajes con los códigos de pago que he recibido"
+        },
+        {
+          "lang": "es-ES",
+          "intent": "high_value_payment",
+          "text": "hola buenos días estoy tratando de hacer un pago bastante grande por internet y me han enviado un código del banco pero no sé que hay que hacer con este código ni dónde lo tengo que insertar"
+        },
+        {
+          "lang": "es-ES",
+          "intent": "high_value_payment",
+          "text": "quiero realizar un pago importante en línea y dice que tengo que recibir un mensaje SMS"
+        },
+        {
+          "lang": "es-ES",
+          "intent": "high_value_payment",
+          "text": "comprando aquí en Amazon de forma online y me pone que hacer una gran cantidad me enviara mi banco es código confirmación"
+        },
+        {
+          "lang": "es-ES",
+          "intent": "high_value_payment",
+          "text": "hola buenas pues mira resulta que recientemente tengo que realizar un pago de una gran suma de dinero y me dice que voy a recibir un sms de mi banco"
+        },
+        {
+          "lang": "es-ES",
+          "intent": "high_value_payment",
+          "text": "hola quiero hacer un pago importante y es una cantidad muy grande pero no veo el SMS que me han dicho que debería recibir"
+        },
+        {
+          "lang": "es-ES",
+          "intent": "direct_debit",
+          "text": "hola buenos días quería ver mis domiciliaciones bancarias creo que hay algún fallo y quise devolver una gracias"
+        },
+        {
+          "lang": "es-ES",
+          "intent": "latest_transactions",
+          "text": "hola buenos días hay un pago que no conozco en mi cuenta y me gustaría saber a qué es debido"
+        },
+        {
+          "lang": "es-ES",
+          "intent": "latest_transactions",
+          "text": "estoy realizando nuestra sección recientes y hay un par de cosas que te pago que no reconozco estos es quisiera saber el tiempo de antenas información"
+        }
+      ]
+    }
+  },
+  "confidence": [
+    {
+      "p_at_least": 0.5,
+      "accepted": {
+        "k": 305,
+        "n": 930,
+        "rate": 0.328,
+        "ci95": [
+          0.2985,
+          0.3588
+        ]
+      },
+      "accuracy_when_accepted": {
+        "k": 207,
+        "n": 305,
+        "rate": 0.6787,
+        "ci95": [
+          0.6243,
+          0.7286
+        ]
+      }
+    },
+    {
+      "p_at_least": 0.6,
+      "accepted": {
+        "k": 186,
+        "n": 930,
+        "rate": 0.2,
+        "ci95": [
+          0.1755,
+          0.2269
+        ]
+      },
+      "accuracy_when_accepted": {
+        "k": 150,
+        "n": 186,
+        "rate": 0.8065,
+        "ci95": [
+          0.7437,
+          0.8568
+        ]
+      }
+    },
+    {
+      "p_at_least": 0.8,
+      "accepted": {
+        "k": 67,
+        "n": 930,
+        "rate": 0.072,
+        "ci95": [
+          0.0571,
+          0.0905
+        ]
+      },
+      "accuracy_when_accepted": {
+        "k": 67,
+        "n": 67,
+        "rate": 1.0,
+        "ci95": [
+          0.9458,
+          1.0
+        ]
+      }
+    }
+  ],
+  "errors_primary": [
+    {
+      "lang": "es-ES",
+      "intent": "address",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.19,
+      "text": "hola buenos días vivo en la calle 2385 de Blue y me gustaría cambiar mi dirección gracias"
+    },
+    {
+      "lang": "es-ES",
+      "intent": "address",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.37,
+      "text": "hola que ya también mi dirección en el banco porque me he mudado aunque cambio de dirección"
+    },
+    {
+      "lang": "es-ES",
+      "intent": "address",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.44,
+      "text": "hola buenas noches mira tengo una cuenta y bueno tengo una dirección asociada y por lo que me gustaría cambiar la dirección que tengo asociada a dicho cuántas que posible"
+    },
+    {
+      "lang": "es-ES",
+      "intent": "address",
+      "truth": "out_of_scope",
+      "pred": "exchange_rate_inquiry",
+      "p": 0.53,
+      "text": "hola buenas tardes le llamaba porque quería cambiar mi dirección y quería saber cuál es el trámite a seguir para realizar el cambio de dirección"
+    },
+    {
+      "lang": "es-ES",
+      "intent": "address",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.64,
+      "text": "pues alguien que quiere cambiar la dirección que tiene enlazada con la cuenta de su banco"
+    },
+    {
+      "lang": "es-ES",
+      "intent": "address",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.27,
+      "text": "hola mi morado y mi dirección"
+    },
+    {
+      "lang": "es-ES",
+      "intent": "address",
+      "truth": "out_of_scope",
+      "pred": "exchange_rate_inquiry",
+      "p": 0.37,
+      "text": "hola necesito cambiar mi dirección de domicilio"
+    },
+    {
+      "lang": "es-ES",
+      "intent": "address",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.45,
+      "text": "hola llamada porque me gustaría cambiar mi dirección que aparece en mi cuenta dado que mirando la cartilla y me ha dado cuenta que tenéis mi dirección pasada de manera que no me llegaban los las cartas a mi domicilio actual gracias"
+    },
+    {
+      "lang": "es-ES",
+      "intent": "address",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.28,
+      "text": "hola buenos días mire le llamo porque recientemente me he comido de casa y me gustaría cambiar la dirección que está asociada a mi cuenta"
+    },
+    {
+      "lang": "es-ES",
+      "intent": "address",
+      "truth": "out_of_scope",
+      "pred": "exchange_rate_inquiry",
+      "p": 0.6,
+      "text": "solicitud de cambio de dirección"
+    },
+    {
+      "lang": "es-ES",
+      "intent": "address",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.36,
+      "text": "hola buenos días mira le llamaba porque quería cambiar la dirección que está asociado a mi cuenta y quería saber si es posible realizarlo por Internet o tengo que hacerlo por teléfono"
+    },
+    {
+      "lang": "es-ES",
+      "intent": "address",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.27,
+      "text": "hola me he mudado y quería cambiar mi dirección postal muchas gracias"
+    },
+    {
+      "lang": "es-ES",
+      "intent": "address",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.36,
+      "text": "hola buenos días mire me he cambiado de domicilio y quería que cambiar a mi dirección"
+    },
+    {
+      "lang": "es-ES",
+      "intent": "address",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.32,
+      "text": "hola buenos días le llamo para cambiar mi dirección ya que recientemente me he mudado y quisiera tener la documentación actualizada y agradecería me indica se los trámites a seguir"
+    },
+    {
+      "lang": "es-ES",
+      "intent": "address",
+      "truth": "out_of_scope",
+      "pred": "transaction_lookup",
+      "p": 0.29,
+      "text": "hola buenos días a ver el motivo de mi llamada es porque me gustaría cambiar mi dirección de la base de datos"
+    },
+    {
+      "lang": "es-ES",
+      "intent": "address",
+      "truth": "out_of_scope",
+      "pred": "payment_status",
+      "p": 0.22,
+      "text": "buenos días me gustaría cambiar mi dirección en los datos del banco"
+    },
+    {
+      "lang": "es-ES",
+      "intent": "address",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.35,
+      "text": "hola buenos días tengo un problema y es que recientemente me he mudado entonces me gustaría cambiar mi dirección antigua por la actual"
+    },
+    {
+      "lang": "es-ES",
+      "intent": "address",
+      "truth": "out_of_scope",
+      "pred": "exchange_rate_inquiry",
+      "p": 0.41,
+      "text": "hola buenos días mire estoy de mudanza y necesitaba cambiar la cambia la dirección keldagrim está directa"
+    },
+    {
+      "lang": "es-ES",
+      "intent": "joint_account",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.34,
+      "text": "quiero hacer una cuenta conjunta y me gustaría tener información"
+    },
+    {
+      "lang": "es-ES",
+      "intent": "joint_account",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.38,
+      "text": "me gustaría crear una cuenta con un amigo cómo se hace"
+    },
+    {
+      "lang": "es-ES",
+      "intent": "joint_account",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.52,
+      "text": "hola buenas estaba interesado en una cuenta del Banco como está compañía ya que un socio me ha comentado que trabajas muy bien estoy interesado en abrir una cuenta conjunta"
+    },
+    {
+      "lang": "es-ES",
+      "intent": "joint_account",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.36,
+      "text": "hola buenas mi socio y yo queríamos crear una cuenta conjunta si podrías ayudarnos a crearla"
+    },
+    {
+      "lang": "es-ES",
+      "intent": "joint_account",
+      "truth": "out_of_scope",
+      "pred": "transaction_lookup",
+      "p": 0.23,
+      "text": "hola buenos días me gustaría tener una cuenta conjunta con mi compañero y quería saber cómo realizar la"
+    },
+    {
+      "lang": "es-ES",
+      "intent": "joint_account",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.55,
+      "text": "soy un accidente de otro tengo una tarjeta contratada y me preguntaba si podría configurar una nueva cuenta en el banco pero de manera conjunta con mucha presión puedo hacerlo yo por mi cuenta en Internet que tengo que ir alguna vez o me la puedo hacer"
+    },
+    {
+      "lang": "es-ES",
+      "intent": "joint_account",
+      "truth": "out_of_scope",
+      "pred": "balance_inquiry",
+      "p": 0.22,
+      "text": "hola buenos días me gustaría abrir una cuenta conjunta con mi pareja y no tengo claro cuál es el procedimiento podrán ayudarme gracias"
+    },
+    {
+      "lang": "es-ES",
+      "intent": "joint_account",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.32,
+      "text": "hola buenos días me gustaría saber la manera para poder configurar una cuenta conjunta con otra persona le pica son pareja tenemos un pequeño negocio y gustaría bueno que podamos utilizar la misma cuenta ambos desde la aplicación no encuentro la opción me gustaría que me ayudaste"
+    },
+    {
+      "lang": "es-ES",
+      "intent": "joint_account",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.46,
+      "text": "me gustaría crear una cuenta nueva con mi pareja qué pasos tengo que hacer"
+    },
+    {
+      "lang": "es-ES",
+      "intent": "joint_account",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.4,
+      "text": "hola buenos días necesitaba ayuda para configurar una cuenta conjunta ya que me gustaría crear una con mi pareja aparte de la que ya tengo yo en virtualmente y no sé si tengo que ir a la oficina o lo puedo hacer directamente desde la aplicación de la banca"
+    },
+    {
+      "lang": "es-ES",
+      "intent": "balance",
+      "truth": "balance_inquiry",
+      "pred": "requires_escalation",
+      "p": 0.39,
+      "text": "hola buenas tardes me llamo para venir con Daniel Pérez hablo de mi cuenta corriente que esto que lo intentamos jugar por internet pero no me contarás si podría llegar"
+    },
+    {
+      "lang": "es-ES",
+      "intent": "business_loan",
+      "truth": "out_of_scope",
+      "pred": "payment_status",
+      "p": 0.36,
+      "text": "yogur un préstamo comercial sobre un préstamo existente no presto"
+    },
+    {
+      "lang": "es-ES",
+      "intent": "business_loan",
+      "truth": "out_of_scope",
+      "pred": "payment_status",
+      "p": 0.41,
+      "text": "qué has conocido alguna información sobre mi préstamo en el comercial existente"
+    },
+    {
+      "lang": "es-ES",
+      "intent": "business_loan",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.34,
+      "text": "buenos días me gustaría informarme sobre los préstamos que quiere realizar uno"
+    },
+    {
+      "lang": "es-ES",
+      "intent": "business_loan",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.53,
+      "text": "hola mira tengo un préstamo comercial conocer gente y me gusta que hacer un par de preguntas sobre que no entiendo"
+    },
+    {
+      "lang": "es-ES",
+      "intent": "business_loan",
+      "truth": "out_of_scope",
+      "pred": "payment_status",
+      "p": 0.39,
+      "text": "hola buenos días quería preguntar y vuestro banco nos préstamos comerciales o no"
+    },
+    {
+      "lang": "es-ES",
+      "intent": "business_loan",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.3,
+      "text": "buenos días le llamo para pedir información sobre un préstamo comercial además para saber en qué condición se encuentra el préstamo existente que ya me concedieron"
+    },
+    {
+      "lang": "es-ES",
+      "intent": "business_loan",
+      "truth": "out_of_scope",
+      "pred": "payment_status",
+      "p": 0.28,
+      "text": "hola buenos días mira estaría interesado en información respectado respecto a la obtención de un préstamo comercial"
+    },
+    {
+      "lang": "es-ES",
+      "intent": "latest_transactions",
+      "truth": "transaction_lookup",
+      "pred": "requires_escalation",
+      "p": 0.72,
+      "text": "hola buenos días hay un pago que no conozco en mi cuenta y me gustaría saber a qué es debido"
+    },
+    {
+      "lang": "es-ES",
+      "intent": "latest_transactions",
+      "truth": "transaction_lookup",
+      "pred": "requires_escalation",
+      "p": 0.54,
+      "text": "estoy realizando nuestra sección recientes y hay un par de cosas que te pago que no reconozco estos es quisiera saber el tiempo de antenas información"
+    },
+    {
+      "lang": "es-ES",
+      "intent": "latest_transactions",
+      "truth": "transaction_lookup",
+      "pred": "requires_escalation",
+      "p": 0.41,
+      "text": "hola buenos días estaba revisando mi historial de compras de la aplicación de Funicamp y hay una compra que no reconozco"
+    },
+    {
+      "lang": "es-ES",
+      "intent": "latest_transactions",
+      "truth": "transaction_lookup",
+      "pred": "requires_escalation",
+      "p": 0.72,
+      "text": "hay un pago de ayer que no reconozco"
+    },
+    {
+      "lang": "es-ES",
+      "intent": "latest_transactions",
+      "truth": "transaction_lookup",
+      "pred": "requires_escalation",
+      "p": 0.45,
+      "text": "hola buenos días soy cliente de su banco y llamaba para que me pase de mis últimas transacciones ya que he estado mirando en la web y hay un pago que no conozco no sé a qué corresponde lo podían explicar"
+    },
+    {
+      "lang": "es-ES",
+      "intent": "latest_transactions",
+      "truth": "transaction_lookup",
+      "pred": "requires_escalation",
+      "p": 0.44,
+      "text": "hola buenas estado viendo mis transacciones reciente y hay un pago que no conozco se podía saber a qué se debe ese pago"
+    },
+    {
+      "lang": "es-ES",
+      "intent": "latest_transactions",
+      "truth": "transaction_lookup",
+      "pred": "requires_escalation",
+      "p": 0.54,
+      "text": "hola muy buenas he recibido un poco que no reconozco me gustaría ver las últimas acciones que están en mi cuenta"
+    },
+    {
+      "lang": "es-ES",
+      "intent": "latest_transactions",
+      "truth": "transaction_lookup",
+      "pred": "requires_escalation",
+      "p": 0.56,
+      "text": "si quería conocer las últimas transacciones de mi cuenta de que hay un cargo que no reconozco bien"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "latest_transactions",
+      "truth": "transaction_lookup",
+      "pred": "requires_escalation",
+      "p": 0.71,
+      "text": "quando eu tento levantar um extrato da minha conta aparece uma operação não autorizada"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "latest_transactions",
+      "truth": "transaction_lookup",
+      "pred": "balance_inquiry",
+      "p": 0.29,
+      "text": "Olá eu precisava de saber mais informações sobre os movimentos que estão acontecendo na minha conta"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "latest_transactions",
+      "truth": "transaction_lookup",
+      "pred": "requires_escalation",
+      "p": 0.75,
+      "text": "não pagamento que não conheço"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "latest_transactions",
+      "truth": "transaction_lookup",
+      "pred": "requires_escalation",
+      "p": 0.5,
+      "text": "Olá boa noite Eu gostaria de saber sobre umas Tentações repentes que fiz na minha conta penso que é um pagamento numa das Tentações que não estou a reconhecer"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "latest_transactions",
+      "truth": "transaction_lookup",
+      "pred": "requires_escalation",
+      "p": 0.42,
+      "text": "Boa tarde está aqui um pagamento da minha conta bancária que é duvidoso porque eu não fiz e não sei onde é que ele vai te entregar umas transações eu agradecia para ter a certeza que não estou a ver mal mas gostava dessas neste caso"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "latest_transactions",
+      "truth": "transaction_lookup",
+      "pred": "requires_escalation",
+      "p": 0.41,
+      "text": "Estou sim Bom dia estava a ligar por causa de um pagamento de uma transação que tenho aqui 90 € Não sei não sei qual é que é a esta transação não estou a reconhecer Se pudesses por mais acerca disso eu agradeceria imenso"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "business_loan",
+      "truth": "out_of_scope",
+      "pred": "payment_status",
+      "p": 0.5,
+      "text": "tenho uma pergunta sobre o empréstimo existente"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "business_loan",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.32,
+      "text": "Olá bom dia estou a ligar que tenho uma pergunta sobre o empréstimo comercial Novo que gostava de fazer por favor"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "business_loan",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.35,
+      "text": "olá e eu gostava de tentar perceber como é que funciona aquela notícia que saiu sobre o empréstimo empréstimo comercial que já existe mas que não ficas com ácido"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "business_loan",
+      "truth": "out_of_scope",
+      "pred": "balance_inquiry",
+      "p": 0.56,
+      "text": "queria fazer uma transferência e gostava de saber quanto é que eu tenho de débito direto na minha conta"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "business_loan",
+      "truth": "out_of_scope",
+      "pred": "payment_status",
+      "p": 0.47,
+      "text": "estou a ligar por causa do empréstimo comercial"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "business_loan",
+      "truth": "out_of_scope",
+      "pred": "payment_status",
+      "p": 0.34,
+      "text": "Olá muito bom dia eu estou a pensar comprar um carro Portanto eu gostaria de saber quais é que são as condições para ter um empréstimo imobiliário com o banco podia ter uma ideia do valor que consegue estar e o pagamento touro 70 agendar uma reunião Ainda para esta semana é possível"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "business_loan",
+      "truth": "out_of_scope",
+      "pred": "payment_status",
+      "p": 0.36,
+      "text": "Boa tarde tenho uma pergunta sobre um empréstimo existente"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "business_loan",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.28,
+      "text": "bom dia eu queria saber informação sobre um empréstimo comercial que vocês tem disponível Será que podem ajudar"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "business_loan",
+      "truth": "out_of_scope",
+      "pred": "payment_status",
+      "p": 0.5,
+      "text": "tenho uma pergunta sobre o empréstimo existente"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "business_loan",
+      "truth": "out_of_scope",
+      "pred": "payment_status",
+      "p": 0.48,
+      "text": "tenho uma pergunta sobre o empréstimo este ano"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "business_loan",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.31,
+      "text": "Bom dia estou a ligar sobre o empréstimo comercial quero fazer e criar nova sempre algumas informações que poderia dar"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "business_loan",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.27,
+      "text": "Olá bom dia eu gostava de criar outro pedir um empréstimo Comercial Eu queria saber o que é que existem se tem novos empréstimos ou se algum existente que me possa ajudar"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "joint_account",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.54,
+      "text": "Boa tarde Queria criar uma conta conjunta com a minha esposa mas não sei como fazer para que me podia dar informações sobre o procedimento"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "joint_account",
+      "truth": "out_of_scope",
+      "pred": "balance_inquiry",
+      "p": 0.5,
+      "text": "muito bom dia eu gostava de saber se é possível ter uma conta conjunta por favor obrigado"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "joint_account",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.44,
+      "text": "bom dia como é que eu faço para configurar uma conta conjunta com o meu parceiro"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "joint_account",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.42,
+      "text": "Estou bom dia eu Estou prestes a casar e eu queria saber se como é que se configura uma conta uma conta conjunta com a minha parceira nós queremos ter um cartão em conjunto para conseguirmos fazer as compras em conjunto em vez de ter dois cartões de separados e eu perguntasse então dava para ter uma conta com o meu parceiro para facilitar as as compras e e na aplicação que tem no telemóvel e a perguntar se se tem uma opção para fazer essa tal conta obrigado"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "joint_account",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.41,
+      "text": "Buenos dias Matosinhos Eu quero configurar uma conta conjunta para mim é possível tipo tu andas a fazer é que te contei conjuntos é que está essa opção de conta conjunta até logo"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "joint_account",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.31,
+      "text": "Olá bom dia Gostaria de saber como é que eu posso configurar uma conta conjunta Sim pois é que eu mudei de titular de conta e e pronto em todo o caso com o meu parceiro e eu gostava de saber agora o que é que como é que eu posso ficar os dois agora"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "joint_account",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.33,
+      "text": "Olá bom dia eu gostaria de saber como é que consigo abrir uma conta conjunta com com a minha esposa neste caso e gostaria também de perceber se no aplicativo o consigo fazer ou se tem que me deslocar ao banco"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "joint_account",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.38,
+      "text": "Olá boa tarde Será possível ter uma conta com o meu parceiro Como é que eu posso fazer se faz favor"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "joint_account",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.62,
+      "text": "Posso ter uma conta com o meu parceiro é que eu gostaria de fazer uma conta conjunta com ele mas não sei como é que faço"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "joint_account",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.42,
+      "text": "Olá muito boa tarde eu gostaria de criar uma conta conjunta com o meu namorado e gostaria de saber como é que como é que isso processo pronto como é que eu posso fazer e porquanto não posso raio que não não consegui ficar a compreender e gostaria de ter a vossa ajuda para para este sério obrigada"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "joint_account",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.6,
+      "text": "Olá boa tarde Queria configurar uma conta em conjunto uma parceiro Queria saber como é que era possível fazer isso que eu tenho que fazer"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "joint_account",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.36,
+      "text": "Estou sim eu gostaria de saber como é que eu conseguiria ter uma conta com o meu parceiro"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "joint_account",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.62,
+      "text": "preciso fazer uma conta com a minha mulher como é que eu faço"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "joint_account",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.42,
+      "text": "Eu quero configurar uma contagem conjunta Como é que eu faço para ter uma conta com o meu parceiro"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "joint_account",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.41,
+      "text": "Gostaria de saber como é que consigo configurar uma conta conjunta"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "joint_account",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.55,
+      "text": "bom dia como é que eu queria ter uma conta conjunta obrigado"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "joint_account",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.4,
+      "text": "Bom dia eu desejo configurar uma conta conjunta"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "joint_account",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.53,
+      "text": "boa tarde Eu queria saber se é possível configurar uma conta conjunta com a minha visão não estamos a criar uma conta na possivel Eu queria a tua aplicação tem que me deslocar principalmente Como é que eu faço para criar esta conta"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "joint_account",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.45,
+      "text": "Eu quero ter uma conta conjunta mas eu não sei como é que hei-de fazer à 1:00 ação Onde posso ver uma conta conjunta ou pode configurar o banco com Andreia para Junta obrigado"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "joint_account",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.45,
+      "text": "Olá bom dia estava a tentar configurar uma conta conjunta com o meu parceiro só que eu não consigo encontrar essa opção no aplicativo podemos usar por favor"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "joint_account",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.35,
+      "text": "por favor eu gostaria de configurar uma conta conjunta Como é que é possível fazê-lo"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "joint_account",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.56,
+      "text": "Como é que eu faço configurar uma conta conjunta não é que pode ter conta de uma parceira Onde é que posso ver no colectivo opção do contente"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "joint_account",
+      "truth": "out_of_scope",
+      "pred": "transaction_lookup",
+      "p": 0.3,
+      "text": "eu estou ligado porque eu gostava de ver configurar logo conta conjunta mas não sei como eu fui ver só que não podia ajudar a pagar os pais logo assim agradecimento amanhã"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "joint_account",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.4,
+      "text": "Boa tarde poderia explicar-me Como é que faço para configurar uma conta conjunta obrigada"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "joint_account",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.34,
+      "text": "Bom dia eu estava a ligar para saber como é que é possível configurar uma conta conjunta e gostava de adicionar o meu parceiro A conta estava de saber onde é que no aplicativo consigo encontrar essa opção os tem que me dirigir a algum sítio muito obrigada"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "joint_account",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.47,
+      "text": "Olá bom dia Sim eu gostava de ter configurar uma conta conjunta nossa mãe não sabem como estava a fazer isso com o meu pai e com a minha parceira no aplicativo não estava a encontrar aonde é que posso ok ok ok ok Obrigado sim ok"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "address",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.28,
+      "text": "Boa tarde gostaria de saber como é que posso mudar o endereço da minha conta"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "address",
+      "truth": "out_of_scope",
+      "pred": "payment_status",
+      "p": 0.33,
+      "text": "Boa tarde eu estou farto bem Eu gostava muito de levar no endereço"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "address",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.37,
+      "text": "Bom dia Gostaria de mudar o endereço e não estou a conseguir fazer pode me ajudar"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "address",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.36,
+      "text": "Olá boa tarde eu gostava de mudar o meu próprio endereço de morada e era para saber o que é que é suposto eu fazer para conseguir mudar o meu meu meu endereço"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "address",
+      "truth": "out_of_scope",
+      "pred": "balance_inquiry",
+      "p": 0.26,
+      "text": "Bom dia o meu endereço ou está errado Eu gostava de mudar por favor estou"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "address",
+      "truth": "out_of_scope",
+      "pred": "balance_inquiry",
+      "p": 0.28,
+      "text": "Bom dia eu ia queria mudar de endereço que mudar meu endereço e se possível podia me ajudar por favor"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "address",
+      "truth": "out_of_scope",
+      "pred": "payment_status",
+      "p": 0.27,
+      "text": "hello I'm calling about my personal information I like to update My address"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "address",
+      "truth": "out_of_scope",
+      "pred": "balance_inquiry",
+      "p": 0.22,
+      "text": "Olá boa tarde eu gostava de saber se é possível mudar o endereço"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "address",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.58,
+      "text": "Boa tarde eu gostaria de alterar o endereço no banco O que é que é necessário para realizar essa alteração"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "address",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.43,
+      "text": "boa tarde Eu queria mudar o meu endereço a indicação que tenho aqui"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "address",
+      "truth": "out_of_scope",
+      "pred": "balance_inquiry",
+      "p": 0.33,
+      "text": "Olá bom dia eu gostaria de alterar o endereço A minha morada o mais rápido possível por favor"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "address",
+      "truth": "out_of_scope",
+      "pred": "balance_inquiry",
+      "p": 0.29,
+      "text": "Bom dia eu gostaria de alterar o endereço da minha conta obrigado"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "address",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.29,
+      "text": "Olá eu gostaria de mudar o meu endereço queria que está aqui é possível"
+    },
+    {
+      "lang": "pt-PT",
+      "intent": "address",
+      "truth": "out_of_scope",
+      "pred": "requires_escalation",
+      "p": 0.23,
+      "text": "Eu gostava de mudar o meu endereço meu interesse"
+    }
+  ]
+}

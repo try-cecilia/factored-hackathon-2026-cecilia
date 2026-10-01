@@ -8,7 +8,7 @@ WEB_PORT ?= 3000
 # Combined development always connects to its local API, unless overridden.
 AGENT_API_URL ?= http://127.0.0.1:$(API_PORT)
 
-.PHONY: gate validate-data-ml lineage gold operator-labels retention test-resilience loadtest loadtest-fixture loadtest-http setup ingest ingest-demo analysis label-signal train-eval workload eval eval-adversarial eval-ablation check-readme eval-failures eval-failures-live eval-live-sample eval-live-sample-report eval-failures-local eval-live live-smoke test serve docker-build all mlflow-ui
+.PHONY: gate real-speech tracking-report model-study model-card unit-economics validate-data-ml lineage gold operator-labels retention test-resilience loadtest loadtest-fixture loadtest-http setup ingest ingest-demo analysis label-signal train-eval workload eval eval-adversarial eval-ablation check-readme eval-failures eval-failures-live eval-live-sample eval-live-sample-report eval-failures-local eval-live live-smoke test serve docker-build all mlflow-ui
 .PHONY: web-setup serve-web web-build web-typecheck web-test serve-fixture serve-all-fixture serve-all
 .PHONY: env env-check env-fill evidence up down clean-volumes monitoring-up up-llm-local up-llm-host up-dataset lock lock-check alerts-check compose-e2e
 .PHONY: human-set-export human-set-sheet human-set-pages human-set-agreement human-set-cases human-set-eval human-set-report
@@ -109,6 +109,18 @@ ingest-demo:      ## small deterministic sample for demo deploys (5k customers, 
 
 analysis:         ## problem evidence + human baseline -> docs/evidence/baseline_metrics.md
 	$(PY) -m analysis.baseline_contact_center
+
+real-speech:      ## the intent classifier, untouched, on 1,090 real calls to an e-banking line (MInDS-14, es-ES/pt-PT) -> docs/evidence/real_speech.md
+	$(PY) -m eval.real_speech
+
+model-study:      ## sensitivity and learning curve of the intent classifier on dev only (the shipped model does not change) -> docs/evidence/model_study.md
+	$(PY) -m eval.model_study
+
+model-card:       ## the intent classifier's model card, rendered from the reports -> docs/MODEL_CARD.md
+	$(PY) -m eval.model_card
+
+unit-economics:   ## where the human time goes and what automating the slice is worth under stated scenarios -> docs/evidence/unit_economics.md
+	$(PY) -m analysis.unit_economics
 
 label-signal:     ## is there signal in the fraud labels? -> docs/evidence/label_signal.md
 	$(PY) -m analysis.label_signal
@@ -212,6 +224,9 @@ test:             ## hermetic test suite (fixture warehouse; no S3, no API keys)
 
 test-resilience:  ## hermetic: traces, bounded retries, safe fallback and capacity limits (no S3, no API keys)
 	$(PY) -m pytest tests/test_tracing.py tests/test_retry.py tests/test_resilience.py tests/test_capacity.py tests/test_local_llm.py tests/test_turn_deadline.py tests/test_record_failures.py tests/test_llm_error_privacy.py tests/test_call_cancellation.py tests/test_handoff_budget.py tests/test_handoff_lock.py tests/test_late_handoff.py tests/test_bounded_ops.py tests/test_call_pool_limit.py tests/test_loadtest.py -q
+
+tracking-report:  ## a versioned snapshot of the MLflow runs, each checked against its committed report -> docs/evidence/ml_tracking.md
+	$(PY) -m eval.tracking_report
 
 mlflow-ui:        ## browse every tracked classifier selection and evaluation run: http://127.0.0.1:5000
 	$(PY) -m mlflow ui --backend-store-uri sqlite:///mlruns/mlflow.db

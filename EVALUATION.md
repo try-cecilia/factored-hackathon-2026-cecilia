@@ -79,6 +79,9 @@ time plus 120 s wait, 91.5% resolved on first contact, 9.9% escalated.
 ## 2. Learned component: intent classifier
 
 `make train-eval` → `eval/reports/intent_classifier.md`.
+What the model is for and where it fails: [`docs/MODEL_CARD.md`](docs/MODEL_CARD.md). How much its representation and regularization
+choices matter, and whether more data would help (dev only; the shipped model was fixed before it ran):
+[`docs/evidence/model_study.md`](docs/evidence/model_study.md).
 
 **Labels and data.**
 - The supplied data can't provide valid intent labels:
@@ -462,6 +465,10 @@ With Sonnet 5 the model costs USD 0.0029 per safe resolution, about USD 1.42 a
 month for every text contact, against USD 293–1,172 a month of agent time
 avoided at 5–20 USD per hour.
 
+Where the human time goes by contact reason, and what the same arithmetic gives under assumed shifts of phone contacts to text
+(and under the lower bound of Sonnet 5's interval), is in [`docs/evidence/unit_economics.md`](docs/evidence/unit_economics.md):
+the scenarios are labeled assumptions, not forecasts.
+
 **Failure handling by category and language.** `make eval-failures` →
 [`eval/reports/FAILURE_EVAL.md`](eval/reports/FAILURE_EVAL.md) (and `failure_eval.json`). It re-measures the five kinds
 of failure the rubric names (expired sessions, unauthorized access, prompt injection, tool failures, ES/PT ambiguity) on
@@ -677,6 +684,10 @@ on every pull request and every push to `main`, plus the classifier evaluation. 
   the classifier rewrites the same bytes;
 - retention.
 
+**Real speech (zero-shot, protocol fixed first).** The classifier was also run, untouched, on 1,090 real calls to an e-banking line
+(MInDS-14, es-ES and pt-PT): [`docs/evidence/real_speech.md`](docs/evidence/real_speech.md). It is a negative result for the
+out-of-scope class and a positive one for the in-scope calls; see the report and `LIMITATIONS.md`.
+
 ## 5. Experiment tracking (MLflow)
 
 Every run of the two evaluations is logged to MLflow (`eval/tracking.py`), so
@@ -702,7 +713,10 @@ them. The committed reports stay the reviewed record.
 - Only the Markdown report is attached to a system run: the JSON report
   carries customer ids.
 - The store is local and git-ignored (`mlruns/`: sqlite and artifacts).
-  `MLFLOW_TRACKING_URI` points it at a tracking server instead.
+  `MLFLOW_TRACKING_URI` points it at a tracking server instead. What a reader of the
+  repository can see is a versioned snapshot, [`docs/evidence/ml_tracking.md`](docs/evidence/ml_tracking.md)
+  (`make tracking-report`): the runs, the code and data hashes they ran on, and a check that each one says
+  what its committed report says.
 - mlflow comes with `make setup` (`requirements-tracking.txt`). The serving
   image does not carry it; without it, a run is skipped with one line. A
   tracking failure is reported, never raised.
