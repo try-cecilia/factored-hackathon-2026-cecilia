@@ -14,6 +14,7 @@ import {
   countryOptions, distinct, filterTickets, filtersOf, hasFilters, inScope, isClosed, orderTickets, pageSlice, tabCounts, validateSearch, type QueueSearch, type StatusTab,
 } from '../-operator/queue'
 import { isOverdue } from '../-operator/sla'
+import { FilterSelect, SearchBox } from '../-operator/QueueControls'
 import { LocaleCell, Notice } from '../-operator/ui'
 
 const PAGE_SIZE = 25
@@ -137,12 +138,7 @@ function Queue() {
           <span className="op-count" aria-label={String(pending)}>{result.ok ? pending : ''}</span>
           <NewCasesBar />
           <div className="op-head__spacer" />
-          <label className="op-search">
-            <svg viewBox="0 0 20 20" width="12" height="12" aria-hidden="true" focusable="false"><circle cx="9" cy="9" r="5.5" fill="none" stroke="currentColor" strokeWidth="1.7" /><path d="M13.2 13.2 17 17" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" /></svg>
-            <span className="sr-only">{t('operator.queue.search')}</span>
-            <input ref={searchBox} type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('operator.queue.searchPlaceholder')} autoComplete="off" spellCheck={false} />
-            <kbd aria-hidden="true">{t('operator.queue.searchHint')}</kbd>
-          </label>
+          <SearchBox value={q} onChange={setQ} inputRef={searchBox} />
           <Button variant="ghost" size="sm" onClick={() => router.invalidate()}>{t('operator.refresh')}</Button>
         </div>
 
@@ -159,10 +155,10 @@ function Queue() {
                   </Link>
                 ))}
               </div>
-              <FilterSelect name={t('operator.queue.filter.priority')} value={search.prioridad} onChange={(v) => set({ prioridad: v })}
+              <FilterSelect field="prioridad" name={t('operator.queue.filter.priority')} value={search.prioridad} onChange={(v) => set({ prioridad: v })}
                 options={PRIORITIES.map((p) => ({ value: p, label: t(`table.priority.${p.toLowerCase() as Lowercase<typeof p>}`) }))} />
-              <FilterSelect name={t('operator.queue.filter.country')} value={filters.country} onChange={(v) => set({ pais: v })} options={countries} />
-              <FilterSelect name={t('operator.queue.filter.language')} value={search.idioma} onChange={(v) => set({ idioma: v })} options={languages.map((l) => ({ value: l, label: l.toUpperCase() }))} />
+              <FilterSelect field="pais" name={t('operator.queue.filter.country')} value={filters.country} onChange={(v) => set({ pais: v })} options={countries} />
+              <FilterSelect field="idioma" name={t('operator.queue.filter.language')} value={search.idioma} onChange={(v) => set({ idioma: v })} options={languages.map((l) => ({ value: l, label: l.toUpperCase() }))} />
               <button type="button" className="op-toggle" aria-pressed={filters.overdue} onClick={() => set({ vencidos: filters.overdue ? undefined : 'si' })}>
                 {t('operator.queue.filter.overdue')}
                 <span className="op-mono">{overdueCount}</span>
@@ -192,18 +188,5 @@ function Queue() {
         <Outlet />
       </aside>
     </div>
-  )
-}
-
-/** A filter that looks like the pills of the design and is a native select underneath: keyboard and screen readers get it for free. */
-function FilterSelect({ name, value, onChange, options }: { name: string; value: string | undefined; onChange: (value: string | undefined) => void; options: { value: string; label: string }[] }) {
-  return (
-    <label className="op-select" data-set={value ? '' : undefined}>
-      <select aria-label={name} value={value ?? ''} onChange={(e) => onChange(e.target.value || undefined)}>
-        <option value="">{name}</option>
-        {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
-      <svg viewBox="0 0 20 20" width="10" height="10" aria-hidden="true" focusable="false"><path d="M5 8l5 5 5-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-    </label>
   )
 }
