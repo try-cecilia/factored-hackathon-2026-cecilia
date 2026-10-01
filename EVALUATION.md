@@ -684,6 +684,10 @@ on every pull request and every push to `main`, plus the classifier evaluation. 
   the classifier rewrites the same bytes;
 - retention.
 
+**Real speech (zero-shot, protocol fixed first).** The classifier was also run, untouched, on 1,090 real calls to an e-banking line
+(MInDS-14, es-ES and pt-PT): [`docs/evidence/real_speech.md`](docs/evidence/real_speech.md). It is a negative result for the
+out-of-scope class and a positive one for the in-scope calls; see the report and `LIMITATIONS.md`.
+
 ## 5. Experiment tracking (MLflow)
 
 Every run of the two evaluations is logged to MLflow (`eval/tracking.py`), so
