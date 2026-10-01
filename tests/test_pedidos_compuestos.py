@@ -423,3 +423,46 @@ def test_requiring_the_mandatory_arguments_is_unchanged_and_a_bad_date_is_still_
     orch, tok, _ = session([tool_call_response("get_exchange_rate", raw)])
     r = orch.handle_message(tok, "el dólar al 99 del 99")
     assert r.disposition == "CLARIFY" and r.verified_facts == []  # the tool rejects it: a question, as before
+
+
+# --- prompt 3.2.1: ejemplos de pedidos de dos cosas, en español y en portugués (sin tocar esquemas ni ejecutor) ------------------
+
+def test_the_prompt_teaches_two_requests_with_examples_in_both_languages_and_keeps_the_tools_as_they_were():
+    from agent.llm import prompts
+
+    assert prompts.PROMPT_VERSION == "3.2.1"
+    assert [t["function"]["name"] for t in prompts.TOOL_SCHEMAS] == ["get_account_summary", "list_transactions", "get_payment_status",
+                                                                     "get_exchange_rate", "request_trace"]
+    for fragment in ("cuánto tengo y mis últimas 4 transferencias", "muéstrame los pagos pendientes y mis 3 últimas transferencias",
+                     "quiero ver lo pendiente y las 6 últimas transferencias", "mis saldos, mis 4 últimas transferencias y si mi tarjeta está en mora",
+                     "quanto eu tenho e minhas 4 últimas transferências", "mostre os pagamentos pendentes e as 3 últimas transferências",
+                     "eu pedi duas coisas", "e as últimas 5?", "transaction_type=Payment, status=Pending"):
+        assert fragment in prompts.SYSTEM_PROMPT, fragment
+    assert "get_payment_status es solo para atrasos" in prompts.SYSTEM_PROMPT  # pending payments are not a card's delinquency
+    assert "hasta dos" not in prompts.SYSTEM_PROMPT and "dos primeras" not in prompts.SYSTEM_PROMPT  # the cap is the code's
+
+
+def test_the_balance_and_the_last_transfers_the_prompt_example_asks_for_are_two_reads_with_their_own_filters():
+    orch, tok, _ = session([tool_call_response("get_account_summary", {}, ("list_transactions", {"transaction_type": "Transfer", "limit": 4}))])
+    r = orch.handle_message(tok, "cuánto tengo y mis últimas 4 transferencias")
+    assert [f["tool"] for f in r.verified_facts] == ["get_account_summary", "list_transactions"]
+    assert "saldo 5,000.00 USD" in r.response_text and "Transferencias (4 más recientes):" in r.response_text
+    assert sum(line.startswith("- ") for line in r.response_text.splitlines()) == 2 + 4  # the customer's two products and exactly four transfers
+
+
+def test_pending_payments_are_the_pending_movements_of_type_payment_and_not_the_cards_delinquency():
+    orch, tok, _ = session([tool_call_response("list_transactions", {"transaction_type": "Payment", "status": "Pending"},
+                                               ("list_transactions", {"transaction_type": "Transfer", "limit": 3}))])
+    r = orch.handle_message(tok, "muéstrame los pagos pendientes y mis 3 últimas transferencias")
+    pending = section(r.response_text, "Pagos pendientes")
+    assert "250.00 USD" in pending and "640.00" not in pending.split("Transferencias")[0]  # the pending transfer is not a payment
+    assert "días de atraso" not in r.response_text and "Transferencias (3 más recientes)" in r.response_text
+
+
+def test_the_recovery_a_follow_up_gets_keeps_what_the_customer_asked_for_in_the_models_history():
+    """After a half answer the history says what was read and with which filters, which is what the prompt asks the model to use."""
+    orch, tok, fake = session([tool_call_response("get_account_summary", {}), tool_call_response("list_transactions", {"transaction_type": "Transfer", "limit": 5})])
+    orch.handle_message(tok, "quiero mi saldo y mis ultimas 5 transferencias")
+    r = orch.handle_message(tok, "¿y las últimas 5?")
+    assert r.response_text.startswith("Transferencias (5 más recientes):")
+    assert "get_account_summary()" in fake.calls[1][2:-1][1]["content"]
