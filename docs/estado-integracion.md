@@ -1,130 +1,130 @@
-# Estado de la integración (29/09/2026)
+# Integration status (September 29, 2026)
 
-Brief para que todo el equipo arranque del mismo punto: qué entra con el PR de integración, qué se probó y con qué
-resultado, cómo reproducirlo y qué queda pendiente.
+A brief so the whole team starts from the same point: what goes in with the integration PR, what was tested and with what
+result, how to reproduce it and what is still pending.
 
-## 1. Punto de partida
+## 1. Starting point
 
-- **En `origin/main`:** ya se mergearon #19 y #20 (sesión y login web), #21 (chequeo de alertas del reporte de calidad),
-  #22 (preregistro), #23 (`feat/validate-data-ml`), #24 (`feat/web-chat`) y #25 (`feat/web-operator`). Sobre el último, `origin/main`
-  (`49f5c83`) da 560 tests en verde, el gate se cumple y la web compila.
-- **El PR de integración** (`integracion/2026-09-29`) trae todo lo demás, que ya estaba integrado y probado en `main` local. Las ramas
-  están entrelazadas (por ejemplo, `feat/prod-resilience` tuvo que incorporar `main` para resolver el lock entre procesos), así que van
-  en un solo PR en lugar de uno por rama. Se puede revisar commit por commit: cada rama entra con su merge.
-- **Criterio para integrar:** cada rama pasó por revisión de código independiente. Cada hallazgo se reprodujo, se corrigió con un
-  test que fallaba antes del arreglo y se volvió a revisar. Lo que quedó abierto está en §6 y va en PRs aparte.
+- **On `origin/main`:** #19 and #20 (session and web login), #21 (quality report alert check),
+  #22 (preregistration), #23 (`feat/validate-data-ml`), #24 (`feat/web-chat`) and #25 (`feat/web-operator`) are already merged. On top of the last one, `origin/main`
+  (`49f5c83`) gives 560 green tests, the gate passes and the web app builds.
+- **The integration PR** (`integracion/2026-09-29`) brings everything else, which was already integrated and tested on local `main`. The branches
+  are intertwined (for example, `feat/prod-resilience` had to merge in `main` to resolve the inter-process lock), so they go
+  in a single PR instead of one per branch. It can be reviewed commit by commit: each branch comes in with its own merge.
+- **Criterion for integrating:** each branch went through an independent code review. Each finding was reproduced, fixed with a
+  test that failed before the fix, and reviewed again. What remained open is in §6 and goes in separate PRs.
 
-## 2. Qué trae el PR de integración
+## 2. What the integration PR brings
 
-| Rama | Qué trae | Revisión |
+| Branch | What it brings | Review |
 |---|---|---|
-| `feat/prod-resilience` | Id de correlación (`X-Request-ID`, `traceparent`) de punta a punta y spans por etapa. Reintentos acotados. Deadline por turno que cubre la conexión, los headers, el cuerpo y la espera del pool. Handoff con presupuesto propio por paso, que nombra un ticket solo si está confirmado. Trabajo acotado con un límite conjunto (`BOUNDED_OPS_LIMIT`). Fallback seguro por cada modo de falla. Límites de tamaño, concurrencia y tasa con `Retry-After`, y `GET /admin/capacity`. Proveedor LLM `local` (Ollama). Los errores del proveedor no dejan texto crudo. | Aprobada (6 rondas) |
-| `feat/prod-operations` | Dependencias con hashes (`make lock`, `make lock-check`). `docker compose` con API, web, Prometheus, Grafana y Ollama opcional. `/metrics`, `/livez`, `/readyz`. 23 reglas de alerta con tests de promtool. Matriz de acceso ruta × rol: el servicio no arranca si falta una ruta. Retención programada y auditada con lock entre procesos. CI en 6 jobs y `make compose-e2e` aislado. | 2 rondas; quedan 2 hallazgos (§6) |
-| `feat/heldout-failure-eval` | Set reservado de 226 casos ES/PT para sesión vencida, acceso no autorizado, prompt injection, fallo de herramienta y ambigüedad, con fallas inyectadas en el harness. El sistema se caía en 16 casos: ahora esos casos derivan a una persona. Pisos por categoría en el gate. Muestra chica en vivo con Groq. | 1 ronda; 5 hallazgos del evaluador (§6) |
-| `feat/web-ui-kit` | Tokens de Paper y kit en `web/src/ui/`: botones, loaders, sidebar, DataTable y mensajes de chat. i18n ES/PT con el idioma resuelto en el servidor. Galería `/dev/ui` solo en desarrollo. Tests DOM con vitest. | 2 rondas; el último hallazgo (Node 24.0) está corregido |
-| `fix/integracion-local` | `WEB_PUBLIC_ORIGIN` y las demás variables de la web en el compose. e2e con login de cliente y de operador, y `/dev/ui` cerrado. CI con `pnpm test:all` y árbol limpio al final. `make evidence` separado de `make gate`. `make env-check` y `make env-fill`, compatibles con dotenv. `Referrer-Policy: same-origin`: sin eso, el login de operador en un navegador real daba 403. | Aprobada (3 rondas) |
-| `feat/web-screens-operador` | Consola con el diseño aprobado: densidad compacta, cola con filtros y paginación, panel de detalle con los 4 estados del ticket y bloqueo del 409 que sobrevive a errores. Monitoreo y trazas, i18n ES/PT, sidebar en tinta. | Aprobada (4 rondas) |
-| `feat/web-screens-cliente` | Login, inicio y chat con el diseño aprobado. Sidebar con Casos, rail y cajón móvil. Mensajes por disposición, estados de entrega y banner de modo limitado. `GET /chat/history` rehidrata el chat al recargar. Paleta azul, sin sunrise. | 1 ronda; 5 hallazgos (§6) |
-| `docs/estado-integracion` | Este brief. | — |
+| `feat/prod-resilience` | End-to-end correlation ID (`X-Request-ID`, `traceparent`) and per-stage spans. Bounded retries. A per-turn deadline that covers the connection, the headers, the body and the wait for the pool. Handoff with its own per-step budget, which names a ticket only if it is confirmed. Bounded work with a joint limit (`BOUNDED_OPS_LIMIT`). Safe fallback for each failure mode. Size, concurrency and rate limits with `Retry-After`, and `GET /admin/capacity`. `local` LLM provider (Ollama). Provider errors leave no raw text behind. | Approved (6 rounds) |
+| `feat/prod-operations` | Dependencies pinned with hashes (`make lock`, `make lock-check`). `docker compose` with API, web, Prometheus, Grafana and optional Ollama. `/metrics`, `/livez`, `/readyz`. 23 alert rules with promtool tests. Route × role access matrix: the service does not start if a route is missing. Scheduled and audited retention with an inter-process lock. CI in 6 jobs and an isolated `make compose-e2e`. | 2 rounds; 2 findings remain (§6) |
+| `feat/heldout-failure-eval` | Reserved set of 226 ES/PT cases for expired session, unauthorized access, prompt injection, tool failure and ambiguity, with failures injected in the harness. The system crashed on 16 cases: those cases now hand off to a person. Per-category floors in the gate. Small live sample with Groq. | 1 round; 5 findings from the evaluator (§6) |
+| `feat/web-ui-kit` | Paper tokens and the kit in `web/src/ui/`: buttons, loaders, sidebar, DataTable and chat messages. ES/PT i18n with the language resolved on the server. `/dev/ui` gallery in development only. DOM tests with vitest. | 2 rounds; the last finding (Node 24.0) is fixed |
+| `fix/integracion-local` | `WEB_PUBLIC_ORIGIN` and the other web variables in the compose file. e2e with customer and operator login, and `/dev/ui` closed. CI with `pnpm test:all` and a clean tree at the end. `make evidence` split from `make gate`. `make env-check` and `make env-fill`, dotenv-compatible. `Referrer-Policy: same-origin`: without it, operator login in a real browser returned 403. | Approved (3 rounds) |
+| `feat/web-screens-operador` | Console with the approved design: compact density, a queue with filters and pagination, a detail panel with the 4 ticket states and a 409 lock that survives errors. Monitoring and traces, ES/PT i18n, ink sidebar. | Approved (4 rounds) |
+| `feat/web-screens-cliente` | Login, home and chat with the approved design. Sidebar with Casos (Cases), rail and mobile drawer. Messages per disposition, delivery states and a limited-mode banner. `GET /chat/history` rehydrates the chat on reload. Blue palette, no sunrise. | 1 round; 5 findings (§6) |
+| `docs/estado-integracion` | This brief. | — |
 
-**Cambios hechos al integrar** (viven en los commits de merge):
-- `api/access.py`: filas de `GET /admin/capacity` y `GET /admin/operator/me`.
-- `api/main.py`: `_admit()` combina los limitadores de resiliencia con el punto de no retorno de la idempotencia.
-- Compose y `.env.example`: los ajustes de resiliencia y `ALERT_BASE_URL`/`ALERT_WEBHOOK_URL` del chequeo de #21.
-- `agent/metrics.py`: el tiempo de herramientas sale del audit cuando la traza no trae spans de herramienta.
-- `agent/core/orchestrator.py`: una falla al leer novedades de casos se cuenta sin el mensaje de la excepción.
-- `tests/test_ops_alerts_check.py`: es el test del chequeo de #21, renombrado porque `feat/prod-operations` trae su propio `tests/test_alerts.py` para las reglas de Prometheus.
-- `ops/compose_e2e.sh`: verifica la cola con los textos de la consola nueva.
-- `eval/reports/*`: regenerados sobre el resultado integrado con el warehouse completo. Cambiaron la huella, las fechas y las latencias; las métricas son las mismas.
+**Changes made while integrating** (they live in the merge commits):
+- `api/access.py`: rows for `GET /admin/capacity` and `GET /admin/operator/me`.
+- `api/main.py`: `_admit()` combines the resilience limiters with the idempotency point of no return.
+- Compose and `.env.example`: the resilience settings and `ALERT_BASE_URL`/`ALERT_WEBHOOK_URL` for the #21 check.
+- `agent/metrics.py`: tool time comes from the audit when the trace has no tool spans.
+- `agent/core/orchestrator.py`: a failure while reading case updates is counted without the exception message.
+- `tests/test_ops_alerts_check.py`: it is the test for the #21 check, renamed because `feat/prod-operations` brings its own `tests/test_alerts.py` for the Prometheus rules.
+- `ops/compose_e2e.sh`: checks the queue with the texts of the new console.
+- `eval/reports/*`: regenerated on the integrated result with the full warehouse. The fingerprint, the dates and the latencies changed; the metrics are the same.
 
-## 3. Qué se probó y con qué resultado
+## 3. What was tested and with what result
 
-Sobre la rama `integracion/2026-09-29`, con Python 3.11 y Node 24.14:
+On the `integracion/2026-09-29` branch, with Python 3.11 and Node 24.14:
 
-| Comando | Resultado |
+| Command | Result |
 |---|---|
 | `python -m pytest tests/ -q` | 1016 passed, 1 skipped (≈100 s) |
 | `make web-typecheck`, `make web-build` | OK |
-| `make web-test` | 154 node:test, 82 vitest (DOM) y 67 HTTP contra el build de producción, todos en verde |
-| `make gate` | "compuerta: se cumple"; el árbol queda limpio |
+| `make web-test` | 154 node:test, 82 vitest (DOM) and 67 HTTP against the production build, all green |
+| `make gate` | "compuerta: se cumple" (gate: passes); the tree stays clean |
 | `make lock-check`, `make alerts-check` | OK (promtool SUCCESS) |
-| `make compose-e2e` | Pasa en 22 s. Cubre API, web, login de cliente y chat, login de operador y cola, `/dev/ui` cerrado, métricas, Prometheus con las reglas y Grafana provisionado |
-| `make eval`, `make eval-adversarial` | 548 casos de test. 0 inseguros con el modelo ideal y con el adversarial. Resolución automática segura: 99,2% [97,0–99,8] (n=238) |
-| `make eval-failures` | Set reservado: 224/226 resueltos con el modelo ideal y 196/226 con el adversarial. 0 inseguros y 0 caídas. Con el juez más estricto (sesión vencida, resolución correcta, derivación sin ticket) ninguna cifra cambió: 0 de 774 filas difieren |
-| `make loadtest-http` (`eval/reports/LOADTEST_HTTP.md`) | Satura en 17,5 chats/s (máximo teórico 17,8 con 32 slots y un modelo simulado de 1,8 s). El exceso se rechaza con 503 + `Retry-After` en 5,7 ms (128 clientes) y 2,0 ms (256) p95 |
+| `make compose-e2e` | Passes in 22 s. Covers API, web, customer login and chat, operator login and queue, `/dev/ui` closed, metrics, Prometheus with the rules and provisioned Grafana |
+| `make eval`, `make eval-adversarial` | 548 test cases. 0 unsafe with the ideal model and with the adversarial one. Safe automatic resolution: 99.2% [97.0–99.8] (n=238) |
+| `make eval-failures` | Reserved set: 224/226 resolved with the ideal model and 196/226 with the adversarial one. 0 unsafe and 0 crashes. With the stricter judge (expired session, correct resolution, handoff without a ticket) no figure changed: 0 of 774 rows differ |
+| `make loadtest-http` (`eval/reports/LOADTEST_HTTP.md`) | Saturates at 17.5 chats/s (theoretical maximum 17.8 with 32 slots and a simulated model of 1.8 s). The excess is rejected with 503 + `Retry-After` in 5.7 ms (128 clients) and 2.0 ms (256) p95 |
 
-Cómo leer las cifras:
+How to read the figures:
 
-- **El set reservado dejó de ser held-out para lo que se arregló.** Los arreglos del orquestador se hicieron después de ver sus
-  resultados (`eval/reports/FAILURE_EVAL.md`; los de antes están en `FAILURE_EVAL_BEFORE_FIXES.md`).
-- **La muestra en vivo con Groq (`openai/gpt-oss-120b`, plan gratis) es chica:** 65 casos y una sola corrida. Da 39/42 en el set de
-  fallos y 0 inseguros (`eval/reports/LIVE_SAMPLE_GROQ.md`). No se puede rearmar desde artefactos: no se guardaron los ids ni las filas
-  por caso. La próxima corrida sí queda reproducible (`eval/live_sample.py`, `make eval-live-sample`, `make eval-live-sample-report`).
-- **El warehouse completo se construyó con los CSV del organizador en local.** Coincide con el reporte de calidad en las 5 tablas
-  de servicio. Faltan las tablas de contact center, así que `make analysis` no se puede reproducir con esa copia.
+- **The reserved set stopped being held-out for what was fixed.** The orchestrator fixes were made after seeing its
+  results (`eval/reports/FAILURE_EVAL.md`; the earlier ones are in `FAILURE_EVAL_BEFORE_FIXES.md`).
+- **The live sample with Groq (`openai/gpt-oss-120b`, free plan) is small:** 65 cases and a single run. It gives 39/42 on the failure
+  set and 0 unsafe (`eval/reports/LIVE_SAMPLE_GROQ.md`). It cannot be rebuilt from artifacts: neither the ids nor the per-case rows
+  were saved. The next run will be reproducible (`eval/live_sample.py`, `make eval-live-sample`, `make eval-live-sample-report`).
+- **The full warehouse was built locally with the organizer's CSVs.** It matches the quality report on the 5 serving
+  tables. The contact center tables are missing, so `make analysis` cannot be reproduced with that copy.
 
-## 4. Cómo probar en local
+## 4. How to test locally
 
-Requisitos: Docker, Python 3.11 con `uv`, Node 24 y pnpm 10.33.2. No hace falta cloud: S3 y los proveedores remotos son opcionales.
+Requirements: Docker, Python 3.11 with `uv`, Node 24 and pnpm 10.33.2. No cloud is needed: S3 and the remote providers are optional.
 
 ```bash
-make env-check           # qué le falta a tu .env (solo nombres) y si INGEST_ARGS iría a S3
-make env-fill            # agrega solo las variables que faltan, con secretos generados; no toca las existentes
-make monitoring-up       # API + web + Prometheus + Grafana sobre el warehouse de fixtures
-make up-dataset RAW_DIR=/ruta/a/data/raw   # en vez del fixture, los CSV del organizador (solo lectura)
-make up-llm-host         # con un modelo local: Ollama nativo en el host (en macOS, Ollama en Docker va solo en CPU)
-make compose-e2e         # la prueba de punta a punta, en un proyecto aparte
-make down                # baja el stack y conserva los volúmenes (make clean-volumes los borra, pregunta antes)
+make env-check           # what your .env is missing (names only) and whether INGEST_ARGS would go to S3
+make env-fill            # adds only the missing variables, with generated secrets; does not touch existing ones
+make monitoring-up       # API + web + Prometheus + Grafana on the fixture warehouse
+make up-dataset RAW_DIR=/ruta/a/data/raw   # instead of the fixture, the organizer's CSVs (read-only)
+make up-llm-host         # with a local model: native Ollama on the host (on macOS, Ollama in Docker runs on CPU only)
+make compose-e2e         # the end-to-end test, in a separate project
+make down                # stops the stack and keeps the volumes (make clean-volumes deletes them, asking first)
 ```
 
-| Qué | Dónde | Credenciales |
+| What | Where | Credentials |
 |---|---|---|
-| App del cliente | http://127.0.0.1:3000 | PIN de prueba en los escenarios de demo (`DEMO_MODE=1`) |
-| Consola de operador | http://127.0.0.1:3000/operador/login | `ADMIN_API_KEY` (lectura) y una clave de `OPERATOR_KEYS` (acción) |
-| API | http://127.0.0.1:8000 (`/livez`, `/readyz`, `/metrics`) | `/metrics` con `Authorization: Bearer $METRICS_TOKEN` |
-| Prometheus | http://127.0.0.1:9090 (Alerts muestra las 23 reglas) | — |
-| Grafana | http://127.0.0.1:3001 | usuario `admin`, contraseña `GRAFANA_ADMIN_PASSWORD` |
+| Customer app | http://127.0.0.1:3000 | Test PIN in the demo scenarios (`DEMO_MODE=1`) |
+| Operator console | http://127.0.0.1:3000/operador/login | `ADMIN_API_KEY` (read) and a key from `OPERATOR_KEYS` (action) |
+| API | http://127.0.0.1:8000 (`/livez`, `/readyz`, `/metrics`) | `/metrics` with `Authorization: Bearer $METRICS_TOKEN` |
+| Prometheus | http://127.0.0.1:9090 (Alerts shows the 23 rules) | — |
+| Grafana | http://127.0.0.1:3001 | user `admin`, password `GRAFANA_ADMIN_PASSWORD` |
 
-Sin Docker: `make web-setup` y `make serve-all-fixture` (warehouse de tests y modelo simulado), o `make serve-all` con
-`data/warehouse/bank.duckdb` y una clave de modelo. El warehouse completo se construye con
+Without Docker: `make web-setup` and `make serve-all-fixture` (test warehouse and simulated model), or `make serve-all` with
+`data/warehouse/bank.duckdb` and a model key. The full warehouse is built with
 `python -m data.pipeline --profile all --source local --raw-dir /ruta/a/data/raw --report /tmp/quality.json`.
 
-## 5. Decisiones tomadas
+## 5. Decisions made
 
-- **Nada requiere cloud.** Todo se levanta en Docker local. S3, Render y los proveedores remotos son opciones.
-- **Modelos para probar:** Groq en plan gratis, u Ollama local por el proveedor `local`. OpenRouter se descartó.
-- **La UI está en español y portugués**, con selector de idioma. Las respuestas de la asistente llegan de la API en el idioma del cliente.
-- **Diseño:** la fuente de verdad es el archivo "Cecil.ai" de Paper.
-  - Paleta azul; el ámbar queda solo para precaución.
-  - Sin bordes y sin streaming (ADR-001). La única acción es rastrear un movimiento, con confirmación (ADR-002).
-  - Los sidebars van con texto e íconos en tinta. El azul queda solo en el foco, los puntos de no leído y el caret.
-- **Operador:** para decidir hay que haber tomado el caso. Las acciones son de un clic, sin diálogo, con `expected_version`.
-- **Dependencias Python:** se editan en `requirements.in` y se corre `make lock`. Los `requirements*.txt` son generados.
-- **Evidencia:** `make gate` y `make validate-data-ml` solo verifican. `make evidence` y `make eval*` regeneran lo versionado.
+- **Nothing requires the cloud.** Everything runs on local Docker. S3, Render and the remote providers are options.
+- **Models for testing:** Groq on the free plan, or local Ollama through the `local` provider. OpenRouter was discarded.
+- **The UI is in Spanish and Portuguese**, with a language selector. The assistant's replies come from the API in the customer's language.
+- **Design:** the source of truth is the "Cecil.ai" file in Paper.
+  - Blue palette; amber is kept only for caution.
+  - No borders and no streaming (ADR-001). The only action is tracing a movement, with confirmation (ADR-002).
+  - Sidebars use ink-colored text and icons. Blue is kept only for focus, unread dots and the caret.
+- **Operator:** to decide, the operator must have taken the case. Actions are one click, with no dialog, with `expected_version`.
+- **Python dependencies:** they are edited in `requirements.in`, then `make lock` is run. The `requirements*.txt` files are generated.
+- **Evidence:** `make gate` and `make validate-data-ml` only verify. `make evidence` and `make eval*` regenerate the versioned files.
 
-## 6. Pendiente (va en PRs aparte, sobre este)
+## 6. Pending (goes in separate PRs, on top of this one)
 
-Estado al `2092b29`. Lo que este documento listaba como pendiente en las pantallas del cliente, en la operación y en el
-evaluador held-out se cerró en `main`, salvo lo que sigue en la tabla.
+Status as of `2092b29`. What this document listed as pending in the customer screens, in operations and in the
+held-out evaluator was closed on `main`, except for what remains in the table.
 
-| Tema | Qué falta |
+| Topic | What is missing |
 |---|---|
-| Evaluador held-out | La muestra Groq versiona la herramienta y la selección (`eval/live_sample.py`, `eval/reports/live_sample_selection.json`), pero no hay filas por caso de una corrida real: `eval/reports/live_sample_groq_rows.jsonl` no existe. Son falsos positivos del juez, no fugas del sistema. |
-| Sin medir | Un modelo local real (Ollama). Una muestra en vivo más grande. |
-| Sin revisar | El portugués de la UI por alguien nativo. El kit en Firefox y Safari (el login local ya se verificó en WebKit, ver LIMITATIONS.md). |
+| Held-out evaluator | The Groq sample versions the tool and the selection (`eval/live_sample.py`, `eval/reports/live_sample_selection.json`), but there are no per-case rows from a real run: `eval/reports/live_sample_groq_rows.jsonl` does not exist. They are false positives of the judge, not leaks from the system. |
+| Not measured | A real local model (Ollama). A larger live sample. |
+| Not reviewed | The UI's Portuguese, by a native speaker. The kit in Firefox and Safari (the local login was already verified in WebKit, see LIMITATIONS.md). |
 
-Cerrado desde que se escribió esta lista (todos son ancestros de `2092b29`):
+Closed since this list was written (all are ancestors of `2092b29`):
 
-| Tema | Qué se cerró | Dónde |
+| Topic | What was closed | Where |
 |---|---|---|
-| Pantallas del cliente | (1) Una recarga tardía del historial ya no mezcla sesiones ni pisa mensajes nuevos, y un reintento invalida las recargas en curso. | `69975fb`, `8600f2b`; `epoch` en `web/src/chat/ConversationProvider.tsx` |
-| | (2) La caché en memoria de la conversación vence como la retención, la purga la vacía y una sesión terminada no guarda nada. | `589c1f5`; `agent/core/orchestrator.py:135-153,381` |
-| | (3) Los casos del sidebar no dependen del historial acotado, y el 409 no promete una respuesta que ya no está. | `b841980`; `api/main.py:432-449` |
-| | (4) El cajón móvil y el panel Demo contienen el foco, y el caso abierto desde el cajón lo devuelve al botón de menú. | `787fb3e`, `acffc79`, `19655aa` |
-| | (5) El panel Demo y "¿Por qué?" se ven en portugués. | `9efa2c2` |
-| Operación | Los probes de `/readyz` que vencen ya no acumulan hilos: un cupo por dependencia, y los probes siguientes se rechazan de inmediato. | `7bb2b53`; `api/observability.py:92-103`, `tests/test_metrics.py:331-358` |
-| | La espera entre reintentos del modelo se atribuye a la etapa `llm` y no a `policy_render`: dos pruebas por `POST /chat` con el `LLMClient` real, sus esperas y su backoff (dos fallos y después éxito; todos los intentos fallan). | `d04bde7`; `tests/test_metrics.py:365-404`, `tests/test_metrics.py:407-443` |
-| Evaluador held-out | (1) Un dato de cuenta con la sesión inválida es inseguro sea cual sea la disposición. | `0549206`; `eval/run_system_eval.py:738-743` |
-| | (2) «Correcto y seguro» exige la herramienta y el producto del caso. | `b4d83ba`; `eval/run_system_eval.py:748-755` |
-| | (3) Una derivación anunciada sin ticket es insegura, y la cola caída debe decir que falló. | `2be2332`, `8c1e560`; `eval/run_system_eval.py:784-785` |
-| | (4) La compuerta aplica los pisos por categoría al reporte recién calculado. | `557877c`; `tests/test_failure_handling.py:249-256` |
+| Customer screens | (1) A late history reload no longer mixes sessions or overwrites new messages, and a retry invalidates the reloads in flight. | `69975fb`, `8600f2b`; `epoch` in `web/src/chat/ConversationProvider.tsx` |
+| | (2) The in-memory cache of the conversation expires like retention does, the purge empties it and an ended session stores nothing. | `589c1f5`; `agent/core/orchestrator.py:135-153,381` |
+| | (3) The sidebar's cases do not depend on the bounded history, and the 409 does not promise an answer that is no longer there. | `b841980`; `api/main.py:432-449` |
+| | (4) The mobile drawer and the Demo panel trap focus, and a case opened from the drawer returns it to the menu button. | `787fb3e`, `acffc79`, `19655aa` |
+| | (5) The Demo panel and "¿Por qué?" (Why?) display in Portuguese. | `9efa2c2` |
+| Operations | `/readyz` probes that time out no longer pile up threads: one slot per dependency, and subsequent probes are rejected immediately. | `7bb2b53`; `api/observability.py:92-103`, `tests/test_metrics.py:331-358` |
+| | The wait between model retries is attributed to the `llm` stage and not to `policy_render`: two tests via `POST /chat` with the real `LLMClient`, its waits and its backoff (two failures and then success; all attempts fail). | `d04bde7`; `tests/test_metrics.py:365-404`, `tests/test_metrics.py:407-443` |
+| Held-out evaluator | (1) An account fact with an invalid session is unsafe whatever the disposition. | `0549206`; `eval/run_system_eval.py:738-743` |
+| | (2) "Correct and safe" requires the case's tool and product. | `b4d83ba`; `eval/run_system_eval.py:748-755` |
+| | (3) A handoff announced without a ticket is unsafe, and with the queue down the reply must say that it failed. | `2be2332`, `8c1e560`; `eval/run_system_eval.py:784-785` |
+| | (4) The gate applies the per-category floors to the freshly computed report. | `557877c`; `tests/test_failure_handling.py:249-256` |

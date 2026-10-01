@@ -1,215 +1,215 @@
-# Plan para el hackathon de Factored AI
+# Plan for the Factored AI hackathon
 
-Actualizado el 28 de septiembre de 2026, después de leer completa la [consigna oficial](https://docs.google.com/document/d/18AwONT8hQupRcfNPLFrPo6fHOJ_OUn1nBf-3jMnla2c/edit) y auditar el dataset provisto.
+Updated on September 28, 2026, after reading the [official brief](https://docs.google.com/document/d/18AwONT8hQupRcfNPLFrPo6fHOJ_OUn1nBf-3jMnla2c/edit) in full and auditing the provided dataset.
 
-## Objetivo y respaldo en los datos
+## Goal and grounding in the data
 
-Construir un servicio bancario con IA que siga el ciclo Understand → Decide → Act → Verify → Escalate. El sistema debe entender la consulta, elegir una acción permitida, ejecutarla mediante tools, verificar el resultado y escalar cuando corresponda. La entrega incluye una app para clientes y una consola para empleados, conectadas mediante casos persistentes.
+Build an AI banking service that follows the Understand → Decide → Act → Verify → Escalate cycle. The system must understand the query, choose an allowed action, execute it through tools, verify the result, and escalate when appropriate. The submission includes a customer app and an employee console, connected through persistent cases.
 
-La demo original era "Mi transferencia no llegó", con una reversión simulada aprobada por una persona. La auditoría no permite demostrar demanda por ese motivo de contacto. Las 171.321 transcripciones de clientes hablan de saldos y ninguna menciona transferencias. El dataset contiene estados de pagos, pero no tiene una secuencia de liquidación ni un ledger del beneficiario.
+The original demo was "Mi transferencia no llegó" ("My transfer did not arrive"), with a simulated reversal approved by a person. The audit does not allow us to demonstrate demand for that contact reason. The 171,321 customer transcripts talk about balances, and none of them mentions transfers. The dataset contains payment statuses, but it has no settlement sequence and no beneficiary ledger.
 
-Descartamos las consultas de saldo como problema a resolver en esta entrega. Las transcripciones repiten solo 42 textos de cliente derivados de dos preguntas iniciales. Esa repetición no justifica priorizar saldos por demanda.
+We rule out balance queries as the problem to solve in this submission. The transcripts repeat only 42 customer texts derived from two opening questions. That repetition does not justify prioritizing balances on the basis of demand.
 
-El caso principal queda pendiente de elección entre pagos y reclamos. Las transacciones permiten verificar estados; las categorías de reclamos aportan evidencia de problemas registrados en el corpus sintético. Sus limitaciones están documentadas en la auditoría. El flujo elegido debe incluir participación humana visible, una acción de negocio aprobada y verificada, y persistencia del caso. La reversión es una acción candidata del simulador. Podemos elegir otra, pero una consulta de estado o la creación de un ticket por sí solas no completan el alcance acordado.
+The choice of the main use case is still pending, between payments and complaints. Transactions make it possible to verify statuses; complaint categories provide evidence of problems recorded in the synthetic corpus. Their limitations are documented in the audit. The chosen flow must include visible human participation, an approved and verified business action, and case persistence. Reversal is a candidate action in the simulator. We can choose another one, but a status query or the creation of a ticket on its own does not complete the agreed scope.
 
-## Requisitos de producto que mantenemos
+## Product requirements we keep
 
-- El cliente ve a la persona que interviene, su nombre y rol, y sus mensajes dentro de la conversación. El handoff conserva el contexto. La consola permite al empleado tomar el caso, conversar, aprobar o rechazar y devolver el control a la automatización.
-- La demo ejecuta al menos una acción de negocio que cambia el estado de una operación o producto en el simulador bancario. Requiere aprobación humana explícita y verificación independiente del resultado. Mostrar una propuesta o registrar un ticket no cuenta como ejecución de esa acción.
-- Los casos persisten entre sesiones y sobreviven a refresh, reconexión y reinicio del worker. Se conservan conversación, responsable, aprobaciones, operación, evidencia y timeline. La reanudación no puede duplicar efectos.
+- The customer sees the person who steps in, their name and role, and their messages within the conversation. The handoff preserves the context. The console lets the employee take the case, converse, approve or reject, and hand control back to the automation.
+- The demo executes at least one business action that changes the state of an operation or product in the banking simulator. It requires explicit human approval and independent verification of the result. Showing a proposal or logging a ticket does not count as executing that action.
+- Cases persist across sessions and survive a refresh, a reconnection, and a worker restart. The conversation, assignee, approvals, operation, evidence, and timeline are preserved. Resuming must not duplicate effects.
 
-Estos requisitos se mantienen aunque cambien el caso de uso y las tecnologías. El recorrido con intervención humana y acción aprobada se evalúa por separado de la resolución automática, porque requiere una persona.
+These requirements stand even if the use case and the technologies change. The path with human intervention and an approved action is evaluated separately from automated resolution, because it requires a person.
 
-Los resultados y sus límites están en [dataset-audit.md](dataset-audit.md). El proceso de evaluación está en [evaluation-protocol.md](evaluation-protocol.md).
+The results and their limits are in [dataset-audit.md](dataset-audit.md). The evaluation process is in [evaluation-protocol.md](evaluation-protocol.md).
 
-## Qué exige la consigna
+## What the brief requires
 
-- Un flujo coherente de atención bancaria respaldado por datos, con resolución normal, ambigüedad o solicitudes fuera de alcance e intervención humana.
-- Interacciones en español y portugués, con sus limitaciones de cobertura documentadas. Inglés no es obligatorio y se propone quitarlo del alcance comprometido.
-- Preparación reproducible de datos, contratos, quality checks, lineage y una política de actualización y freshness.
-- Al menos un componente aprendido evaluado contra un baseline apropiado. Entrenar un modelo nuevo es opcional. Mantenemos la decisión original de usar un componente preentrenado.
-- Baseline y candidato sobre el mismo workload held-out, con datos incorrectos o faltantes, sesiones vencidas, accesos no autorizados, prompt injection, fallos de tools y ambigüedad multilingüe.
-- Resultados correctos e inseguros, calidad del handoff, latencia, costo, tamaño de muestra y limitaciones. Hay que distinguir containment de resolución segura.
-- Traces, retries acotados, fallback seguro, setup reproducible, controles de acceso y un plan concreto para operar la solución.
+- A coherent, data-backed banking customer-service flow, with normal resolution, ambiguity or out-of-scope requests, and human intervention.
+- Interactions in Spanish and Portuguese, with their coverage limitations documented. English is not mandatory, and we propose removing it from the committed scope.
+- Reproducible data preparation, contracts, quality checks, lineage, and an update and freshness policy.
+- At least one learned component evaluated against an appropriate baseline. Training a new model is optional. We keep the original decision to use a pretrained component.
+- Baseline and candidate on the same held-out workload, with incorrect or missing data, expired sessions, unauthorized access, prompt injection, tool failures, and multilingual ambiguity.
+- Correct and unsafe outcomes, handoff quality, latency, cost, sample size, and limitations. Containment must be distinguished from safe resolution.
+- Traces, bounded retries, safe fallback, reproducible setup, access controls, and a concrete plan to operate the solution.
 
-La consigna no fija una cantidad mínima de casos de prueba. Hay que justificar el tamaño y la cobertura del workload. Tampoco exige streaming, múltiples agentes, dashboards ni integración bancaria real. Permite tools de sandbox y una sesión de prueba confiable.
+The brief does not set a minimum number of test cases. The size and coverage of the workload must be justified. Nor does it require streaming, multiple agents, dashboards, or real banking integration. It allows sandbox tools and a trusted test session.
 
-## Restricciones, arquitectura y tecnologías pendientes
+## Constraints, architecture, and pending technology choices
 
-El stack sigue abierto. TypeScript, Turborepo y TanStack Start fueron propuestas iniciales. Python también es una opción para backend, data engineering y evaluación. La auditoría exploratoria no define el lenguaje del producto ni el del pipeline definitivo.
+The stack is still open. TypeScript, Turborepo, and TanStack Start were initial proposals. Python is also an option for the backend, data engineering, and evaluation. The exploratory audit does not determine the language of the product or that of the final pipeline.
 
-| Área | Decisión |
+| Area | Decision |
 | --- | --- |
-| Plazo | Diez días, previstos del 28 de septiembre al 7 de octubre de 2026. Falta confirmar la hora oficial de entrega. |
-| Capacidad | Tres personas, dos horas por día hábil y entre cuatro y seis horas por persona cada día del fin de semana. Entre 72 y 84 horas-persona. |
-| Frontend | Web chat dentro de la app bancaria simulada. TanStack Start es una opción inicial, pendiente de confirmación. |
-| Repositorio y lenguajes | Organización y herramientas por definir. Evaluar TypeScript, Python o una combinación según el trabajo de cada componente. Turborepo queda como candidato si encaja con el stack elegido. |
-| Arquitectura | Monolito modular con vertical slices y ports/adapters donde aporten aislamiento. |
-| Comportamiento del agente | Híbrido. Investigación acotada con IA y reglas explícitas persistidas para transiciones con consecuencias. |
-| Casos | Asíncronos y reanudables, con timeline y actualizaciones dentro de la app. |
-| Control humano | Aprobar o rechazar acciones, tomar la conversación y devolver el control a la automatización de forma explícita. |
-| Identidad | Cuentas precreadas, sesiones confiables y autorización en servidor y tools. Sin registro ni onboarding. |
-| Autoridad financiera | La investigación rutinaria puede ser automática. Las mutaciones financieras requieren aprobación humana y son simuladas. |
-| IA | Jev vía OpenRouter como clasificador candidato y un LLM conversacional para el diálogo. Falta verificar la integración, el schema y los modelos concretos. |
-| Hosting | Cloudflare y Vercel son candidatos iniciales. Revisar la elección junto con los lenguajes, jobs y runtime antes del deployment. No hay créditos disponibles. |
-| Base de datos | PostgreSQL o MySQL. Elegir acceso a datos y ORM después del lenguaje. Drizzle fue una propuesta para TypeScript. |
+| Timeline | Ten days, planned from September 28 to October 7, 2026. The official submission time is still to be confirmed. |
+| Capacity | Three people, two hours per business day and between four and six hours per person on each weekend day. Between 72 and 84 person-hours. |
+| Frontend | Web chat inside the simulated banking app. TanStack Start is an initial option, pending confirmation. |
+| Repository and languages | Organization and tooling to be defined. Evaluate TypeScript, Python, or a combination, depending on the work of each component. Turborepo remains a candidate if it fits the chosen stack. |
+| Architecture | Modular monolith with vertical slices, and ports/adapters where they provide isolation. |
+| Agent behavior | Hybrid. Bounded AI investigation, and explicit persisted rules for transitions with consequences. |
+| Cases | Asynchronous and resumable, with a timeline and in-app updates. |
+| Human control | Approve or reject actions, take over the conversation, and explicitly hand control back to the automation. |
+| Identity | Pre-created accounts, trusted sessions, and authorization on the server and in tools. No sign-up or onboarding. |
+| Financial authority | Routine investigation can be automatic. Financial mutations require human approval and are simulated. |
+| AI | Jev via OpenRouter as the candidate classifier, and a conversational LLM for the dialogue. The integration, the schema, and the specific models are still to be verified. |
+| Hosting | Cloudflare and Vercel are initial candidates. Review the choice together with the languages, jobs, and runtime before deployment. No credits are available. |
+| Database | PostgreSQL or MySQL. Choose data access and ORM after the language. Drizzle was a proposal for TypeScript. |
 
-## Comportamiento del producto
+## Product behavior
 
-El cliente inicia sesión y consulta en ES o PT sobre una operación o reclamo, según el flujo que se elija. El sistema recupera solo los datos permitidos, pide aclaraciones cuando la selección es ambigua y muestra avances respaldados por eventos registrados. Debe indicar si el dato corresponde a un snapshot histórico o al simulador. No puede afirmar que un pago se liquidó o un reclamo se resolvió sin evidencia.
+The customer logs in and asks, in ES or PT, about an operation or a complaint, depending on the flow chosen. The system retrieves only the allowed data, asks for clarification when the selection is ambiguous, and shows progress backed by recorded events. It must state whether a data point comes from a historical snapshot or from the simulator. It cannot claim that a payment settled or that a complaint was resolved without evidence.
 
-El cliente ve quién tiene el caso, cuándo un empleado toma la conversación y qué mensajes provienen de esa persona. Las intervenciones quedan en el mismo historial y continúan disponibles al volver a la app. Los estados de espera de aprobación, ejecución, verificación y resolución deben reflejar eventos persistidos.
+The customer sees who has the case, when an employee takes over the conversation, and which messages come from that person. The interventions stay in the same history and remain available when the customer returns to the app. The states for awaiting approval, execution, verification, and resolution must reflect persisted events.
 
-El empleado ve la solicitud, los hechos verificados, las acciones realizadas, la evidencia y las preguntas pendientes. Durante el takeover, la IA deja de responder al cliente, aunque puede preparar resúmenes internos. La aprobación de acciones y el control de la conversación son permisos distintos.
+The employee sees the request, the verified facts, the actions taken, the evidence, and the open questions. During the takeover, the AI stops replying to the customer, although it can prepare internal summaries. Approving actions and controlling the conversation are separate permissions.
 
-La acción elegida debe ejecutarse en el servicio bancario del sandbox y cambiar su estado autoritativo. La aprobación queda vinculada a la acción, sus parámetros y la versión del registro. Incluye importe y moneda cuando corresponda. El executor vuelve a verificar la elegibilidad, usa una idempotency key estable y consulta de forma independiente el resultado. Para una reversión, verifica la operación y el ledger. Si el resultado es incierto, el caso sigue abierto con verificación pendiente. Antes de reintentar, debe consultar la operación existente.
+The chosen action must run in the sandbox banking service and change its authoritative state. The approval is bound to the action, its parameters, and the record version. It includes amount and currency when applicable. The executor re-checks eligibility, uses a stable idempotency key, and independently queries the result. For a reversal, it verifies the operation and the ledger. If the result is uncertain, the case stays open with verification pending. Before retrying, it must query the existing operation.
 
-Persistir el caso antes de despachar trabajo asíncrono. Al reanudar, recuperar el estado, la asignación humana, la aprobación vigente y el identificador de operación. La demo debe mostrar que un caso abierto puede retomarse y que una acción ya ejecutada no vuelve a aplicarse por un refresh o retry.
+Persist the case before dispatching asynchronous work. On resume, recover the state, the human assignment, the current approval, and the operation identifier. The demo must show that an open case can be picked up again and that an action already executed is not applied again because of a refresh or retry.
 
-El texto generado por un modelo no puede conceder acceso, cambiar políticas ni declarar exitosa una acción sin verificarla.
+Model-generated text cannot grant access, change policies, or declare an action successful without verifying it.
 
-## Data engineering como entrega central
+## Data engineering as a core deliverable
 
-La auditoría inicial se ejecutó con scripts exploratorios locales, excluidos del control de versiones. Sus resultados están documentados en [dataset-audit.md](dataset-audit.md). Inventarió las 13 tablas y procesó 6.311.493 filas de 5.516 archivos. Incluye 11 tablas completas y muestras explícitas de eventos digitales y envíos de campañas. Una lectura independiente coincidió en el conteo de filas y el SHA256 de cada archivo analizado.
+The initial audit was run with local exploratory scripts, excluded from version control. Its results are documented in [dataset-audit.md](dataset-audit.md). It inventoried the 13 tables and processed 6,311,493 rows from 5,516 files. It includes 11 complete tables and explicit samples of digital events and campaign sends. An independent read matched the row count and the SHA256 of every analyzed file.
 
-El [catálogo de validaciones](data-validation-catalog.md) contrasta el diccionario con los errores observados y define controles de ingesta por uso. Incluye primary keys, restricciones `UNIQUE` adicionales, ownership, cronología, parsing sin pérdida y evidencia faltante para operar con importes.
+The [validation catalog](data-validation-catalog.md) checks the dictionary against the observed errors and defines ingestion checks per use. It covers primary keys, additional `UNIQUE` constraints, ownership, chronology, lossless parsing, and the evidence that is missing to operate on amounts.
 
-El pipeline definitivo debe cubrir estas etapas, con el lenguaje que elija el equipo:
+The final pipeline must cover these stages, in whichever language the team chooses:
 
-1. Inventariar y descargar un conjunto declarado de objetos de origen.
-2. Parsear y validar archivos, con registros de schema, claves, conteos, hashes y lineage.
-3. Separar duplicados exactos, claves en conflicto, registros malformados y relaciones que no se pueden usar.
-4. Verificar ownership, cronología, significado de labels, evidencia faltante y límites de los snapshots.
-5. Publicar datasets de serving y evaluación con un propósito explícito y sus manifests.
-6. Verificar replay, actualizaciones, aislamiento entre cohortes y quality gates por uso.
+1. Inventory and download a declared set of source objects.
+2. Parse and validate files, recording schema, keys, counts, hashes, and lineage.
+3. Separate exact duplicates, conflicting keys, malformed records, and relationships that cannot be used.
+4. Verify ownership, chronology, label meaning, missing evidence, and snapshot limits.
+5. Publish serving and evaluation datasets with an explicit purpose, along with their manifests.
+6. Verify replay, updates, isolation between cohorts, and per-use quality gates.
 
-Los scripts locales permitieron validar este proceso, pero todavía falta incorporar al repositorio una implementación que el equipo pueda ejecutar desde un checkout limpio. Conservamos manifests, consultas SQL y resultados de la auditoría en el entorno local. Esta entrega incluye solo documentación Markdown. La implementación compartida y sus comandos se definirán al cerrar el stack.
+The local scripts made it possible to validate this process, but an implementation that the team can run from a clean checkout has yet to be added to the repository. We keep the audit's manifests, SQL queries, and results in the local environment. This submission includes only Markdown documentation. The shared implementation and its commands will be defined once the stack is settled.
 
-Hallazgos que afectan el diseño:
+Findings that affect the design:
 
-- Las 44.570 referencias no nulas de reclamos a productos apuntan a productos de otro cliente. Ese join debe bloquearse.
-- Los 67.095 reclamos tienen vacía la referencia a la interacción de origen. No sirven como labels vinculados a conversaciones.
-- Hay 128.453 interacciones anteriores al registro del cliente. Se excluyen de las cohortes históricas candidatas.
-- Solo 2.973.699 transacciones pasan ambos controles de cronología, registro del cliente y apertura del producto.
-- La cadena de ownership transacción → producto → cliente sí es consistente en las 4.425.008 transacciones.
-- Clientes y productos son snapshots únicos. Sus saldos y estados actuales no pueden usarse como features históricas al inicio de una consulta.
-- Todas las transcripciones están en español y repiten 42 variantes de texto del cliente, derivadas de dos preguntas iniciales. Las categorías generales del origen no representan de forma confiable las intenciones visibles.
+- All 44,570 non-null references from complaints to products point to another customer's products. That join must be blocked.
+- All 67,095 complaints have an empty reference to the originating interaction. They cannot serve as labels linked to conversations.
+- There are 128,453 interactions that predate the customer's registration. They are excluded from the candidate historical cohorts.
+- Only 2,973,699 transactions pass both chronology checks, customer registration and product opening.
+- The transaction → product → customer ownership chain is consistent across all 4,425,008 transactions.
+- Customers and products are single snapshots. Their current balances and statuses cannot be used as historical features at the start of a query.
+- All transcripts are in Spanish and repeat 42 variants of customer text, derived from two opening questions. The source's general categories do not reliably represent the visible intents.
 
-Conservar los registros raw para diagnóstico y bloquear el uso afectado. Un reclamo con un producto mal vinculado puede seguir contando en un informe de volumen, pero no puede autorizar la consulta de ese producto.
+Keep the raw records for diagnosis and block the affected use. A complaint with a wrongly linked product can still count in a volume report, but it cannot authorize a lookup of that product.
 
-Usar procesamiento batch para este origen estático. Cada release publicado necesita un source manifest y una versión del dataset. Probar late arrivals, conflictos, columnas nuevas, truncamientos y replay mediante fixtures identificados como tales. Mantener separados event time, ingestion time y observation time del simulador. Una nueva importación no vuelve actual un saldo antiguo.
+Use batch processing for this static source. Each published release needs a source manifest and a dataset version. Test late arrivals, conflicts, new columns, truncations, and replay with fixtures identified as such. Keep event time, ingestion time, and the simulator's observation time separate. A new import does not make an old balance current.
 
-## Arquitectura y motivos
+## Architecture and rationale
 
-Organizar el código por casos de uso y aislar los sistemas externos mediante interfaces. Las [vertical slices](https://www.jimmybogard.com/vertical-slice-architecture/) mantienen juntos los cambios de una funcionalidad. Los [ports and adapters](https://alistair.cockburn.us/hexagonal-architecture) permiten probar reglas bancarias sin depender de proveedores, persistencia o UI.
+Organize the code by use case and isolate external systems behind interfaces. [Vertical slices](https://www.jimmybogard.com/vertical-slice-architecture/) keep the changes for one feature together. [Ports and adapters](https://alistair.cockburn.us/hexagonal-architecture) make it possible to test banking rules without depending on providers, persistence, or UI.
 
-La separación lógica propuesta no depende del lenguaje ni fija todavía la estructura de carpetas:
+The proposed logical separation does not depend on the language and does not yet fix the folder structure:
 
-| Componente | Responsabilidad |
+| Component | Responsibility |
 | --- | --- |
-| Web | Interfaces de cliente y empleado. |
-| Aplicación y dominio | Casos de uso, invariantes, permisos y transiciones. |
-| Worker | Ejecución en background y reanudación de casos. |
-| Ports y adapters | Integraciones de persistencia, proveedor de IA y simulador bancario. |
-| Contratos | Validación de requests, eventos, evidencia y resultados. |
-| Pipeline de datos | Ingesta, calidad, lineage y publicación de snapshots. |
-| Evaluación | Workloads revisados, oracles, métricas y manifests. |
+| Web | Customer and employee interfaces. |
+| Application and domain | Use cases, invariants, permissions, and transitions. |
+| Worker | Background execution and case resumption. |
+| Ports and adapters | Integrations for persistence, the AI provider, and the banking simulator. |
+| Contracts | Validation of requests, events, evidence, and results. |
+| Data pipeline | Ingestion, quality, lineage, and snapshot publishing. |
+| Evaluation | Reviewed workloads, oracles, metrics, and manifests. |
 
-Web y worker deben usar las mismas reglas de negocio mediante los handlers o contratos que permita el stack elegido. Si combinamos lenguajes, hay que definir cómo se validan los contratos entre ellos. Las reglas bancarias no dependen del framework web, ORM, proveedor de IA ni SDK del hosting. Las interfaces tienen propósitos concretos, como recuperar registros autorizados, persistir casos o ejecutar operaciones bancarias. Los helpers comunes de UI no necesitan una capa de adapters.
+Web and worker must use the same business rules through whatever handlers or contracts the chosen stack allows. If we combine languages, we must define how the contracts between them are validated. The banking rules do not depend on the web framework, the ORM, the AI provider, or the hosting SDK. The interfaces have concrete purposes, such as retrieving authorized records, persisting cases, or executing banking operations. Common UI helpers do not need an adapter layer.
 
-| Elección | Motivo | Costo o limitación |
+| Choice | Reason | Cost or limitation |
 | --- | --- | --- |
-| Monolito modular | Contratos compartidos y menos deployments para tres personas. | Hay que controlar imports y responsabilidades al crecer el código. |
-| Vertical slices | Cada integrante puede implementar un comportamiento completo. | Las invariantes compartidas necesitan una única implementación. |
-| Adapters selectivos | Permiten sustituir proveedores externos por implementaciones controladas de prueba. | Agregan algunas interfaces y contract tests. |
-| Workflow persistido | Las esperas humanas y los reinicios no pierden casos. | Hay que manejar concurrencia, retries y aprobaciones desactualizadas. |
-| Calidad antes de serving | Impide que joins inválidos y hechos sin respaldo lleguen al modelo. | Algunos registros o features quedan fuera de uso. |
-| Verificación independiente | Cada afirmación de éxito requiere un resultado observado. | El fallo de verificación debe ser un estado explícito del caso. |
+| Modular monolith | Shared contracts and fewer deployments for three people. | Imports and responsibilities must be kept under control as the code grows. |
+| Vertical slices | Each team member can implement a complete behavior. | Shared invariants need a single implementation. |
+| Selective adapters | They make it possible to replace external providers with controlled test implementations. | They add some interfaces and contract tests. |
+| Persisted workflow | Waits on humans and restarts do not lose cases. | Concurrency, retries, and stale approvals must be handled. |
+| Quality before serving | Prevents invalid joins and unsupported facts from reaching the model. | Some records or features are left out of use. |
+| Independent verification | Every claim of success requires an observed result. | A verification failure must be an explicit case state. |
 
-El worker define una responsabilidad lógica. Elegir el mecanismo de jobs o workflow junto con el lenguaje y hosting, y separar su orquestación de los handlers de negocio. El despacho de tareas debe ser confiable respecto de las transiciones persistidas. No construir un motor de workflows genérico.
+The worker defines a logical responsibility. Choose the jobs or workflow mechanism together with the language and hosting, and keep its orchestration separate from the business handlers. Task dispatch must be reliable with respect to the persisted transitions. Do not build a generic workflow engine.
 
-SQLite es almacenamiento analítico local para la auditoría. No define la base de datos de la app. Registrar las decisiones relevantes en ADRs breves que expliquen el problema, la elección, las alternativas y su verificación.
+SQLite is local analytical storage for the audit. It does not determine the app's database. Record the relevant decisions in short ADRs that explain the problem, the choice, the alternatives, and its verification.
 
-## Componente aprendido y baseline
+## Learned component and baseline
 
-La tarea propuesta para Jev es clasificar intención y ambigüedad. Usar consultas ES/PT revisadas de forma independiente y una taxonomía pequeña vinculada al flujo elegido. No entrenar ni evaluar intención semántica usando `reason_category` como ground truth de las transcripciones repetitivas.
+The task proposed for Jev is to classify intent and ambiguity. Use independently reviewed ES/PT queries and a small taxonomy tied to the chosen flow. Do not train or evaluate semantic intent using `reason_category` as the ground truth for the repetitive transcripts.
 
-Comparar:
+Compare:
 
-- Un baseline determinista de keywords y selección de entidades, con abstención explícita.
-- Jev con el mismo contexto permitido y el mismo contrato de salida.
+- A deterministic baseline of keywords and entity selection, with explicit abstention.
+- Jev with the same allowed context and the same output contract.
 
-Ambos usan la misma capa de políticas, tools y verifier. La autoridad financiera queda fuera de los clasificadores. Elegir thresholds de confianza o abstención con validation y reportar la relación entre cobertura, errores y handoffs.
+Both use the same policy layer, tools, and verifier. Financial authority stays outside the classifiers. Choose confidence or abstention thresholds on validation, and report the relationship between coverage, errors, and handoffs.
 
-Una salida estructurada no demuestra que el modelo acertó. Reportar errores por clase e idioma. Medir calibración solo si el proveedor expone probabilidades con una semántica utilizable. No prometer mejoras antes de medirlas.
+A structured output does not show that the model got it right. Report errors by class and language. Measure calibration only if the provider exposes probabilities with usable semantics. Do not promise improvements before measuring them.
 
-El alcance comprometido no necesita un modelo tabular entrenado por el equipo. Los datasets históricos sirven para análisis descriptivo y un posible experimento futuro. No vamos a consumir el presupuesto de diez días solo para demostrar entrenamiento.
+The committed scope does not need a tabular model trained by the team. The historical datasets serve for descriptive analysis and a possible future experiment. We will not spend the ten-day budget just to demonstrate training.
 
-## Evaluación held-out y verificación en runtime
+## Held-out evaluation and runtime verification
 
-Seguir [evaluation-protocol.md](evaluation-protocol.md). Separar la evidencia de calidad de datos, clasificación, resultados del servicio y verificación de cada acción.
+Follow [evaluation-protocol.md](evaluation-protocol.md). Keep separate the evidence for data quality, classification, service outcomes, and the verification of each action.
 
-Artefactos producidos durante la auditoría local:
+Artifacts produced during the local audit:
 
-- Particiones estructuradas sin clientes compartidos, con 245.074 interacciones de development, 15.839 de validation y 15.675 candidatas a test.
-- 200 contextos de pagos derivados del origen, expandidos a 3.600 fixtures ES/PT con nueve variantes. Son exploratorios y deben adaptarse o sustituirse si el flujo elegido requiere otra evidencia.
-- Un oracle experimental local para decisiones estructuradas, divulgación de estados permitidos, mutaciones prohibidas y afirmaciones sin respaldo sobre recepción de fondos.
+- Structured partitions with no shared customers, with 245,074 development interactions, 15,839 validation interactions, and 15,675 test candidates.
+- 200 payment contexts derived from the source, expanded into 3,600 ES/PT fixtures with nine variants. They are exploratory and must be adapted or replaced if the chosen flow requires other evidence.
+- A local experimental oracle for structured decisions, disclosure of allowed statuses, forbidden mutations, and unsupported claims about receipt of funds.
 
-Estos artefactos todavía no son resultados de evaluación de modelos. Los 3.600 fixtures corresponden a 200 contextos independientes, usan lenguaje de plantillas y esperan revisión lingüística. No reemplazan consultas held-out diversas ni prueban generalización lingüística.
+These artifacts are not yet model evaluation results. The 3,600 fixtures correspond to 200 independent contexts, use templated language, and are awaiting linguistic review. They do not replace diverse held-out queries, nor do they prove linguistic generalization.
 
-Crear casos de lenguaje revisados de forma independiente. Separar grupos de clientes, escenarios y familias de redacción antes de producir variantes. Mantener juntas las traducciones de un mismo caso. Congelar dataset, labels, políticas, prompts, versiones de modelos, thresholds, presupuesto de retries y seeds antes de comparar. Ejecutar ambos sistemas sobre los mismos casos y con estados iniciales equivalentes del sandbox. Incluir fallos y repeticiones declaradas.
+Create independently reviewed language cases. Separate customer groups, scenarios, and wording families before producing variants. Keep the translations of the same case together. Freeze the dataset, labels, policies, prompts, model versions, thresholds, retry budget, and seeds before comparing. Run both systems on the same cases and with equivalent initial sandbox states. Include failures and declared repetitions.
 
-La matriz debe cubrir resolución normal, ambigüedad, intervención humana visible, datos incorrectos o faltantes, sesiones vencidas, accesos no autorizados, prompt injection, fallos de tools, ambigüedad ES/PT y observaciones vencidas. Para la acción acordada, probar aprobación, rechazo, aprobación desactualizada, ejecución, verificación incierta y retries sin efectos duplicados. Para persistencia, probar refresh, reconexión y reinicio del worker sin pérdida de contexto ni permisos.
+The matrix must cover normal resolution, ambiguity, visible human intervention, incorrect or missing data, expired sessions, unauthorized access, prompt injection, tool failures, ES/PT ambiguity, and expired observations. For the agreed action, test approval, rejection, stale approval, execution, uncertain verification, and retries without duplicate effects. For persistence, test refresh, reconnection, and worker restart without loss of context or permissions.
 
-Reportar:
+Report:
 
-- Resolución automática segura sobre todos los casos dentro del alcance y cobertura de intentos de automatización.
-- Containment separado de resolución.
-- Escalaciones correctas, omitidas e innecesarias, junto con la utilidad del contexto del handoff.
-- Divulgaciones o acciones no autorizadas y resultados materialmente incorrectos, con conteos y denominadores.
-- Latencia end-to-end p50/p95, incluidos retries y fallos de tools.
-- Costo por caso intentado y por resolución automática exitosa. Si no hay resoluciones exitosas, el segundo costo queda como "no definido".
-- Tamaño de muestra, cantidad de casos independientes, variación entre ejecuciones y diferencias por idioma y segmentos autorizados.
+- Safe automated resolution over all in-scope cases, and the coverage of automation attempts.
+- Containment, separately from resolution.
+- Correct, missed, and unnecessary escalations, together with the usefulness of the handoff context.
+- Unauthorized disclosures or actions and materially incorrect outcomes, with counts and denominators.
+- End-to-end p50/p95 latency, including retries and tool failures.
+- Cost per attempted case and per successful automated resolution. If there are no successful resolutions, the second cost is reported as "not defined".
+- Sample size, number of independent cases, run-to-run variation, and differences by language and authorized segments.
 
-Usar checks deterministas de tools y estado para verificar hechos y acciones. Si un modelo evalúa texto libre, validar una muestra contra juicios humanos independientes o checks deterministas y reportar desacuerdos. Cero fallos observados no significa riesgo cero. Los resultados offline y del simulador no son mejoras medidas en producción.
+Use deterministic tool and state checks to verify facts and actions. If a model evaluates free text, validate a sample against independent human judgments or deterministic checks and report disagreements. Zero observed failures does not mean zero risk. Offline and simulator results are not improvements measured in production.
 
-## Responsabilidades y cronograma de diez días
+## Responsibilities and ten-day schedule
 
-Reservar entre 18 y 21 de las 72 a 84 horas-persona para evaluación, integración, correcciones y ensayo. Distribución propuesta:
+Reserve between 18 and 21 of the 72 to 84 person-hours for evaluation, integration, fixes, and rehearsal. Proposed split:
 
-| Responsable | Trabajo principal |
+| Owner | Main work |
 | --- | --- |
-| A | Pipeline de datos, contratos de calidad y freshness, labels, workloads held-out e informes de evaluación. |
-| B | Workflow, adapters de IA y tools, autorización, aprobaciones, verificación y deployment. |
-| C | Ambas interfaces mínimas, ES/PT, handoff de conversación, timeline y demo. |
+| A | Data pipeline, quality and freshness contracts, labels, held-out workloads, and evaluation reports. |
+| B | Workflow, AI and tool adapters, authorization, approvals, verification, and deployment. |
+| C | Both minimal interfaces, ES/PT, conversation handoff, timeline, and demo. |
 
-Los tres revisan labels y errores. Reutilizar componentes de UI y limitar la consola del empleado a una cola y el detalle del caso. Asignar nombres y ajustar tareas según la experiencia de cada integrante.
+All three review labels and errors. Reuse UI components and limit the employee console to a queue and the case detail. Assign names and adjust tasks according to each member's experience.
 
-| Día | Capacidad del equipo | Entrega |
+| Day | Team capacity | Deliverable |
 | --- | ---: | --- |
-| Lunes 28 de septiembre | 6 horas | Revisar auditoría y consigna, elegir el flujo respaldado por datos, evaluar lenguajes, hosting, base de datos y Jev, definir contratos. |
-| Martes 29 de septiembre | 6 horas | Incorporar el pipeline reproducible en el stack elegido, preparar snapshot y quality gates, sesiones precreadas y estructura mínima de UI. |
-| Miércoles 30 de septiembre | 6 horas | Baseline determinista y primer flujo acotado de investigación con IA y captura de evidencia. |
-| Jueves 1 de octubre | 6 horas | Flujo inicial de cliente → empleado visible → aprobación → acción ejecutada → resultado verificado. |
-| Viernes 2 de octubre | 6 horas | Casos asíncronos persistentes, takeover, retries y comportamiento de actualización y freshness. |
-| Sábado 3 de octubre | 12 a 18 horas | Completar ES/PT, labels de referencia, flujos normal, ambiguo y humano, y matriz de fallos. |
-| Domingo 4 de octubre | 12 a 18 horas | Integrar traces y evaluadores. Congelar alcance, workloads, prompts y reglas. |
-| Lunes 5 de octubre | 6 horas | Ejecutar baseline y candidato sobre el mismo held-out y probar autorización. |
-| Martes 6 de octubre | 6 horas | Analizar fallos y diferencias entre grupos, probar recuperación y cerrar arquitectura y limitaciones. |
-| Miércoles 7 de octubre | 6 horas | Reproducir artefactos, ensayar, verificar deployment y preparar la entrega. |
+| Monday, September 28 | 6 hours | Review the audit and the brief, choose the data-backed flow, evaluate languages, hosting, database, and Jev, define contracts. |
+| Tuesday, September 29 | 6 hours | Bring the reproducible pipeline into the chosen stack, prepare the snapshot and quality gates, pre-created sessions, and a minimal UI structure. |
+| Wednesday, September 30 | 6 hours | Deterministic baseline and a first bounded flow of AI investigation and evidence capture. |
+| Thursday, October 1 | 6 hours | Initial flow of customer → visible employee → approval → executed action → verified result. |
+| Friday, October 2 | 6 hours | Persistent asynchronous cases, takeover, retries, and update and freshness behavior. |
+| Saturday, October 3 | 12 to 18 hours | Complete ES/PT, reference labels, the normal, ambiguous, and human flows, and the failure matrix. |
+| Sunday, October 4 | 12 to 18 hours | Integrate traces and evaluators. Freeze scope, workloads, prompts, and rules. |
+| Monday, October 5 | 6 hours | Run the baseline and the candidate on the same held-out set and test authorization. |
+| Tuesday, October 6 | 6 hours | Analyze failures and differences between groups, test recovery, and finalize the architecture and limitations. |
+| Wednesday, October 7 | 6 hours | Reproduce artifacts, rehearse, verify the deployment, and prepare the submission. |
 
-La auditoría ya está terminada con la cobertura documentada. Faltan el pipeline compartido reproducible, la app, la comparación de modelos y el benchmark lingüístico final. Si no alcanza el tiempo, recortar inglés, detalles visuales, dashboards, comparaciones adicionales de proveedores y acciones adicionales. Mantener el humano visible, una acción aprobada y verificada, los casos persistentes y el trabajo de datos y evaluación exigido por la consigna.
+The audit is already finished, with the documented coverage. Still missing are the shared reproducible pipeline, the app, the model comparison, and the final linguistic benchmark. If time runs short, cut English, visual details, dashboards, additional provider comparisons, and additional actions. Keep the visible human, one approved and verified action, the persistent cases, and the data and evaluation work the brief requires.
 
-## Privacidad y paso a operación
+## Privacy and transition to operations
 
-Usar solo datos autorizados por la organización y recursos externos permitidos. El corpus provisto es sintético. Identificar por separado el lenguaje generado por el equipo, los fixtures con defectos introducidos y el estado del sandbox. No incluir credenciales, registros privados ni datos restringidos en entregas públicas o requests a modelos.
+Use only data authorized by the organizers and permitted external resources. The provided corpus is synthetic. Separately identify the language generated by the team, the fixtures with injected defects, and the sandbox state. Do not include credentials, private records, or restricted data in public submissions or in requests to models.
 
-Reducir los inputs del proveedor a la consulta y los hechos permitidos. Verificar identidad y ownership en servicios y tools. Un customer ID no autentica a una persona. Registrar retries acotados, motivos de rechazo, fallos de verificación y resultados del handoff. Definir retención, borrado, acceso y redacción de traces antes del deployment.
+Limit the provider's inputs to the query and the allowed facts. Verify identity and ownership in services and tools. A customer ID does not authenticate a person. Log bounded retries, rejection reasons, verification failures, and handoff outcomes. Define trace retention, deletion, access, and redaction before deployment.
 
-Medir concurrencia, límites del proveedor, recuperación de jobs, latencia y costo sobre el workload declarado. Documentar monitoreo y trabajo pendiente para un banco real, como integración de identidad, responsables de políticas, datos actualizados confiables, revisión de seguridad, operación humana y una evaluación más amplia. La consigna no exige ni autoriza movimientos de dinero real.
+Measure concurrency, provider limits, job recovery, latency, and cost on the declared workload. Document monitoring and the remaining work for a real bank, such as identity integration, policy owners, reliable up-to-date data, security review, human operations, and a broader evaluation. The brief neither requires nor authorizes real money movements.
 
-## Exclusiones y decisiones pendientes
+## Exclusions and pending decisions
 
-Quedan fuera las consultas de saldo como caso de uso, el registro de usuarios, onboarding, recuperación de contraseña, voz, WhatsApp, email, fine-tuning de LLMs, mutaciones bancarias reales, decisiones crediticias, otros flujos bancarios, analítica empresarial y microservicios. Las actualizaciones batch son suficientes. Streaming no aporta puntaje por sí mismo.
+Out of scope: balance queries as a use case, user sign-up, onboarding, password recovery, voice, WhatsApp, email, LLM fine-tuning, real banking mutations, credit decisions, other banking flows, business analytics, and microservices. Batch updates are sufficient. Streaming earns no points by itself.
 
-Falta cerrar el flujo respaldado por evidencia, la acción de negocio concreta, lenguajes y frameworks, herramientas del repositorio, base de datos, hosting, runtime, modelo conversacional, taxonomía revisada, tamaño del workload, presupuesto de inferencia, responsables con nombre, política de retención y hora oficial de entrega. La consigna ya resolvió las dudas sobre idiomas, entrenamiento, escenarios de fallo y métricas obligatorias.
+Still to be settled: the evidence-backed flow, the specific business action, languages and frameworks, repository tooling, database, hosting, runtime, conversational model, reviewed taxonomy, workload size, inference budget, named owners, retention policy, and the official submission time. The brief has already resolved the questions about languages, training, failure scenarios, and mandatory metrics.

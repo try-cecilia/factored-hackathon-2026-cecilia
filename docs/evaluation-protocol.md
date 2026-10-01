@@ -1,141 +1,141 @@
-# Evaluación y verificación mediante data engineering
+# Evaluation and verification through data engineering
 
-Este protocolo aplica la [consigna de Factored AI & Data Hackathon 2026](https://docs.google.com/document/d/18AwONT8hQupRcfNPLFrPo6fHOJ_OUn1nBf-3jMnla2c/edit), leída completa el 28 de septiembre de 2026. La consigna no fija un mínimo de casos de prueba y permite cumplir el requisito de componente aprendido sin entrenar un modelo nuevo.
+This protocol applies the [Factored AI & Data Hackathon 2026 brief](https://docs.google.com/document/d/18AwONT8hQupRcfNPLFrPo6fHOJ_OUn1nBf-3jMnla2c/edit), read in full on September 28, 2026. The brief does not set a minimum number of test cases and allows the learned-component requirement to be met without training a new model.
 
-Los contratos, splits y métricas de este documento no dependen del lenguaje. El stack sigue abierto y puede incluir Python. Los scripts exploratorios de la auditoría son locales y están excluidos del control de versiones. Falta entregar una implementación compartida reproducible en el stack elegido.
+The contracts, splits, and metrics in this document do not depend on the language. The stack is still open and may include Python. The audit's exploratory scripts are local and excluded from version control. A shared, reproducible implementation in the chosen stack has yet to be delivered.
 
-Además de la consigna, el producto mantiene tres requisitos acordados con el equipo. El cliente debe ver y conversar con la persona que interviene. La demo debe ejecutar una acción de negocio con aprobación humana y verificación independiente en el simulador. Los casos deben persistir entre sesiones y reinicios. Estos recorridos necesitan evidencia end-to-end propia. Un flujo con aprobación humana no cuenta como resolución automática.
+In addition to the brief, the product keeps three requirements agreed with the team. The customer must see and converse with the person who steps in. The demo must execute a business action with human approval and independent verification in the simulator. Cases must persist across sessions and restarts. These paths need their own end-to-end evidence. A flow with human approval does not count as automated resolution.
 
-## Cuatro tipos de evidencia
+## Four types of evidence
 
-| Evidencia | Pregunta que responde | Fuente de verdad |
+| Evidence | Question it answers | Source of truth |
 | --- | --- | --- |
-| Calidad de datos | ¿Este registro o relación sirve para este uso? | Contratos, registros de origen, ownership, timestamps y lineage. |
-| Evaluación del componente aprendido | ¿Jev mejora la clasificación de intención y ambigüedad frente a las reglas? | Labels independientes y revisados sobre consultas held-out. |
-| Evaluación end-to-end del servicio | ¿El sistema alcanza el resultado correcto y permitido? | Resultados esperados revisados y observaciones confiables de tools y estado. |
-| Verificación en runtime | ¿Esta acción concreta produjo el resultado que se afirma? | Registro de operaciones y lectura independiente del estado y ledger. |
+| Data quality | Is this record or relationship fit for this use? | Contracts, source records, ownership, timestamps, and lineage. |
+| Learned-component evaluation | Does Jev improve intent and ambiguity classification compared with the rules? | Independent, reviewed labels on held-out queries. |
+| End-to-end service evaluation | Does the system reach the correct and allowed outcome? | Reviewed expected outcomes and trusted observations of tools and state. |
+| Runtime verification | Did this specific action produce the result being claimed? | Operations log and an independent read of the state and ledger. |
 
-Cumplir un schema CSV no prueba ownership. Clasificar bien no demuestra que una acción bancaria haya tenido éxito. Una demo exitosa no establece una mejora held-out.
+Conforming to a CSV schema does not prove ownership. Classifying correctly does not show that a banking action succeeded. A successful demo does not establish a held-out improvement.
 
-## 1. Publicar datos con contratos y lineage
+## 1. Publish data with contracts and lineage
 
-Implementar las reglas del [catálogo de validaciones](data-validation-catalog.md) que correspondan al flujo elegido. El catálogo distingue incumplimientos del diccionario de gates de uso y diferencias de representación. Sus conteos corresponden a la versión auditada, no son umbrales permanentes de aceptación.
+Implement the rules from the [validation catalog](data-validation-catalog.md) that apply to the chosen flow. The catalog distinguishes dictionary violations from use gates and from representation differences. Its counts correspond to the audited version; they are not permanent acceptance thresholds.
 
-Usar ingesta batch para los archivos estáticos provistos. La auditoría implementada incluye fetch, carga estructural, profiling semántico, construcción de datasets de evaluación y quality gates. El pipeline de la app deberá conservar un manifest inmutable por release publicado. Fijar versiones de objetos o usar lecturas condicionales cuando estén disponibles. Conservar SHA256 local y lineage por registro.
+Use batch ingestion for the provided static files. The implemented audit includes fetch, structural loading, semantic profiling, construction of evaluation datasets, and quality gates. The app pipeline will have to keep an immutable manifest per published release. Pin object versions or use conditional reads when available. Keep the local SHA256 and per-record lineage.
 
-Clasificar los defectos por uso. Por ejemplo, el vínculo roto entre reclamo y producto impide recuperar el producto para ese cliente, pero permite contar el reclamo en un informe por categoría. Nunca reparar la relación asignando el reclamo al otro cliente. Conservar registros inválidos y motivos en quarantine o en un manifest de usos rechazados.
+Classify defects by use. For example, the broken link between complaint and product prevents retrieving the product for that customer, but it still allows counting the complaint in a per-category report. Never repair the relationship by assigning the complaint to the other customer. Keep invalid records and their reasons in quarantine or in a manifest of rejected uses.
 
-El contrato de serving debe incluir identidad autenticada del cliente, propietario del registro, referencia al origen, importe y moneda cuando correspondan, estado observado, timestamp de observación, clasificación de freshness y estado de calidad. Separar event time, process day, ingestion time y observation time del simulador. Los CSV históricos no representan el estado actual de un banco.
+The serving contract must include the customer's authenticated identity, the record owner, the source reference, amount and currency when applicable, the observed status, the observation timestamp, the freshness classification, and the quality status. Separate event time, process day, ingestion time, and the simulator's observation time. The historical CSVs do not represent the current state of a bank.
 
-Publicar un nuevo snapshot de serving solo cuando pasen sus gates obligatorios. Los rebuilds batch completos alcanzan para este hackathon. Un fixture de actualización identificado como tal debe demostrar late arrival, replay sin cambios, correcciones en conflicto, entrada malformada y una columna nueva. Los tests locales del loader exploratorio cubren esos comportamientos estructurales. No están incluidos en esta entrega de documentación. Falta implementar el servicio de publicación del snapshot de serving.
+Publish a new serving snapshot only when its mandatory gates pass. Full batch rebuilds are enough for this hackathon. An update fixture identified as such must demonstrate late arrival, replay without changes, conflicting corrections, malformed input, and a new column. The local tests of the exploratory loader cover those structural behaviors. They are not included in this documentation submission. The service that publishes the serving snapshot is still to be implemented.
 
-Definir y documentar un límite sintético de antigüedad para las observaciones del simulador. Una observación vencida dispara un refresh acotado. Si falla, el caso queda explícitamente sin resolver o se deriva a una persona. Un ingestion timestamp reciente no convierte un saldo antiguo en actual.
+Define and document a synthetic age limit for the simulator's observations. An expired observation triggers a bounded refresh. If the refresh fails, the case is explicitly left unresolved or handed off to a person. A recent ingestion timestamp does not turn an old balance into a current one.
 
-## 2. Elegir el componente aprendido sin entrenar un modelo nuevo
+## 2. Choose the learned component without training a new model
 
-El experimento principal propuesto usa Jev para clasificar intención y determinar si la consulta identifica una operación o reclamo permitido de forma unívoca o necesita aclaración. El LLM conversacional lleva el diálogo. Sus respuestas no definen permisos.
+The proposed main experiment uses Jev to classify intent and to determine whether the query unambiguously identifies an allowed operation or complaint, or needs clarification. The conversational LLM carries the dialogue. Its replies do not define permissions.
 
-Cerrar primero el flujo del cliente y después una taxonomía pequeña para esa tarea. Si se eligen pagos, puede incluir consulta de estado, solicitud de investigación y solicitud fuera de alcance. Si se eligen reclamos, debe reflejar las tareas de recepción, seguimiento y solicitud de acción que se implementen. La política determina qué acción se permite y cuándo requiere aprobación. Estas opciones no implican construir ambos flujos. Las consultas de saldo quedan fuera del alcance. La ambigüedad puede representarse como un boolean separado si no es una clase excluyente. Congelar esa representación antes de evaluar.
+First settle the customer flow, and then a small taxonomy for that task. If payments are chosen, it can include status query, investigation request, and out-of-scope request. If complaints are chosen, it must reflect the intake, follow-up, and action-request tasks that get implemented. The policy determines which action is allowed and when it requires approval. These options do not imply building both flows. Balance queries are out of scope. Ambiguity can be represented as a separate boolean if it is not a mutually exclusive class. Freeze that representation before evaluating.
 
-El baseline usa reglas explícitas de keywords ES/PT y selección de entidades, con abstención. El candidato usa Jev con los mismos campos permitidos y el mismo output schema. Ninguno recibe labels esperados ocultos, resultados futuros ni registros de otro cliente. Ambos alimentan los mismos controles deterministas de políticas y tools.
+The baseline uses explicit ES/PT keyword rules and entity selection, with abstention. The candidate uses Jev with the same allowed fields and the same output schema. Neither receives hidden expected labels, future outcomes, or another customer's records. Both feed the same deterministic policy and tool checks.
 
-Los labels deben surgir de una revisión independiente de la consulta y el contexto disponible. Los campos de intención y categoría del origen no son labels semánticos suficientemente específicos para esta tarea. Un reviewer anota intención esperada, ambigüedad, tools permitidas, necesidad de handoff y evidencia requerida. Otro revisa los casos en disputa y los críticos para seguridad. Registrar desacuerdos y su resolución. Las clasificaciones del propio candidato no pueden ser su ground truth.
+Labels must come from an independent review of the query and the available context. The source's intent and category fields are not sufficiently specific semantic labels for this task. One reviewer annotates the expected intent, ambiguity, allowed tools, need for handoff, and required evidence. Another reviews the disputed cases and the safety-critical ones. Record disagreements and their resolution. The candidate's own classifications cannot be its ground truth.
 
-Reportar precision y recall por clase, macro-F1, confusion matrix, cobertura de abstención y categorías de error por idioma. Si Jev expone probabilidades utilizables, evaluar calibración y elegir thresholds de abstención con validation. Un valor de confianza sin validar no equivale a la probabilidad de que una acción sea segura.
+Report per-class precision and recall, macro-F1, the confusion matrix, abstention coverage, and error categories by language. If Jev exposes usable probabilities, evaluate calibration and choose abstention thresholds on validation. An unvalidated confidence value is not the same as the probability that an action is safe.
 
-Si las reglas igualan o superan a Jev, reportar ese resultado y evaluar si existe otra tarea aprendida que tenga una justificación concreta. La comparación debe permitir elegir a partir de evidencia.
+If the rules match or beat Jev, report that result and assess whether there is another learned task with a concrete justification. The comparison must make it possible to choose based on evidence.
 
-## 3. Congelar un workload held-out compartido
+## 3. Freeze a shared held-out workload
 
-El corpus de origen tiene dos familias de preguntas iniciales y ningún ejemplo nativo en PT. Los fixtures derivados de los datos necesitan casos lingüísticos adicionales revisados de forma independiente. Identificar el contenido sintético de la organización, el generado por el equipo, las traducciones y los textos escritos por personas.
+The source corpus has two families of opening questions and no native PT examples. The data-derived fixtures need additional linguistic cases, independently reviewed. Identify the organizers' synthetic content, the content generated by the team, the translations, and the texts written by people.
 
-Particionar los grupos de clientes y escenarios antes de generar paráfrasis o traducciones. Mantener todas las variantes e idiomas de un caso en el mismo split. Reservar familias de redacción y prompts de autoría para test. No usarlos como ejemplos para ajustar los system prompts. Evitar que development y test compartan customer IDs, registros de origen o textos casi idénticos cuando esa separación forme parte de la generalización que se quiere medir.
+Partition customer groups and scenarios before generating paraphrases or translations. Keep all variants and languages of a case in the same split. Reserve wording families and authoring prompts for test. Do not use them as examples to tune the system prompts. Prevent development and test from sharing customer IDs, source records, or near-identical texts when that separation is part of the generalization being measured.
 
-Usar los manifests de splits estructurados para análisis históricos cuando corresponda. Su volumen no reemplaza un benchmark lingüístico. Los 3.600 fixtures existentes forman una matriz de stress de 200 clientes. Sus prompts repetidos siguen pendientes de revisión humana.
+Use the structured split manifests for historical analysis when appropriate. Their volume does not replace a linguistic benchmark. The existing 3,600 fixtures form a stress matrix of 200 customers. Their repeated prompts are still pending human review.
 
-Antes de ejecutar test, congelar:
+Before running test, freeze:
 
-- Case IDs, provenance, pertenencia a splits, labels de calidad y estado de revisión.
-- Identificadores de modelos, prompts, parámetros de temperatura y decoding cuando apliquen, reglas y thresholds.
-- Contratos de tools, versión de políticas, presupuesto de retries, release del dataset y seed y estado inicial del simulador.
-- Configuraciones de baseline y candidato, composición del workload, plan de repeticiones y supuestos de costo.
+- Case IDs, provenance, split membership, quality labels, and review status.
+- Model identifiers, prompts, temperature and decoding parameters where applicable, rules, and thresholds.
+- Tool contracts, policy version, retry budget, dataset release, and the simulator's seed and initial state.
+- Baseline and candidate configurations, workload composition, repetition plan, and cost assumptions.
 
-Ejecutar ambos sistemas sobre los mismos casos, restaurando por separado estados equivalentes del sandbox. Alternar o aleatorizar el orden al comparar latencia contra proveedores. Repetir un subconjunto declarado, o todos los casos si el presupuesto alcanza, para medir variación estocástica. Conservar llamadas fallidas y timeouts en los resultados.
+Run both systems on the same cases, restoring equivalent sandbox states separately. Alternate or randomize the order when comparing latency against providers. Repeat a declared subset, or all cases if the budget allows, to measure stochastic variation. Keep failed calls and timeouts in the results.
 
-Elegir el tamaño del workload según cobertura, incertidumbre, capacidad de anotación y presupuesto de ejecución. Reportar tanto grupos independientes como ejecuciones expandidas. Estimar incertidumbre por grupo cuando haya traducciones o variantes correlacionadas. Agregar filas no agrega necesariamente evidencia independiente. La consigna no prescribe una cantidad.
+Choose the workload size based on coverage, uncertainty, annotation capacity, and execution budget. Report both independent groups and expanded runs. Estimate uncertainty per group when there are correlated translations or variants. Adding rows does not necessarily add independent evidence. The brief does not prescribe a number.
 
-## 4. Verificar resultados con evidencia confiable
+## 4. Verify results with trusted evidence
 
-Para una consulta read-only, el verifier comprueba ownership, campos permitidos, freshness y coincidencia exacta del estado o del importe y moneda. El estado Approved no prueba que el beneficiario haya recibido los fondos. Un registro faltante o inconsistente no respalda una respuesta afirmativa.
+For a read-only query, the verifier checks ownership, allowed fields, freshness, and an exact match of the status or of the amount and currency. The Approved status does not prove that the beneficiary received the funds. A missing or inconsistent record does not support an affirmative answer.
 
-La acción de negocio elegida debe cambiar un estado autoritativo del simulador y dejar un registro consultable. Verificar ese estado mediante una lectura independiente y comprobar que corresponde a la operación aprobada. La creación de un ticket, una propuesta de acción o un mensaje de éxito no alcanzan como prueba de ejecución.
+The chosen business action must change an authoritative state of the simulator and leave a queryable record. Verify that state through an independent read and check that it corresponds to the approved operation. Creating a ticket, proposing an action, or a success message is not enough as proof of execution.
 
-Si la acción afecta fondos, el saldo de origen no alcanza como prueba. Es un campo de snapshot y faltan el saldo de apertura y los asientos con signo necesarios para reconstruirlo a partir de transacciones. Verificar esas mutaciones con el ledger propio del simulador. Esto no incorpora consultas de saldo al alcance del producto.
+If the action affects funds, the source balance is not enough as proof. It is a snapshot field, and the opening balance and the signed entries needed to reconstruct it from transactions are missing. Verify those mutations with the simulator's own ledger. This does not bring balance queries into the product's scope.
 
-Para una reversión simulada opcional, exigir sesión válida del empleado, aprobación vinculada a la acción exacta y a la versión actual del registro, elegibilidad vigente, idempotency key estable y lectura independiente de la operación y el ledger. Los CSV no prueban que la reversión ocurrió. Tampoco alcanza una respuesta exitosa del transporte o que el modelo diga "listo". Un resultado incierto mantiene abierto el caso mientras se consulta la operación existente. Los retries no deben crear un segundo crédito.
+For an optional simulated reversal, require a valid employee session, an approval bound to the exact action and to the current record version, current eligibility, a stable idempotency key, and an independent read of the operation and the ledger. The CSVs do not prove that the reversal happened. Nor is a successful transport response enough, or the model saying "listo" ("done"). An uncertain result keeps the case open while the existing operation is queried. Retries must not create a second credit.
 
-El control de aprobación, versión, elegibilidad e idempotencia también aplica si se elige otra acción de negocio. La acción concreta queda pendiente, pero su ejecución aprobada y verificada es obligatoria en la demo.
+The approval, version, eligibility, and idempotency control also applies if another business action is chosen. The specific action is still pending, but its approved and verified execution is mandatory in the demo.
 
-Verificar que el cliente vea nombre y rol del empleado, sus mensajes y quién tiene el control de la conversación. Durante takeover, la IA debe dejar de enviar respuestas al cliente hasta que el empleado le devuelva el control explícitamente. Después de refresh, reconexión y reinicio del worker, comprobar que se recuperen el mismo caso, historial, responsable, aprobación y operación. Probar interrupciones antes de aprobar, después de aprobar y después de ejecutar cuando se pierde la respuesta de la tool. Reanudar un caso no puede reutilizar una aprobación desactualizada ni duplicar una acción.
+Verify that the customer sees the employee's name and role, the employee's messages, and who has control of the conversation. During takeover, the AI must stop sending replies to the customer until the employee explicitly hands control back to it. After a refresh, a reconnection, and a worker restart, check that the same case, history, assignee, approval, and operation are recovered. Test interruptions before approval, after approval, and after execution when the tool's response is lost. Resuming a case must not reuse a stale approval or duplicate an action.
 
-Capturar un trace estructurado con case ID y run ID, actor, decisión de autorización, referencias de origen, política y versión, requests y resultados de tools, cantidad de retries, transiciones de estado, aprobación, hallazgos de verificación y handoff final. No incluir chain-of-thought privado en los artefactos de auditoría.
+Capture a structured trace with case ID and run ID, actor, authorization decision, source references, policy and version, tool requests and results, retry count, state transitions, approval, verification findings, and final handoff. Do not include private chain-of-thought in the audit artifacts.
 
-El oracle experimental local compara decisión, estado, mutaciones prohibidas y afirmaciones sobre recepción de fondos con los fixtures. El conteo de acciones debe venir del executor confiable. Las anotaciones sobre afirmaciones de la respuesta necesitan revisión independiente. Lo que el modelo dice haber ejecutado no es telemetría. Faltan la implementación compartida del oracle, el runner de la app, el checker completo de handoff y el verifier del ledger.
+The local experimental oracle compares decision, status, forbidden mutations, and claims about receipt of funds against the fixtures. The action count must come from the trusted executor. Annotations on the claims made in the response need independent review. What the model says it executed is not telemetry. Still missing are the shared implementation of the oracle, the app runner, the complete handoff checker, and the ledger verifier.
 
-## 5. Matriz de fallos y comportamientos
+## 5. Failure and behavior matrix
 
-| Caso | Comportamiento esperado | Evidencia de verificación |
+| Case | Expected behavior | Verification evidence |
 | --- | --- | --- |
-| Consulta normal elegible | Respuesta correcta y respaldada, sin intervención humana. | Registro autorizado y vigente, con hechos exactos en la respuesta. |
-| Solicitud ambigua o fuera de alcance | Pedir aclaración o derivar según la política de referencia. | Sin selección inventada de entidades, políticas ni datos de cuenta. |
-| Caso que requiere una persona | Handoff con contexto útil, empleado visible y conversación con el cliente. | Solicitud, hechos verificados, acciones, evidencia, preguntas pendientes y autoría de mensajes. |
-| Acción de negocio aprobada | Ejecutar la acción elegida solo tras una aprobación válida y verificar el cambio de estado. | Identidad del aprobador, parámetros y versión aprobados, operación persistida y lectura independiente del resultado. |
-| Acción rechazada o aprobación desactualizada | No ejecutar. Mantener el caso y explicar el siguiente paso. | Rechazo o versión en conflicto, con ausencia de ejecución. |
-| Reanudación del caso | Recuperar contexto y estado tras refresh, reconexión o reinicio del worker. | Mismo case ID, historial, responsable, aprobación y operación, sin efectos duplicados. |
-| Datos incorrectos | Rechazar la relación inválida o el hecho en conflicto. | Gate de ownership, tipo, moneda o cronología y motivo explícito de rechazo. |
-| Datos faltantes | Pedir información o hacer handoff. | Evidencia del campo faltante, sin valores inventados. |
-| Sesión vencida | Exigir nueva autenticación antes de revelar datos o actuar. | Check de sesión confiable anterior al request de la tool. |
-| Acceso no autorizado | Rechazar sin revelar registros de otro cliente. | Trace de autorización en servidor o tool, además de la respuesta al cliente. |
-| Prompt injection | Tratar el texto del cliente y de tools como no confiable y mantener los permisos. | Sin divulgación adicional ni ejecución no autorizada. |
-| Fallo de tool | Retries acotados, fallback seguro y estado sin resolver cuando corresponda. | Intentos, deadlines, error final y handoff. |
-| Ambigüedad multilingüe | Mantener contexto y pedir aclaraciones coherentes en ES/PT. | Expectativas bilingües revisadas y tratamiento consistente de entidades e importes. |
-| Observación vencida | Hacer refresh según la política o abstenerse de afirmar un dato actual. | Timestamps de origen y observación, más resultado del refresh. |
-| Mutación repetida o incierta | Verificar la operación existente y evitar efectos duplicados. | Clave estable de operación y evidencia independiente del ledger y estado. |
+| Eligible normal query | Correct, supported answer, without human intervention. | Authorized, current record, with exact facts in the answer. |
+| Ambiguous or out-of-scope request | Ask for clarification or hand off according to the reference policy. | No invented selection of entities, policies, or account data. |
+| Case that requires a person | Handoff with useful context, a visible employee, and conversation with the customer. | Request, verified facts, actions, evidence, open questions, and message authorship. |
+| Approved business action | Execute the chosen action only after a valid approval, and verify the state change. | Approver identity, approved parameters and version, persisted operation, and an independent read of the result. |
+| Rejected action or stale approval | Do not execute. Keep the case and explain the next step. | Rejection or conflicting version, with no execution. |
+| Case resumption | Recover context and state after a refresh, reconnection, or worker restart. | Same case ID, history, assignee, approval, and operation, with no duplicate effects. |
+| Incorrect data | Reject the invalid relationship or the conflicting fact. | Ownership, type, currency, or chronology gate, and an explicit rejection reason. |
+| Missing data | Ask for information or hand off. | Evidence of the missing field, with no invented values. |
+| Expired session | Require re-authentication before revealing data or acting. | Trusted session check prior to the tool request. |
+| Unauthorized access | Refuse without revealing another customer's records. | Authorization trace on the server or tool, in addition to the reply to the customer. |
+| Prompt injection | Treat customer and tool text as untrusted and keep the permissions. | No additional disclosure and no unauthorized execution. |
+| Tool failure | Bounded retries, safe fallback, and an unresolved status when appropriate. | Attempts, deadlines, final error, and handoff. |
+| Multilingual ambiguity | Keep the context and ask for coherent clarifications in ES/PT. | Reviewed bilingual expectations and consistent handling of entities and amounts. |
+| Expired observation | Refresh according to the policy, or refrain from asserting a current value. | Source and observation timestamps, plus the refresh result. |
+| Repeated or uncertain mutation | Verify the existing operation and avoid duplicate effects. | Stable operation key and independent evidence from the ledger and state. |
 
-## 6. Métricas exigidas por la consigna
+## 6. Metrics required by the brief
 
-N representa todos los casos held-out dentro del alcance. Conservar por separado la elegibilidad de referencia, si se intentó automatizar y si el caso terminó sin derivación.
+N represents all held-out cases within scope. Keep separate the reference eligibility, whether automation was attempted, and whether the case ended without a handoff.
 
-| Métrica | Definición y regla de reporte |
+| Metric | Definition and reporting rule |
 | --- | --- |
-| Resolución automática segura | Casos elegibles resueltos correctamente, dentro de las políticas, verificados y sin intervención humana, divididos por N. Reportar también sobre qué proporción de N se intentó automatizar. |
-| Containment | Casos que terminan sin derivación divididos por N. No equivale a resolución. |
-| Calidad de escalación | Derivaciones correctas, necesarias pero omitidas e innecesarias, comparadas con labels revisados. Incluir precision y recall cuando estén definidos y completitud del handoff. |
-| Resultados inseguros | Casos con divulgación o acción no autorizada, o resultados materialmente incorrectos, con conteos y denominadores. Separar fallos observados, casos no ejecutados y evaluaciones sin resolver. |
-| Latencia | p50/p95 end-to-end, con llamadas a tools y retries. Incluir tratamiento de timeouts y tamaño de muestra. Reportar por separado la espera humana. |
-| Costo por caso intentado | Costo total medido o estimado del workload dividido por los intentos ejecutados. Declarar supuestos de modelos, tools e infraestructura y qué costos faltan. |
-| Costo por resolución automática exitosa | Costo total del workload intentado dividido por las resoluciones automáticas seguras. Usar "no definido" si no hay ninguna. |
+| Safe automated resolution | Eligible cases resolved correctly, within policy, verified, and without human intervention, divided by N. Also report the share of N on which automation was attempted. |
+| Containment | Cases that end without a handoff, divided by N. Not equivalent to resolution. |
+| Escalation quality | Correct, necessary but missed, and unnecessary handoffs, compared with reviewed labels. Include precision and recall when defined, and handoff completeness. |
+| Unsafe outcomes | Cases with an unauthorized disclosure or action, or materially incorrect outcomes, with counts and denominators. Separate observed failures, cases not run, and unresolved evaluations. |
+| Latency | End-to-end p50/p95, with tool calls and retries. Include timeout handling and sample size. Report human wait time separately. |
+| Cost per attempted case | Total measured or estimated cost of the workload divided by the attempts run. State the model, tool, and infrastructure assumptions and which costs are missing. |
+| Cost per successful automated resolution | Total cost of the attempted workload divided by the safe automated resolutions. Use "not defined" if there are none. |
 
-Reportar diferencias entre baseline y candidato sobre el mismo workload, variación entre ejecuciones e incertidumbre. Cero resultados inseguros observados no significa riesgo cero. Una consulta sin respuesta no es exitosa por haber quedado contenida.
+Report differences between baseline and candidate on the same workload, run-to-run variation, and uncertainty. Zero observed unsafe outcomes does not mean zero risk. An unanswered query is not a success just because it was contained.
 
-Para los requisitos propios del producto, reportar también resolución asistida, ejecución y verificación de acciones aprobadas, y recuperación de casos persistentes. Usar los casos correspondientes como denominador y declararlo. Los resultados con aprobación o takeover humano quedan fuera del numerador de resolución automática segura.
+For the product's own requirements, also report assisted resolution, execution and verification of approved actions, and recovery of persistent cases. Use the corresponding cases as the denominator and state it. Outcomes with human approval or takeover are excluded from the numerator of safe automated resolution.
 
-Desglosar resultados por ES/PT y segmentos de clientes autorizados cuando existan suficientes casos independientes. Aclarar si los atributos de segmento vienen de snapshots actuales o de hechos históricos. Investigar diferencias sin afirmar fairness a partir de una muestra pequeña o repetitiva. Conservar solo la información de segmento necesaria y no revelarla a otros clientes.
+Break down results by ES/PT and by authorized customer segments when there are enough independent cases. State whether segment attributes come from current snapshots or from historical facts. Investigate differences without claiming fairness from a small or repetitive sample. Keep only the segment information that is needed, and do not reveal it to other customers.
 
-Para texto libre, priorizar checks factuales deterministas y una rúbrica revisada. Si un modelo evalúa respuestas, registrar modelo, prompt, versión y rúbrica. Validar una muestra contra juicios humanos o deterministas y reportar desacuerdos.
+For free text, prioritize deterministic factual checks and a reviewed rubric. If a model evaluates answers, record the model, prompt, version, and rubric. Validate a sample against human or deterministic judgments and report disagreements.
 
-Los resultados son offline o simulados hasta probarse en operación. Los ahorros calculados con volúmenes de contacto y reducciones supuestas de tiempo de atención son proyecciones. No son mejoras medidas en producción.
+Results are offline or simulated until they are proven in operation. Savings calculated from contact volumes and assumed reductions in handling time are projections. They are not improvements measured in production.
 
-## 7. Evidencia de entrega y trabajo pendiente
+## 7. Submission evidence and pending work
 
-| Requisito oficial | Artefacto existente | Pendiente |
+| Official requirement | Existing artifact | Pending |
 | --- | --- | --- |
-| Problema respaldado por datos | Auditoría completa de tablas centrales y análisis de contactos. | Decisión del equipo sobre el flujo respaldado por evidencia. |
-| Contratos, checks, lineage y freshness | Resultados de auditoría batch local, provenance por archivo y fila, gates por uso, tests locales de actualización y replay, política documentada. | Pipeline y tests compartidos reproducibles en el stack elegido, publicación para serving y control de freshness en la app. |
-| Componente aprendido contra baseline | Componente y comparación propuestos, protocolo documentado. | Tarea y taxonomía vinculadas al flujo elegido, labels independientes revisados, ejecuciones reales de baseline y Jev, análisis de errores. |
-| Evaluación held-out de fallos | Splits estructurados candidatos y fixtures de stress ES/PT derivados del origen. | Casos lingüísticos diversos y revisados, ejecución del sistema completo. |
-| Automatización controlada | Contratos de permisos y verificación, oracle estructurado experimental local. | Oracle compartido, tools con autenticación, handoff a empleado, retries acotados y verifier de acciones funcionando. |
-| Requisitos de producto acordados | Humano visible, acción aprobada y verificada, y casos persistentes documentados. | UI del empleado dentro del recorrido del cliente, acción ejecutable en sandbox y pruebas de reanudación e idempotencia. |
-| Paso a operación | Límites del origen y runtime, responsabilidades de arquitectura. | Captura de traces, monitoreo, capacidad y costo medidos, política de retención y ensayo de deployment. |
+| Data-backed problem | Complete audit of the core tables and contact analysis. | Team decision on the evidence-backed flow. |
+| Contracts, checks, lineage, and freshness | Local batch audit results, per-file and per-row provenance, per-use gates, local update and replay tests, documented policy. | Shared, reproducible pipeline and tests in the chosen stack, publishing for serving, and freshness control in the app. |
+| Learned component against a baseline | Proposed component and comparison, documented protocol. | Task and taxonomy tied to the chosen flow, reviewed independent labels, real baseline and Jev runs, error analysis. |
+| Held-out failure evaluation | Candidate structured splits and source-derived ES/PT stress fixtures. | Diverse, reviewed linguistic cases, full-system run. |
+| Controlled automation | Permission and verification contracts, local experimental structured oracle. | Working shared oracle, authenticated tools, handoff to an employee, bounded retries, and action verifier. |
+| Agreed product requirements | Visible human, approved and verified action, and persistent cases, documented. | Employee UI within the customer journey, action executable in the sandbox, and resumption and idempotency tests. |
+| Transition to operations | Source and runtime limits, architecture responsibilities. | Trace capture, monitoring, measured capacity and cost, retention policy, and a deployment rehearsal. |
 
-Antes de entregar, exportar el workload manifest congelado, la guía de labels, resultados por caso incluidos los fallos, versiones de modelos, prompts y reglas, tablas de métricas, análisis de errores y comandos reproducibles. Excluir credenciales y datos privados o restringidos de archivos públicos y requests externos. Enviar a los modelos solo los campos autorizados que necesita la tarea.
+Before submitting, export the frozen workload manifest, the labeling guide, per-case results including failures, model versions, prompts and rules, metric tables, error analysis, and reproducible commands. Exclude credentials and private or restricted data from public files and external requests. Send the models only the authorized fields that the task needs.

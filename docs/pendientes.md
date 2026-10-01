@@ -1,42 +1,42 @@
-# Pendientes
+# Pending work
 
-Lo que falta después de que las alertas (punto 6) y el reporte de calidad en vivo (punto 5) queden cerrados.
-Estado al 2026-09-29.
+What remains after the alerts (item 6) and the live quality report (item 5) are closed.
+Status as of 2026-09-29.
 
-## 3b. Evaluar el camino humano
+## 3b. Evaluate the human path
 
-**Qué falta:** medir por separado el camino en que una persona interviene (escalación a operador, aprobación,
-feedback), aparte de la automatización controlada que ya está mergeada y medida (punto 3).
+**What is missing:** measure separately the path in which a person intervenes (escalation to an operator, approval,
+feedback), apart from the controlled automation that is already merged and measured (item 3).
 
-**Se puede hacer ya:** no depende de datos nuevos. El código de operadores y aprobación está mergeado
+**Can be done now:** it does not depend on new data. The operator and approval code is merged
 (`agent/session/operators.py`, `agent/policy/escalation.py`, `eval/operator_labels.py`).
 
-**Criterio de cierre:** un reporte en `eval/reports/` con las mismas métricas que el resto de la evaluación del
-sistema, medidas solo sobre los casos que pasan por una persona, y una sección en `EVALUATION.md` que lo cite.
+**Closing criterion:** a report in `eval/reports/` with the same metrics as the rest of the system
+evaluation, measured only on the cases that go through a person, and a section in `EVALUATION.md` that cites it.
 
-## 3c. Evaluar la pantalla de operador
+## 3c. Evaluate the operator screen
 
-**Qué falta:** evaluar la pantalla que usa el operador (la vista web de `web/` que consume la API de `api/`) como
-pieza aparte: qué ve, qué puede aprobar o rechazar y qué queda registrado de lo que hace (la API exige la clave de operador,
-`require_operator` en `api/main.py`).
+**What is missing:** evaluate the screen the operator uses (the web view in `web/` that consumes the API in `api/`) as
+a separate piece: what they see, what they can approve or reject and what gets recorded of what they do (the API requires the operator key,
+`require_operator` in `api/main.py`).
 
-**Se puede hacer ya:** sí, contra el demo local.
+**Can be done now:** yes, against the local demo.
 
-**Criterio de cierre:** una lista de casos recorridos a mano o con prueba automática (`tests/test_api.py` como
-punto de partida), con el resultado de cada uno, y las fallas anotadas en `LIMITATIONS.md`.
+**Closing criterion:** a list of cases walked through by hand or with an automated test (`tests/test_api.py` as a
+starting point), with the result of each one, and the failures noted in `LIMITATIONS.md`.
 
-## 4. Datos y ML
+## 4. Data and ML
 
-**Estado:** la herramienta ya está mergeada, pero **no hay resultados** y no hay nada que hacer todavía.
+**Status:** the tool is already merged, but **there are no results** and there is nothing to do yet.
 
-**Bloqueo:** hacen falta mensajes escritos por personas reales. Las transcripciones del organizador no sirven
-(42 textos distintos de cliente, todos sobre saldo; ver `docs/data_quality.md`). Los mensajes vienen del
-formulario descrito en `docs/human_set.md`, con piso de 60 mensajes de 8 personas.
+**Blocker:** messages written by real people are needed. The organizer's transcripts are not usable
+(42 distinct customer texts, all about balances; see `docs/data_quality.md`). The messages come from the
+form described in `docs/human_set.md`, with a floor of 60 messages from 8 people.
 
-**Cuando se desbloquee:**
-1. Bajar los mensajes de la base D1 del formulario y anonimizarlos como indica `docs/human_set.md`.
-2. Correr la herramienta de datos y ML sobre ellos.
-3. Registrar el resultado en `EVALUATION.md`. Si no se llega al piso, decirlo ahí y no reportarlo como resultado.
+**Once unblocked:**
+1. Download the messages from the form's D1 database and anonymize them as `docs/human_set.md` indicates.
+2. Run the data and ML tool on them.
+3. Record the result in `EVALUATION.md`. If the floor is not reached, say so there and do not report it as a result.
 
-**Ojo con el plazo:** la base D1 se borra después de la final (16/10/2026), así que hay que exportar los mensajes
-antes.
+**Mind the deadline:** the D1 database is deleted after the final (October 16, 2026), so the messages must be exported
+before then.

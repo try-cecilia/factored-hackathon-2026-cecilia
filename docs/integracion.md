@@ -1,705 +1,705 @@
-# Puntos de integración y contratos de los sistemas simulados
+# Integration points and contracts of the simulated systems
 
-La consigna acepta servicios de prueba y herramientas bancarias simuladas "cuando sus contratos y limitaciones están
-documentados", y pide identificar qué entradas son reales, de-identificadas, sintéticas o generadas por el equipo.
-Este documento hace las dos cosas: dice qué es simulado hoy, qué contrato cumple cada simulación y **dónde exactamente**
-se enchufaría el sistema real.
+The brief accepts sandbox services and mock banking tools "when their contracts and limitations are
+documented", and asks to identify which inputs are real, de-identified, synthetic or team-generated.
+This document does both: it states what is simulated today, which contract each simulation fulfills and **exactly where**
+the real system would plug in.
 
-Cómo leerlo:
+How to read it:
 
-- **Contrato actual** es lo que el código hace hoy y un test comprueba. **En producción** es lo que proponemos, no algo
-  ya acordado con un banco. Donde depende del banco y no lo sabemos, dice **por definir con el banco**.
-- Cada frontera usa la misma plantilla: *Hoy*, *Contrato*, *Punto de sustitución*, *En producción* y *Cómo se verifica*.
-- Nada en este prototipo mueve dinero real, ni toma decisiones de crédito: la consigna no lo exige ni lo autoriza.
+- **Current contract** is what the code does today and a test checks. **In production** is what we propose, not something
+  already agreed with a bank. Where it depends on the bank and we do not know, it says **to be defined with the bank**.
+- Each boundary uses the same template: *Today*, *Contract*, *Substitution point*, *In production* and *How it is verified*.
+- Nothing in this prototype moves real money or makes credit decisions: the brief neither requires nor authorizes it.
 
-## Qué es real y qué es simulado
+## What is real and what is simulated
 
-| Elemento | Naturaleza | Detalle |
+| Element | Nature | Detail |
 |---|---|---|
-| Clientes, productos y transacciones | **Sintéticos**, provistos por el organizador | Se leen de un bucket de solo lectura y se cargan al warehouse. Los límites de estos datos están en `docs/data_quality.md` y `docs/dataset-audit.md`. |
-| Casos de evaluación en español | **Generados por el equipo** | Salen del warehouse con etiquetas de referencia calculadas (`eval/workload.py`), no escritas a mano. |
-| Turnos en portugués | **Escritos por el equipo** | El dataset no tiene portugués; es una limitación declarada en los reportes. |
-| Set de mensajes humanos | **Reales**, de personas ajenas al equipo | Con consentimiento, sin datos personales (`docs/human_set.md`). Está en recolección. |
-| Identidad del cliente | **Simulada** | IdP de prueba, ver frontera 1. |
-| Identidad del operador | **Simulada** | Claves con nombre, ver frontera 2. |
-| Servicio de rastreo | **Simulado** | Archivo JSONL, con un SLA de 2 días hábiles que es una política sintética. |
-| Cola de casos | **Simulada** | Archivo JSONL. |
-| Regla de revisión de rastreos (90 días) | **Política sintética** | Constante `TRACE_REVIEW_AFTER_DAYS`; la decisión final es de una persona. |
-| Modelos de lenguaje | **Servicios externos reales** | Solo reciben texto enmascarado, ver frontera 6. |
+| Customers, products and transactions | **Synthetic**, supplied by the organizer | Read from a read-only bucket and loaded into the warehouse. The limits of this data are in `docs/data_quality.md` and `docs/dataset-audit.md`. |
+| Evaluation cases in Spanish | **Team-generated** | Drawn from the warehouse with computed reference labels (`eval/workload.py`), not written by hand. |
+| Turns in Portuguese | **Team-written** | The dataset has no Portuguese; this is a limitation declared in the reports. |
+| Human message set | **Real**, from people outside the team | With consent, no personal data (`docs/human_set.md`). Collection is in progress. |
+| Customer identity | **Simulated** | Test IdP, see boundary 1. |
+| Operator identity | **Simulated** | Named keys, see boundary 2. |
+| Trace service | **Simulated** | JSONL file, with an SLA of 2 business days that is a synthetic policy. |
+| Case queue | **Simulated** | JSONL file. |
+| Trace review rule (90 days) | **Synthetic policy** | Constant `TRACE_REVIEW_AFTER_DAYS`; the final decision is made by a person. |
+| Language models | **Real external services** | They only receive masked text, see boundary 6. |
 
 ---
 
-## 1. Identidad del cliente
+## 1. Customer identity
 
-**Hoy.** `agent/session/identity.py`, `IdentityService.login(customer_id, pin) -> Session`. Es el "servicio de sesión de
-prueba confiable" que pide la consigna: un número de cliente solo no prueba identidad.
+**Today.** `agent/session/identity.py`, `IdentityService.login(customer_id, pin) -> Session`. It is the "trusted test session
+service" the brief asks for: a customer number alone does not prove identity.
 
-**Contrato actual.**
+**Current contract.**
 
-- *Entrada:* `customer_id` y un segundo factor. El factor es un PIN de 6 dígitos derivado como
-  `HMAC-SHA256(DEMO_IDP_SECRET, customer_id)`; el secreto vive solo en el servidor.
-- *Salida:* una sesión con token opaco (24 bytes aleatorios, TTL de 15 minutos, `SESSION_TTL_SECONDS`) y los atributos
-  `segment`, `country` y `customer_status`. Con `STATE_DB_PATH` la sesión sobrevive a un reinicio y en disco queda solo el hash del token.
-- *Errores:* `AuthError` genérico a propósito (quien llama no aprende qué verificación falló), `LockedOut` tras 5 fallos
-  en 15 minutos para ese cliente, e `IdentityUnavailable` si falta `DEMO_IDP_SECRET`: sin secreto no se emite ninguna
-  sesión (falla cerrado). Un cliente desconocido o con la cuenta cerrada no puede abrir sesión.
-- *Seguridad:* comparación en tiempo constante; el endpoint `POST /auth/session` además limita intentos por origen.
-- *Consulta y cierre:* `GET /auth/session` con la cabecera `X-Session-Token` devuelve `customer_id`, `session_ref`, los
-  atributos y el tiempo restante, sin extender la sesión (401 si no está viva). `DELETE /auth/session` la revoca y
-  responde siempre 204, aunque el token no exista o ya esté revocado.
-- *Frontend web:* un BFF guarda el token en una cookie httpOnly y el navegador nunca lo ve. Envía la IP del usuario en
-  `X-Client-IP`; con `CLIENT_IP_HEADER=X-Client-IP` el límite de intentos es por usuario. Solo es seguro si nada más que
-  el BFF puede alcanzar la API (servicio privado); si no, cualquiera elige su propia IP.
-- *Datos:* aguas abajo solo circula el token; los tickets y logs llevan `session_ref`, un hash de un solo sentido.
+- *Input:* `customer_id` and a second factor. The factor is a 6-digit PIN derived as
+  `HMAC-SHA256(DEMO_IDP_SECRET, customer_id)`; the secret lives only on the server.
+- *Output:* a session with an opaque token (24 random bytes, 15-minute TTL, `SESSION_TTL_SECONDS`) and the attributes
+  `segment`, `country` and `customer_status`. With `STATE_DB_PATH` the session survives a restart and only the token's hash is kept on disk.
+- *Errors:* a deliberately generic `AuthError` (the caller does not learn which check failed), `LockedOut` after 5 failures
+  in 15 minutes for that customer, and `IdentityUnavailable` if `DEMO_IDP_SECRET` is missing: without the secret no
+  session is issued (fails closed). An unknown customer, or one whose account is closed, cannot open a session.
+- *Security:* constant-time comparison; the `POST /auth/session` endpoint also limits attempts per source.
+- *Lookup and logout:* `GET /auth/session` with the `X-Session-Token` header returns `customer_id`, `session_ref`, the
+  attributes and the remaining time, without extending the session (401 if it is not alive). `DELETE /auth/session` revokes it and
+  always answers 204, even if the token does not exist or is already revoked.
+- *Web frontend:* a BFF keeps the token in an httpOnly cookie and the browser never sees it. It sends the user's IP in
+  `X-Client-IP`; with `CLIENT_IP_HEADER=X-Client-IP` the attempt limit is per user. This is only safe if nothing but
+  the BFF can reach the API (private service); otherwise anyone can choose their own IP.
+- *Data:* only the token circulates downstream; tickets and logs carry `session_ref`, a one-way hash.
 
-**Punto de sustitución.** La verificación dentro de `IdentityService.login` (`derive_test_pin`). Lo que sigue igual: quien
-emite la sesión siempre termina en `SessionStore.issue(customer_id, atributos)`, y el resto del sistema solo conoce el token.
+**Substitution point.** The check inside `IdentityService.login` (`derive_test_pin`). What stays the same: whoever
+issues the session always ends up in `SessionStore.issue(customer_id, atributos)`, and the rest of the system only knows the token.
 
-**En producción.** El IdP del banco (inicio de sesión en la app, OTP o PIN de IVR), con MFA y vinculación de dispositivo;
-los atributos vendrían del IdP. `/demo/customers` publica PINs de prueba: solo existe con `DEMO_MODE=1` (404 en cualquier
-otro caso) y debe quedar apagado en cualquier entorno real.
+**In production.** The bank's IdP (app login, OTP or IVR PIN), with MFA and device binding;
+the attributes would come from the IdP. `/demo/customers` publishes test PINs: it only exists with `DEMO_MODE=1` (404 in every
+other case) and must stay off in any real environment.
 
-**Cómo se verifica.** `tests/test_api.py` (inicio de sesión, consulta y cierre, límite de intentos detrás del BFF),
-`tests/test_durable_state.py` (sesiones tras un reinicio, solo el hash en disco).
+**How it is verified.** `tests/test_api.py` (login, lookup and logout, attempt limit behind the BFF),
+`tests/test_durable_state.py` (sessions after a restart, only the hash on disk).
 
 ---
 
-## 2. Identidad del operador
+## 2. Operator identity
 
-**Hoy.** `agent/session/operators.py`, `OperatorDirectory`. Diseño en
+**Today.** `agent/session/operators.py`, `OperatorDirectory`. Design in
 `docs/superpowers/specs/2026-09-29-identidad-operador-design.md`.
 
-**Contrato actual.**
+**Current contract.**
 
-- *Entrada:* la cabecera `X-Operator-Key`. Las claves se configuran en `OPERATOR_KEYS` (`nombre=clave`).
-- *Salida:* el nombre del operador, que **sale de la clave y nunca de lo que el operador envíe**.
-- *Roles:* la clave de admin solo lee; la de operador es la única que puede tomar, aprobar, rechazar y devolver.
-- *Errores:* 503 si no hay claves configuradas, 401 con clave ausente o inválida, 429 tras demasiados fallos desde un origen.
-  Cada intento fallido queda en el registro de auditoría sin la clave presentada. Nombres o claves repetidos, o claves
-  de menos de 24 caracteres, impiden que el servicio arranque.
+- *Input:* the `X-Operator-Key` header. Keys are configured in `OPERATOR_KEYS` (`nombre=clave`, that is, name=key).
+- *Output:* the operator's name, which **comes from the key and never from anything the operator sends**.
+- *Roles:* the admin key only reads; the operator key is the only one that can claim, approve, reject and hand back.
+- *Errors:* 503 if no keys are configured, 401 with a missing or invalid key, 429 after too many failures from one source.
+  Every failed attempt is recorded in the audit log without the presented key. Repeated names or keys, or keys
+  shorter than 24 characters, prevent the service from starting.
 
-**Punto de sustitución.** `require_operator` en `api/main.py`: hoy consulta `OperatorDirectory`; con SSO consultaría al
-proveedor de identidad y devolvería el mismo nombre.
+**Substitution point.** `require_operator` in `api/main.py`: today it queries `OperatorDirectory`; with SSO it would query the
+identity provider and return the same name.
 
-**En producción.** SSO corporativo (OIDC) con los roles del banco y MFA. Las claves con nombre son un puente honesto,
-no el destino: viven en variables de entorno y se rotan a mano.
+**In production.** Corporate SSO (OIDC) with the bank's roles and MFA. Named keys are an honest bridge,
+not the destination: they live in environment variables and are rotated by hand.
 
-**Consola web de operador** (`web/`, rutas `/operador/*`). Cola humana, detalle con evidencia y acciones, monitoreo de solo
-lectura y trazas. Cómo se configuran las claves:
+**Web operator console** (`web/`, routes `/operador/*`). Human queue, detail with evidence and actions, read-only
+monitoring and traces. How the keys are configured:
 
-| Dónde | Qué se configura |
+| Where | What is configured |
 |---|---|
-| API | `ADMIN_API_KEY` (lee: cola, tickets, monitoreo, trazas) y `OPERATOR_KEYS=ana=…,beto=…` (actúa: tomar, aprobar, rechazar, devolver). Cada clave de operador de 24 caracteres o más. |
-| Web (servidor) | `AGENT_API_URL`, **`WEB_PUBLIC_ORIGIN`** (obligatoria en producción) y `TRUSTED_CLIENT_IP_HEADER` si hay un proxy. **Las claves no van en el entorno de la web**: cada persona escribe las suyas en `/operador/login`. |
-| API, detrás del BFF | `CLIENT_IP_HEADER=X-Client-IP`, igual que para el login de clientes. Sin eso, el límite de intentos fallidos (`OPERATOR_AUTH_FAILS_PER_MIN`) cuenta por la IP del BFF y diez claves mal escritas bloquean a todos los operadores. Solo es seguro si nada más que el BFF alcanza la API. |
+| API | `ADMIN_API_KEY` (reads: queue, tickets, monitoring, traces) and `OPERATOR_KEYS=ana=…,beto=…` (acts: claim, approve, reject, hand back). Each operator key is 24 characters or longer. |
+| Web (server) | `AGENT_API_URL`, **`WEB_PUBLIC_ORIGIN`** (required in production) and `TRUSTED_CLIENT_IP_HEADER` if there is a proxy. **The keys do not go in the web's environment**: each person types their own at `/operador/login`. |
+| API, behind the BFF | `CLIENT_IP_HEADER=X-Client-IP`, same as for customer login. Without it, the failed-attempt limit (`OPERATOR_AUTH_FAILS_PER_MIN`) counts by the BFF's IP and ten mistyped keys lock out every operator. This is only safe if nothing but the BFF reaches the API. |
 
-- *Lectura y acción separadas, como en la API.* El ingreso pide la clave de lectura y, opcionalmente, la de operador. Con
-  solo la de lectura la sesión es de **solo lectura**: ve todo y no puede actuar; la consola ofrece agregar la clave de
-  operador sin volver a ingresar. La clave de operador se comprueba con `GET /admin/operator/me`, que devuelve el nombre
-  al que pertenece sin tocar ningún ticket; ese nombre es el que la consola muestra y el que queda en
-  `ticket_events.jsonl`. El ingreso exige la clave de lectura porque un operador sin ella no podría ver ni la cola.
-- *Cómo viaja la clave.* Se **tipea en un formulario HTML nativo** (`<form method="post">`, campos `type="password"` sin
-  estado de React), va **una sola vez** al BFF por POST (`/operador/sesion` para ingresar, `/operador/clave` para sumar
-  la de operador, `/operador/salir`) y **nunca se guarda ni se devuelve al navegador**: el BFF la comprueba contra la API,
-  la guarda en su memoria y responde con una redirección 303 (post/redirect/get) que solo lleva un destino y, a lo
-  sumo, un código fijo como `operator_401` en una cookie de un solo uso. Como es un formulario nativo, funciona sin
-  JavaScript, y ningún estado, store, log ni respuesta del cliente contiene la clave. Un chequeo lo sostiene:
-  `make web-test` (`pnpm --dir web test:all`) prueba la lógica del formulario con claves de mentira, comprueba que ni el
-  destino ni el código de error las contienen, y falla si un componente de la consola guarda una clave en estado,
-  controla un campo de contraseña o pasa una clave a una función de servidor. Además hay pruebas HTTP contra el handler del
-  build de producción (`web/tests/http/`, con una API falsa): CSRF, destinos de redirección hostiles y rotación de sesión.
-- *Formularios protegidos contra CSRF.* Los tres POST (`/operador/sesion`, `/operador/clave`, `/operador/salir`) se rechazan
-  —sin leer el cuerpo ni tocar la sesión— si no prueban venir de una página de la consola: `Sec-Fetch-Site`, cuando el navegador lo
-  manda, tiene que ser `same-origin`; `Origin` (o `Referer` si falta) tiene que ser **exactamente el origen público**
-  (esquema, host y puerto); sin ninguna de las dos cabeceras no hay prueba y se rechaza. `SameSite=Strict` no alcanzaba
-  para el ingreso porque todavía no hay cookie. El origen público sale de **`WEB_PUBLIC_ORIGIN`** en el servidor de la web
-  (por ejemplo `https://console.bank.example`, sin ruta), nunca de cabeceras de proxy: una página `http://` del mismo host
-  no puede forzar un ingreso sobre `https://`. **En producción es obligatoria**: sin ella, o con un valor que no sea un
-  origen http(s), todos los POST de la consola se rechazan y el servidor escribe en el log qué falta.
-  **Puede ser una lista de orígenes exactos separados por comas** (esquema, host y puerto de cada uno): el stack local de Docker
-  responde en `http://127.0.0.1:3000` y en `http://localhost:3000`, y el compose pasa ambos por defecto. Cada entrada
-  tiene que ser un origen puro tal como está escrita: sin comodines, usuario@, ruta, query ni fragmento (se valida el texto
-  antes de normalizarlo, con el host en ASCII —un dominio internacionalizado va en punycode, `xn--…`; los caracteres Unicode que el parser convertiría en `*` o `.` se rechazan—; una `/` final se tolera). **Una sola entrada inválida invalida todo el valor**, y **una lista que mezcla
-  http y https también** (las cookies no pueden ser correctas para las dos): se rechaza todo en vez de abrir algo por un error de
-  tipeo. Las cookies y la autorización usan esa misma validación. Las cabeceras `X-Forwarded-*` siguen sin leerse. En producción
-  va **un origen https explícito**. En desarrollo, si está
-  vacía, se usa el origen de la URL de la petición (`http://127.0.0.1:<puerto>`). Está en `web/.env.example`.
-  **El rechazo no es una página en blanco:** es un `303` a `/operador/login?motivo=origen` (u `origen-config`) con el motivo en la URL, no en una
-  cookie (un navegador que no guarda cookies igual lo ve), de una lista cerrada y sin eco de la petición: ni las claves ni el origen
-  que mandó el navegador; también se ve si ya hay una sesión activa, que no se toca. En ES y PT: «No pudimos verificar el origen del
-  formulario. Ingresar desde <orígenes configurados>.», o, si `WEB_PUBLIC_ORIGIN` falta o es inválido, que la consola no tiene
-  configurado su origen público. No se emite ninguna cookie de sesión.
-- *Cookies según el origen.* Que una cookie salga `Secure` y con prefijo `__Host-` lo decide **`WEB_PUBLIC_ORIGIN`**, no `NODE_ENV`
-  (la imagen de Docker corre con `NODE_ENV=production` también en local). Con un origen **https** son `Secure` con `__Host-`
-  (`__Host-cecilai_session`, `__Host-cecilai_operator`, `__Host-cecilai_operator_flash`; el idioma, `cecilai_lang`, va `Secure`
-  sin prefijo); con un origen **http** (el stack local, `http://127.0.0.1:3000`) no llevan ninguna de las dos cosas, porque Safari
-  y los navegadores fuera de `localhost` no guardan una cookie `Secure` recibida por http y el ingreso se perdía sin aviso.
-  Sin `WEB_PUBLIC_ORIGIN` en producción se conserva el comportamiento anterior (`Secure`). En cualquier caso siguen `httpOnly`,
-  `SameSite` (`Lax` la sesión de cliente, `Strict` la de operador) y el chequeo de origen de los formularios. Es una sola
-  función (`web/src/server/cookie-policy.ts`) para las cuatro cookies. Si aun así el navegador no guarda la sesión (cookies
-  bloqueadas, http fuera de localhost), el ingreso de cliente devuelve el botón a su estado y muestra «Tu navegador no guardó la
-  sesión…», y el de operador —que pasa por `/operador/ingreso`, una redirección que mira la cookie que el navegador sí trajo—
-  vuelve al formulario con el mismo aviso (ES y PT).
-- *Sesión nueva en cada ingreso y en cada elevación.* Un ingreso siempre crea un identificador nuevo y termina la sesión
-  que ese navegador tuviera; agregar la clave de operador también cambia el identificador y el anterior deja de valer, así
-  que una cookie de solo lectura copiada no gana permisos de acción. El tope de 8 horas sigue contando desde el ingreso original. La sesión anterior se consume en un solo paso
-  (tomar y borrar): de dos ingresos simultáneos con la misma cookie solo uno crea sesión; el otro vuelve al ingreso con un
-  aviso y **sin tocar la cookie de sesión** (un borrado que llegara después del Set-Cookie del ganador dejaría esa sesión
-  huérfana). Si el navegador perdió la respuesta ganadora, la cookie vieja se rechaza durante 30 segundos y luego se trata
-  como una cookie desconocida. Ninguna respuesta a un identificador muerto (vencido, reemplazado o desconocido) borra la cookie de
-  sesión: solo la borra el cierre de sesión explícito, y un ingreso nuevo la sobrescribe; así una respuesta lenta a un GET no
-  puede borrar la sesión que otro ingreso acaba de fijar. Lo mismo vale para los errores de la API: un 401 al leer (la clave de lectura se
-  rotó) invalida en el servidor solo la sesión que usó esa petición, por identificador y sin `Set-Cookie`; 403, 429 y 5xx no
-  terminan ninguna sesión. El borrado de la cookie queda reservado al cierre de sesión explícito.
-- *Destino tras el ingreso.* Se decodifica y normaliza como lo haría un navegador (puntos, `%2f`, `%5c`, tabuladores,
-  barras invertidas) y solo se acepta una ruta propia que no empiece con `//`; ante la duda va a `/operador/cola`.
-- *Dónde viven las claves.* Nunca en el JavaScript del navegador, en `localStorage` ni en una cookie. El servidor de la web
-  (BFF) las guarda **en memoria**, atadas a un identificador aleatorio de 256 bits que viaja en una cookie
-  `httpOnly` + `SameSite=Strict` (y `Secure` con prefijo `__Host-` cuando el origen público es https; ver «Cookies según el origen»). La sesión vence a los 30 minutos sin
-  actividad de la persona (el refresco automático de la cola y del monitoreo **no** cuenta como actividad) o a las 8
-  horas, y se descarta si la API rechaza la clave (rotada o revocada). Al vencer, la consola vuelve al ingreso con un aviso.
-  `OPERATOR_IDLE_SECONDS` (en el servidor de la web, por defecto 1800, mínimo 10) acorta esa ventana para probar el vencimiento.
-- *Alternativa descartada y por qué.* Una cookie sellada con las claves adentro evita el estado en el servidor, pero
-  pone las claves (cifradas) en el navegador, exige un secreto de sellado que rotar y no permite cerrar una sesión robada
-  desde el servidor. **Costo de la elección:** las sesiones viven en la memoria de un solo proceso, así que un reinicio
-  o una segunda réplica sin afinidad de sesión obliga a volver a ingresar. Para un puñado de operadores es aceptable; con
-  varias réplicas hace falta un almacén compartido (Redis) o pasar al SSO.
-- *`SameSite=Strict`.* Frena el envío de la cookie desde otro sitio, que es la defensa contra CSRF de las acciones; el
-  costo es que un enlace a la consola desde otra app (un chat, un correo) abre primero el ingreso.
-- *Errores.* 401 (clave rotada) cierra la sesión o pide de nuevo la clave de operador; 403 en la web significa "sesión
-  de solo lectura"; 409 (otra persona movió el caso, o la pantalla estaba vieja: cada acción envía la `version` que se
-  vio) recarga el estado y muestra el panel de conflicto ("No se aplicó: el caso cambió", de `v3` a `v4`, con quién lo movió); mientras ese aviso está
-  visible no se puede decidir hasta usar "Recargar caso". 429 y 503 se explican en pantalla. Tomar, aprobar, rechazar, resolver y devolver actúan con
-  un clic (como en el artboard aprobado), sin diálogo de confirmación: la protección es `expected_version` más el nombre de la clave en el historial.
-  Resolver se habilita recién con el mensaje para el cliente escrito.
-- *Datos del cliente.* La consola muestra lo que la API ya devuelve a la clave de lectura: el ticket (con su
-  `customer_id`, el pedido recortado y la evidencia). De las trazas **no** muestra el texto de la respuesta, lo que vio el
-  modelo ni los argumentos de las herramientas: el BFF deja pasar solo un conjunto fijo de campos (`loadTraceLog` y
-  `loadTrace` en `web/src/server/operator.functions.ts`).
-- *Probarlo sin datos reales ni claves de modelo:* `python -m ops.seed_operator_demo --dir /tmp/cecilai-operator-demo`
-  arma un warehouse mínimo, genera claves nuevas y llena la cola y las trazas con turnos de verdad; imprime las claves y
-  deja `operator-demo.env` para cargar antes de `uvicorn`. Las capturas del recorrido están en `docs/demo/operador-kit-*.png`.
+- *Reading and acting kept separate, as in the API.* Sign-in asks for the read key and, optionally, the operator key. With
+  only the read key the session is **read-only**: it sees everything and cannot act; the console offers to add the
+  operator key without signing in again. The operator key is checked with `GET /admin/operator/me`, which returns the name
+  it belongs to without touching any ticket; that name is the one the console shows and the one recorded in
+  `ticket_events.jsonl`. Sign-in requires the read key because an operator without it could not even see the queue.
+- *How the key travels.* It is **typed into a native HTML form** (`<form method="post">`, `type="password"` fields with no
+  React state), goes **only once** to the BFF by POST (`/operador/sesion` to sign in, `/operador/clave` to add
+  the operator key, `/operador/salir`) and is **never stored in or sent back to the browser**: the BFF checks it against the API,
+  keeps it in its memory and answers with a 303 redirect (post/redirect/get) that carries only a destination and, at
+  most, a fixed code such as `operator_401` in a single-use cookie. Because it is a native form, it works without
+  JavaScript, and no client-side state, store, log or response contains the key. A check backs this up:
+  `make web-test` (`pnpm --dir web test:all`) tests the form logic with fake keys, checks that neither the
+  destination nor the error code contains them, and fails if a console component keeps a key in state,
+  controls a password field or passes a key to a server function. There are also HTTP tests against the handler of the
+  production build (`web/tests/http/`, with a fake API): CSRF, hostile redirect destinations and session rotation.
+- *Forms protected against CSRF.* The three POSTs (`/operador/sesion`, `/operador/clave`, `/operador/salir`) are rejected,
+  without reading the body or touching the session, unless they prove they come from a console page: `Sec-Fetch-Site`, when the browser
+  sends it, must be `same-origin`; `Origin` (or `Referer` if it is missing) must be **exactly the public origin**
+  (scheme, host and port); with neither header there is no proof and the request is rejected. `SameSite=Strict` was not enough
+  for sign-in because there is no cookie yet. The public origin comes from **`WEB_PUBLIC_ORIGIN`** on the web server
+  (for example `https://console.bank.example`, without a path), never from proxy headers: an `http://` page on the same host
+  cannot force a sign-in over `https://`. **It is required in production**: without it, or with a value that is not an
+  http(s) origin, every console POST is rejected and the server logs what is missing.
+  **It can be a comma-separated list of exact origins** (scheme, host and port of each): the local Docker stack
+  answers on `http://127.0.0.1:3000` and on `http://localhost:3000`, and the compose file passes both by default. Each entry
+  must be a pure origin exactly as written: no wildcards, user@, path, query or fragment (the text is validated
+  before it is normalized, with the host in ASCII: an internationalized domain goes in punycode, `xn--…`, and Unicode characters that the parser would turn into `*` or `.` are rejected; a trailing `/` is tolerated). **A single invalid entry invalidates the whole value**, and **so does a list that mixes
+  http and https** (the cookies cannot be right for both): everything is rejected rather than opening something because of a
+  typo. The cookies and the authorization use that same validation. The `X-Forwarded-*` headers are still not read. In production
+  it holds **one explicit https origin**. In development, if it is
+  empty, the origin of the request URL is used (`http://127.0.0.1:<puerto>`). It is in `web/.env.example`.
+  **The rejection is not a blank page:** it is a `303` to `/operador/login?motivo=origen` (or `origen-config`) with the reason in the URL, not in a
+  cookie (a browser that does not keep cookies still sees it), taken from a closed list and with no echo of the request: neither the keys nor the origin
+  the browser sent; it is also shown if there is already an active session, which is left untouched. In ES and PT: «No pudimos verificar el origen del formulario. Ingresar desde <orígenes configurados>.»
+  (We could not verify the form's origin. Sign in from the configured origins.), or, if `WEB_PUBLIC_ORIGIN` is missing or invalid, that the console does not have
+  its public origin configured. No session cookie is issued.
+- *Cookies by origin.* Whether a cookie is `Secure` and carries the `__Host-` prefix is decided by **`WEB_PUBLIC_ORIGIN`**, not `NODE_ENV`
+  (the Docker image runs with `NODE_ENV=production` locally too). With an **https** origin they are `Secure` with `__Host-`
+  (`__Host-cecilai_session`, `__Host-cecilai_operator`, `__Host-cecilai_operator_flash`; the language one, `cecilai_lang`, is `Secure`
+  without a prefix); with an **http** origin (the local stack, `http://127.0.0.1:3000`) they carry neither, because Safari
+  and browsers outside `localhost` do not keep a `Secure` cookie received over http and the sign-in was silently lost.
+  Without `WEB_PUBLIC_ORIGIN` in production the previous behavior (`Secure`) is kept. In every case `httpOnly`,
+  `SameSite` (`Lax` for the customer session, `Strict` for the operator one) and the forms' origin check remain. It is a single
+  function (`web/src/server/cookie-policy.ts`) for the four cookies. If the browser still does not keep the session (cookies
+  blocked, http outside localhost), the customer sign-in resets the button and shows «Tu navegador no guardó la sesión…»
+  (Your browser did not save the session…), and the operator one (which goes through `/operador/ingreso`, a redirect that looks at the cookie the browser did send)
+  returns to the form with the same notice (ES and PT).
+- *A new session on every sign-in and every elevation.* A sign-in always creates a new identifier and ends whatever session
+  that browser had; adding the operator key also changes the identifier and the previous one stops being valid, so
+  a copied read-only cookie does not gain action permissions. The 8-hour cap still counts from the original sign-in. The previous session is consumed in a single step
+  (take and delete): of two simultaneous sign-ins with the same cookie only one creates a session; the other returns to sign-in with a
+  notice and **without touching the session cookie** (a deletion arriving after the winner's Set-Cookie would leave that session
+  orphaned). If the browser lost the winning response, the old cookie is rejected for 30 seconds and is then treated
+  as an unknown cookie. No response to a dead identifier (expired, replaced or unknown) deletes the session
+  cookie: only an explicit logout deletes it, and a new sign-in overwrites it; that way a slow response to a GET cannot
+  delete the session that another sign-in has just set. The same holds for API errors: a 401 on a read (the read key was
+  rotated) invalidates on the server only the session that made that request, by identifier and without `Set-Cookie`; 403, 429 and 5xx do not
+  end any session. Deleting the cookie is reserved for an explicit logout.
+- *Destination after sign-in.* It is decoded and normalized the way a browser would (dots, `%2f`, `%5c`, tabs,
+  backslashes) and only a same-site path that does not start with `//` is accepted; when in doubt it goes to `/operador/cola`.
+- *Where the keys live.* Never in the browser's JavaScript, in `localStorage` or in a cookie. The web server
+  (BFF) keeps them **in memory**, tied to a random 256-bit identifier that travels in an
+  `httpOnly` + `SameSite=Strict` cookie (and `Secure` with the `__Host-` prefix when the public origin is https; see "Cookies by origin"). The session expires after 30 minutes without
+  activity by the person (the automatic refresh of the queue and of monitoring does **not** count as activity) or after 8
+  hours, and is discarded if the API rejects the key (rotated or revoked). On expiry, the console returns to sign-in with a notice.
+  `OPERATOR_IDLE_SECONDS` (on the web server, 1800 by default, minimum 10) shortens that window to test expiry.
+- *Discarded alternative and why.* A sealed cookie with the keys inside avoids state on the server, but
+  puts the keys (encrypted) in the browser, requires a sealing secret that has to be rotated and does not allow closing a stolen session
+  from the server. **Cost of the choice:** the sessions live in the memory of a single process, so a restart
+  or a second replica without session affinity forces a new sign-in. For a handful of operators this is acceptable; with
+  several replicas a shared store (Redis) or a move to SSO is needed.
+- *`SameSite=Strict`.* It stops the cookie from being sent from another site, which is the CSRF defense for the actions; the
+  cost is that a link to the console from another app (a chat, an email) opens the sign-in first.
+- *Errors.* 401 (rotated key) closes the session or asks for the operator key again; 403 on the web means "read-only
+  session"; 409 (someone else moved the case, or the screen was stale: each action sends the `version` that was
+  seen) reloads the state and shows the conflict panel ("No se aplicó: el caso cambió" (Not applied: the case changed), from `v3` to `v4`, with who moved it); while that notice is
+  visible no decision can be made until "Recargar caso" (Reload case) is used. 429 and 503 are explained on screen. Claim, approve, reject, resolve and hand back act with
+  one click (as in the approved artboard), with no confirmation dialog: the protection is `expected_version` plus the key's name in the history.
+  Resolve is enabled only once the message for the customer has been written.
+- *Customer data.* The console shows what the API already returns to the read key: the ticket (with its
+  `customer_id`, the truncated request and the evidence). From the traces it does **not** show the answer text, what the
+  model saw or the tool arguments: the BFF lets through only a fixed set of fields (`loadTraceLog` and
+  `loadTrace` in `web/src/server/operator.functions.ts`).
+- *Trying it without real data or model keys:* `python -m ops.seed_operator_demo --dir /tmp/cecilai-operator-demo`
+  builds a minimal warehouse, generates new keys and fills the queue and the traces with real turns; it prints the keys and
+  leaves `operator-demo.env` to load before `uvicorn`. The screenshots of the walkthrough are in `docs/demo/operador-kit-*.png`.
 
-- *Cómo está armada la pantalla.* Es el diseño aprobado de Paper (artboards "Operator · Queue" y "Operator · Ticket states", copias en
-  `docs/demo/paper-operator-*.jpg`) sobre el kit: sidebar compacto con las vistas (Todos abiertos, Míos, Sin asignar), las siete colas
-  con su cantidad de casos pendientes y los registros (monitoreo y trazas); tabla compacta (`DataTable`) con orden por columna, pestañas
-  de estado, filtros de prioridad, país e idioma, búsqueda (`Ctrl`/`Cmd` + `K`) y paginación de 25; y el detalle del caso en un panel
-  tonal a la derecha. Los filtros viven en la URL de `/operador/cola` (`vista=mias|sin-asignar`, `cola`, `estado=abiertos|tomados|decididos`,
-  `prioridad`, `pais`, `idioma`) y se validan en `web/src/routes/-operator/queue.ts`. La cola se lee en el layout `/_operator` (no en la
-  ruta de la cola) para que el sidebar tenga sus conteos en todas las páginas; el sondeo cada 30 s también se mudó ahí y sigue pasando
-  por `refreshQuietly`. La evidencia marca como riesgo los movimientos que la API marcó o cuyo score llega a 70
-  (`FRAUD_SCORE_FLAG` en `agent/policy/escalation.py`). Los textos de la consola están en `web/src/i18n/dict/{es,pt}/operator.ts` y
-  `monitor.ts`; lo que viene de la API (pedido del cliente, motivos, próximos pasos) se muestra tal cual, sin traducir.
+- *How the screen is built.* It is the approved Paper design (artboards "Operator · Queue" and "Operator · Ticket states", copies in
+  `docs/demo/paper-operator-*.jpg`) on top of the kit: a compact sidebar with the views (Todos abiertos, Míos, Sin asignar: all open, mine, unassigned), the seven queues
+  with their number of pending cases, and the logs (monitoring and traces); a compact table (`DataTable`) with per-column sorting, status
+  tabs, priority, country and language filters, search (`Ctrl`/`Cmd` + `K`) and pages of 25; and the case detail in a tonal
+  panel on the right. The filters live in the URL of `/operador/cola` (`vista=mias|sin-asignar`, `cola`, `estado=abiertos|tomados|decididos`,
+  `prioridad`, `pais`, `idioma`) and are validated in `web/src/routes/-operator/queue.ts`. The queue is read in the `/_operator` layout (not in the
+  queue route) so that the sidebar has its counts on every page; the polling every 30 s also moved there and still goes
+  through `refreshQuietly`. The evidence flags as a risk the movements that the API flagged or whose score reaches 70
+  (`FRAUD_SCORE_FLAG` in `agent/policy/escalation.py`). The console's texts are in `web/src/i18n/dict/{es,pt}/operator.ts` and
+  `monitor.ts`; what comes from the API (the customer's request, reasons, next steps) is shown as is, untranslated.
 
-**Cómo se verifica.** `tests/test_operators.py`, `tests/test_operator_auth.py` (incluye `/admin/operator/me`) y, para la consola,
-`make web-test web-typecheck web-build` más el recorrido con capturas de `docs/demo/operador-kit-*.png` (`LIMITATIONS.md` dice qué
-no cubre).
+**How it is verified.** `tests/test_operators.py`, `tests/test_operator_auth.py` (includes `/admin/operator/me`) and, for the console,
+`make web-test web-typecheck web-build` plus the walkthrough with screenshots in `docs/demo/operador-kit-*.png` (`LIMITATIONS.md` says what
+it does not cover).
 
 ---
 
-## 3. Datos del core bancario
+## 3. Core banking data
 
-**Hoy.** Un warehouse DuckDB de **solo lectura** para la capa de servicio (`agent/tools/db.py`); solo la ingesta
-(`data/pipeline.py`) escribe. Sobre él hay funciones deterministas, sin modelo, en `agent/tools/account_tools.py`.
+**Today.** A DuckDB warehouse that is **read-only** for the service layer (`agent/tools/db.py`); only ingestion
+(`data/pipeline.py`) writes. On top of it there are deterministic functions, with no model, in `agent/tools/account_tools.py`.
 
-**Contrato actual.** Toda función recibe `customer_id` como primer argumento, tomado de la sesión y **nunca de lo que
-dijo el modelo**.
+**Current contract.** Every function receives `customer_id` as its first argument, taken from the session and **never from what
+the model said**.
 
-| Función | Devuelve |
+| Function | Returns |
 |---|---|
-| `get_customer_profile` | Segmento, estado y catálogo de productos enmascarado |
-| `get_account_summary` | Saldos por producto |
-| `list_transactions` | Movimientos con filtros (máximo 50) |
-| `get_payment_status` | Atraso y crédito disponible; solo tarjetas y préstamos |
-| `get_exchange_rate` | Tipo de cambio; si falta la fecha, usa hasta 7 días antes y lo marca, o el inverso |
-| `request_trace` | Movimientos pendientes candidatos a rastreo; **no abre nada** |
-| `recent_activity_for_review` | Solo para el traspaso a un humano: movimientos recientes con señales de fraude |
+| `get_customer_profile` | Segment, status and masked product catalog |
+| `get_account_summary` | Balances per product |
+| `list_transactions` | Movements with filters (maximum 50) |
+| `get_payment_status` | Arrears and available credit; cards and loans only |
+| `get_exchange_rate` | Exchange rate; if the date is missing, it uses up to 7 days earlier and flags it, or the inverse rate |
+| `request_trace` | Pending movements that are candidates for a trace; **opens nothing** |
+| `recent_activity_for_review` | Only for the handoff to a human: recent movements with fraud signals |
 
-Reglas que aplica cada función, en código:
+Rules that each function applies, in code:
 
-1. **Propiedad.** Si el cliente de la sesión no es dueño del producto, se lanza `PermissionDenied` (un evento de
-   seguridad, no un resultado vacío). Sale de una consulta a la base, jamás de la redacción del usuario ni del modelo.
-2. **Verificación.** Solo devuelve un resultado si existen los campos que la respuesta necesita; si no, `DataUnavailable`.
-   Una pregunta válida que no aplica al producto lanza `NotApplicable`, y se responde en vez de transferir.
-3. **Minimización.** Números de cuenta y tarjeta salen solo con los últimos 4 dígitos.
-4. **Frescura.** Todo resultado lleva `as_of`. Con `FRESHNESS_ENFORCE=1`, un warehouse más viejo que
-   `FRESHNESS_SLO_HOURS` (36 por defecto) responde `DataUnavailable` en vez de un dato viejo en silencio. En el dataset
-   estático la política queda apagada y toda respuesta declara su fecha.
-5. **Auditoría.** Cada llamada se escribe en el registro de auditoría con el identificador de la traza.
+1. **Ownership.** If the session's customer does not own the product, `PermissionDenied` is raised (a security
+   event, not an empty result). It comes from a database query, never from the user's or the model's wording.
+2. **Verification.** It returns a result only if the fields the answer needs exist; otherwise, `DataUnavailable`.
+   A valid question that does not apply to the product raises `NotApplicable`, and it is answered instead of transferred.
+3. **Minimization.** Account and card numbers leave only with their last 4 digits.
+4. **Freshness.** Every result carries `as_of`. With `FRESHNESS_ENFORCE=1`, a warehouse older than
+   `FRESHNESS_SLO_HOURS` (36 by default) answers `DataUnavailable` instead of silently returning stale data. On the
+   static dataset the policy stays off and every answer states its date.
+5. **Audit.** Every call is written to the audit log with the trace identifier.
 
-*Taxonomía de errores* (`agent/tools/errors.py`), cada uno mapeado a una sola decisión de `agent/policy/router.py`; el
-modelo nunca decide qué significa un fallo:
+*Error taxonomy* (`agent/tools/errors.py`), each error mapped to a single decision in `agent/policy/router.py`; the
+model never decides what a failure means:
 
-| Error | Decisión |
+| Error | Decision |
 |---|---|
-| `MissingSlot`, `InvalidArgument`, `ResourceNotFound` | Pedir aclaración |
-| `NotApplicable` | Responder |
-| `PermissionDenied` | Escalar (seguridad) |
-| `DataUnavailable` | Escalar (datos) |
-| Cualquier otro error | Escalar (falla de herramienta) |
+| `MissingSlot`, `InvalidArgument`, `ResourceNotFound` | Ask for clarification |
+| `NotApplicable` | Answer |
+| `PermissionDenied` | Escalate (security) |
+| `DataUnavailable` | Escalate (data) |
+| Any other error | Escalate (tool failure) |
 
-**Punto de sustitución.** Estas siete funciones. Su firma y su taxonomía de errores son el contrato; la fuente puede cambiar.
+**Substitution point.** These seven functions. Their signatures and their error taxonomy are the contract; the source can change.
 
-**En producción.** Una API o réplica del core, con la propiedad **verificada en el servicio** (la consigna pide aplicar los
-permisos en la capa de servicio o de herramientas). La ingesta pasaría de "una vez al arrancar" a una programada. Los
-límites del dataset actual están en `docs/data_quality.md`. Latencia, disponibilidad y volumen: **por definir con el banco**.
+**In production.** A core API or replica, with ownership **verified in the service** (the brief asks to enforce
+permissions in the service or tool layer). Ingestion would move from "once at startup" to a scheduled one. The
+limits of the current dataset are in `docs/data_quality.md`. Latency, availability and volume: **to be defined with the bank**.
 
-**Cómo se verifica.** `tests/test_tools.py`, `tests/test_pipeline.py`, `tests/test_cross_checks.py`.
+**How it is verified.** `tests/test_tools.py`, `tests/test_pipeline.py`, `tests/test_cross_checks.py`.
 
 ---
 
-## 4. Servicio de rastreo (operaciones de pagos)
+## 4. Trace service (payment operations)
 
-**Hoy.** `agent/tools/traces.py`, `TraceService`: un archivo JSONL (`TRACE_REQUESTS_PATH`). Es la **única acción** del
-sistema (ADR-002) y simula el servicio de operaciones de pagos.
+**Today.** `agent/tools/traces.py`, `TraceService`: a JSONL file (`TRACE_REQUESTS_PATH`). It is the system's **only
+action** (ADR-002) and simulates the payment operations service.
 
-**Contrato actual.**
+**Current contract.**
 
-- *Abrir:* `open(customer_id, transaction_id, product_id, session_ref)` devuelve el pedido existente o uno nuevo, con
-  `trace_id`, `status: "open"`, `sla_business_days: 2` (política **sintética**) y `queue: "payments_ops"`.
-- *Idempotencia:* el `trace_id` es `TR-` más 16 hex de `sha256(cliente|movimiento)`: pedir lo mismo dos veces devuelve el
-  mismo pedido, sin duplicar. `find` compara campo por campo y no confía en que un identificador sea único.
-- *Relectura:* el orquestador vuelve a leer el pedido antes de decirle al cliente que existe. Si no se puede leer, no lo
-  anuncia y lo deriva a una persona (`trace_unverified`).
-- *Elegibilidad:* solo movimientos que siguen pendientes de tipo Transfer, Payment o Deposit. Uno de más de 90 días, o
-  con fecha anterior a la apertura del producto o al registro del cliente, no se abre con el "sí" del cliente: lo decide
-  una persona.
+- *Open:* `open(customer_id, transaction_id, product_id, session_ref)` returns the existing request or a new one, with
+  `trace_id`, `status: "open"`, `sla_business_days: 2` (a **synthetic** policy) and `queue: "payments_ops"`.
+- *Idempotency:* the `trace_id` is `TR-` plus 16 hex characters of `sha256(cliente|movimiento)` (customer|movement): asking for the same thing twice returns the
+  same request, without duplicating it. `find` compares field by field and does not trust an identifier to be unique.
+- *Read-back:* the orchestrator reads the request again before telling the customer it exists. If it cannot be read, it does not
+  announce it and routes the case to a person (`trace_unverified`).
+- *Eligibility:* only movements that are still pending, of type Transfer, Payment or Deposit. One older than 90 days, or
+  dated before the product was opened or before the customer registered, is not opened on the customer's "yes": a
+  person decides.
 
-**Punto de sustitución.** `TraceService.open`, `find` y `get`.
+**Substitution point.** `TraceService.open`, `find` and `get`.
 
-**En producción.** La API de operaciones de pagos. Necesita: una **clave de idempotencia** (cliente más movimiento) que
-ante un reintento devuelva el pedido ya creado; lectura inmediata tras la escritura o un estado explícito de "recibido";
-y que un tiempo de espera agotado se trate como no verificado y pase a una persona, sin reintentar a ciegas. El SLA real:
-**por definir con el banco**.
+**In production.** The payment operations API. It needs: an **idempotency key** (customer plus movement) that
+returns the already-created request on a retry; immediate read after write, or an explicit "received" status;
+and a timeout treated as unverified and passed to a person, without blind retries. The real SLA:
+**to be defined with the bank**.
 
-**Cómo se verifica.** `tests/test_trace.py` (incluye movimientos que se liquidan tras la propuesta, colisión de
-identificadores y una traza que no se relee), y la revisión del juez de evaluación contra los registros del servicio.
+**How it is verified.** `tests/test_trace.py` (includes movements that settle after the proposal, identifier
+collisions and a trace that does not read back), and the evaluation judge's review against the service's records.
 
 ---
 
-## 5. Cola de casos y trabajo del operador
+## 5. Case queue and operator work
 
-**Hoy.** `agent/policy/escalation.py` (`HumanQueue`, `EscalationTicket`) y `agent/policy/desk.py` (`TicketDesk`), sobre
-archivos JSONL.
+**Today.** `agent/policy/escalation.py` (`HumanQueue`, `EscalationTicket`) and `agent/policy/desk.py` (`TicketDesk`), on top of
+JSONL files.
 
-**Contrato actual: el ticket.** Es lo que la consigna pide entregar al agente humano: el pedido, los hechos verificados,
-las acciones realizadas, la evidencia y las preguntas abiertas. Campos: `ticket_id`, `trace_id`, `category`, `priority`,
-`queue`, `customer_id`, `session_ref`, `segment`, `country`, `language`, `request` (máximo 500 caracteres),
-`prior_requests` (las últimas 3, cortadas a 160), `reason`, `policy_rule`, `verified_facts`, `evidence`,
-`actions_taken`, `open_questions`, `suggested_next_step` y, si hay una acción que aprobar, `pending_action`. Los tres textos
-que la consola muestra al operador (`reason`, `open_questions`, `suggested_next_step`) viajan además como código, en
-`reason_code`, `open_question_codes` y `next_step_code` (más abajo).
-**Nunca lleva el token de sesión**, solo `session_ref`. Las colas son `fraud_ops`, `priority_care`, `complaints`,
-`security_review`, `compliance`, `payments_ops` y `account_payments_l2` por defecto.
+**Current contract: the ticket.** It is what the brief asks to hand to the human agent: the request, the verified facts,
+the actions taken, the evidence and the open questions. Fields: `ticket_id`, `trace_id`, `category`, `priority`,
+`queue`, `customer_id`, `session_ref`, `segment`, `country`, `language`, `request` (maximum 500 characters),
+`prior_requests` (the last 3, truncated to 160), `reason`, `policy_rule`, `verified_facts`, `evidence`,
+`actions_taken`, `open_questions`, `suggested_next_step` and, if there is an action to approve, `pending_action`. The three texts
+that the console shows the operator (`reason`, `open_questions`, `suggested_next_step`) also travel as codes, in
+`reason_code`, `open_question_codes` and `next_step_code` (below).
+**It never carries the session token**, only `session_ref`. The queues are `fraud_ops`, `priority_care`, `complaints`,
+`security_review`, `compliance`, `payments_ops` and `account_payments_l2` by default.
 
-**Contrato actual: el desk.** `TicketDesk.act(ticket_id, action, operator, expected_version, reason, message)` con las
-acciones `claim`, `approve`, `reject`, `release` y `resolve`. Los estados son
+**Current contract: the desk.** `TicketDesk.act(ticket_id, action, operator, expected_version, reason, message)` with the
+actions `claim`, `approve`, `reject`, `release` and `resolve`. The states are
 `open → claimed → approved | rejected | handed_back | stale | resolved`.
-El estado es la reproducción de un registro de eventos que solo se agrega, bajo un lock. Repetir un resultado ya
-alcanzado no hace nada; cualquier otro movimiento sobre un ticket cerrado es un conflicto (409); una decisión tomada
-desde una versión vieja se rechaza; aprobar vuelve a comprobar que el movimiento siga pendiente y relee la traza. Que el
-cliente se entere del resultado se cubre con `GET /case/{id}` y con un aviso en su próximo mensaje.
+The state is the replay of an append-only event log, under a lock. Repeating an outcome already
+reached does nothing; any other transition on a closed ticket is a conflict (409); a decision made
+from a stale version is rejected; approving checks again that the movement is still pending and reads the trace back. The
+customer learning the outcome is covered by `GET /case/{id}` and by a notice on their next message.
 
-- **`resolve`** cierra un ticket **sin** acción pendiente con un mensaje para el cliente (`message`: se guarda en una
-  sola línea, de 1 a 500 caracteres, con los números de tarjeta completos enmascarados). Sin mensaje es un 400; en un ticket
-  con `pending_action` es un 409, porque ese se cierra decidiendo la acción (aprobar o rechazar). El estado del desk
-  lleva `message`, y el cliente lo lee textual en `GET /case/{id}` y antes de su próxima respuesta ("un agente lo
-  resolvió. Mensaje del agente: «...»"). El motivo de un rechazo (`reason`) sigue siendo interno.
-- Un ticket **sin** acción que se rechaza le dice al cliente que no se puede resolver por este canal, sin nombrar un
-  rastreo que nunca pidió.
+- **`resolve`** closes a ticket **without** a pending action with a message for the customer (`message`: stored on a
+  single line, 1 to 500 characters, with full card numbers masked). Without a message it is a 400; on a ticket
+  with `pending_action` it is a 409, because that one is closed by deciding the action (approve or reject). The desk state
+  carries `message`, and the customer reads it verbatim in `GET /case/{id}` and before their next answer ("un agente lo
+  resolvió. Mensaje del agente: «...»", that is, an agent resolved it. Agent's message: «...»). The reason for a rejection (`reason`) remains internal.
+- A ticket **without** an action that is rejected tells the customer that it cannot be resolved through this channel, without mentioning a
+  trace they never asked for.
 
-**Punto de sustitución.** `HumanQueue.enqueue/get` y `TicketDesk.act/state`.
+**Substitution point.** `HumanQueue.enqueue/get` and `TicketDesk.act/state`.
 
-**Los textos del operador viajan como códigos.** El modelo nunca le escribe al cliente (ADR-001), y el texto que lee el
-operador tampoco lo escribe el modelo: sale del código de política. Ese texto estaba en inglés en `router.py` y
-`escalation.py`, y la consola lo mostraba tal cual aunque el operador trabajara en español o en portugués. Ahora cada
-ticket lleva el texto en inglés de siempre y, al lado, su código con los parámetros:
+**The operator's texts travel as codes.** The model never writes to the customer (ADR-001), and the text the
+operator reads is not written by the model either: it comes from the policy code. That text was in English in `router.py` and
+`escalation.py`, and the console showed it as is even when the operator worked in Spanish or Portuguese. Now each
+ticket carries the usual English text and, next to it, its code with the parameters:
 
-| Campo | Qué es |
+| Field | What it is |
 | --- | --- |
-| `reason_code` | `{code, params}` o `null`. Es el código de `reason`. |
-| `open_question_codes` | Lista con un `{code, params}` (o `null`) por cada elemento de `open_questions`, en el mismo orden. Las notas de evidencia que suma `escalate` van al final, con su código también. |
-| `next_step_code` | La categoría del caso, o `default`. Es el código de `suggested_next_step` (sin parámetros). |
+| `reason_code` | `{code, params}` or `null`. It is the code for `reason`. |
+| `open_question_codes` | A list with one `{code, params}` (or `null`) for each element of `open_questions`, in the same order. The evidence notes that `escalate` adds go at the end, also with their code. |
+| `next_step_code` | The case's category, or `default`. It is the code for `suggested_next_step` (without parameters). |
 
-Reglas del contrato:
+Contract rules:
 
-- **El texto en inglés se conserva** (`reason`, `open_questions`, `suggested_next_step`). Es el respaldo: un ticket guardado antes
-  de los códigos no tiene los campos nuevos (no se reescribe nada al leerlo), un texto suelto sin código lleva `null`, y la
-  consola muestra el inglés cuando el código no existe en su diccionario o le faltan datos para armar la frase. Nunca queda
-  vacío ni se oculta.
-- **El texto en inglés sale del mismo catálogo que el código** (`agent/policy/notes.py`, una línea por código con sus
-  `{parámetros}`), así que no pueden diverger.
-- **Los parámetros son lo que la frase necesita y nada del cliente**: una categoría o una lista de categorías, la cantidad de
-  productos ajenos, un motivo de revisión, el nombre del campo que falta, el tipo de error de una consulta, la probabilidad del
-  clasificador. Nunca el pedido, un identificador, un monto ni un número de tarjeta; `tests/test_operator_codes.py` lo
-  comprueba escalando un pedido con un número de tarjeta, y con los mensajes de una excepción de una consulta (con un id de
-  producto y una ruta de archivo adentro). **El mensaje crudo de una excepción no viaja en los parámetros**: puede traer
-  identificadores y rutas internas y está en inglés, así que `data_unavailable` lleva el campo que falta (`field`, o el código
-  `data_unavailable_unspecified` si no se sabe cuál), y `tool_failure` y `evidence_failed`, el tipo de error (`error_type`).
-  El mensaje queda solo en el texto de respaldo en inglés (`reason`, `open_questions`), como antes.
-- **Lo que ya era un identificador estable no lleva código nuevo**: el tipo de evidencia (`transaction`, `denied_request`), las
-  claves de los hechos (`tool`, `result`), el motivo de revisión de `pending_action` (`older_than_review_threshold`,
-  `before_product_opening`, `before_customer_registration`, `turn_timeout`), `policy_rule` y, en la traza, el resultado y el
-  motivo de cada intento del modelo y el `error_type` de las herramientas. La consola los traduce con la misma técnica, y lo que
-  no conoce lo muestra como llegó.
+- **The English text is kept** (`reason`, `open_questions`, `suggested_next_step`). It is the fallback: a ticket stored before
+  the codes does not have the new fields (nothing is rewritten when reading it), a loose text without a code carries `null`, and the
+  console shows the English when the code does not exist in its dictionary or lacks the data to build the sentence. It is never left
+  empty or hidden.
+- **The English text comes from the same catalog as the code** (`agent/policy/notes.py`, one line per code with its
+  `{parámetros}`, that is, its parameters), so they cannot diverge.
+- **The parameters are what the sentence needs and nothing about the customer**: a category or a list of categories, the number of
+  other customers' products, a review reason, the name of the missing field, the error type of a query, the
+  classifier's probability. Never the request, an identifier, an amount or a card number; `tests/test_operator_codes.py`
+  checks it by escalating a request with a card number, and with the messages of a query exception (with a
+  product id and a file path inside). **The raw message of an exception does not travel in the parameters**: it can carry
+  internal identifiers and paths and it is in English, so `data_unavailable` carries the missing field (`field`, or the code
+  `data_unavailable_unspecified` if it is not known which one), and `tool_failure` and `evidence_failed` carry the error type (`error_type`).
+  The message stays only in the English fallback text (`reason`, `open_questions`), as before.
+- **What was already a stable identifier gets no new code**: the evidence type (`transaction`, `denied_request`), the
+  keys of the facts (`tool`, `result`), the review reason of `pending_action` (`older_than_review_threshold`,
+  `before_product_opening`, `before_customer_registration`, `turn_timeout`), `policy_rule` and, in the trace, the outcome and the
+  reason of each model attempt and the tools' `error_type`. The console translates them with the same technique, and what it
+  does not know it shows as it arrived.
 
-**En la consola.** `web/src/routes/-operator/notes.ts` escribe cada texto en el idioma del operador con los diccionarios
-`operator.codes.{reason,question,step}` y `operator.terms.*` (`web/src/i18n/dict/{es,pt}/operator.ts`), que viajan en el área
-del operador, que es la que carga la ruta, y también en la del detalle de la traza. `TicketPanel` los usa para el motivo, las
-preguntas abiertas, el próximo paso, el tipo de evidencia, las claves de los hechos y el motivo de revisión; `summary.ts`, para
-el resumen que el operador copia; y el detalle de la traza, para la regla, los intentos y los errores.
+**In the console.** `web/src/routes/-operator/notes.ts` writes each text in the operator's language with the dictionaries
+`operator.codes.{reason,question,step}` and `operator.terms.*` (`web/src/i18n/dict/{es,pt}/operator.ts`), which travel in the
+operator area, the one the route loads, and also in the trace-detail area. `TicketPanel` uses them for the reason, the
+open questions, the next step, the evidence type, the keys of the facts and the review reason; `summary.ts`, for
+the summary the operator copies; and the trace detail, for the rule, the attempts and the errors.
 
-**Cómo se agrega un código.**
+**How to add a code.**
 
-1. Una línea en el catálogo de su tipo en `agent/policy/notes.py`: `REASONS` (el motivo), `QUESTIONS` (una pregunta abierta), con
-   su texto en inglés y los `{parámetros}`. El próximo paso es `NEXT_STEP` de `escalation.py`, con la categoría como código.
-2. Usarlo donde se decide: `reason("codigo", parametro=...)` para el motivo y `question("codigo", ...)` para la pregunta, en el
-   `Decision` de `router.py`. Un `Decision` con un texto suelto sigue funcionando, pero sin código.
-3. Su traducción al español y al portugués en `operator.codes.<tipo>.<codigo>` de `dict/es/operator.ts` y `dict/pt/operator.ts`
-   (los mismos `{parámetros}` en los dos idiomas). Un motivo de revisión nuevo va en `operator.terms.reviewReason`, un
-   `policy_rule` nuevo en `operator.terms.rule` y en `wholeRules` o `ruleFamilies` de `notes.ts`.
+1. One line in the catalog of its kind in `agent/policy/notes.py`: `REASONS` (the reason), `QUESTIONS` (an open question), with
+   its English text and the `{parámetros}`. The next step is `NEXT_STEP` in `escalation.py`, with the category as the code.
+2. Use it where the decision is made: `reason("codigo", parametro=...)` for the reason and `question("codigo", ...)` for the question, in the
+   `Decision` of `router.py`. A `Decision` with a loose text still works, but without a code.
+3. Its Spanish and Portuguese translation in `operator.codes.<tipo>.<codigo>` of `dict/es/operator.ts` and `dict/pt/operator.ts`
+   (the same `{parámetros}` in both languages). A new review reason goes in `operator.terms.reviewReason`, a new
+   `policy_rule` in `operator.terms.rule` and in `wholeRules` or `ruleFamilies` of `notes.ts`.
 
-`tests/test_operator_codes.py` falla mientras un código del catálogo no tenga traducción en los dos idiomas y comprueba que cada
-pregunta lleve su código en su lugar.
+`tests/test_operator_codes.py` fails as long as a catalog code lacks a translation in both languages, and checks that each
+question carries its code in its place.
 
-**Lo que la consola recibe de la cola.** `loadQueue` (`web/src/server/operator.functions.ts`) lee `/admin/human_queue?limit=200` (los 200 tickets más nuevos y, sin importar su antigüedad, todos los que siguen `open` o
-`claimed`: un caso que nadie decidió no sale de la cola por viejo, pero sí sale con la retención: pasados los 90 días el ticket
-deja el archivo y la API ya no lo ve) y devuelve al navegador `QueueRow` (`web/src/server/queue-row.ts`), no el ticket: `ticket_id`, `created_at`, `category`,
-`priority`, `queue`, `customer_id`, `country`, `language`, `request` y del desk solo `status`, `operator` y `version`. Es
-lo que usan la tabla, sus filtros, las pestañas y los contadores del sidebar, y la cola se relee cada 30 s. La evidencia,
-los hechos verificados, las acciones, las preguntas abiertas, la acción pendiente y el historial del desk viajan solo con
-el caso abierto (`loadTicket`, `/admin/tickets/{id}`). Una columna o un filtro que necesite otro campo lo agrega a
-`QueueRow` y a `toQueueRow`; `queue-row.test.ts` falla si la fila empieza a llevar algo del caso. La cola tolera un caso sin
-`priority` o sin `language` (un registro viejo o incompleto): se dibuja con "Desconocida" en la prioridad y, en el idioma, con `?` a la vista y "Desconocido" para lectores de pantalla y
-en el `title` (el ancho de la columna no alcanza para la palabra; en el panel del caso sí se lee completa), sin ocultarlo y sin asignarle una prioridad que no tiene, y en el orden por defecto queda después de los que sí la
-tienen (`queue.ts`, `priorityOf` del kit).
+**What the console receives from the queue.** `loadQueue` (`web/src/server/operator.functions.ts`) reads `/admin/human_queue?limit=200` (the 200 newest tickets and, regardless of their age, every one that is still `open` or
+`claimed`: a case nobody decided does not leave the queue for being old, but it does leave with retention: after 90 days the ticket
+leaves the file and the API no longer sees it) and returns `QueueRow` (`web/src/server/queue-row.ts`) to the browser, not the ticket: `ticket_id`, `created_at`, `category`,
+`priority`, `queue`, `customer_id`, `country`, `language`, `request` and, from the desk, only `status`, `operator` and `version`. That is
+what the table, its filters, the tabs and the sidebar counters use, and the queue is re-read every 30 s. The evidence,
+the verified facts, the actions, the open questions, the pending action and the desk history travel only with
+the opened case (`loadTicket`, `/admin/tickets/{id}`). A column or a filter that needs another field adds it to
+`QueueRow` and to `toQueueRow`; `queue-row.test.ts` fails if the row starts carrying anything from the case. The queue tolerates a case without
+`priority` or without `language` (an old or incomplete record): it is drawn with "Desconocida" (Unknown) as the priority and, for the language, with `?` on screen and "Desconocido" (Unknown) for screen readers and
+in the `title` (the column is not wide enough for the word; in the case panel it can be read in full), without hiding it and without assigning it a priority it does not have, and in the default order it comes after the ones that do
+have one (`queue.ts`, the kit's `priorityOf`).
 
-**En producción.** El sistema de casos del banco. Necesita: alta idempotente por `ticket_id`; transiciones con
-concurrencia optimista por versión; adjuntar evidencia; y la retención que fije el banco (aquí 90 días es un sustituto).
-Cómo se asignan colas y prioridades reales: **por definir con el banco**.
+**In production.** The bank's case system. It needs: idempotent creation by `ticket_id`; transitions with
+optimistic concurrency by version; attaching evidence; and the retention the bank sets (here 90 days is a stand-in).
+How real queues and priorities are assigned: **to be defined with the bank**.
 
-**Cómo se verifica.** `tests/test_desk.py` (transiciones, aprobación desactualizada, doble aprobación, reintentos),
-`tests/test_operator_labels.py`, y los tests de traspaso de `tests/test_orchestrator.py`.
+**How it is verified.** `tests/test_desk.py` (transitions, stale approval, double approval, retries),
+`tests/test_operator_labels.py`, and the handoff tests in `tests/test_orchestrator.py`.
 
 ---
 
-## 6. Proveedores de modelos de lenguaje
+## 6. Language model providers
 
-**Hoy.** `agent/llm/client.py`, `LLMClient`: Anthropic, Groq y Together, en el orden de `LLM_PROVIDERS`. Uno sin su clave
-se omite.
+**Today.** `agent/llm/client.py`, `LLMClient`: Anthropic, Groq and Together, in the order of `LLM_PROVIDERS`. One without its key
+is skipped.
 
-**Contrato actual de confiabilidad.**
+**Current reliability contract.**
 
-- Cada pedido tiene un plazo (`LLM_TIMEOUT_SECONDS`, 12 s) y cada turno un presupuesto total de tiempo
+- Each request has a timeout (`LLM_TIMEOUT_SECONDS`, 12 s) and each turn a total time budget
   (`LLM_TOTAL_BUDGET_SECONDS`, 25 s).
-- Solo se reintentan fallas transitorias (tiempos de espera, conexión, 429, 5xx), con espera exponencial con
-  variación aleatoria y sin dormir tras el último intento. Las permanentes (autenticación, pedido inválido) pasan al
-  siguiente proveedor.
-- Un cortacircuitos por proveedor lo saltea si acaba de fallar varias veces: una caída cuesta un plazo, no uno por pedido.
-- Si todos fallan se lanza `LLMUnavailable` y el orquestador escala o corre en modo degradado. Nunca responde por su cuenta.
-- Un tope diario de gasto (`LLM_DAILY_BUDGET_USD`) hace que, superado, el sistema corra como si el modelo estuviera caído.
-- Una llamada a una herramienta que Groq rechaza por un campo `null` se recupera del propio mensaje de error.
+- Only transient failures are retried (timeouts, connection, 429, 5xx), with exponential backoff with
+  random jitter and no sleep after the last attempt. Permanent ones (authentication, invalid request) move on to the
+  next provider.
+- A per-provider circuit breaker skips it if it has just failed several times: an outage costs one timeout, not one per request.
+- If they all fail, `LLMUnavailable` is raised and the orchestrator escalates or runs in degraded mode. It never answers on its own.
+- A daily spending cap (`LLM_DAILY_BUDGET_USD`): once it is exceeded, the system runs as if the model were down.
+- A tool call that Groq rejects because of a `null` field is recovered from the error message itself.
 
-**Contrato de privacidad** (la consigna prohíbe registros privados en pedidos externos a modelos).
+**Privacy contract** (the brief forbids private records in external model requests).
 
-- Al modelo solo llega lo que el cliente escribió, **enmascarado** por `agent/llm/privacy.py`: identificadores internos,
-  CURP y RFC, tarjetas y números largos, correos. El orquestador nunca agrega un registro al contexto del modelo.
-- El modelo **solo propone qué herramienta usar**. Su texto nunca se le muestra al cliente: la respuesta la arma el código
-  a partir de resultados verificados (ADR-001).
-- La evidencia es la métrica `records_sent_to_model`, que la evaluación mide en cada corrida.
-- Límites conocidos: nombres, direcciones y números de menos de 8 dígitos escritos en texto libre no se detectan
+- Only what the customer wrote reaches the model, **masked** by `agent/llm/privacy.py`: internal identifiers,
+  CURP and RFC, cards and long numbers, emails. The orchestrator never adds a record to the model's context.
+- The model **only proposes which tool to use**. Its text is never shown to the customer: the answer is built by the code
+  from verified results (ADR-001).
+- The evidence is the `records_sent_to_model` metric, which the evaluation measures on every run.
+- Known limits: names, addresses and numbers shorter than 8 digits written in free text are not detected
   (`LIMITATIONS.md`).
 
-**Punto de sustitución.** `default_providers` y `candidate_client` en `client.py`. Además, `agent/core/experiments.py` deja preparados shadow y canary, para
-comparar un modelo candidato con tráfico real antes de cambiarlo.
+**Substitution point.** `default_providers` and `candidate_client` in `client.py`. In addition, `agent/core/experiments.py` has shadow and canary ready, to
+compare a candidate model with real traffic before switching to it.
 
-**En producción.** Un modelo dentro del perímetro del banco o una pasarela aprobada, con acuerdo de tratamiento de
-datos, residencia de datos y gestión de claves. Cuotas, latencia y costo reales: **por definir con el banco**.
+**In production.** A model inside the bank's perimeter or an approved gateway, with a data processing
+agreement, data residency and key management. Real quotas, latency and cost: **to be defined with the bank**.
 
-**Cómo se verifica.** `tests/test_llm_client.py`, `tests/test_privacy.py`, `tests/test_experiments.py`, la evaluación
-adversarial (`make eval-adversarial`, con un modelo deliberadamente malo) y la compuerta de calidad del CI.
+**How it is verified.** `tests/test_llm_client.py`, `tests/test_privacy.py`, `tests/test_experiments.py`, the adversarial
+evaluation (`make eval-adversarial`, with a deliberately bad model) and the CI quality gate.
 
 ---
 
-## 7. Observabilidad, auditoría y retención
+## 7. Observability, audit and retention
 
-**Hoy.** `agent/tools/audit.py` y archivos JSONL bajo `data/warehouse/`.
+**Today.** `agent/tools/audit.py` and JSONL files under `data/warehouse/`.
 
-**Contrato actual.** Los registros se correlacionan por `trace_id`; lo que se guarda son **registros de ejecución**, no el
-razonamiento oculto del modelo, que la consigna no acepta como artefacto de auditoría.
+**Current contract.** Records are correlated by `trace_id`; what is stored are **execution records**, not the model's hidden
+reasoning, which the brief does not accept as an audit artifact.
 
-| Registro | Contenido | Retención |
+| Log | Content | Retention |
 |---|---|---|
-| `audit_log.jsonl` | Una línea por llamada a una herramienta, los intentos fallidos de clave y cada purga de retención | 30 días |
-| `traces.jsonl` | Una línea por turno: intentos al modelo y su uso, política aplicada, latencia, costo y cohorte | 30 días |
-| `ticket_events.jsonl` | Cada decisión del operador, con su nombre | con el ticket (se borran juntos, ya fuera de la cola y con el último evento de más de 90 días) |
-| `human_queue.jsonl` | Los tickets | 90 días (sustituto) |
-| `trace_requests.jsonl` | Los pedidos de rastreo | 90 días |
-| sesiones y conversaciones (SQLite) | Solo el hash del token; el historial enmascarado | vencidas al purgar; 1 día |
+| `audit_log.jsonl` | One line per tool call, the failed key attempts and each retention purge | 30 days |
+| `traces.jsonl` | One line per turn: model attempts and their usage, policy applied, latency, cost and cohort | 30 days |
+| `ticket_events.jsonl` | Each operator decision, with the operator's name | with the ticket (they are deleted together, once it is out of the queue and its last event is older than 90 days) |
+| `human_queue.jsonl` | The tickets | 90 days (stand-in) |
+| `trace_requests.jsonl` | The trace requests | 90 days |
+| sessions and conversations (SQLite) | Only the token hash; the masked history | expired ones at each purge; 1 day |
 
-La retención la aplica `python -m ops.retention` (una política para todos los almacenes, cada período en una variable
-`RETENTION_*_DAYS`); el contenedor la corre en un bucle diario, es idempotente y cada corrida queda registrada como evento
-`retention_purge` en la auditoría. Los endpoints de solo lectura (clave de admin) son `/admin/human_queue`, `audit_log`,
-`trace_log`, `traces/{id}`, `ops`, `llm_budget`, `data_quality`, `drift` y `experiments`. `GET /metrics` (formato Prometheus,
-con `METRICS_TOKEN` o la clave de admin), `/livez` y `/readyz` completan la observabilidad, y `ops/alerts.yml` trae las reglas de
-alerta. Las reglas y un dashboard de Grafana corren en el compose local (`make monitoring-up`); **no hay un Alertmanager ni un
-canal de notificación conectado**. Aparte, `python -m ops.alerts` evalúa por los endpoints de admin las señales que no
-necesitan historial y puede avisar a `ALERT_WEBHOOK_URL`, pero nada lo ejecuta periódicamente. Detalle y comandos: `docs/operations.md` (Monitoring, Access control, Data retention).
+Retention is applied by `python -m ops.retention` (one policy for every store, each period in a
+`RETENTION_*_DAYS` variable); the container runs it in a daily loop, it is idempotent and each run is recorded as a
+`retention_purge` event in the audit log. The read-only endpoints (admin key) are `/admin/human_queue`, `audit_log`,
+`trace_log`, `traces/{id}`, `ops`, `llm_budget`, `data_quality`, `drift` and `experiments`. `GET /metrics` (Prometheus format,
+with `METRICS_TOKEN` or the admin key), `/livez` and `/readyz` complete the observability, and `ops/alerts.yml` holds the alerting
+rules. The rules and a Grafana dashboard run in the local compose stack (`make monitoring-up`); **there is no Alertmanager and no
+notification channel connected**. Separately, `python -m ops.alerts` evaluates, through the admin endpoints, the signals that do not
+need history and can notify `ALERT_WEBHOOK_URL`, but nothing runs it periodically. Details and commands: `docs/operations.md` (Monitoring, Access control, Data retention).
 
-**Punto de sustitución.** `_JsonlSink.write(record)` en `audit.py`: es donde un SIEM o una canalización de logs recibiría
-cada registro.
+**Substitution point.** `_JsonlSink.write(record)` in `audit.py`: it is where a SIEM or a log pipeline would receive
+each record.
 
-**En producción.** Un destino de solo escritura (a prueba de manipulación), con retención por política de la plataforma y
-alertas cableadas. Hoy **no hay evidencia de manipulación** (un encadenamiento por hash está pensado, no hecho), y las
-ventanas en memoria son de 1000 registros de auditoría y 500 de trazas.
+**In production.** A write-only (tamper-proof) destination, with retention by platform policy and
+wired alerts. Today **nothing is tamper-evident** (hash chaining is designed, not built), and the
+in-memory windows are 1000 audit records and 500 traces.
 
-**Cómo se verifica.** `tests/test_api.py` (el registro de trazas y que ningún registro exponga el token), `tests/test_drift.py`,
-`tests/test_retention.py`, `tests/test_metrics.py` y `tests/test_alerts.py`.
+**How it is verified.** `tests/test_api.py` (the trace log, and that no record exposes the token), `tests/test_drift.py`,
+`tests/test_retention.py`, `tests/test_metrics.py` and `tests/test_alerts.py`.
 
 ---
 
-## 8. Frontend web del cliente
+## 8. Customer web frontend
 
-**Hoy.** `web/` (TanStack Start, React 19). El navegador nunca habla con la API de Python: lo hace un BFF, con
-funciones de servidor en `web/src/server/`, y el token de sesión vive en una cookie httpOnly (ver frontera 1). La ruta
-`/chat` es el chat del cliente: el shell (`web/src/shell/`), la conversación (`web/src/chat/`) y las pantallas públicas
-siguen el diseño "Cecil.ai" de Paper (componentes del kit, sin bordes, paleta de azules; el único ámbar es
-`--color-caution`, para precaución), y sus tokens están en `web/src/tokens.css` con los mismos nombres que en Paper (`--color-cecil-blue`, `--color-gray-500`,
-`--radius-app`...). La consola del operador debe reutilizar esas variables, no redefinirlas. Nada depende de la nube: Inter y DM Mono salen
-de paquetes npm (`@fontsource`) y quedan dentro del build, y el avatar de Cecilia está en `web/public`; no hay CDN ni
+**Today.** `web/` (TanStack Start, React 19). The browser never talks to the Python API: a BFF does, with
+server functions in `web/src/server/`, and the session token lives in an httpOnly cookie (see boundary 1). The
+`/chat` route is the customer chat: the shell (`web/src/shell/`), the conversation (`web/src/chat/`) and the public screens
+follow the "Cecil.ai" design from Paper (kit components, no borders, a palette of blues; the only amber is
+`--color-caution`, for caution), and their tokens are in `web/src/tokens.css` with the same names as in Paper (`--color-cecil-blue`, `--color-gray-500`,
+`--radius-app`...). The operator console must reuse those variables, not redefine them. Nothing depends on the cloud: Inter and DM Mono come
+from npm packages (`@fontsource`) and are bundled in the build, and Cecilia's avatar is in `web/public`; there is no CDN and no
 Google Fonts.
 
-**Cómo correrlo.**
+**How to run it.**
 
 ```bash
-make web-setup                 # Node 24, pnpm 10.33.2, dependencias fijadas
-make serve-all                 # con el warehouse real (make ingest o ingest-demo) y una clave de modelo
-make serve-all-fixture         # sin S3 ni claves: warehouse de los tests y un modelo simulado
+make web-setup                 # Node 24, pnpm 10.33.2, pinned dependencies
+make serve-all                 # with the real warehouse (make ingest or ingest-demo) and a model key
+make serve-all-fixture         # no S3 and no keys: the tests' warehouse and a simulated model
 ```
 
-Web en `http://127.0.0.1:3000`, API en `http://127.0.0.1:8000`. Variables del frontend (o `web/.env`):
-`AGENT_API_URL` (por defecto `http://127.0.0.1:8000`) y `TRUSTED_CLIENT_IP_HEADER` (ver frontera 1). Con `DEMO_MODE=1`
-en la API el chat muestra, aparte y marcado como **Demo**, los escenarios guiados, las fallas (vencer la sesión,
-modelo caído), "¿Por qué?" en cada respuesta y la vista del banco de la sesión; sin `DEMO_MODE` nada de eso se dibuja.
-`make serve-fixture` deja `DEMO_MODE=1` salvo que lo pises (`DEMO_MODE=0 make serve-fixture`).
+Web on `http://127.0.0.1:3000`, API on `http://127.0.0.1:8000`. Frontend variables (or `web/.env`):
+`AGENT_API_URL` (default `http://127.0.0.1:8000`) and `TRUSTED_CLIENT_IP_HEADER` (see boundary 1). With `DEMO_MODE=1`
+in the API, the chat shows, set apart and labeled **Demo**, the guided scenarios, the faults (expiring the session,
+model down), "¿Por qué?" (Why?) on each answer and the bank's view of the session; without `DEMO_MODE` none of that is drawn.
+`make serve-fixture` sets `DEMO_MODE=1` unless you override it (`DEMO_MODE=0 make serve-fixture`).
 
-`ops/serve_fixture.py` es una **simulación offline**: el código posterior al modelo (políticas, herramientas, plantillas,
-tickets, rastreos, sesiones) es el real, pero qué herramienta pedir lo decide una coincidencia de palabras, no un modelo.
-Sirve para desarrollar y mostrar el front; no dice nada de cómo se comporta un modelo real.
+`ops/serve_fixture.py` is an **offline simulation**: the code after the model (policies, tools, templates,
+tickets, trace requests, sessions) is the real one, but which tool to request is decided by keyword matching, not by a model.
+It is useful to develop and show the front end; it says nothing about how a real model behaves.
 
-**Contrato que usa el BFF.**
+**Contract the BFF uses.**
 
-| Función de servidor | Llamada a la API | Qué devuelve al navegador |
+| Server function | API call | What it returns to the browser |
 |---|---|---|
-| `sendMessage` | `POST /chat` con `session_token` (lo agrega el servidor) y `Idempotency-Key` (un UUID por mensaje, que el cliente conserva en los reintentos), plazo de 35 s | La respuesta (`disposition`, texto, idioma, `category`, `ticket_id`, y `why` solo en demo) o un motivo de fallo |
-| `getHistory` | `GET /chat/history` con el token de la cookie | La conversación de la sesión viva, ya renderizada por la API (ver abajo), o `session_expired` / `unavailable` |
-| `getCase` | `GET /case/{ticket_id}` | Estado del caso y el texto de novedad, o `not_found` |
-| `getDemoKit`, `startScenario`, `applyDemoFault`, `getDemoTickets` | `/demo/*` | Solo con `DEMO_MODE=1`; los PIN de prueba se quedan en el servidor |
+| `sendMessage` | `POST /chat` with `session_token` (added by the server) and `Idempotency-Key` (one UUID per message, which the client keeps across retries), 35 s timeout | The answer (`disposition`, text, language, `category`, `ticket_id`, and `why` only in the demo) or a failure reason |
+| `getHistory` | `GET /chat/history` with the cookie's token | The live session's conversation, already rendered by the API (see below), or `session_expired` / `unavailable` |
+| `getCase` | `GET /case/{ticket_id}` | The case status and the update text, or `not_found` |
+| `getDemoKit`, `startScenario`, `applyDemoFault`, `getDemoTickets` | `/demo/*` | Only with `DEMO_MODE=1`; the test PINs stay on the server |
 
-La propuesta de rastreo se reconoce por `disposition=CLARIFY` y `category=confirm_action`, y se responde con un "Sí" o "No"
-que el código de la API evalúa (nunca el modelo). Una aclaración se dibuja como lista de opciones cuando el texto trae
-`1) ...; 2) ...`; si no calza con ese formato se muestra el texto tal cual.
+The trace proposal is recognized by `disposition=CLARIFY` and `category=confirm_action`, and it is answered with a "Sí" or "No"
+that the API code evaluates (never the model). A clarification is drawn as a list of options when the text contains
+`1) ...; 2) ...`; if it does not fit that format, the text is shown as is.
 
-**Historial (`GET /chat/history`).** Devuelve, con el token de la sesión viva (cabecera `X-Session-Token`, como `/case`), los turnos
-que la API guardó tal como el cliente los vio: sus palabras con los números de tarjeta enmascarados, la respuesta ya
-armada por las plantillas y, por turno de la asistente, `trace_id`, `disposition`, `category`, `language`, `ticket_id` y
-`degraded`, y aparte el índice de casos de la sesión (`cases`: `ticket_id`, `category`, `at`), que no se acota con los turnos. Nada interno: ni la regla que decidió, ni `why`, ni lo que recibió el modelo, ni los resultados de las
-herramientas. Es de solo lectura, el rol es CUSTOMER en la matriz de `api/access.py`, y la conversación es la de esa sesión:
-otra sesión, aunque sea del mismo cliente, recibe la suya (vacía si es nueva); sin sesión viva, 401. Se guardan hasta 40
-turnos (`MAX_TRANSCRIPT`) en el estado de la conversación (`agent/core/orchestrator.py`), que ya sobrevive a un reinicio, y se
-borran al cerrar sesión. El BFF lo lee en el loader de la ruta autenticada, así que el HTML del servidor ya trae la
-conversación: recargar la página no la vacía. Al recargar aparece la nota "Conversación retomada". La respuesta de `/chat`
-trae además `degraded` (el modelo no estaba disponible y el código respondió solo), que el front dibuja como el banner de
-modo limitado.
+**History (`GET /chat/history`).** With the live session's token (`X-Session-Token` header, like `/case`), it returns the turns
+the API stored exactly as the customer saw them: their words with card numbers masked, the answer already
+assembled by the templates and, per assistant turn, `trace_id`, `disposition`, `category`, `language`, `ticket_id` and
+`degraded`, plus, separately, the session's case index (`cases`: `ticket_id`, `category`, `at`), which is not capped along with the turns. Nothing internal: not the rule that decided, not `why`, not what the model received, not the
+tool results. It is read-only, the role is CUSTOMER in the `api/access.py` matrix, and the conversation is that session's:
+another session, even for the same customer, gets its own (empty if it is new); without a live session, 401. Up to 40
+turns are kept (`MAX_TRANSCRIPT`) in the conversation state (`agent/core/orchestrator.py`), which already survives a restart, and they are
+deleted on logout. The BFF reads it in the authenticated route's loader, so the server HTML already contains the
+conversation: reloading the page does not empty it. On reload the note "Conversación retomada" (Conversation resumed) appears. The `/chat` response
+also carries `degraded` (the model was not available and the code answered on its own), which the front end draws as the limited-mode
+banner.
 
-**Pantallas del cliente** (`web/src/shell/`, `web/src/chat/`; el kit está en la sección siguiente).
+**Customer screens** (`web/src/shell/`, `web/src/chat/`; the kit is in the next section).
 
-- *Shell.* Sidebar de cliente (expandido de 260 px, o rail de 56 px con el botón de la marca), barra con el título, el
-  selector de idioma y, solo en la demo, el botón "Demo". Bajo los 760 px el sidebar es un cajón (botón de menú, cierre con
-  Escape, con la barra de fondo o con su botón; el foco entra y vuelve al botón). El panel abierto es visible desde el primer cuadro (`visibility` con transición de 0 s al abrir y con demora al cerrar): con `visibility: hidden` durante la
-  animación, Chromium deja el foco en `<body>`. `web/src/shell/drawer-css.test.ts` lo protege; en el navegador se comprueba con animaciones normales
-  (abrir el menú móvil y el panel Demo: el foco cae en "Cerrar", Tab sigue dentro y Escape lo devuelve al botón; capturas `docs/demo/cliente-27-*` y `cliente-28-*`). Texto e íconos del sidebar van en tinta:
-  el azul queda para el anillo de foco y los puntos de "no leído".
-- *Casos.* La sección lista los casos de la sesión (las derivaciones que llegaron con número, del índice `cases` del historial más los de esta página) y el estado de cada
-  uno, consultado con `GET /case/{id}` (otra vez cada 45 s mientras un caso siga abierto y la página esté visible, y
-  cuando una respuesta trae una novedad). El título sale de la categoría de la derivación (`cases.category.*`). "Ver caso" en el
-  mensaje de derivación y la fila del caso en el sidebar abren la vista del caso (`web/src/shell/CaseView.tsx`): un diálogo
-  modal desde la derecha (pantalla completa en un teléfono) con el motivo, la fecha, el estado, qué está pasando y qué sigue
-  según el estado, la última novedad que redacta la API (en el idioma de la conversación) y el número; al abrirse y con
-  "Actualizar el estado" vuelve a pedir `GET /case/{id}`. La API no guarda un historial de novedades por caso, así que la
-  vista no lo muestra.
-- *Mensajes.* Cada respuesta se dibuja con el componente del kit que pide su disposición (`resolveMessage`): AUTO_RESOLVE,
-  respuesta (con "¿Por qué?" solo si la API mandó `why`, o sea, en la demo); CLARIFY, aclaración con opciones, o la
-  propuesta de rastreo con Sí/No (`category=confirm_action`); ABSTAIN, rechazo con sugerencias; ESCALATE con número de
-  caso, pase a una persona; ESCALATE **sin** número (no se pudo registrar), "no pude verificar", con reintento que reenvía
-  el mensaje del cliente; la respuesta al "sí" de una propuesta, resultado de la acción; `degraded`, banner de modo
-  limitado; las novedades de un caso que la API antepone a una respuesta ("Novedad de tu caso: ..."), notas de sistema; sesión
-  terminada, "ingresar de nuevo". El resultado de la acción se reconoce por su posición (sigue al "sí" del cliente a una
-  propuesta), no por un campo: `category=resolved` lo comparten todas las respuestas resueltas.
-- *Espera y entrega.* Tres puntos hasta que llega la respuesta y, pasados 6 s, los pasos de verificación (un paso hecho, el
-  envío, y el que está en curso); nada de texto que aparezca de a poco. Cada mensaje del cliente lleva su estado: enviando;
-  **sin confirmar** (se perdió la respuesta: "Reintentar" es seguro porque viaja con la misma clave); no enviado (429 o turno
-  en curso; también con la misma clave); y **recibido** (409, ver arriba): el mensaje que la API ya tiene no se reenvía, se
-  ofrece "Cargar la conversación", que vuelve a leer `/chat/history`. Si la respuesta no está entre lo que la API guardó (sus últimos
-  40 turnos), el mensaje queda "Recibido" con un texto que lo dice —"su respuesta ya no está guardada y no se puede mostrar"— y sin botón.
-- *Sesión.* Ya no se redirige sola: al terminar (respuesta `REAUTH_REQUIRED`, 401 o cuenta regresiva) el chat queda en su
-  lugar, con una nota, el compositor deshabilitado y el mensaje "Ingresar de nuevo", que lleva a
-  `/login?redirect=/chat&motivo=expired`. Otro inicio de sesión es otra conversación (empieza de cero).
-- *Demo.* Con `DEMO_MODE=1` el panel de demo es una columna aparte (cajón deslizante bajo los 1180 px), con la etiqueta
-  Demo; sin la variable no existe ni en el HTML. Los títulos y las pistas de los escenarios y los motivos de "¿Por qué?" los
-  manda la API en español, inglés y portugués (`title`, `look_for` y `because`, con `pt`); un API sin `pt` se ve en español.
-- *Idioma.* Todo texto de la interfaz está en ES y PT (`web/src/i18n/dict/*/{shell,cases,conversation,demo}.ts`); las
-  respuestas de la asistente llegan de la API en el idioma del cliente y no se traducen. El español no usa imperativo de
-  tuteo (un test lo comprueba).
+- *Shell.* Customer sidebar (260 px expanded, or a 56 px rail with the brand button), a bar with the title, the
+  language selector and, only in the demo, the "Demo" button. Below 760 px the sidebar is a drawer (menu button, closes with
+  Escape, with the backdrop or with its button; focus moves in and returns to the button). The open panel is visible from the first frame (`visibility` with a 0 s transition when opening and a delay when closing): with `visibility: hidden` during the
+  animation, Chromium leaves focus on `<body>`. `web/src/shell/drawer-css.test.ts` guards it; in the browser it is checked with normal animations
+  (opening the mobile menu and the Demo panel: focus lands on "Cerrar" (Close), Tab stays inside and Escape returns it to the button; screenshots `docs/demo/cliente-27-*` and `cliente-28-*`). Sidebar text and icons are in ink:
+  blue is kept for the focus ring and the "unread" dots.
+- *Cases.* The section lists the session's cases (the handoffs that arrived with a number, from the history's `cases` index plus those from this page) and the status of each
+  one, fetched with `GET /case/{id}` (again every 45 s while a case is still open and the page is visible, and
+  when an answer brings an update). The title comes from the handoff's category (`cases.category.*`). "Ver caso" (View case) in the
+  handoff message and the case's row in the sidebar open the case view (`web/src/shell/CaseView.tsx`): a modal
+  dialog from the right (full screen on a phone) with the reason, the date, the status, what is happening and what comes next
+  depending on the status, the latest update written by the API (in the conversation's language) and the number; when it opens, and with
+  "Actualizar el estado" (Refresh the status), it requests `GET /case/{id}` again. The API does not keep a history of updates per case, so the
+  view does not show one.
+- *Messages.* Each answer is drawn with the kit component that its disposition calls for (`resolveMessage`): AUTO_RESOLVE,
+  an answer (with "¿Por qué?" only if the API sent `why`, that is, in the demo); CLARIFY, a clarification with options, or the
+  trace proposal with Sí/No (`category=confirm_action`); ABSTAIN, a refusal with suggestions; ESCALATE with a case
+  number, a handoff to a person; ESCALATE **without** a number (it could not be recorded), "no pude verificar" (I could not verify), with a retry that resends
+  the customer's message; the answer to the "yes" to a proposal, the action result; `degraded`, the limited-mode
+  banner; a case's updates that the API puts before an answer ("Novedad de tu caso: ...", that is, Update on your case: ...), system notes; session
+  ended, "ingresar de nuevo" (sign in again). The action result is recognized by its position (it follows the customer's "yes" to a
+  proposal), not by a field: `category=resolved` is shared by every resolved answer.
+- *Waiting and delivery.* Three dots until the answer arrives and, after 6 s, the verification steps (one step done, the
+  sending, and the one in progress); no text that appears bit by bit. Each customer message carries its state: sending;
+  **unconfirmed** (the answer was lost: "Reintentar" (Retry) is safe because it travels with the same key); not sent (429 or a turn
+  in progress; also with the same key); and **received** (409, see above): the message the API already has is not resent, and
+  "Cargar la conversación" (Load the conversation) is offered, which reads `/chat/history` again. If the answer is not among what the API stored (its last
+  40 turns), the message stays "Recibido" (Received) with a text that says so, "su respuesta ya no está guardada y no se puede mostrar" (its answer is no longer stored and cannot be shown), and with no button.
+- *Session.* It no longer redirects on its own: when it ends (`REAUTH_REQUIRED` response, 401 or countdown) the chat stays in
+  place, with a note, the composer disabled and the "Ingresar de nuevo" (Sign in again) message, which leads to
+  `/login?redirect=/chat&motivo=expired`. Another login is another conversation (it starts from scratch).
+- *Demo.* With `DEMO_MODE=1` the demo panel is a separate column (a sliding drawer below 1180 px), with the
+  Demo label; without the variable it does not even exist in the HTML. The scenarios' titles and hints and the "¿Por qué?" reasons are
+  sent by the API in Spanish, English and Portuguese (`title`, `look_for` and `because`, with `pt`); an API without `pt` is shown in Spanish.
+- *Language.* Every interface text is in ES and PT (`web/src/i18n/dict/*/{shell,cases,conversation,demo}.ts`); the
+  assistant's answers arrive from the API in the customer's language and are not translated. The Spanish does not use the informal
+  (tú) imperative (a test checks it).
 
-**Fallas, y qué ve el cliente.**
+**Failures, and what the customer sees.**
 
-| Situación | Qué pasa |
+| Situation | What happens |
 |---|---|
-| Sesión vencida (`REAUTH_REQUIRED`, HTTP 401 o cookie ausente) | El BFF borra la cookie; el chat muestra el mensaje "Ingresar de nuevo" (ver *Sesión*). Con la cookie ausente al cargar, `/chat` redirige a `/login?redirect=/chat` |
-| 429 | El mensaje queda "No enviado" con "Reintentar" (misma clave); no se reenvía solo |
-| API caída, conexión cortada o plazo agotado | Resultado incierto: "Sin confirmar", "No pude confirmar si el servicio recibió tu mensaje", con "Reintentar" manual. El reintento es seguro porque viaja con la misma clave: si la API ya lo procesó, devuelve la misma respuesta y no crea otro ticket ni confirma dos veces |
-| Respuesta que no calza con el contrato | "Recibí una respuesta que no pude mostrar" y "Reintentar" (misma clave) |
-| Doble envío | Un turno a la vez: el compositor se bloquea mientras envía, y el BFF rechaza un segundo envío de la misma sesión mientras el primero corre |
-| La conversación no se pudo leer al cargar | Aviso con "Reintentar" que vuelve a pedir `/chat/history`; el resto de la página funciona |
+| Expired session (`REAUTH_REQUIRED`, HTTP 401 or missing cookie) | The BFF deletes the cookie; the chat shows the "Ingresar de nuevo" (Sign in again) message (see *Session*). With the cookie missing on load, `/chat` redirects to `/login?redirect=/chat` |
+| 429 | The message stays "No enviado" (Not sent) with "Reintentar" (Retry) (same key); it is not resent automatically |
+| API down, connection cut or timeout | Uncertain outcome: "Sin confirmar" (Unconfirmed), "No pude confirmar si el servicio recibió tu mensaje" (I could not confirm whether the service received your message), with a manual "Reintentar". The retry is safe because it travels with the same key: if the API already processed it, it returns the same answer and does not create another ticket or confirm twice |
+| An answer that does not fit the contract | "Recibí una respuesta que no pude mostrar" (I received an answer I could not display) and "Reintentar" (same key) |
+| Double send | One turn at a time: the composer is locked while sending, and the BFF rejects a second send from the same session while the first one is running |
+| The conversation could not be read on load | A notice with "Reintentar" that requests `/chat/history` again; the rest of the page works |
 
-**Idempotencia de `POST /chat`.** Con la cabecera `Idempotency-Key` (8 a 64 caracteres: letras, dígitos, `-` o `_`), la API
-(`api/idempotency.py`) guarda la respuesta por (sesión, clave) mientras viva la sesión (`SESSION_TTL_SECONDS`, 900 por
-defecto), en el mismo SQLite de sesiones y conversaciones (`STATE_DB_PATH`, o memoria). La misma clave devuelve la misma
-respuesta con `Idempotent-Replayed: true`, sin volver a correr el turno y sin gastar cupo del límite de mensajes; un
-reintento que llega mientras el primero corre espera su respuesta. Antes de entregar un replay se comprueba que la
-sesión siga viva (también después de esperar): con la sesión cerrada o vencida la respuesta es `REAUTH_REQUIRED`, como en
-un turno normal. La misma clave con otro texto es un 422. No se guardan las respuestas de sesión vencida ni los errores. Un turno que falla después de empezar (por ejemplo, el ticket
-ya se creó y falla el log de trazas) deja la clave marcada: el reintento recibe 409 y nunca un segundo turno; el lugar solo
-se devuelve si el turno se rechazó antes de empezar (429, sesión terminada).
-Pasadas 50 000 respuestas guardadas, las más viejas pierden la respuesta pero conservan una marca (hash de la clave):
-un reintento de esa clave recibe un 409 "already processed" en vez de volver a ejecutarse, y la UI marca el mensaje
-como "Recibido" y dice "El servicio ya recibió este mensaje. Cargar la conversación muestra su respuesta si todavía está guardada":
-el turno quedó en el historial de la sesión (`GET /chat/history`), aunque la respuesta ya no esté en la tabla de idempotencia,
-mientras siga entre los últimos 40 turnos; si ya salió de ahí, tras recargar la UI dice que la respuesta no se puede mostrar. Las marcas de sesiones vivas no se expulsan nunca: con 500 000 claves
-retenidas, un turno nuevo se rechaza antes de ejecutarse (503 con `Retry-After`, sin efectos), y cada turno toma su lugar
-en la misma transacción que comprueba el tope. Sin la cabecera, el comportamiento es el de siempre. Con
-`DEMO_MODE=1` la respuesta guardada incluye `why` y `policy_rule`, y un replay los filtra según el modo vigente.
+**Idempotency of `POST /chat`.** With the `Idempotency-Key` header (8 to 64 characters: letters, digits, `-` or `_`), the API
+(`api/idempotency.py`) stores the answer per (session, key) while the session lives (`SESSION_TTL_SECONDS`, 900 by
+default), in the same SQLite as sessions and conversations (`STATE_DB_PATH`, or memory). The same key returns the same
+answer with `Idempotent-Replayed: true`, without running the turn again and without using quota from the message limit; a
+retry that arrives while the first one is running waits for its answer. Before a replay is delivered, the API checks that the
+session is still alive (also after waiting): with the session closed or expired the answer is `REAUTH_REQUIRED`, as in
+a normal turn. The same key with a different text is a 422. Answers for an expired session and errors are not stored. A turn that fails after it has started (for example, the ticket
+was already created and the trace log fails) leaves the key marked: the retry gets 409 and never a second turn; the slot is only
+given back if the turn was rejected before it started (429, ended session).
+After 50,000 stored answers, the oldest lose their answer but keep a marker (a hash of the key):
+a retry with that key gets a 409 "already processed" instead of running again, and the UI marks the message
+as "Recibido" (Received) and says "El servicio ya recibió este mensaje. Cargar la conversación muestra su respuesta si todavía está guardada" (The service already received this message. Loading the conversation shows its answer if it is still stored):
+the turn stayed in the session's history (`GET /chat/history`), even if the answer is no longer in the idempotency table,
+as long as it is among the last 40 turns; if it has already left them, after a reload the UI says that the answer cannot be shown. Markers of live sessions are never evicted: with 500,000 keys
+retained, a new turn is rejected before it runs (503 with `Retry-After`, no side effects), and each turn takes its slot
+in the same transaction that checks the cap. Without the header, the behavior is the same as always. With
+`DEMO_MODE=1` the stored answer includes `why` and `policy_rule`, and a replay filters them according to the mode in force.
 
-**Punto de sustitución.** El BFF solo conoce `POST /chat`, `GET /chat/history` y `GET /case/{id}`; con el core real el contrato no cambia.
+**Substitution point.** The BFF only knows `POST /chat`, `GET /chat/history` and `GET /case/{id}`; with the real core the contract does not change.
 
-**En producción.** Falta un `POST /auth/session/refresh` para ofrecer "Seguir conectado" antes de que venza.
+**In production.** A `POST /auth/session/refresh` is missing, to offer "Seguir conectado" (Stay signed in) before the session expires.
 
-**Cómo se verifica.** `make web-typecheck`, `make web-test` (formato de las aclaraciones, envío, 401, clave de
-idempotencia, lectura del historial, la lógica de la conversación, cada variante de mensaje y cada estado de entrega en el DOM,
-el shell con su rail y su cajón, y pruebas HTTP contra el build: `/chat` con y sin sesión, la conversación ya en el HTML, ES y PT,
-el token que no sale del servidor, el panel de demo que solo existe con la demo), `tests/test_chat_history.py` y
-`tests/test_access_matrix.py` (API: el historial, que otra sesión no lo lee, y su fila en la matriz) y `make web-build`. El
-flujo completo se recorrió en el navegador, en español y portugués, en escritorio y móvil, con `make serve-all-fixture`; las
-capturas están en `docs/demo/cliente-*.png`: inicio y login (ES y PT), chat vacío, respuesta con "¿Por qué?", aclaración,
-rechazo, caso derivado con el sidebar de casos, recarga con la conversación, propuesta y resultado del rastreo, modo limitado,
-chat en portugués, rail, tablet, móvil (chat, cajón y demo), límite de mensajes, sesión terminada, entrega sin confirmar,
-espera (puntos y pasos) y el chat sin demo.
+**How it is verified.** `make web-typecheck`, `make web-test` (format of the clarifications, sending, 401, idempotency
+key, history reading, the conversation logic, every message variant and every delivery state in the DOM,
+the shell with its rail and its drawer, and HTTP tests against the build: `/chat` with and without a session, the conversation already in the HTML, ES and PT,
+the token that does not leave the server, the demo panel that exists only with the demo), `tests/test_chat_history.py` and
+`tests/test_access_matrix.py` (API: the history, that another session does not read it, and its row in the matrix) and `make web-build`. The
+full flow was walked through in the browser, in Spanish and Portuguese, on desktop and mobile, with `make serve-all-fixture`; the
+screenshots are in `docs/demo/cliente-*.png`: home and login (ES and PT), empty chat, answer with "¿Por qué?", clarification,
+refusal, escalated case with the cases sidebar, reload with the conversation, trace proposal and result, limited mode,
+chat in Portuguese, rail, tablet, mobile (chat, drawer and demo), message limit, ended session, unconfirmed delivery,
+waiting (dots and steps) and the chat without the demo.
 
-### UI kit, i18n y galería
+### UI kit, i18n and gallery
 
-**Cómo usar el kit.** Los componentes viven en `web/src/ui/` y salen de un solo punto:
-`import { Button, DataTable, Sidebar, AnswerMessage, Toast } from '../ui'`. Lo que hoy solo dibuja la galería (`Progress`,
-`SidebarMenu`, `DataInAnswer`) no está en ese punto y se importa de su archivo: todo módulo del barrel, con su CSS, viaja en el
-bundle inicial de la app. Un componente que empiece a usar la app se agrega al `index.ts` de su área. Son presentacionales (reciben props, no llaman a
-la API), no dibujan bordes (solo el botón `outline` y el anillo de foco) y consumen únicamente variables de
-`web/src/tokens.css`; cada uno trae su CSS al lado, con clases `ui-*` que no chocan con las de `styles.css`. Las áreas son
-`Button` e `IconButton`; `loaders/` (`Spinner`, `ThinkingDots`, `CheckingSteps`, `Skeleton`, `Progress`, `DeliveryStatus`,
-`PageLoader`, `Toast`); `sidebar/` (cliente, rail, operador, menú de fila, vacío y cargando); `table/` (`DataTable` cómoda
-de 48 px y compacta de 32 px, selección con `BulkActionBar`, orden, `Pagination`); `messages/` (un componente por
-variante del chat, y `resolveMessage` que traduce la disposición de la API a una variante: AUTO_RESOLVE es respuesta,
-CLARIFY aclaración, ABSTAIN rechazo, ESCALATE pase a una persona, REAUTH_REQUIRED ingresar de nuevo). Las respuestas de la
-asistente llegan por props ya en el idioma del cliente y no se traducen. La lógica con reglas (orden, selección,
-paginación, estados de entrega, mapeo de disposiciones) está en archivos `.ts` puros con tests.
+**How to use the kit.** The components live in `web/src/ui/` and are exported from a single entry point:
+`import { Button, DataTable, Sidebar, AnswerMessage, Toast } from '../ui'`. What today only the gallery draws (`Progress`,
+`SidebarMenu`, `DataInAnswer`) is not in that entry point and is imported from its own file: every module of the barrel, with its CSS, ships in the
+app's initial bundle. A component that the app starts using is added to the `index.ts` of its area. They are presentational (they take props, they do not call
+the API), they draw no borders (only the `outline` button and the focus ring) and they consume only variables from
+`web/src/tokens.css`; each one brings its CSS alongside, with `ui-*` classes that do not clash with those in `styles.css`. The areas are
+`Button` and `IconButton`; `loaders/` (`Spinner`, `ThinkingDots`, `CheckingSteps`, `Skeleton`, `Progress`, `DeliveryStatus`,
+`PageLoader`, `Toast`); `sidebar/` (customer, rail, operator, row menu, empty and loading); `table/` (`DataTable`, comfortable
+at 48 px and compact at 32 px, selection with `BulkActionBar`, sorting, `Pagination`); `messages/` (one component per
+chat variant, and `resolveMessage`, which translates the API's disposition into a variant: AUTO_RESOLVE is an answer,
+CLARIFY a clarification, ABSTAIN a refusal, ESCALATE a handoff to a person, REAUTH_REQUIRED sign in again). The
+assistant's answers arrive through props already in the customer's language and are not translated. The rule-based logic (sorting, selection,
+pagination, delivery states, disposition mapping) is in pure `.ts` files with tests.
 
-**Idioma.** Español (`es`) y portugués de Brasil (`pt`). El servidor lo resuelve en este orden: cookie `cecilai_lang`,
-después `Accept-Language`, después `es` (`web/src/i18n/resolve.ts`); el loader de la ruta raíz lo entrega, así el HTML sale
-en el idioma correcto y `<html lang>` es `es` o `pt-BR`. `LanguageSwitcher` guarda la cookie (un año, no es un secreto) y
-recarga los datos de la ruta sin recargar la página. El español de la interfaz es neutro para Argentina, México y
-Colombia: sin voseo ni tuteo imperativo (infinitivos y construcciones nominales: "Reintentar", "Intentar de nuevo").
+**Language.** Spanish (`es`) and Brazilian Portuguese (`pt`). The server resolves it in this order: the `cecilai_lang` cookie,
+then `Accept-Language`, then `es` (`web/src/i18n/resolve.ts`); the root route's loader delivers it, so the HTML comes out
+in the right language and `<html lang>` is `es` or `pt-BR`. `LanguageSwitcher` stores the cookie (one year, it is not a secret) and
+reloads the route's data without reloading the page. The interface's Spanish is neutral for Argentina, Mexico and
+Colombia: no voseo and no informal (tú) imperative (infinitives and noun phrases: "Reintentar", "Intentar de nuevo").
 
-**Cómo agregar un texto.**
+**How to add a text.**
 
-1. Escribirlo en el diccionario español del área, en `web/src/i18n/dict/es/<área>.ts` (objeto anidado; los valores
-   dinámicos van como `{nombre}`).
-2. Escribir su traducción en `web/src/i18n/dict/pt/<área>.ts`. Está tipado contra el español: si falta una clave o sobra
-   una, `make web-typecheck` falla.
-3. Usarlo: `const t = useT()` y `t('shell.customer', { id })`. Fuera de React, `translate(messages, clave, params)`, con el
-   diccionario que da el loader raíz. El título de una ruta usa `headTitle(matches, clave)`, que lee ese mismo diccionario.
-   Una clave inexistente no compila.
+1. Write it in the area's Spanish dictionary, in `web/src/i18n/dict/es/<área>.ts` (a nested object; dynamic
+   values go as `{nombre}`).
+2. Write its translation in `web/src/i18n/dict/pt/<área>.ts`. It is typed against the Spanish one: if a key is missing or there is
+   an extra one, `make web-typecheck` fails.
+3. Use it: `const t = useT()` and `t('shell.customer', { id })`. Outside React, `translate(messages, clave, params)`, with the
+   dictionary that the root loader provides. A route's title uses `headTitle(matches, clave)`, which reads that same dictionary.
+   A nonexistent key does not compile.
 
-**Diccionarios por área.** Ninguna página descarga todos los textos: cada una carga, en su idioma, los espacios de claves
-(`common`, `shell`, `operator`...) de su área, y nada más. Las áreas y sus espacios están en `web/src/i18n/areas.ts`: cliente
-(`/`, `/login`, `/chat`), operador (`/operador/...`), monitoreo (lo que suman `/operador/monitoreo` y `/operador/trazas`) y
-galería (`/dev/ui`, que carga los diccionarios completos en su propio chunk). El loader raíz (`routes/__root.tsx`) resuelve el
-idioma y el área de la ruta, y el diccionario viaja en sus datos: el HTML del servidor y la hidratación usan el mismo, y los
-componentes de carga y de error de una ruta lo tienen aunque su loader falle. Se vuelve a cargar al cambiar de idioma y al
-entrar a una página cuya área no está cargada (de la cola al monitoreo), antes de dibujarla. Por eso:
+**Dictionaries per area.** No page downloads all the texts: each one loads, in its language, the key namespaces
+(`common`, `shell`, `operator`...) of its area, and nothing else. The areas and their namespaces are in `web/src/i18n/areas.ts`: customer
+(`/`, `/login`, `/chat`), operator (`/operador/...`), monitoring (what `/operador/monitoreo` and `/operador/trazas` add) and
+gallery (`/dev/ui`, which loads the full dictionaries in its own chunk). The root loader (`routes/__root.tsx`) resolves the
+language and the route's area, and the dictionary travels in its data: the server HTML and hydration use the same one, and the
+loading and error components of a route have it even if its loader fails. It is loaded again when the language changes and when
+entering a page whose area is not loaded (from the queue to monitoring), before drawing it. Therefore:
 
-- Una clave nueva en un espacio que ya existe no pide nada más.
-- Un espacio nuevo es un archivo en cada `dict/`, una línea en `es.ts` y `pt.ts`, una entrada por idioma en `sources` de
-  `areas.ts` y su nombre en la lista de cada área que lo use. Si una pantalla usa una clave de un espacio que su área no carga,
-  en pantalla aparece la clave tal cual; `web/src/i18n/areas.test.ts` sigue los imports de las rutas de cada área y falla antes.
-- Una ruta nueva fuera de esos prefijos es del área cliente: si es de otra, agregarla en `areasOf` y en `areas.test.ts`.
+- A new key in a namespace that already exists needs nothing else.
+- A new namespace is a file in each `dict/`, a line in `es.ts` and `pt.ts`, one entry per language in `sources` of
+  `areas.ts` and its name in the list of every area that uses it. If a screen uses a key from a namespace that its area does not load,
+  the key appears on screen as is; `web/src/i18n/areas.test.ts` follows the imports of each area's routes and fails first.
+- A new route outside those prefixes belongs to the customer area: if it belongs to another one, add it in `areasOf` and in `areas.test.ts`.
 
-El costo: el diccionario del área va dentro del HTML de cada página (unos 6,5 kB en gzip para `/chat` o la cola) en vez de
-un JS que el navegador guarda en caché; a cambio, el JS inicial ya no trae los textos de las otras áreas ni del otro idioma.
+The cost: the area's dictionary goes inside each page's HTML (about 6.5 kB gzipped for `/chat` or the queue) instead of
+a JS file that the browser caches; in exchange, the initial JS no longer carries the texts of the other areas or of the other language.
 
-`make web-test` comprueba además que las dos lenguas tengan las mismas claves y los mismos marcadores, y que el español no
-tenga voseo.
+`make web-test` also checks that both languages have the same keys and the same placeholders, and that the Spanish has no
+voseo.
 
-**Galería.** `/dev/ui` muestra cada componente en todas sus variantes y estados, para cotejarlos contra los artboards de
-Paper; con `?both=1` dibuja el kit entero en español y en portugués. Existe con `make serve-web` (desarrollo) o con un
-build arrancado con `UI_GALLERY=1`; en cualquier otro build responde 404 y su código va en un chunk aparte que el
-cliente nunca descarga. Los estados que solo se alcanzan con el puntero o el teclado (hover, pressed, focus) se dibujan
-con la prop `forceState`. Las capturas de la galería contra Paper están en `docs/demo/ui-kit-*.png`.
+**Gallery.** `/dev/ui` shows each component in all its variants and states, to compare them against the Paper
+artboards; with `?both=1` it draws the whole kit in Spanish and in Portuguese. It exists with `make serve-web` (development) or with a
+build started with `UI_GALLERY=1`; in any other build it answers 404 and its code goes in a separate chunk that the
+client never downloads. The states that can only be reached with the pointer or the keyboard (hover, pressed, focus) are drawn
+with the `forceState` prop. The gallery screenshots against Paper are in `docs/demo/ui-kit-*.png`.
 
-Las pantallas del cliente extendieron el kit sin tocar sus variantes de Paper: `DeliveryStatus` suma los estados *sin
-confirmar* y *recibido* (con `detail` y `onReload`), `UserMessage` acepta la línea de entrega y el tinte del mensaje que no
-llegó, y `ConfirmTraceMessage` acepta `disabled` y funciona sin tarjeta del movimiento (la API manda la propuesta como texto).
+The customer screens extended the kit without touching its Paper variants: `DeliveryStatus` adds the *unconfirmed* and
+*received* states (with `detail` and `onReload`), `UserMessage` accepts the delivery line and the tint of a message that did not
+arrive, and `ConfirmTraceMessage` accepts `disabled` and works without a movement card (the API sends the proposal as text).
 
 ---
 
-## Levantar todo con un comando
+## Start everything with one command
 
-Todo se levanta y se prueba en Docker local, sin cuentas, sin S3 y sin claves de API; los servicios en la nube (S3, Render,
-proveedores de modelos) son opciones, nunca requisitos.
+Everything starts and is tested in local Docker, with no accounts, no S3 and no API keys; the cloud services (S3, Render,
+model providers) are options, never requirements.
 
 ```bash
-make up                 # API + web sobre el warehouse de fixtures; escribe .env con secretos nuevos; http://127.0.0.1:3000 y :8000
-make env-check          # con un .env viejo: qué variables de .env.example le faltan (solo nombres) y si INGEST_ARGS leería S3; make up lo corre como aviso
-make env-fill           # agrega al .env solo las que faltan, con secretos generados; no cambia nada de lo que ya está
-make monitoring-up      # además Prometheus (con las reglas de alerta) y Grafana con su dashboard: :9090 y :3001
-make up-dataset RAW_DIR=/ruta/a/data/raw   # tus CSV locales, montados de solo lectura, ingeridos en el primer arranque
-make up-llm-local       # además un modelo local (Ollama en Docker); make up-llm-host usa el Ollama del host
-make compose-e2e        # levanta todo desde cero en un proyecto aparte y descartable, lo comprueba de punta a punta y lo baja (es el job `compose` del CI)
-make down               # baja el stack; sus volúmenes se conservan
-make evidence           # regenera docs/evidence/data_ml_validation.{md,json}; make gate y validate-data-ml verifican sin escribir
-make clean-volumes      # además borra los volúmenes (pregunta antes)
+make up                 # API + web on the fixtures warehouse; writes .env with new secrets; http://127.0.0.1:3000 and :8000
+make env-check          # with an old .env: which .env.example variables it lacks (names only) and whether INGEST_ARGS would read S3; make up runs it as a warning
+make env-fill           # adds to .env only the missing ones, with generated secrets; changes nothing that is already there
+make monitoring-up      # also Prometheus (with the alerting rules) and Grafana with its dashboard: :9090 and :3001
+make up-dataset RAW_DIR=/ruta/a/data/raw   # your local CSVs, mounted read-only, ingested on the first start
+make up-llm-local       # also a local model (Ollama in Docker); make up-llm-host uses the host's Ollama
+make compose-e2e        # brings everything up from scratch in a separate, disposable project, checks it end to end and tears it down (it is the CI's `compose` job)
+make down               # stops the stack; its volumes are kept
+make evidence           # regenerates docs/evidence/data_ml_validation.{md,json}; make gate and validate-data-ml verify without writing
+make clean-volumes      # also deletes the volumes (asks first)
 ```
 
-La web del compose corre en modo producción: la consola de operador exige `WEB_PUBLIC_ORIGIN`, y el compose se la pasa
-(por defecto `http://127.0.0.1:${WEB_PORT}` y `http://localhost:${WEB_PORT}`, junto con `TRUSTED_CLIENT_IP_HEADER`, `OPERATOR_IDLE_SECONDS` y `UI_GALLERY`; están en
-`.env.example`). `make compose-e2e` entra por la web como un navegador: login de cliente y un turno de chat, login de operador por el
-formulario (con y sin el `Origin` correcto, y por `localhost`) y su cola, y `/dev/ui` en 404; lo repite con la web reiniciada tras un
-origen https, donde espera cookies `Secure` con `__Host-`. Con un navegador de verdad (WebKit, el motor de Safari, y Chromium)
-se verificó una vez con `ops/browser_cookies_check.mjs`.
+The compose stack's web runs in production mode: the operator console requires `WEB_PUBLIC_ORIGIN`, and the compose file passes it
+(by default `http://127.0.0.1:${WEB_PORT}` and `http://localhost:${WEB_PORT}`, along with `TRUSTED_CLIENT_IP_HEADER`, `OPERATOR_IDLE_SECONDS` and `UI_GALLERY`; they are in
+`.env.example`). `make compose-e2e` goes in through the web like a browser: customer login and a chat turn, operator login through the
+form (with and without the correct `Origin`, and via `localhost`) and their queue, and `/dev/ui` at 404; it repeats this with the web restarted behind an
+https origin, where it expects `Secure` cookies with `__Host-`. With a real browser (WebKit, Safari's engine, and Chromium)
+it was verified once with `ops/browser_cookies_check.mjs`.
 
-Sin clave de modelo el asistente corre en modo degradado seguro: saldos simples desde datos verificados y todo lo demás a una
-persona. Requisitos de RAM y disco de los modelos locales, y por qué en macOS conviene el Ollama del host: `docs/operations.md`
+Without a model key the assistant runs in a safe degraded mode: simple balances from verified data and everything else to a
+person. RAM and disk requirements of the local models, and why the host's Ollama is the better choice on macOS: `docs/operations.md`
 ("Local development").
 
-## Trabajo restante antes de desplegar
+## Remaining work before deployment
 
-Es la lista consolidada de lo que separa este prototipo de un servicio real. El detalle de cada punto está en la
-frontera correspondiente y en `LIMITATIONS.md`.
+This is the consolidated list of what separates this prototype from a real service. The detail of each point is in the
+corresponding boundary and in `LIMITATIONS.md`.
 
-1. **Identidad:** IdP del banco con MFA para clientes y SSO con roles para operadores.
-2. **Core:** API o réplica con la propiedad de recursos verificada en el servicio, e ingesta programada.
-3. **Rastreo:** API de operaciones de pagos con clave de idempotencia y lectura tras escritura.
-4. **Casos:** integración con el sistema de casos del banco y su retención regulatoria.
-5. **Modelos:** un modelo dentro del perímetro del banco, con acuerdo de tratamiento de datos.
-6. **Observabilidad:** un destino a prueba de manipulación, las alertas de `ops/alerts.yml` conectadas a un canal de notificación, y cifrado en reposo.
-7. **Escala:** el estado en SQLite tiene un solo escritor; varias réplicas necesitan Redis o Postgres.
-8. **Evaluación:** repetir la medición con datos y tráfico reales. Las cifras actuales son offline y de simulador, y
-   **no son una mejora medida en producción**.
+1. **Identity:** the bank's IdP with MFA for customers and SSO with roles for operators.
+2. **Core:** an API or replica with resource ownership verified in the service, and scheduled ingestion.
+3. **Traces:** a payment operations API with an idempotency key and read-after-write.
+4. **Cases:** integration with the bank's case system and its regulatory retention.
+5. **Models:** a model inside the bank's perimeter, with a data processing agreement.
+6. **Observability:** a tamper-proof destination, the alerts in `ops/alerts.yml` connected to a notification channel, and encryption at rest.
+7. **Scale:** the state in SQLite has a single writer; several replicas need Redis or Postgres.
+8. **Evaluation:** repeat the measurement with real data and traffic. The current figures are offline and from a simulator, and
+   **they are not a measured production improvement**.

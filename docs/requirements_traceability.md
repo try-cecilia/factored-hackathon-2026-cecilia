@@ -1,119 +1,119 @@
-# Trazabilidad de requisitos
+# Requirements traceability
 
-Cada requisito de la consigna (*Problem Statement*) y del kickoff del 25/09, dónde se cumple en este repositorio y
-cómo verificarlo. Estado: ✅ cumplido · 🟡 parcial (la brecha está dicha) · ⬜ pendiente.
+Each requirement from the challenge brief (*Problem Statement*) and from the September 25 kickoff, where this repository meets it and
+how to verify it. Status: ✅ met · 🟡 partial (the gap is stated) · ⬜ pending.
 
-Las cifras no se repiten acá: viven en los reportes generados que se citan. Todo lo medido es offline y sobre datos
-sintéticos; nada de esto es una medición en producción.
+Figures are not repeated here: they live in the generated reports that are cited. Everything measured is offline and on synthetic
+data; none of this is a production measurement.
 
-## Alcance
+## Scope
 
-| Requisito | Estado | Evidencia | Cómo verificarlo |
+| Requirement | Status | Evidence | How to verify |
 |---|---|---|---|
-| Un flujo coherente | ✅ | Consultas de cuentas y pagos (saldos, transacciones, estado de pago y mora, cambio de moneda); una sola acción, rastrear un movimiento pendiente ([ADR-002](decisions/ADR-002-one-action-confirmed-in-code.md)) | [README](../README.md#por-qué-este-flujo-medido-sobre-los-datos-provistos) |
-| Camino normal de resolución | ✅ | Tipos de caso `balance_*`, `payment_ok`, `fx`, `transactions` | [`SYSTEM_EVAL.md`](../eval/reports/SYSTEM_EVAL.md), tabla "By case type" |
-| Pedido ambiguo o no soportado | ✅ | Disposiciones `CLARIFY` y `ABSTAIN` en [`agent/policy/router.py`](../agent/policy/router.py); tipos `ambiguous_type`, `out_of_scope`, `code_switch` | Ídem |
-| Caso que requiere una persona | ✅ | Tipos `fraud`, `suspended`, `trace_review`; traspaso estructurado en [`agent/policy/escalation.py`](../agent/policy/escalation.py) | Ídem; consola de operador en `web/` |
-| Español y portugués | 🟡 | Los 548 casos de test van en ES y PT; la web tiene i18n ES/PT | Portugués escrito por el equipo: el dataset no lo trae ([LIMITATIONS](../LIMITATIONS.md#data-and-ml)) |
-| Limitaciones de datos y de idioma | ✅ | [LIMITATIONS.md](../LIMITATIONS.md), [data_quality.md](data_quality.md) | Leer |
-| Prototipo funcional, evidencia de camino a producción y relato honesto de lo que falta | ✅ | [operations.md](operations.md), [LIMITATIONS.md](../LIMITATIONS.md) | Demo desplegada: https://cecil-ai.onrender.com |
+| One coherent flow | ✅ | Account and payment inquiries (balances, transactions, payment and delinquency status, currency exchange); a single action, tracing a pending movement ([ADR-002](decisions/ADR-002-one-action-confirmed-in-code.md)) | [README](../README.md#why-this-workflow-measured-on-the-provided-data) |
+| Normal resolution path | ✅ | Case types `balance_*`, `payment_ok`, `fx`, `transactions` | [`SYSTEM_EVAL.md`](../eval/reports/SYSTEM_EVAL.md), "By case type" table |
+| Ambiguous or unsupported request | ✅ | `CLARIFY` and `ABSTAIN` dispositions in [`agent/policy/router.py`](../agent/policy/router.py); types `ambiguous_type`, `out_of_scope`, `code_switch` | Same |
+| Case that requires a person | ✅ | Types `fraud`, `suspended`, `trace_review`; structured handoff in [`agent/policy/escalation.py`](../agent/policy/escalation.py) | Same; operator console in `web/` |
+| Spanish and Portuguese | 🟡 | The 548 test cases are in ES and PT; the web app has ES/PT i18n | Portuguese written by the team: the dataset does not include it ([LIMITATIONS](../LIMITATIONS.md#data-and-ml)) |
+| Data and language limitations | ✅ | [LIMITATIONS.md](../LIMITATIONS.md), [data_quality.md](data_quality.md) | Read |
+| Working prototype, evidence of a path to production and an honest account of what is missing | ✅ | [operations.md](operations.md), [LIMITATIONS.md](../LIMITATIONS.md) | Deployed demo: https://cecil-ai.onrender.com |
 
-## 1. Un problema respaldado por datos
+## 1. A problem backed by data
 
-| Requisito | Estado | Evidencia | Cómo verificarlo |
+| Requirement | Status | Evidence | How to verify |
 |---|---|---|---|
-| Motivos de contacto, demanda, calidad de datos, restricciones operativas | ✅ | Participación, tiempos, resolución en primer contacto y CSAT por motivo ([README](../README.md#por-qué-este-flujo-medido-sobre-los-datos-provistos), [EVALUATION §1](../EVALUATION.md)); [dataset-audit.md](dataset-audit.md), [data_evidence.md](data_evidence.md), [data_quality.md](data_quality.md) | `make baseline` regenera [`baseline_metrics.md`](evidence/baseline_metrics.md) |
-| Línea base humana para medir la mejora | ✅ | [`baseline_metrics.md`](evidence/baseline_metrics.md): ≈341 s por consulta (120 s de cola + 221 s de llamada) | Ídem |
-| Límite de la evidencia | 🟡 | Las 171 mil transcripciones repiten 42 textos de cliente: sirven para medir la demanda por motivo, no para entrenar ni evaluar lenguaje | [LIMITATIONS](../LIMITATIONS.md#data-and-ml) |
+| Contact reasons, demand, data quality, operational constraints | ✅ | Share, times, first-contact resolution and CSAT by reason ([README](../README.md#why-this-workflow-measured-on-the-provided-data), [EVALUATION §1](../EVALUATION.md)); [dataset-audit.md](dataset-audit.md), [data_evidence.md](data_evidence.md), [data_quality.md](data_quality.md) | `make baseline` regenerates [`baseline_metrics.md`](evidence/baseline_metrics.md) |
+| Human baseline to measure the improvement | ✅ | [`baseline_metrics.md`](evidence/baseline_metrics.md): ≈341 s per inquiry (120 s in queue + 221 s on the call) | Same |
+| Limits of the evidence | 🟡 | The 171 thousand transcripts repeat 42 customer texts: they serve to measure demand by reason, not to train or evaluate language | [LIMITATIONS](../LIMITATIONS.md#data-and-ml) |
 
-## 2. Un sistema de IA que funciona
+## 2. An AI system that works
 
-| Requisito | Estado | Evidencia | Cómo verificarlo |
+| Requirement | Status | Evidence | How to verify |
 |---|---|---|---|
-| Contexto conversacional | ✅ | Estado de sesión por turno (`agent/session/`, `agent/core/orchestrator.py`); tipo de caso `multi_turn` | `tests/test_orchestrator.py` |
-| Aclarar la ambigüedad | ✅ | Disposición `CLARIFY` con las opciones del cliente | Escenario guiado "ambiguo" en la demo |
-| Respuestas ancladas en información permitida | ✅ | El modelo no recibe registros del cliente y no le escribe al cliente: cada respuesta es una plantilla o datos verificados ([ADR-001](decisions/ADR-001-model-interprets-code-speaks.md), [`agent/core/render.py`](../agent/core/render.py)) | Métrica "casos que enviaron un registro de cliente al modelo" en los reportes; `tests/test_privacy.py` |
-| Herramientas al servicio del flujo | ✅ | [`agent/tools/`](../agent/tools/) | `tests/test_tools.py` |
-| Reportar solo acciones verificadas | ✅ | La acción se anuncia después de leerla de vuelta; si no coincide, se deriva ([ADR-002](decisions/ADR-002-one-action-confirmed-in-code.md), regla `action:trace_unverified`) | `tests/test_trace.py` |
+| Conversational context | ✅ | Per-turn session state (`agent/session/`, `agent/core/orchestrator.py`); case type `multi_turn` | `tests/test_orchestrator.py` |
+| Clarify ambiguity | ✅ | `CLARIFY` disposition with the customer's options | "ambiguo" (Ambiguous) guided scenario in the demo |
+| Answers grounded in permitted information | ✅ | The model receives no customer records and does not write to the customer: every answer is a template or verified data ([ADR-001](decisions/ADR-001-model-interprets-code-speaks.md), [`agent/core/render.py`](../agent/core/render.py)) | "Cases that sent a customer record to the model" metric in the reports; `tests/test_privacy.py` |
+| Tools in service of the flow | ✅ | [`agent/tools/`](../agent/tools/) | `tests/test_tools.py` |
+| Report only verified actions | ✅ | The action is announced after reading it back; if it does not match, the case is handed off ([ADR-002](decisions/ADR-002-one-action-confirmed-in-code.md), rule `action:trace_unverified`) | `tests/test_trace.py` |
 
-## 3. Automatización controlada
+## 3. Controlled automation
 
-| Requisito | Estado | Evidencia | Cómo verificarlo |
+| Requirement | Status | Evidence | How to verify |
 |---|---|---|---|
-| Qué se responde, qué necesita confirmación, cuándo abstenerse o derivar | ✅ | Política determinista con precedencia fija ([`agent/policy/router.py`](../agent/policy/router.py), [`escalation.py`](../agent/policy/escalation.py)); la única acción exige el "sí" del cliente juzgado en código | Cada decisión lleva su `rule` en el trace; botón **Why?** en la demo |
-| Permisos y políticas fuera de la prosa del modelo | ✅ | Autorización por cliente en la capa de herramientas; matriz ruta × rol que impide arrancar si falta una ruta ([`api/access.py`](../api/access.py)) | `tests/test_access_matrix.py` |
-| El traspaso trae solicitud, hechos verificados, acciones, evidencia y preguntas abiertas | ✅ | `Ticket` en [`agent/policy/escalation.py`](../agent/policy/escalation.py) | Métrica "completitud del handoff" en [`SYSTEM_EVAL.md`](../eval/reports/SYSTEM_EVAL.md) |
-| Identidad: un documento o número de cliente no prueba identidad | ✅ | Sesión con token firmado emitido por un IdP de prueba ([`agent/session/identity.py`](../agent/session/identity.py)) | `tests/test_privacy.py`, `tests/test_api.py`; el IdP de prueba figura en [LIMITATIONS](../LIMITATIONS.md#security-and-privacy) |
+| What gets answered, what needs confirmation, when to abstain or hand off | ✅ | Deterministic policy with fixed precedence ([`agent/policy/router.py`](../agent/policy/router.py), [`escalation.py`](../agent/policy/escalation.py)); the only action requires the customer's "sí" (yes), judged in code | Each decision carries its `rule` in the trace; **Why?** button in the demo |
+| Permissions and policies outside the model's prose | ✅ | Per-customer authorization in the tool layer; a route × role matrix that prevents startup if a route is missing ([`api/access.py`](../api/access.py)) | `tests/test_access_matrix.py` |
+| The handoff carries the request, verified facts, actions, evidence and open questions | ✅ | `Ticket` in [`agent/policy/escalation.py`](../agent/policy/escalation.py) | "Handoff completeness" metric in [`SYSTEM_EVAL.md`](../eval/reports/SYSTEM_EVAL.md) |
+| Identity: a document or customer number does not prove identity | ✅ | Session with a signed token issued by a test IdP ([`agent/session/identity.py`](../agent/session/identity.py)) | `tests/test_privacy.py`, `tests/test_api.py`; the test IdP is listed in [LIMITATIONS](../LIMITATIONS.md#security-and-privacy) |
 
-## 4. Datos y ML
+## 4. Data and ML
 
-| Requisito | Estado | Evidencia | Cómo verificarlo |
+| Requirement | Status | Evidence | How to verify |
 |---|---|---|---|
-| Preparación repetible con contratos | ✅ | [`data/contracts.py`](../data/contracts.py), [`data/pipeline.py`](../data/pipeline.py), [data-validation-catalog.md](data-validation-catalog.md) | `make ingest-demo`; `tests/test_pipeline.py` |
-| Controles de calidad y linaje | ✅ | [`data/quality.py`](../data/quality.py), [`data/lineage.py`](../data/lineage.py); vista **Data quality** en la demo | [data_quality.md](data_quality.md) |
-| Política de actualización y frescura | ✅ | [data_quality.md, "Update and freshness policy"](data_quality.md) | Ídem |
-| Corrección de la actualización con un fixture rotulado (datos estáticos) | ✅ | Prueba de llegada tardía: se re-entrega una partición y el último `last_updated` gana | `tests/test_pipeline.py` |
-| Un componente aprendido contra una línea base apropiada | ✅ | Clasificador de intención frente a palabras clave, en texto que no vio | [`intent_classifier.md`](../eval/reports/intent_classifier.md); [EVALUATION §2](../EVALUATION.md) |
-| Etiquetas válidas | 🟡 | Los textos de entrenamiento y de evaluación los escribió el equipo; hay sesgo de mismo autor. Set de mensajes de personas reales en curso ([human_set.md](human_set.md), [preregistro](preregistration.md)). Las etiquetas de fraude del organizador se midieron y no se usan para decidir: `is_fraud` no se aprende de la transacción (AUC 0,506) ([label_signal.md](evidence/label_signal.md), [ADR-005](decisions/ADR-005-no-fraud-or-risk-model.md)) | [LIMITATIONS](../LIMITATIONS.md#data-and-ml); [`pendientes.md`](pendientes.md) punto 4 |
-| Validación automática de contratos, calidad, linaje, frescura, clasificador contra línea base y fuga | ✅ | Todos en PASS, con lo que no cierran declarado | `make validate-data-ml`; [`data_ml_validation.md`](evidence/data_ml_validation.md) |
-| Sin fuga de datos | ✅ | Chequeo de casi-duplicados entre entrenamiento y evaluación ([`eval/leakage.py`](../eval/leakage.py)); splits dev (seed 7) y test (seed 11) con clientes y frases distintos | `tests/test_leakage.py` |
-| Métricas, umbrales y splits justificados | ✅ | [EVALUATION §2 y §3](../EVALUATION.md); intervalos de Wilson ([`eval/stats.py`](../eval/stats.py)) | Reportes en `eval/reports/` |
-| Seguimiento de experimentos | ✅ | MLflow ([`eval/tracking.py`](../eval/tracking.py)), huella del código evaluado ([`eval/fingerprint.py`](../eval/fingerprint.py)) | [EVALUATION §5](../EVALUATION.md) |
+| Repeatable preparation with contracts | ✅ | [`data/contracts.py`](../data/contracts.py), [`data/pipeline.py`](../data/pipeline.py), [data-validation-catalog.md](data-validation-catalog.md) | `make ingest-demo`; `tests/test_pipeline.py` |
+| Quality and lineage checks | ✅ | [`data/quality.py`](../data/quality.py), [`data/lineage.py`](../data/lineage.py); **Data quality** view in the demo | [data_quality.md](data_quality.md) |
+| Update and freshness policy | ✅ | [data_quality.md, "Update and freshness policy"](data_quality.md) | Same |
+| Correctness of the update with a labeled fixture (static data) | ✅ | Late-arrival test: a partition is re-delivered and the latest `last_updated` wins | `tests/test_pipeline.py` |
+| A learned component against an appropriate baseline | ✅ | Intent classifier versus keywords, on text it had not seen | [`intent_classifier.md`](../eval/reports/intent_classifier.md); [EVALUATION §2](../EVALUATION.md) |
+| Valid labels | 🟡 | The training and evaluation texts were written by the team; there is same-author bias. A set of messages from real people is in progress ([human_set.md](human_set.md), [preregistration](preregistration.md)). The organizer's fraud labels were measured and are not used to decide: `is_fraud` cannot be learned from the transaction (AUC 0.506) ([label_signal.md](evidence/label_signal.md), [ADR-005](decisions/ADR-005-no-fraud-or-risk-model.md)) | [LIMITATIONS](../LIMITATIONS.md#data-and-ml); [`pendientes.md`](pendientes.md) item 4 |
+| Automated validation of contracts, quality, lineage, freshness, classifier against baseline, and leakage | ✅ | All in PASS, with what they leave open stated | `make validate-data-ml`; [`data_ml_validation.md`](evidence/data_ml_validation.md) |
+| No data leakage | ✅ | Near-duplicate check between training and evaluation ([`eval/leakage.py`](../eval/leakage.py)); dev (seed 7) and test (seed 11) splits with distinct customers and phrases | `tests/test_leakage.py` |
+| Justified metrics, thresholds and splits | ✅ | [EVALUATION §2 and §3](../EVALUATION.md); Wilson intervals ([`eval/stats.py`](../eval/stats.py)) | Reports in `eval/reports/` |
+| Experiment tracking | ✅ | MLflow ([`eval/tracking.py`](../eval/tracking.py)), fingerprint of the evaluated code ([`eval/fingerprint.py`](../eval/fingerprint.py)) | [EVALUATION §5](../EVALUATION.md) |
 
-## 5. Calidad medida y manejo de fallas
+## 5. Measured quality and failure handling
 
-| Requisito | Estado | Evidencia | Cómo verificarlo |
+| Requirement | Status | Evidence | How to verify |
 |---|---|---|---|
-| Evaluar en casos held-out, línea base y sistema sobre la misma carga | ✅ | 548 casos de test; línea base de palabras clave ([`eval/baseline_bot.py`](../eval/baseline_bot.py)) | `make eval` → [`SYSTEM_EVAL.md`](../eval/reports/SYSTEM_EVAL.md) |
-| Datos incorrectos o faltantes, sesión vencida, acceso no autorizado, inyección, falla de herramientas, ambigüedad multilingüe | ✅ | Tipos `hallucination_guard`, `expired_session`, `injection`, `tool_failure`, `code_switch`; set reservado de fallas ([`eval/heldout/`](../eval/heldout/)) con fallas inyectadas | [`FAILURE_EVAL.md`](../eval/reports/FAILURE_EVAL.md); [`SYSTEM_EVAL_ADVERSARIAL.md`](../eval/reports/SYSTEM_EVAL_ADVERSARIAL.md) |
-| Resolución segura, containment, calidad de escalamiento, resultados inseguros con conteos y denominadores | ✅ | Definidos y reportados por separado en cada reporte; los omitidos y los innecesarios se cuentan | [EVALUATION §3](../EVALUATION.md) |
-| Latencia p50/p95 y costo por caso y por resolución segura | ✅ | Con modelos en vivo | [`SYSTEM_EVAL_LIVE.md`](../eval/reports/SYSTEM_EVAL_LIVE.md); capacidad en [EVALUATION §6](../EVALUATION.md) |
-| Resultados por idioma y segmento, con las limitaciones de muestra chica | ✅ | Por celda país·segmento y por idioma | [EVALUATION, "Fairness and coverage"](../EVALUATION.md) |
-| Versiones de modelo y prompt, y variabilidad entre corridas | ✅ | `prompt_sha256`, versión de prompt, tres corridas con modelos en vivo | [`SYSTEM_EVAL_LIVE.md`](../eval/reports/SYSTEM_EVAL_LIVE.md) |
-| Juez de respuestas con rúbrica validada | ✅ | No se usa un LLM como juez: el juez reconstruye determinísticamente las respuestas que el sistema podía enviar | [LIMITATIONS](../LIMITATIONS.md), ítem 5 de "Not yet measured" |
-| Modelos en vivo sobre toda la carga | 🟡 | Solo una muestra estratificada de 132 de 548 casos; las cotas de seguridad son ≈2,3%, no cero | [LIMITATIONS](../LIMITATIONS.md#not-yet-measured) |
-| Qué aporta cada grupo de controles de seguridad (contrafactual) | ✅ | Los mismos modelos, ideal y malo, con grupos de controles quitados en una escalera acumulativa, sin atribuir efectos individuales: sin controles, el modelo malo produce resultados inseguros en la mayoría de los casos; con todos, 0. Las variantes ingenuas no abren rastreos, así que la confirmación de la acción no se mide | `make eval-ablation` → [`ABLATION.md`](../eval/reports/ABLATION.md) |
-| Medición offline etiquetada como tal | ✅ | Todos los reportes lo declaran; nada se presenta como mejora medida en producción | [EVALUATION](../EVALUATION.md) |
-| Sesión de red team sobre la demo desplegada | ⬜ | Protocolo listo ([red_team.md](red_team.md)); falta correr la sesión y generar `eval/reports/RED_TEAM.md` | Pendiente |
+| Evaluate on held-out cases, baseline and system on the same workload | ✅ | 548 test cases; keyword baseline ([`eval/baseline_bot.py`](../eval/baseline_bot.py)) | `make eval` → [`SYSTEM_EVAL.md`](../eval/reports/SYSTEM_EVAL.md) |
+| Incorrect or missing data, expired session, unauthorized access, injection, tool failure, multilingual ambiguity | ✅ | Types `hallucination_guard`, `expired_session`, `injection`, `tool_failure`, `code_switch`; reserved failure set ([`eval/heldout/`](../eval/heldout/)) with injected failures | [`FAILURE_EVAL.md`](../eval/reports/FAILURE_EVAL.md); [`SYSTEM_EVAL_ADVERSARIAL.md`](../eval/reports/SYSTEM_EVAL_ADVERSARIAL.md) |
+| Safe resolution, containment, escalation quality, unsafe outcomes with counts and denominators | ✅ | Defined and reported separately in each report; missed and unnecessary escalations are counted | [EVALUATION §3](../EVALUATION.md) |
+| p50/p95 latency and cost per case and per safe resolution | ✅ | With live models | [`SYSTEM_EVAL_LIVE.md`](../eval/reports/SYSTEM_EVAL_LIVE.md); capacity in [EVALUATION §6](../EVALUATION.md) |
+| Results by language and segment, with the limitations of a small sample | ✅ | By country·segment cell and by language | [EVALUATION, "Fairness and coverage"](../EVALUATION.md) |
+| Model and prompt versions, and variability across runs | ✅ | `prompt_sha256`, prompt version, three runs with live models | [`SYSTEM_EVAL_LIVE.md`](../eval/reports/SYSTEM_EVAL_LIVE.md) |
+| Answer judge with a validated rubric | ✅ | No LLM is used as a judge: the judge deterministically reconstructs the answers the system could send | [LIMITATIONS](../LIMITATIONS.md), item 5 of "Not yet measured" |
+| Live models on the whole workload | 🟡 | Only a stratified sample of 132 of 548 cases; the safety bounds are ≈2.3%, not zero | [LIMITATIONS](../LIMITATIONS.md#not-yet-measured) |
+| What each group of safety controls contributes (counterfactual) | ✅ | The same models, ideal and bad, with groups of controls removed in a cumulative ladder, without attributing individual effects: with no controls, the bad model produces unsafe outcomes in most cases; with all of them, 0. The naive variants do not open traces, so the confirmation of the action is not measured | `make eval-ablation` → [`ABLATION.md`](../eval/reports/ABLATION.md) |
+| Offline measurement labeled as such | ✅ | Every report states it; nothing is presented as an improvement measured in production | [EVALUATION](../EVALUATION.md) |
+| Red team session on the deployed demo | ✅ | Run on 2026-09-30 ([red_team.md](red_team.md)); report in [`RED_TEAM.md`](../eval/reports/RED_TEAM.md): no finding in the records, ten observations open, participants' notes still to come | `python -m eval.red_team report` rebuilds [`red_team.json`](../eval/reports/red_team.json) from the snapshot |
 
-## 6. Un camino creíble a la operación
+## 6. A credible path to operations
 
-| Requisito | Estado | Evidencia | Cómo verificarlo |
+| Requirement | Status | Evidence | How to verify |
 |---|---|---|---|
-| Trazas y registros de ejecución | ✅ | Id de correlación de punta a punta, un trace por turno con la regla que decidió ([operations.md, "Resilience and traces"](operations.md)) | `tests/test_trace.py`; `/admin/trace_log` |
-| Reintentos acotados y fallback seguro | ✅ | Presupuesto por turno y por paso; modo degradado si el modelo no responde ([operations.md](operations.md)) | `tests/test_resilience.py`; botón "simular caída del modelo" en la demo |
-| Setup reproducible | ✅ | `make up`, dependencias con hashes, CI que construye y arranca la imagen como Render | [operations.md, "Setup, reproducibly"](operations.md) |
-| Límites de capacidad | ✅ | `make loadtest`, `GET /admin/capacity` | [EVALUATION §6](../EVALUATION.md) |
-| Monitoreo | ✅ | `/metrics`, Prometheus, 23 reglas de alerta con pruebas | [`ops/alerts.yml`](../ops/alerts.yml); [operations.md, "Monitoring"](operations.md) |
-| Controles de acceso | ✅ | Claves de operador con nombre; lectura separada de acción | [operations.md, "Access control"](operations.md); `tests/test_access_matrix.py` |
-| Retención de datos | ✅ | Retención programada y auditada ([`ops/retention.py`](../ops/retention.py)) | `tests/test_retention.py` |
-| Explicaciones basadas en fuentes, reglas y registros de ejecución (no en cadena de pensamiento) | ✅ | **Why?**: qué recibió el modelo (enmascarado), qué eligió y qué verificó el código, con la regla | Demo desplegada |
-| Trabajo restante para desplegar de verdad | ✅ | [LIMITATIONS.md](../LIMITATIONS.md) | Leer |
+| Traces and execution logs | ✅ | End-to-end correlation ID, one trace per turn with the rule that decided ([operations.md, "Resilience and traces"](operations.md)) | `tests/test_trace.py`; `/admin/trace_log` |
+| Bounded retries and safe fallback | ✅ | Per-turn and per-step budget; degraded mode if the model does not respond ([operations.md](operations.md)) | `tests/test_resilience.py`; "simular caída del modelo" (Simulate model outage) button in the demo |
+| Reproducible setup | ✅ | `make up`, dependencies pinned with hashes, CI that builds and starts the image the way Render does | [operations.md, "Setup, reproducibly"](operations.md) |
+| Capacity limits | ✅ | `make loadtest`, `GET /admin/capacity` | [EVALUATION §6](../EVALUATION.md) |
+| Monitoring | ✅ | `/metrics`, Prometheus, 23 alert rules with tests | [`ops/alerts.yml`](../ops/alerts.yml); [operations.md, "Monitoring"](operations.md) |
+| Access controls | ✅ | Named operator keys; read separated from action | [operations.md, "Access control"](operations.md); `tests/test_access_matrix.py` |
+| Data retention | ✅ | Scheduled and audited retention ([`ops/retention.py`](../ops/retention.py)) | `tests/test_retention.py` |
+| Explanations based on sources, rules and execution logs (not on chain of thought) | ✅ | **Why?**: what the model received (masked), what it chose and what the code verified, with the rule | Deployed demo |
+| Remaining work to deploy for real | ✅ | [LIMITATIONS.md](../LIMITATIONS.md) | Read |
 
-## Límites de datos y de ejecución
+## Data and execution limits
 
-| Requisito | Estado | Evidencia | Cómo verificarlo |
+| Requirement | Status | Evidence | How to verify |
 |---|---|---|---|
-| Rotular si cada insumo es real, desidentificado, sintético o del equipo | ✅ | Tabla de procedencia de cada insumo de evaluación (suministrado sintético, generado por el equipo, inyectado, fixture de prueba, personas reales) | [EVALUATION, "Provenance of every evaluation input"](../EVALUATION.md) |
-| Sin credenciales ni datos restringidos en el repositorio público | 🟡 | Procedimiento de copia pública con escaneo de todo el historial ([operations.md, "Public repository"](operations.md), [`ops/export_public.py`](../ops/export_public.py)). **Este repositorio es privado y su historial contiene los PDF del organizador**: no debe publicarse tal cual | Ver "Entrega" abajo |
-| Servicios sandbox documentados con sus contratos y límites | ✅ | Servicio de trazas simulado ([ARCHITECTURE.md](../ARCHITECTURE.md)); IdP de prueba y PIN públicos de la demo, declarados en [LIMITATIONS](../LIMITATIONS.md#security-and-privacy) | Leer |
+| Label whether each input is real, de-identified, synthetic or from the team | ✅ | Provenance table for every evaluation input (supplied synthetic, generated by the team, injected, test fixture, real people) | [EVALUATION, "Provenance of every evaluation input"](../EVALUATION.md) |
+| No credentials or restricted data in the public repository | 🟡 | Public-copy procedure with a scan of the whole history ([operations.md, "Public repository"](operations.md), [`ops/export_public.py`](../ops/export_public.py)). **This repository is private and its history contains the organizer's PDFs**: it must not be published as is | See "Submission" below |
+| Sandbox services documented with their contracts and limits | ✅ | Simulated trace service ([ARCHITECTURE.md](../ARCHITECTURE.md)); the demo's public test IdP and PINs, declared in [LIMITATIONS](../LIMITATIONS.md#security-and-privacy) | Read |
 
-## Entrega (kickoff, "Submission Details")
+## Submission (kickoff, "Submission Details")
 
-| Requisito | Estado | Evidencia | Cómo verificarlo |
+| Requirement | Status | Evidence | How to verify |
 |---|---|---|---|
-| Repositorio GitHub **público**, con nombre `factored-hackathon-2026-[equipo]` | ⬜ | `cecilai-hack/factored-hackathon-2026-cecilai` existe pero es **privado** | Publicar la copia limpia generada con `ops/export_public.py` como repositorio **nuevo** |
-| Enlace a la herramienta desplegada | ✅ | Web: https://cecil-ai.onrender.com · API: https://x-payments-agent.onrender.com | Abrir `/login`; la API responde en `/health` |
-| 4 a 6 diapositivas | 🟡 | Mazo v3 de 6 diapositivas, construido desde [slides_outline.md](slides_outline.md); faltan el nombre del equipo, la URL desplegada y la URL del repositorio público ([docs/demo/README.md](demo/README.md)) | Completar y exportar |
-| Video de presentación obligatorio | 🟡 | Guion ([video_pitch_script.md](video_pitch_script.md)) y segmento de demo grabable con `ops.record_demo`; falta la voz sobre la demo | Grabar y editar |
-| Enviar todo a hackathon.admin@factored.ai | ⬜ | Sin enviar | Enviar |
+| **Public** GitHub repository, named `factored-hackathon-2026-[equipo]` | ⬜ | `cecilai-hack/factored-hackathon-2026-cecilai` exists but is **private** | Publish the clean copy generated with `ops/export_public.py` as a **new** repository |
+| Link to the deployed tool | ✅ | Web: https://cecil-ai.onrender.com · API: https://x-payments-agent.onrender.com | Open `/login`; the API responds at `/health` |
+| 4 to 6 slides | 🟡 | v3 deck of 6 slides, built from [slides_outline.md](slides_outline.md); the team name, the deployed URL and the public repository URL are missing ([docs/demo/README.md](demo/README.md)) | Complete and export |
+| Mandatory presentation video | 🟡 | Script ([video_pitch_script.md](video_pitch_script.md)) and a demo segment recordable with `ops.record_demo`; the voice-over on the demo is missing | Record and edit |
+| Send everything to hackathon.admin@factored.ai | ⬜ | Not sent | Send |
 
-## Criterios de evaluación (kickoff)
+## Evaluation criteria (kickoff)
 
-| Criterio | Dónde mirar |
+| Criterion | Where to look |
 |---|---|
-| Justificación del proyecto y documentación | [README](../README.md), [ADR-001](decisions/ADR-001-model-interprets-code-speaks.md), [ADR-002](decisions/ADR-002-one-action-confirmed-in-code.md), [LIMITATIONS](../LIMITATIONS.md) |
-| Ingeniería de IA (backend, frontend, despliegue) | [ARCHITECTURE.md](../ARCHITECTURE.md), `agent/`, `api/`, `web/`, [operations.md](operations.md) |
-| Analítica de datos (calidad e insights) | [data_quality.md](data_quality.md), [data_evidence.md](data_evidence.md), [`baseline_metrics.md`](evidence/baseline_metrics.md) |
-| Ingeniería de datos (extracción y transformación) | [`data/`](../data/), [data-validation-catalog.md](data-validation-catalog.md) |
-| Machine learning (selección, optimización, implementación, seguimiento) | [EVALUATION §2 y §5](../EVALUATION.md), [`eval/models/`](../eval/models/) |
+| Project justification and documentation | [README](../README.md), [ADR-001](decisions/ADR-001-model-interprets-code-speaks.md), [ADR-002](decisions/ADR-002-one-action-confirmed-in-code.md), [LIMITATIONS](../LIMITATIONS.md) |
+| AI engineering (backend, frontend, deployment) | [ARCHITECTURE.md](../ARCHITECTURE.md), `agent/`, `api/`, `web/`, [operations.md](operations.md) |
+| Data analytics (quality and insights) | [data_quality.md](data_quality.md), [data_evidence.md](data_evidence.md), [`baseline_metrics.md`](evidence/baseline_metrics.md) |
+| Data engineering (extraction and transformation) | [`data/`](../data/), [data-validation-catalog.md](data-validation-catalog.md) |
+| Machine learning (selection, optimization, implementation, tracking) | [EVALUATION §2 and §5](../EVALUATION.md), [`eval/models/`](../eval/models/) |

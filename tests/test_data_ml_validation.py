@@ -802,9 +802,8 @@ def test_leakage_evaluation_doc_section_2_quotes_the_committed_report(committed,
     missing = [e for e in expected if e not in text]
     assert not missing, f"EVALUATION.md §2 does not match eval/reports/intent_classifier.json: {missing}"
     # The same headline in the other documents that repeat it.
-    comma = lambda x: f"{100 * x:.1f}".replace(".", ",")  # noqa: E731
     learned, base = t["learned"]["accuracy"]["rate"], t["baseline_keywords"]["accuracy"]["rate"]
-    assert f"**{comma(learned)}% vs {comma(base)}%**" in (ROOT / "README.md").read_text(encoding="utf-8")
+    assert f"**{100 * learned:.1f}% vs {100 * base:.1f}%**" in (ROOT / "README.md").read_text(encoding="utf-8")
     assert f"{100 * learned:.1f}% vs {100 * base:.1f}% for keywords" in (ROOT / "docs" / "slides_outline.md").read_text(encoding="utf-8")
     assert f"{committed['test_n']} utterances in the classifier test split" in LIMITATIONS_DOC
     record_property("evidence", f"{len(expected)} cifras de EVALUATION.md §2 == eval/reports/intent_classifier.json; el titular coincide en README, slides_outline y LIMITATIONS")
