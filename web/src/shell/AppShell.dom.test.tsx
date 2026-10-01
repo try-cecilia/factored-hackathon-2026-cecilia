@@ -196,6 +196,25 @@ describe('AppShell', () => {
       expect(inside(demo)).toBe(true)
     })
 
+    it('the demo drawer gives the focus back to the Demo button on Escape and on a click on the scrim', async () => {
+      phone(false, true)
+      const user = userEvent.setup()
+      const { container } = await draw({ scenarios })
+      const toggle = await screen.findByRole('button', { name: 'Demo' })
+      await user.click(toggle)
+      const demo = container.querySelector('#shell-demo') as HTMLElement
+      expect(demo.hasAttribute('inert')).toBe(false)
+      await user.keyboard('{Escape}')
+      expect(demo.hasAttribute('inert')).toBe(true)
+      expect(document.activeElement).toBe(toggle)
+
+      await user.click(toggle)
+      expect(demo.contains(document.activeElement)).toBe(true)
+      await user.click(container.querySelector('.shell__scrim--demo') as HTMLElement)
+      expect(demo.hasAttribute('inert')).toBe(true)
+      expect(document.activeElement).toBe(toggle)
+    })
+
     it('with the panel closed nothing is inert', async () => {
       phone(true)
       const { container } = await draw({ scenarios })
@@ -236,6 +255,7 @@ describe('AppShell', () => {
       await user.click(screen.getByRole('button', { name: 'Abrir el menú' }))
       await user.click(container.querySelector('.shell__scrim') as HTMLElement)
       expect((container.querySelector('#shell-side') as HTMLElement).hasAttribute('inert')).toBe(true)
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Abrir el menú' }))
     })
   })
 })
