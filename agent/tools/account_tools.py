@@ -21,6 +21,7 @@ from functools import lru_cache
 from typing import Any, Optional
 
 from agent.llm.privacy import internal_ids, normalize
+from agent.policy.behavior import evidence_for
 from agent.tools.audit import default_audit_log
 from agent.tools.db import duckdb_path, get_connection
 from agent.tools.errors import DataUnavailable, InvalidArgument, NotApplicable, PermissionDenied, ResourceNotFound
@@ -32,6 +33,7 @@ MAX_TRANSACTIONS = 50
 MAX_FX_FALLBACK_DAYS = 7
 TRACEABLE_TYPES = ("Transfer", "Payment", "Deposit")  # what operations can follow; a pending card purchase just posts
 MAX_TRACE_CANDIDATES = 5
+MAX_BEHAVIOR_HISTORY = 5000  # a customer's rows read to describe their recent movements; the data averages about 30
 TRACE_REVIEW_AFTER_DAYS = 90  # synthetic policy: a movement "pending" for longer than this is a case for a person
 
 
@@ -330,6 +332,12 @@ def recent_activity_for_review(customer_id: str, limit: int = 10) -> dict:
                                 merchant_name, transaction_country, transaction_status, is_fraud, fraud_score
                          FROM transactions WHERE customer_id = ? ORDER BY transaction_date DESC LIMIT ?""",
                       [customer_id, limit])
+        history = _rows("""SELECT transaction_id, transaction_date, amount, currency, channel, merchant_category, transaction_country
+                           FROM transactions WHERE customer_id = ? ORDER BY transaction_date, transaction_id LIMIT ?""",
+                        [customer_id, MAX_BEHAVIOR_HISTORY])
+        behavior = evidence_for(history, [t["transaction_id"] for t in items])  # docs/BEHAVIORAL_EVIDENCE.md: descriptive only
+        for t in items:
+            t["behavior"] = behavior.get(t["transaction_id"])
         return {"items": items, "as_of": data_as_of()}
 
     return _audited("recent_activity_for_review", customer_id, {"limit": limit}, _run)
