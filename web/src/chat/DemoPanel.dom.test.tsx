@@ -1,5 +1,8 @@
-import { screen, within } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+import { loadMessages, areasOf } from '../i18n/areas'
+import { I18nProvider } from '../i18n/context'
+import type { Locale } from '../i18n/locales'
 import { renderWithI18n } from '../test/render'
 import { DemoPanel } from './DemoPanel'
 import type { DemoScenario } from './types'
@@ -15,6 +18,16 @@ const scenario: DemoScenario = {
 
 const draw = (locale: 'es' | 'pt', scenarios = [scenario]) =>
   renderWithI18n(<DemoPanel scenarios={scenarios} sessionRef="s" entries={[]} pending={false} escalations={0} ended={false} send={async () => null} onSend={() => () => {}} retry={() => {}} overlay={false} onSessionChanged={async () => {}} onClose={() => {}} />, locale)
+
+// The page the customer gets: the texts of the customer area only, as the root loader resolves them, and not the console's.
+async function drawAsCustomer(locale: Locale) {
+  const messages = await loadMessages(areasOf('/chat'), locale)
+  return render(
+    <I18nProvider locale={locale} messages={messages}>
+      <DemoPanel scenarios={[scenario]} sessionRef="s" entries={[]} pending={false} escalations={0} ended={false} send={async () => null} onSend={() => () => {}} retry={() => {}} overlay={false} onSessionChanged={async () => {}} onClose={() => {}} />
+    </I18nProvider>,
+  )
+}
 
 describe('DemoPanel', () => {
   it('shows each scenario in the language of the interface', () => {
@@ -47,7 +60,7 @@ describe('DemoPanel', () => {
     }
     it('in Spanish the reason, the questions, the next step and the priority are Spanish', async () => {
       tickets.list = [coded]
-      draw('es')
+      await drawAsCustomer('es')
       const card = within((await screen.findByText('fraud_ops')).closest('article') as HTMLElement)
       expect(card.getByText('Crítica')).toBeTruthy()
       expect(card.getByText(/Señal de seguridad en el pedido: Fraude/)).toBeTruthy()
@@ -58,7 +71,7 @@ describe('DemoPanel', () => {
 
     it('in Portuguese too', async () => {
       tickets.list = [coded]
-      draw('pt')
+      await drawAsCustomer('pt')
       const card = within((await screen.findByText('fraud_ops')).closest('article') as HTMLElement)
       expect(card.getByText('Crítica')).toBeTruthy()
       expect(card.getByText(/Sinal de segurança no pedido/)).toBeTruthy()
@@ -67,7 +80,7 @@ describe('DemoPanel', () => {
 
     it('a ticket without codes, or with one the console does not know, shows its text as it came', async () => {
       tickets.list = [{ ...coded, priority: 'Urgente', reason_code: { code: 'a_new_reason' }, open_question_codes: undefined, next_step_code: null }]
-      draw('es')
+      await drawAsCustomer('es')
       const card = within((await screen.findByText('fraud_ops')).closest('article') as HTMLElement)
       expect(card.getByText('Safety signal in the request: fraud.')).toBeTruthy()
       expect(card.getByText(/Call the customer back/)).toBeTruthy()
