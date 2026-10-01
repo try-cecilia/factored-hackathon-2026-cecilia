@@ -87,7 +87,10 @@ export function conversationTranscript(entries: readonly Entry[], { locale, t, c
     const body = entry.role === 'user' ? entry.text.trim().split('\n') : assistantLines(entries, index, { t, cases })
     if (body.join('') === '') return
     const who = entry.role === 'user' ? t('chat.you') : t('chat.assistant')
-    out.push(`[${hour.format(entry.at)}] ${who}: ${body[0]}`, ...body.slice(1))
+    const head = `[${hour.format(entry.at)}] ${who}:`
+    // A reply that opens with a list keeps its heading apart: "Cecilia: - Cuenta..." reads as a dash in the middle of a sentence.
+    if (entry.role === 'assistant' && body[0].startsWith('- ')) out.push(head, ...body)
+    else out.push(`${head} ${body[0]}`, ...body.slice(1))
   })
   return out.join('\n')
 }

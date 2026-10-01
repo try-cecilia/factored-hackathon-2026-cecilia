@@ -48,6 +48,11 @@ test('paragraphs stay lines and dash lists stay dash lists, with the amounts and
   ])
 })
 
+test('a reply that opens with a list has its heading on a line of its own', () => {
+  const out = conversationTranscript([user('Mi saldo'), reply('- Cuenta Ahorro ···0001: saldo 10.00 USD\n- Cuenta Corriente ···0003: saldo 5.00 USD\nInformación al 16/01/2024.')], options('es')).split('\n')
+  assert.deepEqual(out.slice(2), ['[15:38] Cecilia:', '- Cuenta Ahorro ···0001: saldo 10.00 USD', '- Cuenta Corriente ···0003: saldo 5.00 USD', 'Información al 16/01/2024.'])
+})
+
 test('a question with options reads as the question, its options and what it asks at the end', () => {
   const text = 'Tienes varios movimientos pendientes: 1) transferencia de 40.00 USD del 15/01/2024 (Cuenta Ahorro ···0010); 2) pago de 5.00 USD del 14/01/2024 (Cuenta Ahorro ···0010). ¿Cuál quieres rastrear?'
   const out = conversationTranscript([user('Hice un pago y no llega'), reply(text, { disposition: 'CLARIFY', category: 'clarify' })], options('es')).split('\n')
