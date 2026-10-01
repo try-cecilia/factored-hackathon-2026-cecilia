@@ -1,8 +1,8 @@
 /* The customer's window: sidebar, bar and page, and the demo panel apart. No strokes: panels are tonal fills, layers that float have a soft shadow. */
 .shell { display: flex; height: 100dvh; background: var(--color-paper); color: var(--color-ink-app); }
 .shell__side { display: flex; flex: none; height: 100%; }
-.shell__main { display: flex; flex: 1 1 0; flex-direction: column; min-width: 0; }
-.shell__bar { display: flex; flex: none; align-items: center; gap: 12px; min-height: 56px; padding: 0 20px; container: bar / inline-size; }
+.shell__main { display: flex; flex: 1 1 0; flex-direction: column; min-width: 0; container: bar / inline-size; }
+.shell__bar { display: flex; flex: none; align-items: center; gap: 12px; min-height: 56px; padding: 0 20px; }
 .shell__title { margin: 0; font-size: var(--text-compact-lg); font-weight: var(--font-weight-bold); letter-spacing: -0.02em; line-height: 20px; }
 .shell__trust {
   display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: var(--radius-pill);
@@ -11,12 +11,19 @@
 .shell__tools { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .shell__menu { display: none; margin-left: -6px; }
 .shell__copy { display: inline-flex; }
-/* A bar with no room for the label (a phone, or the demo panel open beside the chat) keeps the copy button's icon; the label stays for screen readers. */
-@container bar (max-width: 780px) {
+/* A bar with no room for the label (a phone, or the demo panel open beside the chat) keeps the copy button's icon; the label stays for screen readers.
+   The container is the column of the bar, so its own gap can be tightened too; the title never wraps: whatever is short of room is the note beside it. */
+@container bar (max-width: 830px) {
+  .shell__bar { gap: 8px; }
+  .shell__title { flex: none; white-space: nowrap; }
   .shell__copy-label { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .shell__copy .ui-btn { width: 28px; padding: 0; gap: 0; }
   .shell__tools { gap: 6px; }
   .shell__trust { padding: 0 8px; }
+}
+/* Not even the icon, the title and the note fit: the note leaves, as it does on a phone. */
+@container bar (max-width: 665px) {
+  .shell__trust { display: none; }
 }
 .shell__page { display: flex; flex: 1 1 0; flex-direction: column; min-height: 0; }
 .shell__demo { flex: none; width: 340px; height: 100%; overflow-y: auto; background: var(--color-fill-subtle); }
