@@ -11,6 +11,8 @@ export type TranscriptOptions = {
   t: Translate
   /** The cases the handoff messages read their status from. */
   cases: readonly CaseRow[]
+  /** The session is over: the screen ends with Cecilia's message that asks to sign in again, and so does the text. */
+  ended?: boolean
   /** The zone the hours are told in; the browser's own when absent. */
   timeZone?: string
 }
@@ -85,7 +87,7 @@ function assistantLines(entries: readonly Entry[], index: number, { t, cases }: 
  *
  * The date is the one of the first message; the hours are in the same format as the ones on screen. An empty conversation is "".
  */
-export function conversationTranscript(entries: readonly Entry[], { locale, t, cases, timeZone }: TranscriptOptions): string {
+export function conversationTranscript(entries: readonly Entry[], { locale, t, cases, ended, timeZone }: TranscriptOptions): string {
   const shown = messagesOf(entries)
   if (shown.length === 0) return ''
   const hour = new Intl.DateTimeFormat(htmlLang[locale], { hour: '2-digit', minute: '2-digit', timeZone })
@@ -101,5 +103,7 @@ export function conversationTranscript(entries: readonly Entry[], { locale, t, c
     if (entry.role === 'assistant' && body[0].startsWith('- ')) out.push(head, ...body)
     else out.push(`${head} ${body[0]}`, ...body.slice(1))
   })
+  // The screen's sign-in message has no hour, and neither does its line.
+  if (ended) out.push(`${t('chat.assistant')}: ${t('conversation.session.reauth')}`)
   return out.join('\n')
 }

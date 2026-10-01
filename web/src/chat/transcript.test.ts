@@ -161,3 +161,11 @@ test('a reply made in limited mode carries the notice, after the case news and b
   assert.equal(pt[0], '[15:38] Cecilia: A Cecilia está limitada por enquanto: só consegue consultar saldos simples e o resto é analisado por uma pessoa.')
   assert.equal(pt[1], 'Seu saldo é 10,00 USD.')
 })
+
+test('a conversation whose session is over ends with the sign-in message the screen ends with, in each language', () => {
+  const entries: Entry[] = [user('Saldo'), reply('Tu saldo es 10.00 USD.')]
+  const last = (locale: Locale) => conversationTranscript(entries, { ...options(locale), ended: true }).split('\n').at(-1)
+  assert.equal(last('es'), 'Cecilia: Por tu seguridad, la sesión terminó. Ingresar de nuevo para seguir; la conversación empezará de cero.')
+  assert.ok(last('pt')?.startsWith('Cecilia: Por segurança'))
+  assert.ok(!conversationTranscript(entries, options('es')).includes('Por tu seguridad'))
+})
