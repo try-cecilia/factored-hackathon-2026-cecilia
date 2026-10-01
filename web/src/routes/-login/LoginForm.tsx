@@ -2,7 +2,7 @@ import { useRouter } from '@tanstack/react-router'
 import { useState, type FormEvent } from 'react'
 import { useT } from '../../i18n/context'
 import type { MessageKey } from '../../i18n/translate'
-import { sameOriginPath } from '../../server/safe-path'
+import { customerDestination } from '../../server/safe-path'
 import type { DemoCustomer, LoginResult } from '../../server/auth.functions'
 import { PublicShell } from '../../shell/PublicShell'
 import { Button, QuickReplies } from '../../ui'
@@ -38,7 +38,7 @@ export function LoginForm({ demoCustomers, target, expired, signIn }: Props) {
     try {
       const result = await signIn({ customer_id: customerId, pin })
       if (result.ok) {
-        await router.navigate({ href: sameOriginPath(target) ?? '/chat', replace: true })
+        await router.navigate({ href: customerDestination(target) ?? '/chat', replace: true })
         // The API said yes, so the page behind the login should have opened. If the router sent us back here, the browser did not
         // keep the session cookie (Safari with a Secure cookie over plain http, or cookies blocked): say so instead of spinning.
         if (router.state.location.pathname !== '/login') return

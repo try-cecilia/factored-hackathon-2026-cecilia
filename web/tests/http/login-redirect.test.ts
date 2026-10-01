@@ -34,6 +34,10 @@ describe('the login page, visited while signed in, never sends the customer to a
     ['a double percent-encoded host', 'https%253A%252F%252Fevil.invalid'],
     ['an encoded backslash', '/%5cevil.invalid'],
     ['dot segments that collapse to a host', '/a/..//evil.invalid'],
+    ['a path of this site that is no page (userinfo look-alike)', '/@evil.invalid'],
+    ['a path of this site that is no page', '/nada'],
+    ['a page of the console, which is not the customer\'s', '/operador/cola'],
+    ['a page of the customer app that is not a destination', '/login'],
   ]
   for (const [name, value] of hostile) {
     test(`${name} (${value}) goes to the chat`, async () => {
@@ -47,6 +51,10 @@ describe('the login page, visited while signed in, never sends the customer to a
       assert.equal(res.headers.get('location'), '/chat')
     })
   }
+
+  test('a real target, with its query and fragment, is kept (with a trailing slash too)', async () => {
+    assert.equal((await visit(encodeURIComponent('/chat/?x=1'))).headers.get('location'), '/chat?x=1')
+  })
 
   test('a real target, with its query and fragment, is kept', async () => {
     const res = await visit(encodeURIComponent('/chat?x=1#foo'))

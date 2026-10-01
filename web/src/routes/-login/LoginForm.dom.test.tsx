@@ -55,7 +55,7 @@ describe('the sign-in form when the API accepts the login', () => {
     expect(router.state.location.search).toEqual({ x: 1 })
   })
 
-  it.each(['https://evil.invalid', '//evil.invalid', '/\\evil.invalid', 'javascript:alert(1)', '/%252f/evil.invalid'])(
+  it.each(['https://evil.invalid', '//evil.invalid', '/\\evil.invalid', 'javascript:alert(1)', '/%252f/evil.invalid', '/@evil.invalid', '/nada', '/operador/cola'])(
     'sends %s to the chat, never off the site',
     async (target) => {
       const router = mount(async () => ({ ok: true }), { hasSession: true, target })
