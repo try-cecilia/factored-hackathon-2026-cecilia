@@ -86,4 +86,7 @@ changed after seeing the result. A miss is not repaired by retuning.
 
 Add a dated line for every change, with the reason.
 
-- (none yet)
+- **2026-10-01: a case the table in section 6 does not cover.** A lower bound between 0.55 and 0.60 with a point estimate of
+  0.65 or more fits no row. `analysis/behavior_association.py` words it as "Association with a synthetic label", the
+  stronger of the two neighbors, but it is not reached by the first result (lower bound 0.494) and no word changed
+  because of it.
