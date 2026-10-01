@@ -20,9 +20,11 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
+from agent.policy import intent_model
+
 logger = logging.getLogger(__name__)
 
-MODEL_PATH = os.environ.get("INTENT_MODEL_PATH", "eval/models/intent_clf.joblib")
+MODEL_PATH = os.environ.get("INTENT_MODEL_PATH", "eval/models/intent_clf.json")
 META_PATH = os.environ.get("INTENT_META_PATH", "eval/models/intent_clf_meta.json")
 DEFAULT_THRESHOLD = 0.5
 
@@ -46,19 +48,17 @@ def _load():
     if not Path(MODEL_PATH).exists():
         logger.warning("intent classifier not found at %s; escalation guard is keyword-only", MODEL_PATH)
         return None, DEFAULT_THRESHOLD
-    import joblib
-
     threshold = DEFAULT_THRESHOLD
     if Path(META_PATH).exists():
         threshold = float(json.loads(Path(META_PATH).read_text(encoding="utf-8")).get("escalation_threshold", DEFAULT_THRESHOLD))
-    return joblib.load(MODEL_PATH), threshold
+    return json.loads(Path(MODEL_PATH).read_text(encoding="utf-8")), threshold
 
 
 def read(text: str) -> IntentReading:
     model, threshold = _load()
     if model is None:
         return IntentReading(None, None, None, None, threshold, False)
-    probs = dict(zip(model.classes_, model.predict_proba([text])[0]))
+    probs = intent_model.predict_proba(model, text)
     intent = max(probs, key=probs.get)
     return IntentReading(str(intent), float(probs[intent]), float(probs.get("requires_escalation", 0.0)),
                          float(probs.get("out_of_scope", 0.0)), threshold, True)

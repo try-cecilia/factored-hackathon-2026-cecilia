@@ -1,0 +1,166 @@
+{
+  "generated_at": "2026-10-01T04:43:38+00:00",
+  "inputs": {
+    "monthly_transactional_contacts_median": 6701.0,
+    "text_channel_share": 0.15,
+    "aht_s": 221.0,
+    "model_usd_per_attempted_case": 0.001409,
+    "sar": {
+      "keyword bot (offline)": 0.7017,
+      "Sonnet 5, lower bound of its 95% interval": 0.863,
+      "Sonnet 5 (live)": 0.95
+    },
+    "live_n_in_scope": 60
+  },
+  "where_the_time_goes": [
+    {
+      "reason": "Transaccional",
+      "contacts": 240056,
+      "aht_s": 221.0,
+      "fcr_pct": 91.5,
+      "handle_hours": 14737,
+      "contact_share_pct": 35.0,
+      "hours_share_pct": 24.0
+    },
+    {
+      "reason": "Queja",
+      "contacts": 117021,
+      "aht_s": 435.0,
+      "fcr_pct": 43.6,
+      "handle_hours": 14140,
+      "contact_share_pct": 17.1,
+      "hours_share_pct": 23.1
+    },
+    {
+      "reason": "Producto",
+      "contacts": 150863,
+      "aht_s": 266.0,
+      "fcr_pct": 89.6,
+      "handle_hours": 11147,
+      "contact_share_pct": 22.0,
+      "hours_share_pct": 18.2
+    },
+    {
+      "reason": "Técnico",
+      "contacts": 102899,
+      "aht_s": 360.0,
+      "fcr_pct": 69.9,
+      "handle_hours": 10290,
+      "contact_share_pct": 15.0,
+      "hours_share_pct": 16.8
+    },
+    {
+      "reason": "Comercial",
+      "contacts": 54879,
+      "aht_s": 540.0,
+      "fcr_pct": 65.2,
+      "handle_hours": 8232,
+      "contact_share_pct": 8.0,
+      "hours_share_pct": 13.4
+    },
+    {
+      "reason": "Retención",
+      "contacts": 20578,
+      "aht_s": 479.0,
+      "fcr_pct": 60.2,
+      "handle_hours": 2738,
+      "contact_share_pct": 3.0,
+      "hours_share_pct": 4.5
+    }
+  ],
+  "scenarios_at_live_sar": [
+    {
+      "phone_to_text_shift_pct": 0,
+      "in_scope_contacts": 1005,
+      "automated_contacts": 955,
+      "agent_hours_saved": 58.6,
+      "share_of_transactional_hours_pct": 14.2,
+      "usd_avoided": {
+        "5": 293,
+        "10": 586,
+        "20": 1172
+      },
+      "model_cost_usd": 1.42
+    },
+    {
+      "phone_to_text_shift_pct": 10,
+      "in_scope_contacts": 1575,
+      "automated_contacts": 1496,
+      "agent_hours_saved": 91.8,
+      "share_of_transactional_hours_pct": 22.3,
+      "usd_avoided": {
+        "5": 459,
+        "10": 918,
+        "20": 1837
+      },
+      "model_cost_usd": 2.22
+    },
+    {
+      "phone_to_text_shift_pct": 25,
+      "in_scope_contacts": 2429,
+      "automated_contacts": 2308,
+      "agent_hours_saved": 141.7,
+      "share_of_transactional_hours_pct": 34.4,
+      "usd_avoided": {
+        "5": 708,
+        "10": 1417,
+        "20": 2833
+      },
+      "model_cost_usd": 3.42
+    },
+    {
+      "phone_to_text_shift_pct": 50,
+      "in_scope_contacts": 3853,
+      "automated_contacts": 3660,
+      "agent_hours_saved": 224.7,
+      "share_of_transactional_hours_pct": 54.6,
+      "usd_avoided": {
+        "5": 1124,
+        "10": 2247,
+        "20": 4494
+      },
+      "model_cost_usd": 5.43
+    }
+  ],
+  "sar_sensitivity_today": {
+    "keyword bot (offline)": {
+      "phone_to_text_shift_pct": 0,
+      "in_scope_contacts": 1005,
+      "automated_contacts": 705,
+      "agent_hours_saved": 43.3,
+      "share_of_transactional_hours_pct": 10.5,
+      "usd_avoided": {
+        "5": 216,
+        "10": 433,
+        "20": 866
+      },
+      "model_cost_usd": 1.42
+    },
+    "Sonnet 5, lower bound of its 95% interval": {
+      "phone_to_text_shift_pct": 0,
+      "in_scope_contacts": 1005,
+      "automated_contacts": 867,
+      "agent_hours_saved": 53.3,
+      "share_of_transactional_hours_pct": 12.9,
+      "usd_avoided": {
+        "5": 266,
+        "10": 533,
+        "20": 1065
+      },
+      "model_cost_usd": 1.42
+    },
+    "Sonnet 5 (live)": {
+      "phone_to_text_shift_pct": 0,
+      "in_scope_contacts": 1005,
+      "automated_contacts": 955,
+      "agent_hours_saved": 58.6,
+      "share_of_transactional_hours_pct": 14.2,
+      "usd_avoided": {
+        "5": 293,
+        "10": 586,
+        "20": 1172
+      },
+      "model_cost_usd": 1.42
+    }
+  }
+}

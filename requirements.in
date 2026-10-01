@@ -1,7 +1,7 @@
 # The exact pins a person edits. `make lock` compiles them, with every transitive package and the sha256 of every wheel, into
 # requirements.txt (what the image installs); requirements-tracking.txt adds mlflow. `make lock-check` fails on drift.
-# Exact pins: the committed intent model (eval/models/intent_clf.joblib) is a
-# scikit-learn pickle and is only guaranteed to load with these versions.
+# Serving only: the intent model is JSON scored in pure Python (agent/policy/intent_model.py), so no ML or data-frame
+# libraries here; they live in requirements-tracking.in with the training and evaluation code that uses them.
 # Python 3.11.
 duckdb==1.5.5
 boto3==1.43.103
@@ -9,15 +9,10 @@ pydantic==2.13.5
 fastapi==0.141.1
 uvicorn==0.54.0
 python-dotenv==1.2.3
-scikit-learn==1.9.1
-joblib==1.6.0
-numpy==2.4.6
-scipy==1.17.1
 groq==1.7.0
 together==2.37.0
 anthropic==1.8.0
 httpx==0.28.1
-pandas==3.0.6
 pytest==9.1.1
 prometheus-client==0.26.0  # GET /metrics (agent/metrics.py)
 pyyaml==6.0.3  # the alert rules are parsed by the tests

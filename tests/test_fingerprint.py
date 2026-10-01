@@ -57,7 +57,7 @@ def test_the_real_fingerprint_covers_templates_traces_and_the_other_inputs_of_th
     names = {p.relative_to(fingerprint.ROOT).as_posix() for p in fingerprint.policy_files()}
     assert {"agent/core/render.py", "agent/tools/traces.py", "agent/tools/errors.py", "agent/llm/privacy.py",
             "agent/llm/prompts.py", "agent/session/auth.py", "agent/resilience.py",
-            "eval/models/intent_clf.joblib", "eval/models/intent_clf_meta.json"} <= names
+            "eval/models/intent_clf.joblib", "eval/models/intent_clf.json", "eval/models/intent_clf_meta.json"} <= names
 
 
 def test_editing_the_judge_or_the_gold_changes_the_fingerprint(tmp_path):
