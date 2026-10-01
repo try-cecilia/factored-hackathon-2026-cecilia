@@ -34,7 +34,14 @@ const TYPES = {
 }
 // same-origin, not no-referrer: under no-referrer a browser sends `Origin: null` with a form post, and the operator forms'
 // origin check (src/server/origin-check.ts) would refuse every login. Nothing is sent to other sites either way.
-const SECURITY = { 'x-content-type-options': 'nosniff', 'x-frame-options': 'DENY', 'referrer-policy': 'same-origin' }
+// A CSP without script-src: the pages hydrate with inline scripts, and pinning them needs a nonce per response, which this server
+// cannot add without a browser to check it against. What it does say cannot break a page: nothing may frame it, change its base,
+// embed an object, or receive a form from it at another origin.
+const CSP = "frame-ancestors 'none'; base-uri 'none'; object-src 'none'; form-action 'self'"
+// HSTS only when every public origin is https: a browser ignores it over http, and a local run on http must stay reachable.
+const publicOrigins = (process.env.WEB_PUBLIC_ORIGIN ?? '').split(',').map((o) => o.trim()).filter(Boolean)
+const HSTS = publicOrigins.length > 0 && publicOrigins.every((o) => o.startsWith('https://')) ? { 'strict-transport-security': 'max-age=15724800; includeSubDomains' } : {}
+const SECURITY = { 'x-content-type-options': 'nosniff', 'x-frame-options': 'DENY', 'referrer-policy': 'same-origin', 'content-security-policy': CSP, ...HSTS }
 
 // Images and fonts are compressed already.
 const COMPRESSIBLE = new Set(['.js', '.mjs', '.css', '.html', '.json', '.svg', '.txt', '.map'])
@@ -100,7 +107,7 @@ const server = createServer(async (req, res) => {
   try {
     const { pathname } = new URL(req.url, 'http://localhost')
     if (pathname === '/_healthz') {
-      res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' })
+      res.writeHead(200, { ...SECURITY, 'content-type': 'application/json', 'cache-control': 'no-store' })
       return res.end('{"status":"alive"}')
     }
     const file = req.method === 'GET' || req.method === 'HEAD' ? staticFile(pathname) : null
@@ -126,7 +133,7 @@ const server = createServer(async (req, res) => {
     await send(res, await app.fetch(toRequest(req)))
   } catch (error) {
     console.error(error)
-    if (!res.headersSent) res.writeHead(500, { 'content-type': 'text/plain' })
+    if (!res.headersSent) res.writeHead(500, { ...SECURITY, 'content-type': 'text/plain' })
     res.end('Internal Server Error')
   }
 })
