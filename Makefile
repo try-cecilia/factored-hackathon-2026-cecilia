@@ -8,7 +8,7 @@ WEB_PORT ?= 3000
 # Combined development always connects to its local API, unless overridden.
 AGENT_API_URL ?= http://127.0.0.1:$(API_PORT)
 
-.PHONY: gate validate-data-ml lineage gold operator-labels retention test-resilience loadtest loadtest-fixture loadtest-http setup ingest ingest-demo analysis label-signal train-eval workload eval eval-adversarial eval-ablation check-readme eval-failures eval-failures-live eval-live-sample eval-live-sample-report eval-failures-local eval-live live-smoke test serve docker-build all mlflow-ui
+.PHONY: label-scan gate validate-data-ml lineage gold operator-labels retention test-resilience loadtest loadtest-fixture loadtest-http setup ingest ingest-demo analysis label-signal train-eval workload eval eval-adversarial eval-ablation check-readme eval-failures eval-failures-live eval-live-sample eval-live-sample-report eval-failures-local eval-live live-smoke test serve docker-build all mlflow-ui
 .PHONY: web-setup serve-web web-build web-typecheck web-test serve-fixture serve-all-fixture serve-all
 .PHONY: env env-check env-fill evidence up down clean-volumes monitoring-up up-llm-local up-llm-host up-dataset lock lock-check alerts-check compose-e2e
 .PHONY: human-set-export human-set-sheet human-set-pages human-set-agreement human-set-cases human-set-eval human-set-report
@@ -112,6 +112,9 @@ analysis:         ## problem evidence + human baseline -> docs/evidence/baseline
 
 label-signal:     ## is there signal in the fraud labels? -> docs/evidence/label_signal.md
 	$(PY) -m analysis.label_signal
+
+label-scan:       ## which column each accounts-and-payments outcome depends on, with a permuted-label control -> docs/evidence/label_scan.md
+	DUCKDB_PATH=data/warehouse/full_all.duckdb $(PY) -m analysis.label_scan
 
 train-eval:       ## train/select the intent model on dev, score on held-out test -> eval/reports/intent_classifier.md
 	$(PY) -m eval.test_cases.build_intent_dataset
