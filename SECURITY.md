@@ -53,7 +53,7 @@ promise about response time: this is a prototype with no on-call.
 
 ## Known gaps
 
-1. **No secret scanning in CI** (V14.2.1 is met for dependencies only). Secrets are scanned only at the public export.
+1. **No secret scanning in CI** (V14.2.1 is Partial: it is met only for the serving lock and the web's production tree at high or critical, see the scanning row above). Secrets are scanned only at the public export.
 2. **The web server's CSP has no `script-src`**, because pinning the pages' inline scripts needs a nonce per response and we
    cannot check one without a browser (V14.4.3). The API's CSP is complete. TLS itself is Render's edge and we have not tested it.
 3. **Operators have no MFA.** Keys are named and static, held in the environment, rotated by hand (V4.3.1). The admin
