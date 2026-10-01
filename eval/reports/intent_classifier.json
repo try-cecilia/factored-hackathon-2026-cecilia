@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-01T00:43:39.082029+00:00",
-  "protocol": "train=templates; held-out written after freezing train+baseline; dev=selection+threshold; test=scored once",
+  "generated_at": "2026-10-01T12:41:29.963829+00:00",
+  "protocol": "train=templates; held-out written after freezing train+baseline; selection=grouped CV on train + dev, threshold=dev; test=scored once",
   "train_n": 182,
   "train_class_counts": {
     "balance_inquiry": 40,
@@ -96,13 +96,22 @@
   "majority_class": "payment_status",
   "model_selection_dev": {
     "char": {
-      "dev_macro_f1": 0.8285
+      "dev_macro_f1": 0.8285,
+      "cv_macro_f1": 0.9164,
+      "cv_std": 0.0329,
+      "selection_score": 0.8724
     },
     "word": {
-      "dev_macro_f1": 0.8208
+      "dev_macro_f1": 0.8208,
+      "cv_macro_f1": 0.8436,
+      "cv_std": 0.0307,
+      "selection_score": 0.8322
     },
     "char+word": {
-      "dev_macro_f1": 0.9003
+      "dev_macro_f1": 0.9003,
+      "cv_macro_f1": 0.9014,
+      "cv_std": 0.0252,
+      "selection_score": 0.9008
     }
   },
   "chosen_variant": "char+word",
