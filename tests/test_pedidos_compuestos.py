@@ -358,3 +358,24 @@ def test_the_balance_again_after_the_model_is_restored_is_the_repeat_notice_by_d
     assert restored.policy_rule == "repeat_guard" and restored.disposition == "CLARIFY" and restored.llm_calls == 1
     again = orch.handle_message(tok, "¿Cuál es mi saldo?")
     assert again.policy_rule == "verified_tool_results" and again.response_text == down.response_text
+
+
+def test_a_read_left_unattended_keeps_every_valid_argument_in_the_models_history():
+    fx = ("get_exchange_rate", {"source_currency": "USD", "target_currency": "MXN", "on_date": "2024-01-16"})
+    orch, tok, fake = session([tool_call_response(*PENDING, TRANSFERS_5, fx), tool_call_response(*CARD)])
+    r = orch.handle_message(tok, "pendientes, transferencias y el dólar de hoy")
+    assert "Quedó sin atender: tipo de cambio" in r.response_text
+    orch.handle_message(tok, "¿y el cambio?")
+    kept = fake.calls[1][2:-1][1]["content"]
+    assert "get_exchange_rate(on_date=2024-01-16, source_currency=USD, target_currency=MXN)" in kept
+
+
+def test_a_read_that_is_incomplete_keeps_the_valid_part_and_a_value_that_does_not_pass_is_left_out():
+    partial = ("get_exchange_rate", {"source_currency": "usd", "on_date": "2024-01-16"})  # no target: it would need a clarification
+    bad = ("list_transactions", {"transaction_type": "Cheque", "limit": 3})  # one value outside its enum, one valid
+    orch, tok, fake = session([tool_call_response(*PENDING, TRANSFERS_5, partial, bad), tool_call_response(*CARD)])
+    r = orch.handle_message(tok, "pendientes, transferencias, el dólar y cheques")
+    assert "Quedó sin atender: tipo de cambio, movimientos" in r.response_text
+    orch.handle_message(tok, "¿y lo otro?")
+    kept = fake.calls[1][2:-1][1]["content"]
+    assert "get_exchange_rate(on_date=2024-01-16, source_currency=USD)" in kept and "list_transactions(limit=3)" in kept

@@ -284,7 +284,9 @@ def resolve_product_ref(value: Any, catalog: list[dict]) -> str:
     return v
 
 
-def sanitize_args(tool: str, raw: dict, catalog: list[dict]) -> tuple[dict, list[str]]:
+def sanitize_args(tool: str, raw: dict, catalog: list[dict], require: bool = True) -> tuple[dict, list[str]]:
+    """The arguments the tool takes, each checked (enums, integers, the product resolved to one of the customer's). With `require`
+    False the required ones may be missing: the values that are there are kept, for a read that is described and not run."""
     schema = _SCHEMAS[tool]
     props, required = schema["properties"], schema.get("required", [])
     dropped = [k for k in raw if k not in props]
@@ -311,7 +313,7 @@ def sanitize_args(tool: str, raw: dict, catalog: list[dict]) -> tuple[dict, list
         if len(credit) == 1:  # unambiguous: fill the slot instead of asking
             args["product_id"] = credit[0]["product_id"]
     missing = [k for k in required if k not in args]
-    if missing:
+    if missing and require:
         raise MissingSlot(f"{tool} needs {missing}", missing_slots=missing)
     return args, dropped
 
@@ -897,8 +899,9 @@ class Orchestrator:
     @staticmethod
     def _unattended(left: list[dict], catalog: list[dict], lang: str) -> tuple[list[str], list[str]]:
         """For each read the model declared and the turn did not answer: its name for the customer and its line in the model's
-        history. The arguments are sanitized one by one, so a read that needed a clarification keeps the filters that were valid;
-        a product the model named is kept only if it is a type or alias of this customer's catalog."""
+        history. The arguments are sanitized as a set without requiring the mandatory ones (a read that needed a clarification keeps
+        everything that was valid, such as both currencies of an exchange rate); if one value does not pass, each of the others is
+        tried alone. A product the model named is kept only if it is a type or alias of this customer's catalog."""
         alias = {p["product_id"]: p["alias"] for p in catalog}
         vocabulary = {*alias.values(), *(p["product_type"] for p in catalog)}
         parts, views = [], []
@@ -911,12 +914,15 @@ class Orchestrator:
             except json.JSONDecodeError:
                 raw = {}
             raw = raw if isinstance(raw, dict) else {}
-            args: dict = {}
-            for key in (*VIEW_ARGS, "product_id"):
-                if key in raw:
+            wanted = {k: raw[k] for k in (*VIEW_ARGS, "product_id") if k in raw}
+            try:  # the whole set at once; the required ones may be missing, as in a read that was not complete
+                args = sanitize_args(name, wanted, catalog, require=False)[0]
+            except Exception:  # noqa: BLE001 - one value does not pass: keep each of the others that does
+                args = {}
+                for key, value in wanted.items():
                     try:
-                        args.update(sanitize_args(name, {key: raw[key]}, catalog)[0])
-                    except Exception:  # noqa: BLE001 - a value that does not pass is left out of what the history keeps
+                        args.update(sanitize_args(name, {key: value}, catalog, require=False)[0])
+                    except Exception:  # noqa: BLE001 - left out of what the history keeps
                         pass
             ref = str(raw.get("product_id")) if str(raw.get("product_id")) in vocabulary else ""
             parts.append(render.read_part(name, args, lang))
