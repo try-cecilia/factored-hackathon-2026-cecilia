@@ -65,6 +65,12 @@ export const conversation = {
     callsOne: '1 llamada · {ms} ms',
     callsMany: '{n} llamadas · {ms} ms',
   },
+  copy: {
+    action: 'Copiar conversación',
+    copied: 'Conversación copiada',
+    failed: 'No se pudo copiar',
+    title: 'Conversación con Cecilia',
+  },
   trace: {
     yes: 'Sí',
     no: 'No',
