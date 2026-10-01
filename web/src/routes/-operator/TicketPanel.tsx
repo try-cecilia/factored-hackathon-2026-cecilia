@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { useI18n, useT } from '../../i18n/context'
 import type { MessageKey } from '../../i18n/translate'
+import type { CustomerContext } from '../../server/customer-context'
 import type { DeskAction, DeskState, Result, Ticket } from '../../server/operator.functions'
 import { Button, IconButton, PriorityChip, priorityOf, StatusIndicator, type StatusTone } from '../../ui'
 import { AlertCircleIcon, AlertTriangleIcon, CheckIcon, InfoCircleIcon } from '../../ui/messages/icons'
@@ -11,6 +12,9 @@ import { conflictOf, holdConflict, type Conflict } from './conflicts'
 import { segmentName } from './context'
 import { evidenceTypeName, keyName, nextStepText, questionTexts, reasonText, reviewReasonName, ruleName } from './notes'
 import { KeyValues } from './ui'
+import { Attention } from './Attention'
+import { CasesFold, ContextNotice, MovementsFold, ProductsFold, TracesFold, useCustomerContext, type CaseLink } from './CustomerContext'
+import { Fold, FoldGroup } from './Folds'
 
 export type TicketPanelProps = {
   ticket: Ticket
@@ -28,11 +32,15 @@ export type TicketPanelProps = {
   keyForm?: ReactNode
   /** Link to the trace of the turn that filed the case. */
   traceLink?: ReactNode
-  /** The customer's context (read on its own: see CustomerContext.tsx). */
-  context?: ReactNode
+  /** Reads the customer's context of this case (on its own, so the case never waits for it: see CustomerContext.tsx). Left out, the panel shows no customer. */
+  loadContext?: (ticketId: string) => Promise<Result<CustomerContext>>
+  /** Wraps the label of another case of the customer in the link that opens it. Left out, the id is plain text. */
+  caseLink?: CaseLink
 }
 
 type Flash = { tone: 'ok' | 'error'; title?: string; text: string; detail?: string }
+
+const merchantOf = (e: Ticket['evidence'][number]) => [e.detail.merchant_name, e.detail.transaction_country].filter(Boolean).map(String).join(' · ')
 
 // The API's limit for the message a resolution leaves the customer.
 const MESSAGE_MAX = 500
@@ -40,9 +48,11 @@ const MESSAGE_MAX = 500
 const tones: Record<DeskState['status'], StatusTone> = { open: 'open', claimed: 'info', approved: 'success', rejected: 'danger', handed_back: 'neutral', stale: 'caution', resolved: 'success' }
 
 /** The ticket desk of the operator console: what the case is, what the assistant did, and what the operator can do next. */
-export function TicketPanel({ ticket, view, act, reload, loadError, onClose, keyForm, traceLink, context }: TicketPanelProps) {
+export function TicketPanel({ ticket, view, act, reload, loadError, onClose, keyForm, traceLink, loadContext, caseLink }: TicketPanelProps) {
   const t = useT()
   const { locale } = useI18n()
+  const customer = useCustomerContext(ticket.ticket_id, loadContext)
+  const customerData = customer.result?.ok ? customer.result.data : null
   const [reason, setReason] = useState('')
   const [message, setMessage] = useState('')
   const [pending, setPending] = useState<DeskAction | 'reload' | null>(null)
@@ -65,6 +75,8 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
   const otherEvidence = ticket.evidence.filter((e) => e.type !== 'transaction')
   const flagged = evidence.filter(isFlagged).length
   const last = desk.history.at(-1)
+  // The filing of the case is an event too, the first of all.
+  const events = desk.history.length + 1
 
   async function run(action: DeskAction) {
     setPending(action)
@@ -164,20 +176,29 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
           {conflict && <ConflictBanner conflict={conflict} ticket={ticket} />}
           {!conflict && flash && flash.tone === 'error' && <Banner tone="danger" title={t('operator.ticket.banner.errorTitle')}>{flash.text}{flash.detail ? ` (${flash.detail})` : ''}</Banner>}
           {!conflict && flash?.tone === 'ok' && !closed && <Banner tone="info">{flash.text}</Banner>}
-          {!conflict && closed && <OutcomeBanner ticket={ticket} />}
         </div>
 
-        <section className="op-block" aria-label={t('operator.ticket.request')}>
-          <h2>{t('operator.ticket.request')}</h2>
-          <p className="op-request">{ticket.request}</p>
-          <p className="op-muted">{t('operator.ticket.reasonLine', { reason: reasonText(t, ticket), rule: ruleName(t, ticket.policy_rule) })}</p>
-          {ticket.prior_requests.length > 0 && (
-            <>
-              <h3>{t('operator.ticket.priorRequests')}</h3>
-              <ul className="op-plain">{ticket.prior_requests.map((p, i) => <li key={i}>{p}</li>)}</ul>
-            </>
-          )}
+        <section className="op-sheet op-summary" aria-label={t('operator.ticket.request')}>
+          <div className="op-summary__block">
+            <h2 className="op-label">{t('operator.ticket.request')}</h2>
+            <p className="op-request">“{ticket.request}”</p>
+            <p className="op-muted op-summary__reason">{t('operator.ticket.reasonLine', { reason: reasonText(t, ticket), rule: ruleName(t, ticket.policy_rule) })}</p>
+            {ticket.prior_requests.length > 0 && (
+              <div className="op-summary__prior">
+                <h3 className="op-label">{t('operator.ticket.priorRequests')}</h3>
+                <ul className="op-plain">{ticket.prior_requests.map((p, i) => <li key={i}>{p}</li>)}</ul>
+              </div>
+            )}
+          </div>
+          {!conflict && closed && <Outcome ticket={ticket} />}
+          <div className="op-sheet__rule" />
+          <div className="op-summary__block">
+            <h2 className="op-label">{t('operator.ticket.nextStep')}</h2>
+            <p className="op-next">{nextStepText(t, ticket)}</p>
+          </div>
         </section>
+
+        <Attention ticket={ticket} data={customerData} />
 
         {pendingAction && <PendingCard ticket={ticket} />}
 
@@ -217,139 +238,150 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
           </section>
         )}
 
-        {ticket.evidence.length > 0 ? (
-          <section className="op-block" aria-label={t('operator.ticket.evidence.title')}>
-            <div className="op-block__head">
-              <h2>{t('operator.ticket.evidence.title')}</h2>
-              <span className={flagged ? 'op-flagged-count' : 'op-muted'}>
-                {flagged ? t('operator.ticket.evidence.flagged', { count: flagged, threshold: FRAUD_SCORE_FLAG }) : t('operator.ticket.evidence.count', { count: ticket.evidence.length })}
-              </span>
-            </div>
-            {evidence.length > 0 && (
-              <table className="op-ev">
-                <caption className="sr-only">{t('operator.ticket.evidence.caption')}</caption>
-                <thead>
-                  <tr>
-                    <th scope="col">{t('operator.ticket.evidence.date')}</th>
-                    <th scope="col" className="op-ev__end">{t('operator.ticket.evidence.amount')}</th>
-                    <th scope="col">{t('operator.ticket.evidence.merchant')}</th>
-                    <th scope="col" className="op-ev__end">{t('operator.ticket.evidence.score')}</th>
-                    <th scope="col" className="op-ev__end">{t('operator.ticket.evidence.behavior')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {evidence.map((e) => (
-                    <tr key={e.id ?? shortStamp(e.detail.transaction_date)} data-flagged={isFlagged(e) ? '' : undefined}>
-                      <td className="op-mono" title={e.id ?? undefined}>{shortStamp(e.detail.transaction_date)}</td>
-                      <td className="op-mono op-ev__end">{money(e.detail.amount, e.detail.currency)}</td>
-                      <td>{[e.detail.merchant_name, e.detail.transaction_country].filter(Boolean).map(String).join(' · ') || '—'}</td>
-                      <td className="op-mono op-ev__end">
-                        {isFlagged(e) && (
-                          <>
-                            <svg className="op-flag" viewBox="0 0 20 20" width="10" height="10" aria-hidden="true" focusable="false"><path d="M5 17V3.5M5 4h9l-2 3.5L14 11H5" fill="currentColor" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" strokeLinecap="round" /></svg>
-                            <span className="sr-only">{t('operator.ticket.evidence.flag', { score: scoreLabel(e) })}</span>
-                          </>
-                        )}
-                        <span aria-hidden={isFlagged(e) || undefined}>{scoreLabel(e)}</span>
-                      </td>
-                      <td className="op-mono op-ev__end">
-                        {(() => {
-                          const b = behaviorOf(e)
-                          return b ? `${Math.round(b.composite)} · ${t(`operator.ticket.evidence.band.${b.band}`)}` : <span title={t('operator.ticket.evidence.behaviorNone')}>—</span>
-                        })()}
-                      </td>
-                    </tr>
+        <FoldGroup>
+          {customer.enabled && <ContextNotice result={customer.result} onRetry={customer.retry} />}
+          {customerData?.warehouse.available && (
+            <>
+              <ProductsFold data={customerData} />
+              <MovementsFold data={customerData} />
+            </>
+          )}
+
+          {ticket.evidence.length > 0 && (
+            <Fold
+              id="evidence"
+              title={t('operator.ticket.sections.evidence')}
+              summary={flagged ? t('operator.ticket.sections.flagged', { count: ticket.evidence.length, flagged }) : String(ticket.evidence.length)}
+            >
+              {flagged > 0 && <p className="op-flagged-count">{t('operator.ticket.evidence.flagged', { count: flagged, threshold: FRAUD_SCORE_FLAG })}</p>}
+              {evidence.length > 0 && (
+                <div className="op-ev-scroll" tabIndex={0} role="region" aria-label={t('operator.ticket.evidence.caption')}>
+                  <table className="op-ev">
+                    <caption className="sr-only">{t('operator.ticket.evidence.caption')}</caption>
+                    <thead>
+                      <tr>
+                        <th scope="col">{t('operator.ticket.evidence.date')}</th>
+                        <th scope="col" className="op-ev__end">{t('operator.ticket.evidence.amount')}</th>
+                        <th scope="col">{t('operator.ticket.evidence.merchant')}</th>
+                        <th scope="col" className="op-ev__end">{t('operator.ticket.evidence.score')}</th>
+                        <th scope="col" className="op-ev__end">{t('operator.ticket.evidence.behavior')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {evidence.map((e) => (
+                        <tr key={e.id ?? shortStamp(e.detail.transaction_date)} data-flagged={isFlagged(e) ? '' : undefined}>
+                          <td className="op-mono" title={e.id ?? undefined}>{shortStamp(e.detail.transaction_date)}</td>
+                          <td className="op-mono op-ev__end">{money(e.detail.amount, e.detail.currency)}</td>
+                          <td title={merchantOf(e) || undefined}>{merchantOf(e) || '—'}</td>
+                          <td className="op-mono op-ev__end">
+                            {isFlagged(e) && (
+                              <>
+                                <svg className="op-flag" viewBox="0 0 20 20" width="10" height="10" aria-hidden="true" focusable="false"><path d="M5 17V3.5M5 4h9l-2 3.5L14 11H5" fill="currentColor" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" strokeLinecap="round" /></svg>
+                                <span className="sr-only">{t('operator.ticket.evidence.flag', { score: scoreLabel(e) })}</span>
+                              </>
+                            )}
+                            <span aria-hidden={isFlagged(e) || undefined}>{scoreLabel(e)}</span>
+                          </td>
+                          <td className="op-mono op-ev__end">
+                            {(() => {
+                              const b = behaviorOf(e)
+                              return b ? `${Math.round(b.composite)} · ${t(`operator.ticket.evidence.band.${b.band}`)}` : <span title={t('operator.ticket.evidence.behaviorNone')}>—</span>
+                            })()}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {evidence.length > 0 && <p className="op-muted">{t('operator.ticket.evidence.behaviorNote')}</p>}
+              {otherEvidence.map((e, i) => (
+                <div key={i}>
+                  <h4>{evidenceTypeName(t, e.type)}{e.id ? ` · ${e.id}` : ''}</h4>
+                  <KeyValues data={e.detail} label={(key) => keyName(t, key)} />
+                </div>
+              ))}
+            </Fold>
+          )}
+
+          {ticket.verified_facts.length > 0 && (
+            <Fold id="facts" title={t('operator.ticket.verifiedFacts')} summary={String(ticket.verified_facts.length)}>
+              <ul className="op-facts">
+                {ticket.verified_facts.map((fact, i) => (
+                  <li key={i}>
+                    <CheckIcon size={10} />
+                    <span className="op-mono">{Object.entries(fact).map(([k, v]) => `${keyName(t, k)}: ${typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v)}`).join(' · ')}</span>
+                  </li>
+                ))}
+              </ul>
+            </Fold>
+          )}
+
+          {customerData && (
+            <>
+              <CasesFold data={customerData} caseLink={caseLink} />
+              <TracesFold data={customerData} />
+            </>
+          )}
+
+          {ticket.open_questions.length > 0 && (
+            <Fold id="questions" title={t('operator.ticket.openQuestions')} summary={String(ticket.open_questions.length)}>
+              <ul className="op-bullets">{questionTexts(t, ticket).map((q, i) => <li key={i}>{q}</li>)}</ul>
+            </Fold>
+          )}
+
+          <Fold
+            id="history"
+            title={t('operator.ticket.history')}
+            summary={[t(events === 1 ? 'operator.ticket.sections.eventsOne' : 'operator.ticket.sections.eventsOther', { count: events }), ticket.trace_id && t('operator.ticket.sections.traceSuffix')].filter(Boolean).join(' · ')}
+          >
+            <ol className="op-history">
+              {[...desk.history].reverse().map((h, i, all) => {
+                const version = all.length - i
+                const name = h.operator
+                const text =
+                  h.status === 'claimed' ? t('operator.ticket.historyItem.claim', { name })
+                  : h.status === 'approved' ? t('operator.ticket.historyItem.approve', { name })
+                  : h.status === 'rejected' ? t('operator.ticket.historyItem.reject', { name })
+                  : h.status === 'handed_back' ? t('operator.ticket.historyItem.release', { name })
+                  : h.status === 'stale' ? t('operator.ticket.state.staleBy', { name })
+                  : h.status === 'resolved' ? t('operator.ticket.historyItem.resolve', { name })
+                  : t('operator.ticket.historyItem.other', { action: h.action, name })
+                // A rejection carries the operator's internal reason; a resolution, the message the customer got.
+                const said = h.detail.reason || h.detail.message
+                const quoted = typeof said === 'string' && said ? said : null
+                return (
+                  <li key={i}>
+                    <StatusIndicator tone={tones[h.status as DeskState['status']] ?? 'neutral'}>
+                      <span>{text}{quoted && <em className="op-muted"> — “{quoted}”</em>}</span>
+                    </StatusIndicator>
+                    <span className={conflict && version === desk.version && version !== conflict.seen ? 'op-mono op-danger' : 'op-mono op-muted'} title={when(h.ts, locale)}>
+                      {t('operator.ticket.versionAge', { n: version, age: ago(h.ts, locale) })}
+                    </span>
+                  </li>
+                )
+              })}
+              <li>
+                <StatusIndicator tone="open"><span>{t('operator.ticket.historyFiled')}</span></StatusIndicator>
+                <span className="op-mono op-muted" title={when(ticket.created_at, locale)}>{ago(ticket.created_at, locale)}</span>
+              </li>
+            </ol>
+            <p className="op-ids op-mono op-muted">
+              {ticket.trace_id && (traceLink ?? <span>{t('operator.ticket.trace', { id: ticket.trace_id.slice(0, 8) })}</span>)}
+              <span>{t('operator.ticket.session', { id: ticket.session_ref.slice(0, 8) })}</span>
+            </p>
+            {ticket.actions_taken.length > 0 && (
+              <>
+                <h4>{t('operator.ticket.actionsTaken')}</h4>
+                <ul className="op-facts">
+                  {ticket.actions_taken.map((a, i) => (
+                    <li key={i}><span className="op-mono">{String(a.tool ?? a.tool_name ?? '—')}{a.error_type ? ` · ${String(a.error_type)}` : ''}</span></li>
                   ))}
-                </tbody>
-              </table>
+                </ul>
+              </>
             )}
-            {evidence.length > 0 && <p className="op-muted">{t('operator.ticket.evidence.behaviorNote')}</p>}
-            {otherEvidence.map((e, i) => (
-              <div key={i}>
-                <h3>{evidenceTypeName(t, e.type)}{e.id ? ` · ${e.id}` : ''}</h3>
-                <KeyValues data={e.detail} label={(key) => keyName(t, key)} />
-              </div>
-            ))}
-          </section>
-        ) : null}
-
-        {ticket.verified_facts.length > 0 && (
-          <section className="op-block">
-            <h2>{t('operator.ticket.verifiedFacts')}</h2>
-            <ul className="op-facts">
-              {ticket.verified_facts.map((fact, i) => (
-                <li key={i}>
-                  <CheckIcon size={10} />
-                  <span className="op-mono">{Object.entries(fact).map(([k, v]) => `${keyName(t, k)}: ${typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v)}`).join(' · ')}</span>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
-        {context}
-
-        {ticket.open_questions.length > 0 && (
-          <section className="op-block">
-            <h2>{t('operator.ticket.openQuestions')}</h2>
-            <ul className="op-bullets">{questionTexts(t, ticket).map((q, i) => <li key={i}>{q}</li>)}</ul>
-          </section>
-        )}
-
-        <section className="op-block">
-          <h2>{t('operator.ticket.nextStep')}</h2>
-          <p className="op-callout">{nextStepText(t, ticket)}</p>
-        </section>
-
-        {ticket.actions_taken.length > 0 && (
-          <section className="op-block">
-            <h2>{t('operator.ticket.actionsTaken')}</h2>
-            <ul className="op-facts">
-              {ticket.actions_taken.map((a, i) => (
-                <li key={i}><span className="op-mono">{String(a.tool ?? a.tool_name ?? '—')}{a.error_type ? ` · ${String(a.error_type)}` : ''}</span></li>
-              ))}
-            </ul>
-          </section>
-        )}
-
-        <section className="op-block">
-          <h2>{t('operator.ticket.history')}</h2>
-          <ol className="op-history">
-            {[...desk.history].reverse().map((h, i, all) => {
-              const version = all.length - i
-              const name = h.operator
-              const text =
-                h.status === 'claimed' ? t('operator.ticket.historyItem.claim', { name })
-                : h.status === 'approved' ? t('operator.ticket.historyItem.approve', { name })
-                : h.status === 'rejected' ? t('operator.ticket.historyItem.reject', { name })
-                : h.status === 'handed_back' ? t('operator.ticket.historyItem.release', { name })
-                : h.status === 'stale' ? t('operator.ticket.state.staleBy', { name })
-                : h.status === 'resolved' ? t('operator.ticket.historyItem.resolve', { name })
-                : t('operator.ticket.historyItem.other', { action: h.action, name })
-              // A rejection carries the operator's internal reason; a resolution, the message the customer got.
-              const said = h.detail.reason || h.detail.message
-              const quoted = typeof said === 'string' && said ? said : null
-              return (
-                <li key={i}>
-                  <StatusIndicator tone={tones[h.status as DeskState['status']] ?? 'neutral'}>
-                    <span>{text}{quoted && <em className="op-muted"> — “{quoted}”</em>}</span>
-                  </StatusIndicator>
-                  <span className={conflict && version === desk.version && version !== conflict.seen ? 'op-mono op-danger' : 'op-mono op-muted'} title={when(h.ts, locale)}>
-                    {t('operator.ticket.versionAge', { n: version, age: ago(h.ts, locale) })}
-                  </span>
-                </li>
-              )
-            })}
-            <li>
-              <StatusIndicator tone="open"><span>{t('operator.ticket.historyFiled')}</span></StatusIndicator>
-              <span className="op-mono op-muted" title={when(ticket.created_at, locale)}>{ago(ticket.created_at, locale)}</span>
-            </li>
-          </ol>
-          <p className="op-ids op-mono op-muted">
-            {ticket.trace_id && (traceLink ?? <span>{t('operator.ticket.trace', { id: ticket.trace_id.slice(0, 8) })}</span>)}
-            <span>{t('operator.ticket.session', { id: ticket.session_ref.slice(0, 8) })}</span>
-          </p>
-        </section>
+          </Fold>
+        </FoldGroup>
       </div>
 
       <footer className="op-ticket__foot">
@@ -436,15 +468,28 @@ function ConflictBanner({ conflict, ticket }: { conflict: Conflict; ticket: Tick
   )
 }
 
-function OutcomeBanner({ ticket }: { ticket: Ticket }) {
+/** How a closed case ended, inside the summary card: a mark, the name of the result and, when it has one, the message the customer got. */
+function Outcome({ ticket }: { ticket: Ticket }) {
   const t = useT()
-  const { status, trace_id } = ticket.desk
-  const message = resolutionMessage(ticket.desk)
-  if (status === 'approved') return <Banner tone="success" title={t('operator.ticket.banner.traceOpened')}>{trace_id ? t('operator.ticket.banner.traceOpenedBody', { id: trace_id }) : undefined}</Banner>
-  if (status === 'resolved') return <Banner tone="success" title={t('operator.ticket.banner.resolvedTitle')}>{message ? t('operator.ticket.banner.resolvedBody', { message }) : undefined}</Banner>
-  if (status === 'stale') return <Banner tone="caution" title={t('operator.ticket.banner.staleTitle')}>{t('operator.ticket.banner.staleBody')}</Banner>
-  if (status === 'rejected') return <Banner tone="neutral" title={t('operator.ticket.banner.rejectedTitle')}>{t('operator.ticket.banner.rejectedBody')}</Banner>
-  return <Banner tone="neutral" title={t('operator.ticket.banner.handedBackTitle')}>{t('operator.ticket.banner.handedBackBody')}</Banner>
+  const { desk } = ticket
+  const message = resolutionMessage(desk)
+  const by = desk.history.at(-1)?.operator ?? desk.operator ?? ''
+  const { title, body, tone } =
+    desk.status === 'approved' ? { title: t('operator.ticket.banner.traceOpened'), body: desk.trace_id ? t('operator.ticket.banner.traceOpenedBody', { id: desk.trace_id }) : undefined, tone: 'success' as const }
+    : desk.status === 'resolved' ? { title: t('operator.ticket.banner.resolvedTitle'), body: message ? t('operator.ticket.outcomeMessage', { name: by, message }) : undefined, tone: 'success' as const }
+    : desk.status === 'stale' ? { title: t('operator.ticket.banner.staleTitle'), body: t('operator.ticket.banner.staleBody'), tone: 'caution' as const }
+    : desk.status === 'rejected' ? { title: t('operator.ticket.banner.rejectedTitle'), body: t('operator.ticket.banner.rejectedBody'), tone: 'neutral' as const }
+    : { title: t('operator.ticket.banner.handedBackTitle'), body: t('operator.ticket.banner.handedBackBody'), tone: 'neutral' as const }
+  const Icon = tone === 'caution' ? AlertTriangleIcon : tone === 'success' ? CheckIcon : InfoCircleIcon
+  return (
+    <div className={`op-outcome op-outcome--${tone}`} role="status">
+      <span className="op-outcome__mark"><Icon size={tone === 'success' ? 10 : 14} /></span>
+      <div>
+        <strong>{title}</strong>
+        {body && <p>{body}</p>}
+      </div>
+    </div>
+  )
 }
 
 /** The action the assistant cannot take alone, as a white card of definitions. */
