@@ -152,3 +152,10 @@ declared in 40 of 40 turns [91-100%] and answered in 40 of 40, every case 10 of 
 under 1.25). The numeric thresholds for raising the cap are met. The readability review the section also requires was not done, and only the
 main model qualifies, so by this section's own rule the cap stays 2 (default, in the product and in every deployment) until the user decides
 otherwise. GPT-OSS 120B on Groq: partial (24 of 40 turns refused by the rate limit); 0 of 16 answered turns declared more than one read.
+
+**Correction (2026-10-01, after the review of the probe).** The reports of both outcomes above were recomputed from the same rows with the
+corrected probe (calls with no usage have an unknown cost, a criterion is MET only on the whole sample of answered turns, recovery is measured on
+what was left out, an empty reply is not a cover); the evidence files say so. No Sonnet 5 verdict changed (criteria 1, 2, 3 and the p95, attempts
+and mean cost lines of 5 are MET, 4 and the baseline and demo lines are PENDING, and the cap-3 run still meets its numeric thresholds). On Groq
+the cost criterion is PENDING (13 of 53 answered turns have no usage) and the recovery figure is 5 of 5 in 5 whole sequences, not 0 of 8, which
+had been an artifact of asking the follow-up for the whole request again; the two-request criterion remains NOT MET.

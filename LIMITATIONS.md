@@ -410,7 +410,8 @@ service, and as our own roadmap.
   parallel tool use (`parallel_tool_calls` exists but does not add the support). The same probe on `openai/gpt-oss-120b`
   is **partial**: the account's rate limit refused 167 of the 220 turns, and in the 53 that were answered the model
   declared exactly one read in every two- and three-request turn (22 of 22), so the two-request cases were covered 0 of
-  15 times [0-20%] while the 4 simple controls were answered correctly. Too few turns for a rate, enough to say the limit
-  is real. Report: [`docs/evidence/compound_probe_groq.md`](docs/evidence/compound_probe_groq.md). So when the fallback
+  15 times [0-20%] while the 4 simple controls were answered correctly; in the 5 sequences that were whole, the follow-up
+  ("te pedí dos cosas") did read what had been left out, 5 of 5, which is a sample and not a rate; the cost is unknown for 13
+  of the 53 turns (no usage from the provider). Too few turns for a rate, enough to say the limit is real. Report: [`docs/evidence/compound_probe_groq.md`](docs/evidence/compound_probe_groq.md). So when the fallback
   serves the turn, a request for two things may be answered with only one of them, and the customer should ask for them
   in separate messages. The code does not complete what the model did not declare (no keywords, no second model call).
