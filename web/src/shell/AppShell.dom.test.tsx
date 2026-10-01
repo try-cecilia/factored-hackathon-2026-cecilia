@@ -204,6 +204,29 @@ describe('AppShell', () => {
       expect(inside(demo)).toBe(true)
     })
 
+    it('the demo drawer covers the bar, so it offers "copy conversation" itself, and says how it went beside the button', async () => {
+      phone(true)
+      const user = userEvent.setup()
+      const { container } = await draw({ history: withCase, scenarios })
+      await user.click(await screen.findByRole('button', { name: 'Demo' }))
+      const demo = container.querySelector('#shell-demo') as HTMLElement
+      await screen.findByRole('complementary', { name: 'Ayudas de demostración' })
+      expect((container.querySelector('.shell__bar') as HTMLElement).closest('[inert]')).not.toBeNull()
+      expect(demo.closest('[inert]')).toBeNull()
+      await user.click(within(demo).getByRole('button', { name: 'Copiar conversación' }))
+      const copied = await navigator.clipboard.readText()
+      expect(copied).toContain('Tú: Me clonaron la tarjeta')
+      expect(within(demo).getAllByText('Conversación copiada').length).toBeGreaterThan(0)
+      expect(within(demo).getByRole('status').textContent).toBe('Conversación copiada')
+    })
+
+    it('a wide panel is beside the page, not over the bar: no second button in it', async () => {
+      phone(false)
+      const { container } = await draw({ history: withCase, scenarios })
+      await screen.findByRole('complementary', { name: 'Ayudas de demostración' })
+      expect(within(container.querySelector('#shell-demo') as HTMLElement).queryByRole('button', { name: 'Copiar conversación' })).toBeNull()
+    })
+
     it('with the panel closed nothing is inert', async () => {
       phone(true)
       const { container } = await draw({ scenarios })

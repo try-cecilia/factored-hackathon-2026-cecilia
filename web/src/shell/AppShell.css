@@ -10,13 +10,7 @@
 }
 .shell__tools { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .shell__menu { display: none; margin-left: -6px; }
-.shell__copy { position: relative; display: inline-flex; }
-/* The result floats under the button, so the bar does not move when it comes and goes. */
-.shell__copied {
-  position: absolute; top: calc(100% + 4px); right: 0; z-index: 5; padding: 4px 10px; border-radius: var(--radius-control); background: var(--color-paper);
-  box-shadow: 0 1px 1px #0F0A1414, 0 8px 24px -8px #0F0A148C; color: var(--color-ink-70); font-size: var(--text-xs); font-weight: var(--font-weight-medium); white-space: nowrap;
-}
-.shell__copied[data-outcome='error'] { color: var(--color-danger); }
+.shell__copy { display: inline-flex; }
 /* A bar with no room for the label (a phone, or the demo panel open beside the chat) keeps the copy button's icon; the label stays for screen readers. */
 @container bar (max-width: 780px) {
   .shell__copy-label { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }

@@ -3,7 +3,8 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithI18n } from '../test/render'
 import { ConversationProvider } from './ConversationProvider'
-import { CopyConversation } from './CopyConversation'
+import { ShellProvider, useShell } from '../shell/ShellContext'
+import { CopyConversation, CopyNotice, useConversationCopy } from './CopyConversation'
 import type { HistoryResult } from './types'
 
 vi.mock('../server/chat.functions', () => ({
@@ -28,9 +29,23 @@ const talked: HistoryResult = {
 }
 const empty: HistoryResult = { ok: true, cases: [], turns: [] }
 
-async function draw(history: HistoryResult, locale: 'es' | 'pt' = 'es') {
+// What the shell does: the state is held where the button is drawn from, and the chat reads it from the shell's context.
+function Chat() {
+  const { copied } = useShell()
+  return <div data-testid="chat-notices"><CopyNotice state={copied ?? null} /></div>
+}
+function Bar({ ended }: { ended: boolean }) {
+  const copy = useConversationCopy(ended)
+  return (
+    <ShellProvider value={{ showCase: () => {}, copied: copy.state }}>
+      <CopyConversation copy={copy} />
+      <Chat />
+    </ShellProvider>
+  )
+}
+async function draw(history: HistoryResult, locale: 'es' | 'pt' = 'es', ended = false) {
   await act(async () => {
-    renderWithI18n(<ConversationProvider sessionRef="s1" initial={history}><CopyConversation /></ConversationProvider>, locale)
+    renderWithI18n(<ConversationProvider sessionRef="s1" initial={history}><Bar ended={ended} /></ConversationProvider>, locale)
   })
 }
 const button = (name: RegExp) => screen.getByRole('button', { name }) as HTMLButtonElement
@@ -70,9 +85,19 @@ describe('CopyConversation', () => {
 
     expect(status()).toBe('Conversación copiada')
     expect(screen.getAllByText('Conversación copiada')).toHaveLength(2) // the one for the screen reader and the one for the eye
+    expect(screen.getByTestId('chat-notices').textContent).toBe('Conversación copiada') // the eye reads it by the chat, not over it
     await act(() => vi.advanceTimersByTimeAsync(2600))
     expect(status()).toBe('')
     expect(screen.queryByText('Conversación copiada')).toBeNull()
+  })
+
+  it('with the session over, the copy ends with the message that asks to sign in again, as the screen does', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    await draw(talked, 'es', true)
+    await user.click(button(/Copiar conversación/))
+    const copied = (await navigator.clipboard.readText()).split('\n')
+    expect(copied.at(-1)).toBe('Cecilia: Por tu seguridad, la sesión terminó. Ingresar de nuevo para seguir; la conversación empezará de cero.')
+    expect(copied.at(-2)).toMatch(/^Posible fraude/)
   })
 
   it('a clipboard that refuses is told, not swallowed', async () => {

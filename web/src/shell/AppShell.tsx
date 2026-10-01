@@ -2,7 +2,7 @@ import { Link, useNavigate, useRouter } from '@tanstack/react-router'
 import { lazy, Suspense, use, useCallback, useEffect, useId, useRef, useState, type ReactNode, type RefObject } from 'react'
 import type { DemoScenario } from '../chat/types'
 import { useConversation } from '../chat/ConversationProvider'
-import { CopyConversation } from '../chat/CopyConversation'
+import { CopyConversation, useConversationCopy } from '../chat/CopyConversation'
 import { useSessionNotice } from '../chat/useSessionNotice'
 import { LockIcon } from '../chat/icons'
 import { useT } from '../i18n/context'
@@ -52,6 +52,7 @@ export function AppShell({ session, kit, children }: { session: Session; kit: Pr
   // The same end the chat's composer goes by: what is over for the composer is over for the demo panel's step buttons.
   const notice = useSessionNotice(session)
   const over = ended || notice === 0
+  const copy = useConversationCopy(over)
   const phone = useMediaQuery(PHONE)
   const narrow = useMediaQuery(NARROW)
   const [collapsed, setCollapsed] = useState(false)
@@ -126,7 +127,7 @@ export function AppShell({ session, kit, children }: { session: Session; kit: Pr
   const detail = [session.segment, session.country].filter(Boolean).join(' · ')
 
   return (
-    <ShellProvider value={{ showCase }}>
+    <ShellProvider value={{ showCase, copied: copy.state }}>
       <a className="skip" href="#main" inert={behind ? true : undefined}>{t('common.skipToContent')}</a>
       <div className="shell" data-menu={menuOpen ? 'open' : undefined} data-demo={demoOpen ? 'open' : undefined} data-case={caseOpen ? 'open' : undefined}>
         <div
@@ -191,7 +192,7 @@ export function AppShell({ session, kit, children }: { session: Session; kit: Pr
             <h1 className="shell__title">{t('conversation.title')}</h1>
             <span className="shell__trust"><LockIcon />{t('conversation.trust')}</span>
             <div className="shell__tools">
-              <CopyConversation />
+              <CopyConversation copy={copy} />
               <Suspense fallback={null}>
                 <DemoToggle kit={kit} open={demoOpen} onToggle={() => setDemoOpen((open) => !open)} />
               </Suspense>
@@ -216,6 +217,7 @@ export function AppShell({ session, kit, children }: { session: Session; kit: Pr
                 onSend={onSend}
                 retry={retry}
                 overlay={narrow}
+                copy={copy}
                 onSessionChanged={() => router.invalidate()}
                 onClose={() => setDemoOpen(false)}
               />

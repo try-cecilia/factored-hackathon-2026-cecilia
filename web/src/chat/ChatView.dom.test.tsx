@@ -65,6 +65,19 @@ describe('ChatView', () => {
     expect(renders.log).toBeGreaterThan(settled)
   })
 
+  it('how "copy conversation" went is said by the composer, where it covers no message', async () => {
+    renderWithI18n(
+      <ShellProvider value={{ showCase: () => {}, copied: 'ok' }}>
+        <ConversationProvider sessionRef="s1" initial={history}><ChatView session={session} /></ConversationProvider>
+      </ShellProvider>,
+    )
+    await act(() => vi.advanceTimersByTimeAsync(0))
+    const note = screen.getByText('Conversación copiada')
+    expect(note.closest('.chat__notices')).not.toBeNull()
+    expect(note.closest('.chat__scroll')).toBeNull()
+    expect(note.getAttribute('aria-hidden')).toBe('true') // the button says it to the screen reader
+  })
+
   it('another object of the same session, with the same time to go, does not start the countdown again: the end never moves later', async () => {
     let renew: (next: Session) => void = () => {}
     function Harness() {

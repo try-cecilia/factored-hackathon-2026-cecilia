@@ -6,6 +6,7 @@
 .demo h4 { margin: 12px 0 6px; color: var(--color-ink-70); font-size: var(--text-compact-sm); font-weight: var(--font-weight-medium); }
 .demo__head { display: flex; align-items: center; gap: 8px; }
 .demo__close { margin-left: auto; }
+.demo__copy { display: flex; align-items: center; gap: 8px; min-height: 28px; margin: -8px 0; }
 .demo__badge {
   padding: 2px 6px; border-radius: var(--radius-sm); background: var(--color-sky-100); color: var(--color-sky-900);
   font-size: var(--text-compact-2xs); font-weight: var(--font-weight-bold); letter-spacing: 0.06em; line-height: 12px; text-transform: uppercase;
