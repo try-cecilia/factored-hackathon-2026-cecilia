@@ -1,11 +1,12 @@
 import { createServerFn } from '@tanstack/react-start'
+import { toCustomerContext, type CustomerContext } from './customer-context'
 import { parseDeskAction } from './desk-action'
 import { adminRead, operatorAct, type Result } from './operator-api'
 import { publicOrigins } from './origin-check'
 import { operatorSessionState, takeFlash } from './operator-session'
 import { toQueueRow, type QueueRow } from './queue-row'
 
-export type { QueueRow, Result }
+export type { CustomerContext, QueueRow, Result }
 
 // `unknown` does not cross the server-function boundary; the JSON the API sends does.
 export type Json = string | number | boolean | null | Json[] | { [key: string]: Json }
@@ -108,6 +109,17 @@ export const loadQueue = createServerFn({ method: 'GET' })
 export const loadTicket = createServerFn({ method: 'GET' })
   .validator((input: unknown) => ({ id: idOf(input, 'ticket_id'), auto: autoOf(input as { auto?: boolean } | undefined) }))
   .handler(({ data }) => adminRead<Ticket>(`/admin/tickets/${data.id}`, !data.auto))
+
+// The customer's context is read on its own, after the case: a slow warehouse must never hold the case back, and a failure here is
+// this section's alone. 502: the API answered, but not with the contract.
+export const loadCustomerContext = createServerFn({ method: 'GET' })
+  .validator((input: unknown) => ({ id: idOf(input, 'ticket_id'), auto: autoOf(input as { auto?: boolean } | undefined) }))
+  .handler(async ({ data }): Promise<Result<CustomerContext>> => {
+    const result = await adminRead<unknown>(`/admin/tickets/${data.id}/customer_context`, !data.auto)
+    if (!result.ok) return result
+    const context = toCustomerContext(result.data)
+    return context ? { ok: true, data: context } : { ok: false, status: 502 }
+  })
 
 // `reason` is the internal note of a rejection; `message`, what the customer reads when the case is resolved.
 export const actOnTicket = createServerFn({ method: 'POST' })

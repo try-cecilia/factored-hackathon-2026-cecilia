@@ -8,6 +8,7 @@ import { CloseIcon } from '../../ui/table/icons'
 import { ago, clock, CLOSED, explainKey, money, shortStamp, when } from './format'
 import { FRAUD_SCORE_FLAG, isFlagged, resolutionMessage, scoreLabel, ticketSummary } from './summary'
 import { conflictOf, holdConflict, type Conflict } from './conflicts'
+import { segmentName } from './context'
 import { evidenceTypeName, keyName, nextStepText, questionTexts, reasonText, reviewReasonName, ruleName } from './notes'
 import { KeyValues } from './ui'
 
@@ -27,6 +28,8 @@ export type TicketPanelProps = {
   keyForm?: ReactNode
   /** Link to the trace of the turn that filed the case. */
   traceLink?: ReactNode
+  /** The customer's context (read on its own: see CustomerContext.tsx). */
+  context?: ReactNode
 }
 
 type Flash = { tone: 'ok' | 'error'; title?: string; text: string; detail?: string }
@@ -37,7 +40,7 @@ const MESSAGE_MAX = 500
 const tones: Record<DeskState['status'], StatusTone> = { open: 'open', claimed: 'info', approved: 'success', rejected: 'danger', handed_back: 'neutral', stale: 'caution', resolved: 'success' }
 
 /** The ticket desk of the operator console: what the case is, what the assistant did, and what the operator can do next. */
-export function TicketPanel({ ticket, view, act, reload, loadError, onClose, keyForm, traceLink }: TicketPanelProps) {
+export function TicketPanel({ ticket, view, act, reload, loadError, onClose, keyForm, traceLink, context }: TicketPanelProps) {
   const t = useT()
   const { locale } = useI18n()
   const [reason, setReason] = useState('')
@@ -146,7 +149,7 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
           <StatusIndicator tone={tones[desk.status]}><strong>{state}</strong></StatusIndicator>
           <span className="op-muted">
             {t('operator.ticket.meta', { age: ago(ticket.created_at, locale) })}
-            {[ticket.country, ticket.language ? ticket.language.toUpperCase() : t('operator.queue.unknownLanguage'), ticket.segment].filter(Boolean).map((part) => ` · ${part}`)}
+            {[ticket.country, ticket.language ? ticket.language.toUpperCase() : t('operator.queue.unknownLanguage'), ticket.segment && segmentName(t, ticket.segment)].filter(Boolean).map((part) => ` · ${part}`)}
           </span>
         </p>
       </header>
@@ -275,6 +278,8 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
             </ul>
           </section>
         )}
+
+        {context}
 
         {ticket.open_questions.length > 0 && (
           <section className="op-block">
