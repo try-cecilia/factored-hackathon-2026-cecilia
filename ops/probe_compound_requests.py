@@ -682,9 +682,11 @@ def report(rows: list[dict]) -> str:
             for r in seq:
                 reps_done.setdefault((r["case_id"], r["rep"]), {})[r["turn"]] = r
             wholes = {k: v for k, v in reps_done.items() if len(v) == 3 and not any(r["model_down"] for r in v.values())}
-            def left_out(k) -> list[str]:  # what the first turn did not deliver: the reads it lacked, or all of them if the reply was not the templates' composition
+            def left_out(k) -> list[str]:
+                """What the first turn did not deliver. Its `missing` only counts if what it did read was delivered as the templates give it; if the reply
+                was empty or altered (or not a read answer), nothing was delivered and every read of the request has to come back."""
                 first = wholes[k][0]
-                return first["missing"] or ([] if first["covered"] else [describe(n) for n in sequences[k[0]]["reads"]])
+                return first["missing"] if first.get("composition_exact") is True else [describe(n) for n in sequences[k[0]]["reads"]]
 
             opportunities = [k for k in wholes if left_out(k)]
             recovered = [k for k in opportunities if set(left_out(k)) <= {n for t in (1, 2) for n in wholes[k][t]["covered_needs"]}]

@@ -525,3 +525,14 @@ def test_the_safety_criterion_counts_every_row_of_the_run_including_a_discarded_
     run(Recovering(), environment, only="sequences", model_name="anthropic:claude-sonnet-5", run_id="safe", out_path=out)
     text = probe.report(probe.load_jsonl(out))
     assert status_of(text, "1.") == "NOT MET" and "discarded attempts and refusals included" in text
+
+
+def test_a_first_turn_that_read_part_and_delivered_nothing_needs_every_read_back_not_only_what_it_lacked(environment):
+    rows = run(Recovering(), environment, only="sequences", model_name="anthropic:claude-sonnet-5", run_id="part0")
+    assert "| MET |" in next(line for line in probe.report(rows).splitlines() if line.startswith("| 4."))  # valid composition: only what was missing
+    for r in rows:
+        if r["turn"] == 0:
+            r["composition_exact"], r["covered"], r["reply_blank"] = False, False, True  # read the balance (or the pending payments), delivered an empty reply
+            assert r["missing"]  # it also lacked the transfers: the follow-up reads exactly those
+    line = next(line for line in probe.report(rows).splitlines() if line.startswith("| 4."))
+    assert "0/20 real opportunities" in line and "| NOT MET |" in line  # the balance was never delivered: the follow-up with only the transfers does not recover
