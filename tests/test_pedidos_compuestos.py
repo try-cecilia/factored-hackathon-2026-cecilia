@@ -247,3 +247,114 @@ def test_without_the_model_the_same_balance_question_twice_is_not_answered_twice
     first, second = orch.handle_message(tok, "¿Cuál es mi saldo?"), orch.handle_message(tok, "¿Cuál es mi saldo?")
     assert first.policy_rule == "degraded:deterministic_balance" and first.degraded
     assert second.response_text != first.response_text and second.policy_rule == "degraded:repeat_guard" and second.degraded
+
+
+# --- revisión: lo que no se podía perder ni filtrar ----------------------------------------------------------------------
+
+MARKER = "MARCADOR-SINTETICO-7f3a91"
+
+
+def _files(*names):
+    import os
+
+    return {n: open(os.environ[n], encoding="utf-8").read() if os.path.exists(os.environ[n]) else "" for n in names}
+
+
+def test_a_failure_inside_the_audited_tool_leaves_no_message_in_the_audit_the_trace_or_the_ticket(monkeypatch):
+    """El fallo ocurre DENTRO de list_transactions (la consulta al warehouse), no sustituyendo la herramienta: lo que se
+    guarda es el tipo de la excepción, nunca su mensaje."""
+    real = tools._rows
+
+    def rows(sql, params):
+        if "FROM transactions WHERE" in sql:
+            raise RuntimeError(f'Cannot open "{MARKER}" for PRD-FIX0015')
+        return real(sql, params)
+
+    monkeypatch.setattr(tools, "_rows", rows)
+    orch, tok, _ = session([tool_call_response("list_transactions", {})])
+    r = orch.handle_message(tok, "mis movimientos")
+    assert r.disposition == "ESCALATE" and r.category == "tool_failure"
+    kept = _files("AUDIT_LOG_PATH", "TRACE_LOG_PATH", "HUMAN_QUEUE_PATH")
+    assert all(MARKER not in text for text in kept.values()), [n for n, t in kept.items() if MARKER in t]
+    assert '"error_type": "RuntimeError"' in kept["AUDIT_LOG_PATH"] and "RuntimeError" in kept["HUMAN_QUEUE_PATH"] and "RuntimeError" in kept["TRACE_LOG_PATH"]
+
+
+def test_evidence_that_could_not_be_gathered_leaves_no_message_in_the_ticket(monkeypatch):
+    from agent.policy import escalation
+
+    def boom(*a, **k):
+        raise RuntimeError(f"disk {MARKER}")
+
+    monkeypatch.setattr(escalation.account_tools, "recent_activity_for_review", boom)
+    orch, tok, _ = session([])
+    assert orch.handle_message(tok, "me robaron la tarjeta, es un fraude").disposition == "ESCALATE"
+    assert MARKER not in _files("HUMAN_QUEUE_PATH")["HUMAN_QUEUE_PATH"]
+
+
+def test_the_prompt_asks_for_every_read_and_leaves_the_cap_to_the_code():
+    from agent.llm import prompts
+
+    assert "hasta dos" not in prompts.SYSTEM_PROMPT and "dos primeras" not in prompts.SYSTEM_PROMPT
+    assert "todas" in prompts.SYSTEM_PROMPT
+
+
+def test_a_third_read_the_model_declared_is_run_never_and_is_announced():
+    """El modelo declara las tres lecturas que pidió el cliente; el código ejecuta dos y avisa la tercera."""
+    orch, tok, fake = session([tool_call_response(*PENDING, TRANSFERS_5, CARD)])
+    r = orch.handle_message(tok, ASK + " y el estado de mi tarjeta")
+    assert [f["tool"] for f in r.verified_facts] == ["list_transactions", "list_transactions"]
+    assert "Quedó sin atender: estado de pago" in r.response_text
+
+
+def test_the_unattended_notice_and_its_history_survive_a_repeated_answer():
+    three = tool_call_response(*PENDING, TRANSFERS_5, CARD)
+    orch, tok, fake = session([three, tool_call_response(*PENDING, TRANSFERS_5, CARD), tool_call_response(*CARD)])
+    first = orch.handle_message(tok, ASK + " y mi tarjeta")
+    second = orch.handle_message(tok, "te pedi tres cosas")
+    assert second.policy_rule == "repeat_guard" and "ya te la respondí" in second.response_text
+    assert "Quedó sin atender: estado de pago" in second.response_text and "Quedó sin atender" in first.response_text
+    orch.handle_message(tok, "y mi tarjeta?")
+    history = fake.calls[2][2:-1]
+    assert "sin atender" in history[3]["content"] and "get_payment_status" in history[3]["content"]  # la respuesta repetida
+
+
+def test_two_reads_that_each_need_a_clarification_lose_neither():
+    orch, tok, fake = session([tool_call_response("get_exchange_rate", {}, ("list_transactions", {"product_id": "Cuenta Ahorro"})),
+                               tool_call_response("get_account_summary", {})], customer="CLI-FIX0001")
+    r = orch.handle_message(tok, "el dólar y los movimientos de mi cuenta de ahorros")
+    assert r.disposition == "CLARIFY" and "¿Qué monedas quieres convertir?" in r.response_text
+    assert "Quedó sin atender: movimientos" in r.response_text
+    orch.handle_message(tok, "USD a MXN")
+    assert "list_transactions(Cuenta Ahorro)" in fake.calls[1][2:-1][1]["content"]  # lo que el modelo ya había pedido
+
+
+def test_a_request_trace_in_any_position_takes_the_turn_alone_and_the_yes_opens_it():
+    orch, tok, _ = session([tool_call_response(*PENDING, TRANSFERS_5, ("request_trace", {"amount": 640}))])
+    r = orch.handle_message(tok, "pendientes, mis últimas 5 transferencias y mi transferencia de 640 que no llegó")
+    assert r.policy_rule == "action:trace_proposed" and "Encontré este movimiento pendiente" in r.response_text
+    assert "Quedó sin atender: movimientos pendientes, transferencias" in r.response_text
+    opened = orch.handle_message(tok, "sí")
+    assert opened.policy_rule == "action:trace_opened" and opened.verified_facts[0]["tool"] == "request_trace"
+
+
+def test_the_kind_of_a_choice_comes_from_the_backend_not_from_the_words_of_the_reply():
+    orch, tok, _ = session([tool_call_response(*PENDING, ("list_transactions", {"product_id": "Cuenta Ahorro"}))], customer="CLI-FIX0001")
+    r = orch.handle_message(tok, "mis pendientes y los movimientos de mi cuenta de ahorros")
+    assert r.disposition == "CLARIFY" and "Movimientos pendientes" in r.response_text and r.choice == "product"
+    orch, tok, _ = session([tool_call_response("request_trace", {})])
+    chosen = orch.handle_message(tok, "mis pagos no llegaron")
+    assert chosen.policy_rule == "action:trace_choose" and chosen.choice == "movement"
+    orch, tok, _ = session([tool_call_response("get_account_summary", {})])
+    assert orch.handle_message(tok, "mis saldos").choice is None
+
+
+def test_the_balance_again_after_the_model_is_restored_is_the_repeat_notice_by_decision():
+    """Se decidió: con el mismo saldo la segunda respuesta sería idéntica a la anterior, también al volver el modelo tras
+    una caída; sale el aviso, y al insistir se muestra el dato (LIMITATIONS.md)."""
+    orch, tok, _ = session([unavailable(), tool_call_response("get_account_summary", {}), tool_call_response("get_account_summary", {})])
+    down = orch.handle_message(tok, "¿Cuál es mi saldo?")
+    assert down.policy_rule == "degraded:deterministic_balance"
+    restored = orch.handle_message(tok, "¿Cuál es mi saldo?")
+    assert restored.policy_rule == "repeat_guard" and restored.disposition == "CLARIFY" and restored.llm_calls == 1
+    again = orch.handle_message(tok, "¿Cuál es mi saldo?")
+    assert again.policy_rule == "verified_tool_results" and again.response_text == down.response_text

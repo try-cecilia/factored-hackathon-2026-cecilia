@@ -115,6 +115,14 @@ def percentile(values: list[float], p: float) -> float | None:
     return round(values[min(len(values) - 1, int(p * (len(values) - 1)))], 1) if values else None
 
 
+REPEAT_NOTICE = ("CLARIFY", "repeated_request", False)  # what a read asked twice in a row is answered with, never a ticket
+
+
+def outcome_ok(got: tuple[str, str, bool], expect: tuple[str, str, bool]) -> bool:
+    """The clients repeat one message, so a read that was resolved may also come back as the repeat notice, exactly that tuple."""
+    return got == expect or (expect[0] == "AUTO_RESOLVE" and got == REPEAT_NOTICE)
+
+
 async def drive(base: str, clients: int, requests: int, sessions: list[str], honor_retry_after: bool = True,
                 message: str = "cual es mi saldo", expect: tuple[str, str, bool] = ("AUTO_RESOLVE", "resolved", False)) -> dict:
     """Closed loop: each client sends its next message as soon as the last answer arrives, until `requests` are sent.
@@ -140,9 +148,7 @@ async def drive(base: str, clients: int, requests: int, sessions: list[str], hon
                 results.append((r.status_code, (time.perf_counter() - t0) * 1000, "retry-after" in r.headers))
                 if r.status_code == 200:
                     body = r.json()
-                    got = (body["disposition"], body["category"], bool(body.get("ticket_id")))
-                    # The clients repeat one message: a read asked twice in a row is answered with the repeat notice, not the data again.
-                    if got != expect and not (expect[0] == "AUTO_RESOLVE" and got[1] == "repeated_request"):
+                    if not outcome_ok((body["disposition"], body["category"], bool(body.get("ticket_id"))), expect):
                         wrong.append(1)
                     elif body.get("ticket_id"):
                         tickets.add(body["ticket_id"])
