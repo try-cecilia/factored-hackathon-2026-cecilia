@@ -1,18 +1,18 @@
 {
   "window": {
     "since": 1790811000.0,
-    "until": 1790823540.0,
+    "until": 1790816400.0,
     "first_turn": 1790811052.3204215,
-    "last_turn": 1790815543.2962072
+    "last_turn": 1790815962.1000302
   },
-  "turns": 217,
+  "turns": 224,
   "sessions": 42,
   "turns_without_session": 3,
   "sandbox_customers": 4,
   "dispositions": {
     "AUTO_RESOLVE": 72,
     "CLARIFY": 91,
-    "ESCALATE": 32,
+    "ESCALATE": 39,
     "ABSTAIN": 19,
     "REAUTH_REQUIRED": 3
   },
@@ -71,8 +71,8 @@
       "ESCALATE": 1
     },
     "suspended_customer": {
-      "turns": 10,
-      "ESCALATE": 10
+      "turns": 17,
+      "ESCALATE": 17
     },
     "trace": {
       "turns": 38,
@@ -91,12 +91,12 @@
       "ESCALATE": 2
     }
   },
-  "tickets_opened": 32,
+  "tickets_opened": 39,
   "tickets_by_category": {
     "theft": 1,
     "trace_unmatched": 11,
     "data_unavailable": 1,
-    "compliance_hold": 10,
+    "compliance_hold": 17,
     "classifier_escalation": 2,
     "llm_unavailable": 6,
     "fraud": 1
@@ -105,7 +105,7 @@
   "model_calls": 190,
   "cost_usd": 0.4442,
   "latency_s": {
-    "p50": 1.62,
+    "p50": 1.61,
     "p95": 3.13,
     "max": 5.3
   },
