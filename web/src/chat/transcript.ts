@@ -37,7 +37,7 @@ function userLines(entry: UserEntry, t: Translate): string[] {
 }
 
 /**
- * What a reply says on screen, line by line: the case news above it, its text, and what its card adds (the options of a question,
+ * What a reply says on screen, line by line: the case news above it, the notice of limited mode, its text, and what its card adds (the options of a question,
  * the title of an opened trace, the outcome of a proposal, the case and where it stands). Buttons (yes, no, retry, view the case,
  * the suggestions of a refusal) are not text of the conversation and are left out.
  */
@@ -48,6 +48,7 @@ function assistantLines(entries: readonly Entry[], index: number, { t, cases }: 
   const kind = classifyReply(reply, entries.slice(0, index))
   const { news, body } = splitCaseNews(reply.response_text)
   const out = [...news]
+  if (reply.degraded) out.push(t('conversation.limited'))
   switch (kind.kind) {
     case 'clarify':
       if (kind.options) out.push(...lines(kind.options.lead), ...kind.options.options.map((option) => `- ${option}`), ...lines(kind.options.tail))

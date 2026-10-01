@@ -148,3 +148,16 @@ test('a lost answer, a message the API has and one still on its way each carry t
   assert.deepEqual(lines(unsent('Hola', 'sending')), ['Enviando'])
   assert.deepEqual(lines(user('Hola')), [])
 })
+
+test('a reply made in limited mode carries the notice, after the case news and before its text', () => {
+  const degraded = reply('Novedad de tu caso: aprobamos el rastreo.\n\nTu saldo es 10.00 USD.', { degraded: true })
+  const es = conversationTranscript([user('Saldo'), degraded], options('es')).split('\n').slice(2)
+  assert.deepEqual(es, [
+    '[15:38] Cecilia: Novedad de tu caso: aprobamos el rastreo.',
+    'Cecilia está limitada por ahora: solo puede consultar saldos simples y lo demás lo revisa una persona.',
+    'Tu saldo es 10.00 USD.',
+  ])
+  const pt = conversationTranscript([user('Saldo'), reply('Seu saldo é 10,00 USD.', { degraded: true })], options('pt')).split('\n').slice(2)
+  assert.equal(pt[0], '[15:38] Cecilia: A Cecilia está limitada por enquanto: só consegue consultar saldos simples e o resto é analisado por uma pessoa.')
+  assert.equal(pt[1], 'Seu saldo é 10,00 USD.')
+})
