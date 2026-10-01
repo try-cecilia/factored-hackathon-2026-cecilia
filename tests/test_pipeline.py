@@ -342,3 +342,12 @@ def test_s3_partition_replay_is_idempotent(fresh_db, tmp_path):
     assert first.rows_new > 0 and second.rows_new == 0
     assert q(fresh_db, "SELECT count(*) FROM transactions")[0][0] == first.rows_new
     shutil.rmtree(tmp_path / "raw", ignore_errors=True)
+
+
+def test_each_load_records_the_machine_it_ran_on(fresh_db):
+    build_fixture_warehouse()
+    import json
+    (params,) = {r[0] for r in q(fresh_db, "SELECT params FROM _ingestion_log WHERE table_name = 'customers'")}
+    host = json.loads(params)["host"]
+    assert host["cpu_count"] >= 1 and host["duckdb"] == duckdb.__version__ and host["duckdb_threads"] >= 1
+    assert host["platform"] and host["duckdb_memory_limit"]
