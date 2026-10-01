@@ -201,14 +201,15 @@ def test_why_explains_an_attack_stopped_before_the_model_without_revealing_the_t
 
 
 def test_a_simulated_llm_outage_affects_only_that_session_until_restored(client, monkeypatch):
-    model(monkeypatch, *[tool("get_account_summary", {}) for _ in range(2)])
+    model(monkeypatch, tool("get_account_summary", {}), tool("get_exchange_rate", {"source_currency": "USD", "target_currency": "MXN"}))
     down, up = login(client), login(client)
     assert client.post("/demo/fault", json={"session_token": down, "fault": "llm_outage"}).json() == {"llm": "down"}
     r = chat(client, down, "¿Cuál es mi saldo?")
     assert r["policy_rule"] == "degraded:deterministic_balance" and not r["why"]["model"]["called"]
     assert chat(client, up, "¿Cuál es mi saldo?")["policy_rule"] == "verified_tool_results"
     assert client.post("/demo/fault", json={"session_token": down, "fault": "llm_restore"}).json() == {"llm": "up"}
-    assert chat(client, down, "¿Cuál es mi saldo?")["policy_rule"] == "verified_tool_results"
+    # Another question: the same balance again would be the reply the session was just sent (see test_pedidos_compuestos.py).
+    assert chat(client, down, "¿a cuánto está el dólar?")["policy_rule"] == "verified_tool_results"
 
 
 def test_expiring_the_session_makes_the_next_message_ask_to_sign_in_again(client):

@@ -140,7 +140,9 @@ async def drive(base: str, clients: int, requests: int, sessions: list[str], hon
                 results.append((r.status_code, (time.perf_counter() - t0) * 1000, "retry-after" in r.headers))
                 if r.status_code == 200:
                     body = r.json()
-                    if (body["disposition"], body["category"], bool(body.get("ticket_id"))) != expect:
+                    got = (body["disposition"], body["category"], bool(body.get("ticket_id")))
+                    # The clients repeat one message: a read asked twice in a row is answered with the repeat notice, not the data again.
+                    if got != expect and not (expect[0] == "AUTO_RESOLVE" and got[1] == "repeated_request"):
                         wrong.append(1)
                     elif body.get("ticket_id"):
                         tickets.add(body["ticket_id"])

@@ -24,6 +24,7 @@ a half-done action.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -31,7 +32,7 @@ import threading
 import time
 import uuid
 from collections import OrderedDict
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from typing import Any, Callable
 
 from agent.core import render
@@ -71,7 +72,12 @@ MODEL_VIEW = {
     "trace_proposed": "[Se le propuso al cliente abrir un pedido de rastreo; se espera su respuesta]",
     "trace_opened": "[Se abrió el pedido de rastreo que el cliente confirmó]",
     "trace_cancelled": "[El cliente no quiso abrir el pedido de rastreo; no se abrió nada]",
+    "unattended": "[Quedaron sin atender, por el límite de consultas de un turno: {calls}]",
+    "repeated": "[Se le dijo al cliente que esa consulta ya estaba respondida arriba y se le pidió que dijera qué otra cosa necesitaba]",
 }
+# What a read's arguments say about the request, kept in the history the model gets (no records: filters the customer asked for).
+VIEW_ARGS = ("transaction_type", "status", "limit", "start_date", "end_date", "on_date", "source_currency", "target_currency")
+READ_ANSWERS = ("verified_tool_results", "degraded:deterministic_balance")  # the rules whose reply is a read: two in a row are never the same
 
 MAX_TOOL_CALLS_PER_TURN = 2
 TOOL_RETRY = RetryPolicy(max_attempts=2, base_s=0.05, cap_s=0.25)  # every tool here is a read: repeating one is harmless
@@ -120,6 +126,7 @@ class _Conversation:
     pending_clarification: bool = False
     pending_action: dict | None = None  # a trace proposed on the last turn, kept in code: never sent to the model
     pending_choice: list[dict] | None = None  # the pending movements listed on the last turn, to pick one by number
+    last_answer: str | None = None  # a digest of the last reply when it was a read, to never send the same one twice in a row
     cases: dict[str, str] = field(default_factory=dict)  # legacy notices, retained when loading older conversations
     transcript: list[dict] = field(default_factory=list)  # what the customer saw, as rendered: card numbers masked, no model data
     case_index: list[dict] = field(default_factory=list)  # the session's handoffs (ticket_id, category, at), not bounded by the transcript
@@ -337,9 +344,15 @@ def with_aliases(catalog: list[dict]) -> list[dict]:
     return [{**p, "alias": f"P{i}"} for i, p in enumerate(catalog, start=1)]
 
 
+def _call_view(tool: str, args: dict, alias: dict[str, str]) -> str:
+    """One read as the model's history keeps it: the tool, the product's alias and the filters asked for."""
+    shown = [alias.get(args.get("product_id"), ""), *(f"{k}={args[k]}" for k in VIEW_ARGS if args.get(k) not in (None, ""))]
+    return f"{tool}({', '.join(x for x in shown if x)})"
+
+
 def _answered_view(facts: list[dict], catalog: list[dict]) -> str:
     alias = {p["product_id"]: p["alias"] for p in catalog}
-    used = ", ".join(f"{f['tool']}({alias.get((f.get('args') or {}).get('product_id'), '')})" for f in facts)
+    used = ", ".join(_call_view(f["tool"], f.get("args") or {}, alias) for f in facts)
     return MODEL_VIEW["answered"].format(used=used)
 
 
@@ -522,7 +535,20 @@ class Orchestrator:
         return {"ticket_id": ticket_id, "status": state["status"], "message": text}
 
     # -- helpers --
+    @staticmethod
+    def _repeated(result: TurnResult) -> TurnResult:
+        """The read's reply is the one the customer was just sent: say so, and what else they can ask, instead of sending it again.
+        What was read is still verified and still on the record; only the text changes."""
+        as_of = next((f["result"].get("as_of") for f in result.verified_facts if isinstance(f.get("result"), dict)), None)
+        prefix = "degraded:" if result.degraded else ""
+        return replace(result, disposition=Disposition.CLARIFY.value, category="repeated_request", policy_rule=f"{prefix}repeat_guard",
+                       response_text=render.repeat_notice(as_of, result.language), model_view=MODEL_VIEW["repeated"])
+
     def _finish(self, conv, model_text, ticket_text, result: TurnResult) -> TurnResult:
+        digest = hashlib.sha256(result.response_text.encode("utf-8")).hexdigest()[:16] if result.policy_rule in READ_ANSWERS else None
+        if digest is not None and digest == conv.last_answer:
+            result, digest = self._repeated(result), None  # the last reply is now the notice: asking once more shows the data again
+        conv.last_answer = digest
         conv.pending_clarification = result.disposition == Disposition.CLARIFY.value
         self.conversations.append(conv, "user", model_text)
         self.conversations.append(conv, "assistant", result.model_view or result.response_text)
@@ -767,7 +793,10 @@ class Orchestrator:
                                    "usage": asdict(resp.usage), "attempts": resp.attempts, "n_tool_calls": len(resp.tool_calls)})
 
         self.experiments.shadow(trace_id, session.ref, messages, prompts.TOOL_SCHEMAS, resp, model_route)  # background, logged only
-        calls = resp.tool_calls[:MAX_TOOL_CALLS_PER_TURN]
+        # The same read twice in a response is one read. More reads than a turn takes are not dropped in silence: the customer
+        # is told which were left, and the model's history keeps them so the next turn can finish.
+        distinct = list({(c["name"], c["arguments"]): c for c in resp.tool_calls}.values())
+        calls = distinct[:MAX_TOOL_CALLS_PER_TURN]
         if not calls:  # nothing to look up: abstain or ask, always with a fixed template
             decision = router.no_tool_answer(reading, text)
             reply = render.MSG["abstain" if decision.disposition == Disposition.ABSTAIN else "clarify_generic"][lang]
@@ -776,10 +805,21 @@ class Orchestrator:
 
         if any(c["name"] == "request_trace" for c in calls):  # a proposed action takes the turn on its own
             calls = [next(c for c in calls if c["name"] == "request_trace")]
+        skipped = [c for c in distinct if not any(c is k for k in calls)]
+
+        def with_unattended(result: TurnResult) -> TurnResult:
+            """The reads the turn left aside, said by a template after the reply and kept in the model's history."""
+            parts, views = self._unattended(skipped, catalog, lang)
+            if not parts:
+                return result
+            trace["unattended_calls"] = [c["name"] for c in skipped]
+            return replace(result, response_text=f"{result.response_text}\n\n{render.unattended_notice(parts, lang)}",
+                           model_view=f"{result.model_view or result.response_text} {MODEL_VIEW['unattended'].format(calls=', '.join(views))}")
 
         # Act: sanitized arguments, identity from the session, ownership checked in the tool.
         facts: list[dict] = []
         actions: list[dict] = []
+        clarify: tuple[Decision, list[str]] | None = None  # a read that needs one more answer from the customer; the others still run
         for call in calls:
             name = call["name"]
             deadline = current_deadline.get()
@@ -805,8 +845,8 @@ class Orchestrator:
                 result = {"not_applicable": True, "reason": str(exc), **exc.payload}
             except ToolError as exc:
                 error = exc
-            except Exception as exc:  # noqa: BLE001 - unexpected tool/DB failure -> bounded, safe fallback
-                error = ToolError(f"unexpected failure in {name}: {type(exc).__name__}: {exc}")
+            except Exception as exc:  # noqa: BLE001 - unexpected tool/DB failure -> bounded, safe fallback; only the type is kept, never the message
+                error = ToolError(f"unexpected failure in {name}: {type(exc).__name__}")
             action.update({"success": error is None, "error_type": type(error).__name__ if error else None,
                            "error": str(error) if error else None})
             actions.append(action)
@@ -818,21 +858,46 @@ class Orchestrator:
             if decision is not None:
                 trace["rule"] = decision.rule
                 if decision.disposition == Disposition.CLARIFY:
-                    missing = decision.missing_slots or getattr(error, "missing_slots", [])
-                    reply = render.clarify(missing, catalog, lang)
-                    return done(TurnResult(trace_id, Disposition.CLARIFY.value, reply, lang, decision.category, decision.rule,
-                                           None, facts, actions, **llm_meta(), model_view=_clarify_view(missing, catalog, reply)))
+                    clarify = clarify or (decision, decision.missing_slots or getattr(error, "missing_slots", []))
+                    continue
                 return escalate(decision, actions, facts)
             if name == "request_trace":
-                return self._trace_step(result, conv, lang, trace_id, actions, done, escalate, llm_meta())
+                return self._trace_step(result, conv, lang, trace_id, actions, lambda res: done(with_unattended(res)), escalate, llm_meta())
             facts.append({"tool": name, "args": action["args"], "result": result})
+
+        if clarify is not None:  # what was answered is said first, then the question for the rest
+            decision, missing = clarify
+            reply = render.clarify(missing, catalog, lang)
+            answered = render.render_answer(facts, lang, catalog) if facts else ""
+            view = _clarify_view(missing, catalog, reply)
+            return done(with_unattended(TurnResult(
+                trace_id, Disposition.CLARIFY.value, f"{answered}\n\n{reply}" if answered else reply, lang, decision.category,
+                decision.rule, None, facts, actions, **llm_meta(), model_view=f"{_answered_view(facts, catalog)} {view}" if facts else view)))
 
         # Verify + reply: rendered from the verified results only.
         with stage("render"):
             answer = render.render_answer(facts, lang, catalog)
-        return done(TurnResult(trace_id, Disposition.AUTO_RESOLVE.value, answer, lang,
-                               "resolved", "verified_tool_results", None, facts, actions, **llm_meta(),
-                               model_view=_answered_view(facts, catalog)))
+        return done(with_unattended(TurnResult(trace_id, Disposition.AUTO_RESOLVE.value, answer, lang,
+                                               "resolved", "verified_tool_results", None, facts, actions, **llm_meta(),
+                                               model_view=_answered_view(facts, catalog))))
+
+    @staticmethod
+    def _unattended(skipped: list[dict], catalog: list[dict], lang: str) -> tuple[list[str], list[str]]:
+        """For each read the model asked for and the turn did not take: its name for the customer and its line in the model's
+        history. The arguments go through the same sanitizer as a read that runs; one that does not pass is named by its tool only."""
+        alias = {p["product_id"]: p["alias"] for p in catalog}
+        parts, views = [], []
+        for call in skipped:
+            if call["name"] not in TOOL_FUNCTIONS:
+                continue
+            try:
+                raw = json.loads(call["arguments"] or "{}")
+                args, _ = sanitize_args(call["name"], raw if isinstance(raw, dict) else {}, catalog)
+            except Exception:  # noqa: BLE001 - an argument that does not pass leaves the read named by its tool alone
+                args = {}
+            parts.append(render.read_part(call["name"], args, lang))
+            views.append(_call_view(call["name"], args, alias))
+        return parts, views
 
 
 default_orchestrator = Orchestrator()

@@ -72,10 +72,10 @@ def test_past_the_daily_model_budget_the_assistant_runs_as_if_the_model_were_dow
     from agent.llm.budget import DailyBudget
 
     budget = DailyBudget(limit_usd=0.005)
-    fake = FakeLLMClient([tool_call_response("get_account_summary", {})])
+    fake = FakeLLMClient([tool_call_response("get_payment_status", {"product_id": "0004"})])
     orch = Orchestrator(SessionStore(ttl_seconds=900), llm=lambda: fake, budget=budget)
     tok = orch.session_store.issue("CLI-FIX0001", {"segment": "Premium", "country": "México", "customer_status": "Active"}).token
-    assert orch.handle_message(tok, "¿Cuál es mi saldo?").policy_rule == "verified_tool_results"
+    assert orch.handle_message(tok, "¿estoy al día con la tarjeta 5000000004?").policy_rule == "verified_tool_results"
     assert budget.exhausted()  # the scripted model has no price: its call counts as the conservative estimate
     r = orch.handle_message(tok, "¿Cuál es mi saldo?")
     assert r.policy_rule == "degraded:deterministic_balance" and fake.call_count == 1  # not called again
