@@ -2,7 +2,7 @@
 // Pure, so it is tested without a DOM. Internal data of a reply (trace id, disposition, scores, the "why") is never read here.
 import { htmlLang, type Locale } from '../i18n/locales.ts'
 import type { Translate } from '../i18n/translate.ts'
-import { caseCategoryKey, caseStatusText, classifyReply, proposalState, splitCaseNews, type Entry } from './conversation.ts'
+import { caseCategoryKey, caseStatusText, classifyReply, deliveryDetailKey, proposalState, splitCaseNews, type Entry, type UserEntry } from './conversation.ts'
 import type { CaseRow } from './ConversationProvider.tsx'
 import { toBlocks } from './format.ts'
 
@@ -25,6 +25,15 @@ export const hasMessages = (entries: readonly Entry[]): boolean => messagesOf(en
 /** The API's text as the screen draws it: paragraphs as lines, dash lists as dash lines. */
 function lines(text: string): string[] {
   return toBlocks(text).flatMap((block) => (block.type === 'ul' ? block.items.map((item) => `- ${item}`) : [block.text]))
+}
+
+/** What the customer typed, as typed, and under it what the screen says of a message that did not go (or is still going): its state and why. */
+function userLines(entry: UserEntry, t: Translate): string[] {
+  const out = entry.text.trim().split('\n')
+  if (entry.delivery === 'sent') return out
+  out.push(t(`loaders.delivery.${entry.delivery}`))
+  if (entry.failure) out.push(t(`conversation.delivery.${deliveryDetailKey(entry.failure)}`))
+  return out
 }
 
 /**
@@ -83,8 +92,7 @@ export function conversationTranscript(entries: readonly Entry[], { locale, t, c
   const out = [`${t('conversation.copy.title')} · ${day.format(shown[0].at)}`]
   entries.forEach((entry, index) => {
     if (entry.role === 'note') return
-    // What the customer typed goes as typed.
-    const body = entry.role === 'user' ? entry.text.trim().split('\n') : assistantLines(entries, index, { t, cases })
+    const body = entry.role === 'user' ? userLines(entry, t) : assistantLines(entries, index, { t, cases })
     if (body.join('') === '') return
     const who = entry.role === 'user' ? t('chat.you') : t('chat.assistant')
     const head = `[${hour.format(entry.at)}] ${who}:`

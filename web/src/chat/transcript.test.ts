@@ -5,7 +5,7 @@ import { pt } from '../i18n/pt.ts'
 import { translator } from '../i18n/translate.ts'
 import type { Locale } from '../i18n/locales.ts'
 import type { CaseRow } from './ConversationProvider.tsx'
-import type { AssistantEntry, Entry, UserEntry } from './conversation.ts'
+import type { AssistantEntry, Entry, FailureKind, UserEntry } from './conversation.ts'
 import { conversationTranscript, hasMessages } from './transcript.ts'
 import type { Disposition } from './types.ts'
 
@@ -123,4 +123,28 @@ test('an empty conversation has nothing to copy', () => {
   assert.equal(hasMessages([]), false)
   assert.equal(hasMessages([note]), false)
   assert.equal(hasMessages([user('Hola')]), true)
+})
+
+const unsent = (text: string, delivery: UserEntry['delivery'], failure?: FailureKind): UserEntry => ({ ...user(text), delivery, failure })
+
+test('a message that did not go says so, with the reason the screen gives', () => {
+  const rows = (locale: Locale, entry: UserEntry) => conversationTranscript([entry], options(locale)).split('\n').slice(1)
+  assert.deepEqual(rows('es', unsent('Mi saldo', 'failed', 'rate_limited')), [
+    '[15:38] Tú: Mi saldo',
+    'No se envió',
+    'Se están enviando mensajes muy rápido. Esperar un minuto e intentar de nuevo.',
+  ])
+  assert.deepEqual(rows('pt', unsent('Meu saldo', 'failed', 'rate_limited')), [
+    '[15:38] Você: Meu saldo',
+    'Não enviado',
+    'Você está enviando mensagens muito rápido. Espere um minuto e tente de novo.',
+  ])
+})
+
+test('a lost answer, a message the API has and one still on its way each carry their own state', () => {
+  const lines = (entry: UserEntry) => conversationTranscript([entry], options('es')).split('\n').slice(2)
+  assert.deepEqual(lines(unsent('Hola', 'uncertain', 'timeout')), ['Sin confirmar', 'Tardó demasiado en responder y no pude confirmar si tu mensaje llegó. Reintentar es seguro: si ya lo recibió, no se repite.'])
+  assert.deepEqual(lines(unsent('Hola', 'processed', 'answer_gone')), ['Recibido', 'El servicio recibió este mensaje, pero su respuesta ya no está guardada y no se puede mostrar. Preguntar de nuevo.'])
+  assert.deepEqual(lines(unsent('Hola', 'sending')), ['Enviando'])
+  assert.deepEqual(lines(user('Hola')), [])
 })
