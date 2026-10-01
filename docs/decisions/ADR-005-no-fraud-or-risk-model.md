@@ -29,7 +29,11 @@
 3. **The fields are shown to a person, never decided on.** When the customer reports fraud, theft or an account takeover,
    the words of the customer decide the handoff (the lexicon and the classifier guard, `agent/policy/router.py`). The
    handoff ticket then lists the customer's ten most recent movements with the ones flagged by the fields first
-   (`agent/policy/escalation.py`, `_evidence_for`), so the reviewer starts where the data points. Nothing is routed,
+   (`agent/policy/escalation.py`, `_evidence_for`), so the reviewer starts where the data points. Each movement also shows how far it is from that customer's own earlier
+   behavior (`agent/policy/behavior.py`, contract in [`docs/BEHAVIORAL_EVIDENCE.md`](../BEHAVIORAL_EVIDENCE.md), frozen
+   before it was measured). Against `is_fraud` it has AUC 0.504, no detectable association
+   ([`docs/evidence/behavior_association.md`](../evidence/behavior_association.md)), so it is labeled descriptive and is
+   not a score. Nothing is routed,
    blocked or answered because of `is_fraud` or `fraud_score`.
 
 ## Trade-offs

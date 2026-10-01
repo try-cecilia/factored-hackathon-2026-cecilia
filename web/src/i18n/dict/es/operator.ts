@@ -266,6 +266,10 @@ export const operator = {
       merchant: 'Comercio · país',
       score: 'Score',
       flag: 'Marcado, score {score}',
+      behavior: 'Desviación',
+      behaviorNone: 'Historial insuficiente para describirlo',
+      behaviorNote: 'Desviación respecto del historial propio del cliente (0–100). Evidencia conductual descriptiva únicamente; no es una probabilidad de fraude ni una determinación de fraude.',
+      band: { low: 'baja', moderate: 'moderada', elevated: 'elevada', high: 'alta' },
     },
     reason: {
       label: 'Motivo del rechazo · queda en el historial',

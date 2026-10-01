@@ -268,6 +268,10 @@ export const operator: Like<typeof es> = {
       merchant: 'Estabelecimento · país',
       score: 'Score',
       flag: 'Sinalizada, score {score}',
+      behavior: 'Desvio',
+      behaviorNone: 'Histórico insuficiente para descrever',
+      behaviorNote: 'Desvio em relação ao histórico do próprio cliente (0–100). Evidência comportamental apenas descritiva; não é uma probabilidade de fraude nem uma determinação de fraude.',
+      band: { low: 'baixo', moderate: 'moderado', elevated: 'elevado', high: 'alto' },
     },
     reason: {
       label: 'Motivo da rejeição · fica no histórico',

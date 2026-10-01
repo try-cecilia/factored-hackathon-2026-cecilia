@@ -279,6 +279,24 @@ describe('evidence', () => {
     expect(flagged.map((row) => within(row).getAllByRole('cell')[2].textContent)).toEqual(['Amazon MX · US', 'DigitalOcean · US'])
     expect(within(flagged[0]).getByText('Marcado, score 91')).toBeTruthy()
   })
+
+  it('shows the deviation from the own history of the customer as a number and a word, never as a flag, and says what it is not', () => {
+    const detail = { transaction_date: '2026-09-28T14:02:00', amount: 199, currency: 'USD', merchant_name: 'Uber', transaction_country: 'US', fraud_score: 8 }
+    setup(ticket('claimed', {
+      evidence: [
+        { type: 'transaction', id: 'tx1', flagged: false, detail: { ...detail, behavior: { composite: 62.4, band: 'elevated', components: {}, prior_count: 40 } } },
+        { type: 'transaction', id: 'tx2', flagged: false, detail: { ...detail, behavior: { composite: null, band: null, components: {}, prior_count: 2 } } },
+        { type: 'transaction', id: 'tx3', flagged: false, detail },
+      ],
+    }, { version: 1 }))
+    const table = screen.getByRole('table', { name: 'Movimientos recientes del cliente' })
+    const rows = within(table).getAllByRole('row').slice(1)
+    expect(within(rows[0]).getAllByRole('cell')[4].textContent).toBe('62 · elevada')
+    expect(within(rows[1]).getAllByRole('cell')[4].textContent).toBe('—')
+    expect(within(rows[2]).getAllByRole('cell')[4].textContent).toBe('—')
+    expect(rows.some((row) => row.hasAttribute('data-flagged'))).toBe(false)
+    expect(screen.getByText(/no es una probabilidad de fraude ni una determinación de fraude/)).toBeTruthy()
+  })
 })
 
 describe('portuguese', () => {
