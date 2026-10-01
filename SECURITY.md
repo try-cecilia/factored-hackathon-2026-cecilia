@@ -13,7 +13,8 @@ promise about response time: this is a prototype with no on-call.
 
 - **Standard.** OWASP ASVS 4.0.3 **Level 1**, walked in full. We make no claim about Level 2.
 - **Identity.** A national id or customer number never proves identity. Access is bound to a short-lived session
-  (15 idle minutes) minted only after a credential check.
+  minted only after a credential check: a customer's session ends 15 minutes after it is issued, in use or not, and using it does not
+  extend it; an operator's console session ends after 30 idle minutes or 8 hours.
 - **Decisions are code, not prompts.** The model reads and writes language; eligibility, routing, confirmation and every
   side effect are deterministic code with stable reason codes ([ADR-001](docs/decisions/ADR-001-model-interprets-code-speaks.md),
   [ADR-002](docs/decisions/ADR-002-one-action-confirmed-in-code.md)).
@@ -33,15 +34,18 @@ promise about response time: this is a prototype with no on-call.
 | Model never decides or acts; replies are templates or verified facts | Implemented | ADR-001, `agent/core/render.py` |
 | One confirmed action, idempotent, read back | Implemented | ADR-002, `api/idempotency.py` |
 | Masking of customer text before a model | Implemented, with known holes | `agent/llm/privacy.py`, `LIMITATIONS.md` |
-| Input limits: field schemas, 16 KiB body cap, per-session, customer and address rate limits, bounded concurrency | Implemented, per process | `api/main.py`, `api/middleware.py`, `tests/test_capacity.py` |
+| Input limits: field schemas with an allow list for the customer id and the PIN and a range for the ticket version, a 16 KiB body cap on the API and on every web POST, per-session, customer and address rate limits, bounded concurrency | Implemented, per process; free text is bounded in length, not in characters | `api/main.py`, `api/middleware.py`, `web/serve.mjs`, `tests/test_api.py`, `tests/test_desk.py`, `tests/test_capacity.py`, `web/tests/http/serve.test.ts` |
 | API headers: CSP, `nosniff`, no framing, no referrer, `no-store`; CORS off by default, wildcard refused | Implemented | `api/security.py`, `tests/test_security.py` |
 | Session cookie: `httpOnly`, `SameSite=Lax`, `Secure` and `__Host-` on https | Implemented | `web/src/server/cookie-policy.ts` |
-| Origin check on operator form posts | Implemented | `web/src/server/origin-check.ts` |
-| Web headers: `nosniff`, no framing, referrer policy, a CSP without `script-src`, HSTS on an https origin | Implemented, CSP partial | `web/serve.mjs`, `web/tests/http/serve.test.ts` |
+| Origin check on operator form posts | Implemented | `web/src/server/origin-check.ts`, `web/tests/http/csrf.test.ts` |
+| Cross-site calls to the customer's server functions (login, chat) answer 403 | Implemented by the framework's default CSRF middleware, not by a check of ours | `web/tests/http/csrf-customer.test.ts` (sign-in function) |
+| Redirect targets: only a normalized path of this site | Implemented | `web/src/server/safe-path.ts`, `web/tests/http/login-redirect.test.ts`, `web/tests/http/redirect.test.ts` |
+| Web headers: `nosniff`, no framing, referrer policy, a CSP without `script-src`, HSTS when every `WEB_PUBLIC_ORIGIN` is https (read with the origin check's parser) | Implemented, CSP partial | `web/serve.mjs`, `web/public-origins.mjs`, `web/tests/http/serve.test.ts` |
+| Web server: static files only with a known extension, health check GET and HEAD only, plain-text answers with a charset | Implemented | `web/serve.mjs`, `web/tests/http/serve.test.ts` |
 | Tool audit, traces, tickets with a one-way session reference; retention loop that audits itself | Implemented; the records still hold customer data | `ops/retention.py`, `docs/operations.md` |
 | Containers run unprivileged (API drops to `agent` with `setpriv`; web runs as `web`) | Implemented | `ops/entrypoint.sh`, `ops/Dockerfile.web` |
 | Dependencies pinned with hashes | Implemented | `requirements.txt`, `pnpm-lock.yaml`, `make lock-check` |
-| Dependency vulnerability scanning: `pip-audit` and `pnpm audit` fail the build on a known vulnerability | Implemented; no update bot | `.github/workflows/ci.yml` (`audit`) |
+| Dependency vulnerability scanning: `pip-audit` over the serving lock (`requirements.txt`) and `pnpm audit --prod --audit-level high` fail the build on a known vulnerability | Implemented for those two; the tracking stack (`requirements-tracking.txt`), the web's development dependencies and moderate or low advisories are not scanned; no update bot | `.github/workflows/ci.yml` (`audit`) |
 | Secret scanning | Partial: every blob is scanned when the public repository is exported, not in CI | `ops/export_public.py` |
 | CI actions pinned by commit SHA | Implemented | `.github/workflows/ci.yml` |
 | Red-team of the assistant (injection, other customers' ids, unauthorized access) | Done, on the assistant only | `tests/test_red_team.py`, `docs/red_team.md` |
@@ -58,12 +62,11 @@ promise about response time: this is a prototype with no on-call.
    hands out test PINs, exist there. They answer 404 everywhere else.
 5. **The team's console keys sit in a tracked file of the private repository** (`CLAVES_CONSOLA.md`). The public export
    removes it from every commit, and the keys must be rotated if access to the private repository ever widens.
-6. **CSRF on the customer's web login and chat rests on `SameSite=Lax`** alone (V4.2.2).
+6. **CSRF on the customer's web login and chat has no check of ours** (V4.2.2). It rests on `SameSite=Lax` and on the framework's default CSRF middleware for server functions, which answers 403 to a cross-site call; `web/tests/http/csrf-customer.test.ts` pins that for the sign-in function. There is no CSRF token, and a framework upgrade that dropped the middleware would be caught only by that test.
 7. **State is single-process**: sessions, rate limits and conversations live in one SQLite file and one process
    (`LIMITATIONS.md`).
 8. **No self-service data export or removal, and no privacy notice** in the web (V8.3.2, V8.3.3).
-9. **Traces and tickets keep customer data**, with no redaction before they are exported anywhere (V7.1.2).
-10. **The customer login had an open redirect** (V5.1.5): it used a looser local copy of the same-origin check, so a signed-in user could be sent to another site by `/login?redirect=https%3A%2F%2Fevil.invalid`. The fix and its HTTP tests are in PR #23; this line goes when it merges.
+9. **Traces and tickets keep customer data**, with no redaction before they are exported anywhere (V7.1.2). Also, when the lookup of a customer's recent activity fails while a ticket is filed, the ticket's evidence note keeps the exception's text, not only its type (`agent/policy/escalation.py`); the fix is a separate change.
 
 ## What this document does not show
 
