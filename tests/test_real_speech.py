@@ -71,3 +71,13 @@ def test_confidence_cuts_report_accuracy_only_among_the_calls_that_are_that_sure
     read = [_read("es-ES", "balance", "balance_inquiry", "x", p=0.9), _read("es-ES", "balance", "out_of_scope", "x", p=0.55), _read("es-ES", "address", "out_of_scope", "x", p=0.7)]
     cuts = {c["p_at_least"]: c for c in rs.summarize(read)["confidence"]}
     assert cuts[0.5]["accepted"]["k"] == 3 and cuts[0.8]["accepted"]["k"] == 1 and cuts[0.8]["accuracy_when_accepted"]["rate"] == 1.0
+
+
+def test_the_post_hoc_cuts_split_the_primary_calls_into_in_scope_and_out_of_scope_fates():
+    read = [_read("es-ES", "balance", "balance_inquiry", "out_of_scope"), _read("es-ES", "latest_transactions", "balance_inquiry", "transaction_lookup"),
+            _read("es-ES", "address", "out_of_scope", "out_of_scope"), _read("es-ES", "address", "requires_escalation", "out_of_scope"),
+            _read("pt-PT", "business_loan", "payment_status", "out_of_scope"), _read("pt-PT", "joint_account", "out_of_scope", "out_of_scope")]
+    ph = rs.summarize(read)["post_hoc"]
+    assert ph["out_of_scope_share_of_primary"]["k"] == 4 and ph["in_scope_only"]["learned"]["k"] == 1 and ph["in_scope_only"]["keyword"]["k"] == 1
+    fate = ph["out_of_scope_fate"]
+    assert (fate["correct"]["k"], fate["escalated_to_a_person"]["k"], fate["read_as_an_in_scope_request"]["k"], fate["correct"]["n"]) == (2, 1, 1, 4)

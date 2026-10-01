@@ -18,7 +18,10 @@ Protocol, fixed before the model was run on a single message (the git history or
 3. **Reported:** per-class recall and overall accuracy of the classifier and of the keyword baseline on the same messages
    (paired), by language; the escalation guard's false escalations on every scored message (none of them is a required
    escalation under the mapping); and the classifier's confidence against its accuracy.
-4. **Limits stated in advance:** these are European Spanish and Portuguese, our training text is Latin American; ASR text
+4. **Section "Reading it" is post-hoc.** It was added after the results were seen, to put them in proportion (the keyword
+   baseline answers `out_of_scope` whenever no keyword matches, and most scored calls are `out_of_scope`), and is labeled as
+   such in the report. The protocol's own tables are unchanged by it.
+5. **Limits stated in advance:** these are European Spanish and Portuguese, our training text is Latin American; ASR text
    differs from typed chat; the dataset has no "check a payment" or "exchange rate" intent, so those classes cannot be scored;
    the labels are the dataset's, mapped by us, not re-annotated by a second person.
 """
@@ -92,6 +95,14 @@ def summarize(read: list[dict]) -> dict:
         out[name] = block
     out["by_dataset_intent"] = {i: {"n": len(sub), "tier": sub[0]["tier"], "truth": sub[0]["truth"], "learned": _acc(sub, "pred"), "keyword": _acc(sub, "baseline")}
                                 for i in sorted({r["intent"] for r in scored}) for sub in [[r for r in scored if r["intent"] == i]]}
+    inscope, oos = [r for r in primary if r["truth"] != "out_of_scope"], [r for r in primary if r["truth"] == "out_of_scope"]
+    out["post_hoc"] = {
+        "out_of_scope_share_of_primary": rate(len(oos), len(primary)),
+        "in_scope_only": {"learned": _acc(inscope, "pred"), "keyword": _acc(inscope, "baseline"),
+                          "paired": paired_accuracy([r["truth"] for r in inscope], [r["baseline"] for r in inscope], [r["pred"] for r in inscope]) if inscope else None},
+        "out_of_scope_fate": {"correct": rate(sum(r["pred"] == "out_of_scope" for r in oos), len(oos)),
+                              "escalated_to_a_person": rate(sum(r["pred"] == "requires_escalation" for r in oos), len(oos)),
+                              "read_as_an_in_scope_request": rate(sum(r["pred"] not in ("out_of_scope", "requires_escalation") for r in oos), len(oos))}}
     out["confusion_primary"] = {t: dict(Counter(r["pred"] for r in primary if r["truth"] == t)) for t in sorted({r["truth"] for r in primary})}
     # The guard: no scored message is a required escalation, so every firing is a false escalation.
     guard = {}
@@ -152,7 +163,18 @@ def to_markdown(s: dict, generated_at: str) -> str:
     L += ["", "## 5. Where it is wrong on the primary mapping", ""]
     errs = s["errors_primary"]
     L += [f"{len(errs)} of {pr['learned']['n']} calls (up to 25 shown):", ""] + [f"- `{e['truth']}` read as `{e['pred']}` (p = {e['p']}, {e['lang']}, {e['intent']}): {e['text']}" for e in errs[:25]]
-    L += ["", "## What this does not show", "",
+    ph = s["post_hoc"]
+    ins, fate = ph["in_scope_only"], ph["out_of_scope_fate"]
+    L += ["", "## 6. Reading it (written after the results were seen)", "",
+          f"The keyword baseline answers `out_of_scope` whenever no keyword matches, and {fmt(ph['out_of_scope_share_of_primary'])} of the primary calls are `out_of_scope`, "
+          "so most of its accuracy is that default, not skill. Two cuts put the result in proportion:", "",
+          f"- **Only the in-scope calls** (`balance`, `latest_transactions`): learned {fmt(ins['learned'])}, keyword {fmt(ins['keyword'])}; "
+          f"the learned classifier is right where the keywords are wrong on {ins['paired']['only_b_right']} and the reverse on {ins['paired']['only_a_right']} "
+          f"(McNemar p = {ins['paired']['mcnemar_p']}). Where the assistant has a tool to run, the learned reading does at least as well on real speech.",
+          f"- **What happens to an out-of-scope call** (the weak spot): read correctly {fmt(fate['correct'])}; sent to a person {fmt(fate['escalated_to_a_person'])}; "
+          f"read as an in-scope request {fmt(fate['read_as_an_in_scope_request'])}. The first error is a wasted hand-off, the second a wrong tool the policy and the confirmation step still have to catch.",
+          "", "Both numbers are about one model and one dataset, and the data is now spent as an external test: changing the classifier and re-scoring on the same calls would not be a test.", "",
+          "## What this does not show", "",
           "- European Spanish and Portuguese, transcribed by ASR, against a model trained on Latin American text typed by the team: a real distribution shift, but not our customers.",
           "- The labels are the dataset's own, mapped to ours by a rule written beforehand. No second person re-annotated them.",
           "- The dataset has no `payment_status` or `exchange_rate_inquiry` calls, so two of our six classes are untested here.",
