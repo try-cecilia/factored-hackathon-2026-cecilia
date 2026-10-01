@@ -12,12 +12,12 @@ import { LoginForm } from './LoginForm'
  * The real router, in memory. `/chat` is behind the session like the app's: with `hasSession` false it sends the browser back to
  * /login, which is what happens when the browser did not keep the cookie the sign-in set.
  */
-function mount(signIn: () => Promise<LoginResult>, { hasSession, locale = 'es' }: { hasSession: boolean; locale?: Locale }) {
+function mount(signIn: () => Promise<LoginResult>, { hasSession, locale = 'es', target }: { hasSession: boolean; locale?: Locale; target?: string }) {
   const root = createRootRoute()
   const login = createRoute({
     getParentRoute: () => root,
     path: '/login',
-    component: () => <LoginForm demoCustomers={[]} signIn={signIn} />,
+    component: () => <LoginForm demoCustomers={[]} target={target} signIn={signIn} />,
   })
   const chat = createRoute({
     getParentRoute: () => root,
@@ -47,6 +47,23 @@ describe('the sign-in form when the API accepts the login', () => {
     await waitFor(() => expect(screen.getByText('conversación')).toBeTruthy())
     expect(router.state.location.pathname).toBe('/chat')
   })
+
+  it('goes on to the page it came from, with its query', async () => {
+    const router = mount(async () => ({ ok: true }), { hasSession: true, target: '/chat?x=1#foo' })
+    await submit()
+    await waitFor(() => expect(screen.getByText('conversación')).toBeTruthy())
+    expect(router.state.location.search).toEqual({ x: 1 })
+  })
+
+  it.each(['https://evil.invalid', '//evil.invalid', '/\\evil.invalid', 'javascript:alert(1)', '/%252f/evil.invalid'])(
+    'sends %s to the chat, never off the site',
+    async (target) => {
+      const router = mount(async () => ({ ok: true }), { hasSession: true, target })
+      await submit()
+      await waitFor(() => expect(screen.getByText('conversación')).toBeTruthy())
+      expect(router.state.location.pathname).toBe('/chat')
+    },
+  )
 
   it('does not hang on "Ingresando…" when the browser did not keep it: the button comes back, with a clear message', async () => {
     const signIn = vi.fn(async (): Promise<LoginResult> => ({ ok: true }))

@@ -1,27 +1,17 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
 import { headTitle } from '../i18n/head'
+import { sameOriginPath } from '../server/safe-path'
 import { getDemoCustomers, getSession, login } from '../server/auth.functions'
 import { LoginForm } from './-login/LoginForm'
 
-function sameOriginPath(value: unknown) {
-  if (typeof value !== 'string' || !value.startsWith('/')) return undefined
-  const base = 'http://cecilai.invalid'
-  try {
-    const url = new URL(value, base)
-    return url.origin === base ? url.pathname + url.search + url.hash : undefined
-  } catch {
-    return undefined
-  }
-}
-
 export const Route = createFileRoute('/login')({
   validateSearch: (search: Record<string, unknown>): { redirect?: string; motivo?: 'expired' } => {
-    const redirect = sameOriginPath(search.redirect)
-    return { ...(redirect ? { redirect } : {}), ...(search.motivo === 'expired' ? { motivo: 'expired' as const } : {}) }
+    // Explicit keys, even when undefined: the router merges what a validator leaves out back in from the raw query string.
+    return { redirect: sameOriginPath(search.redirect), motivo: search.motivo === 'expired' ? ('expired' as const) : undefined }
   },
   beforeLoad: async ({ search }) => {
     const session = await getSession().catch(() => null)
-    if (session) throw redirect({ href: search.redirect ?? '/chat' })
+    if (session) throw redirect({ href: sameOriginPath(search.redirect) ?? '/chat' })
   },
   loader: () => getDemoCustomers(),
   head: ({ matches }) => headTitle(matches, 'login.pageTitle'),
