@@ -39,9 +39,10 @@ and the warehouse keeps its previous state (`data/pipeline.py`).
 ## One command
 
 `make pipeline` runs ingest, gold, `gold VERIFY=1`, lineage, lake and `lake VERIFY=1` in that order and stops at the first
-step that fails (`INGEST=ingest-local` reads `data/raw` instead of S3). In this environment there is no `make`, so the
-chain itself was not run as one command: each step's command was run, in that order, on a clean database, and every one
-exited 0 (the numbers below).
+step that fails. `INGEST=ingest-local` reads the folder in `RAW_DATA_DIR` (`data/raw` by default) instead of S3, and the
+lineage step re-hashes the files in that same folder, so a load from anywhere else is checked against where it came from
+(`tests/test_makefile_raw_dir.py`). The load below was run step by step on Windows, where there is no `make`; the chain as one
+command was run later with `make` (see "Run again, on another machine").
 
 ## What a full load costs (measured)
 
@@ -108,6 +109,25 @@ source CSV, written in 5.0 s. `make lake VERIFY=1` needs no warehouse: it re-has
 schema back, and with the warehouse it also compares each table's row count. It took 0.7 s here. A file that was edited,
 truncated, swapped or deleted fails, as does a warehouse table that changed after the export (`tests/test_lake.py`).
 
+## Run again, on another machine
+
+The same commands were run with `make` on macOS (Apple M5 Pro, 18 logical CPUs, Python 3.11.16, DuckDB 1.5.5), on a copy of
+the serving warehouse kept in `/tmp` (the same 4,425,008 `transactions`, 150,000 customers, 400,000 products and 67,095
+complaints as above; the raw files and the other analysis tables were not on that machine). The machine was busy (load
+average above 80 from other test suites), so the times are an upper bound.
+
+| Step | What it did | Seconds |
+|---|---|---|
+| `make gold` | built `gold_daily_activity` (178,941 rows) and `gold_customer_summary` (134,515 rows); `gold_contact_demand` skipped, as there is no `call_center_interactions` there | 1.4 to 2.4 |
+| `make gold VERIFY=1` | totals still add up | 0.2 |
+| `make lake` | 8 files, 253.7 MB | 1.7 to 1.8 |
+| `make lake VERIFY=1` | every file matches the manifest, and the row counts match the warehouse | 0.3 |
+
+The two marts' row counts are the ones in the table above. The 3.9 s, 12 files, 284 MB and 5.0 s of this page include
+`gold_contact_demand` and the contact tables, which this copy lacks, so they were not reproduced and are not corrected.
+`make pipeline INGEST=ingest-local RAW_DATA_DIR=<folder outside the repository>`, the whole chain in one command, ran on the
+test fixtures in 1.6 s with every step exiting 0, lineage included.
+
 ## Guarantees and the test that holds each one
 
 | Guarantee | Test |
@@ -119,7 +139,7 @@ truncated, swapped or deleted fails, as does a warehouse table that changed afte
 | A new column is added, not dropped; a missing required column fails | `test_schema_evolution_adds_new_column`, `test_complaints_quality_gate_and_missing_schema_roll_back` |
 | Lineage times are UTC whatever the machine's time zone | `test_lineage_times_are_utc_whatever_the_machine_time_zone` |
 | Each load records the machine it ran on | `test_each_load_records_the_machine_it_ran_on` |
-| A served row traces back to its load and its file's hash | `python -m data.lineage --verify --raw-dir data/raw` (`make lineage`) |
+| A served row traces back to its load and its file's hash | `python -m data.lineage --verify --raw-dir $RAW_DATA_DIR` (`make lineage`; the folder `make ingest-local` loads from, `data/raw` by default) | `tests/test_makefile_raw_dir.py`
 | Contracts, quality, lineage and freshness pass as a whole | `make validate-data-ml`, which CI runs through `make gate` |
 | A gold mart has the declared columns and a unique grain, adds up to silver, keeps the previous version when a check fails, and names the loads it read | `tests/test_gold.py` |
 | The baseline's gold-derived figures equal the ones the raw contacts give | `tests/test_baseline_gold.py` |
