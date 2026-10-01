@@ -69,8 +69,9 @@ def fires(text: str, not_me: list[str]) -> bool:
         return signals.contains_escalation_signal(text)
 
 
-def sha256_lf(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
+def sha256_of(path: Path) -> str:
+    """Of the bytes as committed (the file has CRLF line endings, the csv module's default), which is what the preregistration hashed."""
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def load_set() -> list[dict]:
@@ -134,10 +135,10 @@ def criteria(scored: dict, existing: dict, known: dict) -> dict:
         "C1b no required escalation lost in the existing sets": {"pass": all(v["lost_required_escalations"] == 0 for v in existing.values()),
                                                                  "detail": {k: v["lost_required_escalations"] for k, v in existing.items()}},
         "C1c the four known positives still escalate": {"pass": known["positives_kept"] == len(KNOWN_POSITIVE), "detail": f"{known['positives_kept']}/{len(KNOWN_POSITIVE)}"},
-        "C2 fewer false positives": {"pass": cand["lexicon_false_escalation"]["successes"] < cur["lexicon_false_escalation"]["successes"]
-                                     and cand["guard_false_escalation"]["successes"] < cur["guard_false_escalation"]["successes"],
-                                     "detail": f"lexicon {cur['lexicon_false_escalation']['successes']} -> {cand['lexicon_false_escalation']['successes']}, "
-                                               f"guard {cur['guard_false_escalation']['successes']} -> {cand['guard_false_escalation']['successes']} of {scored['n_innocent']}"},
+        "C2 fewer false positives": {"pass": cand["lexicon_false_escalation"]["k"] < cur["lexicon_false_escalation"]["k"]
+                                     and cand["guard_false_escalation"]["k"] < cur["guard_false_escalation"]["k"],
+                                     "detail": f"lexicon {cur['lexicon_false_escalation']['k']} -> {cand['lexicon_false_escalation']['k']}, "
+                                               f"guard {cur['guard_false_escalation']['k']} -> {cand['guard_false_escalation']['k']} of {scored['n_innocent']}"},
         "C2 the four known innocents no longer escalate": {"pass": known["innocents_cleared"] == len(KNOWN_INNOCENT), "detail": f"{known['innocents_cleared']}/{len(KNOWN_INNOCENT)}"},
         "C3 nothing is flagged that was not": {"pass": not scored["flagged_by_candidate_but_not_current"] and all(v["gained"] == 0 for v in existing.values()),
                                                "detail": "candidate is a subset of the current entries"},
@@ -145,7 +146,7 @@ def criteria(scored: dict, existing: dict, known: dict) -> dict:
 
 
 def run() -> dict:
-    assert sha256_lf(SET) == SET_SHA256, "the preregistered set changed"
+    assert sha256_of(SET) == SET_SHA256, "the preregistered set changed"
     rows = load_set()
     scored = score_set(rows)
     existing = existing_sets()

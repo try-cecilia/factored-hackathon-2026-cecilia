@@ -149,3 +149,9 @@ Add a dated line here for every change to a gate, with the reason.
 - **2026-10-01: scoping of the "no fui yo" pattern.** Section 1c was written, with its sentences and criteria, before the
   candidate rule was run on them or on any existing set. The reason is the false positives found on PR #16 and the freeze of
   ADR-007.
+- **2026-10-01: result of the "no fui yo" scoping: not applied.** `eval/reports/not_me_experiment.md`. The candidate cut the
+  lexicon's false escalations on the 48 innocent sentences from 48 to 9 and cleared the four of PR #16, and lost nothing in
+  the training, dev, test, trace-request and MInDS-14 sets (0 messages change). It failed C1a: of the 48 disavowals it stops
+  matching 3 in the lexicon, and one of them ("Eu não fui e o dinheiro sumiu da conta", P(escalation) 0.49 under tau 0.55)
+  is no longer flagged by the guard either. Per the rule above the lexicon is left as it is and the rule was not adjusted;
+  a different rule needs a different new set, and a looser criterion needs a product decision recorded here.
