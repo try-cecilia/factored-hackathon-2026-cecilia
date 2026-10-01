@@ -115,15 +115,17 @@ choices matter, and whether more data would help (dev only; the shipped model wa
 - Dev chooses the representation and the runtime escalation threshold.
   Char+word n-grams were chosen with macro-F1 0.90, vs 0.83 char-only and 0.82 word-only.
   The escalation threshold is τ = 0.55: maximum recall with ≤ 5% false escalations.
-- Test is scored once.
+- Test was scored once; the keyword baseline and the lexicon-only guard (†) were later touched by two patterns (see below).
 
 **Results (test).**
 
-| | Keyword baseline | Learned |
+| | Keyword baseline † | Learned |
 |---|---|---|
-| Accuracy | 63.5% [52.9–73.0] | **84.7% [75.6–90.8]** |
-| Macro-F1 | 0.66 | **0.85** |
-| Portuguese accuracy | 61.1% | 80.6% |
+| Accuracy | 63.5% [52.9–73.0]† | **84.7% [75.6–90.8]** |
+| Macro-F1 | 0.66† | **0.85** |
+| Portuguese accuracy | 61.1%† | 80.6% |
+
+† Post-hoc: not scored once. Two `no fui yo` / `não fui eu` patterns were added to the lexicon after this split was scored and match two of its utterances; read as an upper bound (see "Contamination of the test split").
 
 - Both are scored on the same 85 utterances, so the difference is estimated
   on them directly: **+21.2 points** (paired bootstrap 95% [+8.2, +34.1];
@@ -135,9 +137,11 @@ choices matter, and whether more data would help (dev only; the shipped model wa
 
 | Escalation guard (runs before the LLM) | Recall | False escalations |
 |---|---|---|
-| Lexicon only | 86.7% | 0.0% |
+| Lexicon only † | 86.7%† | 0.0% |
 | Classifier only | 46.7% | 0.0% |
 | **Lexicon OR classifier (runtime)** | **93.3%** | **0.0%** |
+
+† Post-hoc: not scored once. Two `no fui yo` / `não fui eu` patterns were added to the lexicon after this split was scored and match two of its utterances; the combined guard's 93.3% did not change, but the lexicon-only row is an upper bound (see "Contamination of the test split").
 
 **Failures.**
 - One escalation missed on test: "vou processar o banco" ("I'll sue the bank",

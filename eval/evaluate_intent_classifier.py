@@ -8,8 +8,9 @@ Protocol (the order matters and is part of the claim):
    accents, code-switching) plus the 2 real request sentences found in the
    dataset's transcripts (source=dataset_transcript). It is never trained on.
 3. The held-out set is split, stratified by intent, into dev and test halves
-   by a fixed hash. Dev is used for model selection (representation variant)
-   and for choosing the runtime escalation threshold, and for error analysis.
+   by a fixed hash. Dev, together with a cross-validation on the training set
+   grouped by template, is used for model selection (representation variant);
+   dev alone for choosing the runtime escalation threshold and for error analysis.
    Test is scored once, at the end, for the reported numbers.
 Known limitation: the same team wrote training and held-out text, so shared
 phrasing habits can inflate both systems' scores; see EVALUATION.md.
@@ -30,9 +31,10 @@ from pathlib import Path
 import joblib
 import sklearn
 from sklearn.metrics import confusion_matrix, f1_score, precision_recall_fscore_support
+from sklearn.model_selection import StratifiedGroupKFold
 
 from agent.llm import baseline_classifier
-from agent.llm.intent_classifier import VARIANTS, load_rows, train
+from agent.llm.intent_classifier import VARIANTS, build_pipeline, load_rows, train
 from agent.policy import intent_model
 from agent.policy.signals import contains_escalation_signal, escalation_categories
 from eval import leakage, tracking
@@ -47,6 +49,7 @@ REPORT_JSON = Path("eval/reports/intent_classifier.json")
 REPORT_MD = Path("eval/reports/intent_classifier.md")
 ESC = "requires_escalation"
 MAX_FALSE_ESCALATION = 0.05
+CV_FOLDS, CV_REPEATS = 5, 10  # grouped cross-validation on the training set: folds, and shuffles averaged (one split flips the winner)
 THRESHOLDS = [round(0.05 * i, 2) for i in range(2, 19)]
 TRACE_HELDOUT = "eval/test_cases/trace_requests_heldout.csv"
 
@@ -64,6 +67,23 @@ def dev_test_split(rows: list[dict]) -> tuple[list[dict], list[dict]]:
         for i, r in enumerate(sorted(items, key=lambda r: _h(r["utterance"]))):
             (dev if i % 2 == 0 else test).append(r)
     return dev, test
+
+
+def grouped_cv_macro_f1(rows: list[dict], variant: str) -> tuple[float, float]:
+    """Out-of-sample macro-F1 of a representation on the training set, mean and standard deviation over CV_REPEATS shuffles.
+    Folds are grouped by template_id (the phrases of one template never sit on both sides, which is the leakage the
+    template ids exist to prevent) and stratified by intent. The test split is not involved."""
+    X, y, groups = [r["utterance"] for r in rows], [r["intent"] for r in rows], [r["template_id"] for r in rows]
+    scores = []
+    for seed in range(CV_REPEATS):
+        pred = [None] * len(y)
+        for fit, held in StratifiedGroupKFold(CV_FOLDS, shuffle=True, random_state=seed).split(X, y, groups):
+            m = build_pipeline(variant).fit([X[i] for i in fit], [y[i] for i in fit])
+            for i, p in zip(held, m.predict([X[i] for i in held])):
+                pred[i] = p
+        scores.append(f1_score(y, pred, average="macro", zero_division=0))
+    mean = sum(scores) / len(scores)
+    return round(mean, 4), round((sum((x - mean) ** 2 for x in scores) / (len(scores) - 1)) ** 0.5, 4)
 
 
 def score(y_true: list[str], y_pred: list[str], rows: list[dict]) -> dict:
@@ -110,13 +130,16 @@ def build_report(train_rows: list[dict], held: list[dict]) -> tuple[dict, object
     dev = [r for r in dev if r["utterance"] not in dropped]
     test = [r for r in test if r["utterance"] not in dropped]
 
-    # 1) Model selection on dev only.
+    # 1) Model selection: the mean of two out-of-sample macro-F1s that share nothing with the test split: grouped
+    #    cross-validation on the training set (90 templates) and the dev half of the held-out set (88 phrases).
     variants = {}
     for v in VARIANTS:
         m = train(train_rows, v)
         pred = list(m.predict([r["utterance"] for r in dev]))
-        variants[v] = {"dev_macro_f1": round(f1_score([r["intent"] for r in dev], pred, average="macro", zero_division=0), 4)}
-    chosen = max(variants, key=lambda v: (variants[v]["dev_macro_f1"], v == "char"))
+        dev_f1 = round(f1_score([r["intent"] for r in dev], pred, average="macro", zero_division=0), 4)
+        cv_f1, cv_std = grouped_cv_macro_f1(train_rows, v)
+        variants[v] = {"dev_macro_f1": dev_f1, "cv_macro_f1": cv_f1, "cv_std": cv_std, "selection_score": round((dev_f1 + cv_f1) / 2, 4)}
+    chosen = max(variants, key=lambda v: (variants[v]["selection_score"], v == "char"))
     model = train(train_rows, chosen)
 
     # 2) Escalation threshold on dev: max recall with false escalations <= 5%.
@@ -170,7 +193,7 @@ def build_report(train_rows: list[dict], held: list[dict]) -> tuple[dict, object
 
     report = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "protocol": "train=templates; held-out written after freezing train+baseline; dev=selection+threshold; test=scored once",
+        "protocol": "train=templates; held-out written after freezing train+baseline; selection=grouped CV on train + dev, threshold=dev; test=scored once",
         "train_n": len(train_rows), "train_class_counts": dict(Counter(r["intent"] for r in train_rows)),
         "heldout_n": len(held), "dev_n": len(dev), "test_n": len(test),
         "leakage": leak,
@@ -234,7 +257,7 @@ def track(report: dict) -> None:
         for variant, score in report["model_selection_dev"].items():
             with mlflow.start_run(run_name=f"candidate {variant}", nested=True):
                 mlflow.log_param("variant", variant)
-                mlflow.log_metric("dev_macro_f1", score["dev_macro_f1"])
+                mlflow.log_metrics({k: score[k] for k in ("dev_macro_f1", "cv_macro_f1", "selection_score")})
                 mlflow.set_tag("chosen", str(variant == report["chosen_variant"]).lower())
         for s in report["threshold_sweep_dev"]:
             mlflow.log_metrics(tracking.numbers({"dev_guard_recall": s["recall"], "dev_guard_false_escalation": s["false_escalation"]}),
@@ -269,7 +292,7 @@ Protocol: {r['protocol']}. Intervals are Wilson 95%.
 
 - Training set: {r['train_n']} team-authored template utterances ({', '.join(f'{k}={v}' for k, v in r['train_class_counts'].items())}).
 - Held-out set: {r['heldout_n']} utterances written after training data and baseline rules were frozen (2 are real sentences from the dataset's transcripts); {len(r['leakage']['excluded'])} left out for leakage, so dev {r['dev_n']} / test {r['test_n']} are scored.
-- Representation chosen on dev by macro-F1: **{r['chosen_variant']}** ({', '.join(f"{k}: {v['dev_macro_f1']}" for k, v in r['model_selection_dev'].items())}).
+- Representation chosen by the mean of two out-of-sample macro-F1s, template-grouped cross-validation on the training set ({CV_FOLDS} folds x {CV_REPEATS} shuffles) and dev: **{r['chosen_variant']}** ({', '.join(f"{k}: cv {v['cv_macro_f1']} ± {v['cv_std']}, dev {v['dev_macro_f1']}" for k, v in r['model_selection_dev'].items())}).
 - Runtime escalation threshold chosen on dev (max recall with false escalations ≤ {int(100 * r['max_false_escalation_constraint'])}%): **τ = {r['escalation_threshold']}**.
 
 ## Test split (scored once)

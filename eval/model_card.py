@@ -85,7 +85,7 @@ def render(report: dict, study: dict, meta: dict) -> str:
           + f" ({before['dev_macro_f1_mean']:.4f} at {round(100 * before['fraction'])}% of the data, {last['dev_macro_f1_mean']:.4f} at {round(100 * last['fraction'])}%), "
           "which says that more text of the same kind, ideally written by people outside the team, is the lever.", "",
           "## Reproducing it", "",
-          "- `make train-eval` rebuilds the dataset, trains, selects on dev and scores test once; it writes `eval/reports/intent_classifier.{md,json}` and the model.",
+          "- `make train-eval` rebuilds the dataset, trains, selects by template-grouped cross-validation on the training set plus dev and scores test once; it writes `eval/reports/intent_classifier.{md,json}` and the model.",
           "- `python -m eval.model_study` re-runs the sensitivity study; `python -m eval.model_card` re-renders this card.",
           "- With `requirements-tracking.txt` installed, every selection and evaluation run is also logged to MLflow (`make mlflow-ui`); the store is local and git-ignored.",
           "- `make validate-data-ml` checks the data contracts, the split and the leakage controls as PASS/FAIL.", ""]

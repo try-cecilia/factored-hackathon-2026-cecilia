@@ -80,7 +80,7 @@ service, and as our own roadmap.
 - **Known misses.** "vou processar o banco" escapes the escalation guard, and
   slang is weak (33%). Both are reported, and neither was tuned away on test
   (`make validate-data-ml` fails if that phrase enters the lexicon).
-- **What "no leakage" does and does not show.** Chosen on dev only, and proven
+- **What "no leakage" does and does not show.** Chosen without the test split (the representation by template-grouped cross-validation on the training set plus dev, the threshold on dev), and proven
   by changing the test labels and seeing nothing chosen move
   (`docs/evidence/data_ml_validation.md`). Not shown, or done with the test
   split in view:
