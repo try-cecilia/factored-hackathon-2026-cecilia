@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { test } from 'node:test'
-import { areaNamespaces, areasOf, covers, loadMessages, type Area } from './areas.ts'
+import { areaNamespaces, areasOf, covers, demoPanelNamespaces, loadMessages, type Area } from './areas.ts'
 import { es } from './es.ts'
 import { pt } from './pt.ts'
 
@@ -71,13 +71,18 @@ function closure(entries: string[]): Set<string> {
   return seen
 }
 
+const demoPanelFiles = [['chat', 'DemoPanel.tsx'], ['routes', '-operator', 'notes.ts'], ['routes', '-operator', 'format.ts']]
+
 test('every key a page uses is in the namespaces of its areas', () => {
   const key = new RegExp(`['\`](${namespaces.join('|')})\\.[a-zA-Z]`, 'g')
   for (const [path, entries] of Object.entries(pages)) {
     const allowed = new Set(areasOf(path).flatMap((area) => areaNamespaces[area]))
     for (const file of closure(entries)) {
+      // The demo panel asks for the console's texts itself, when it is drawn (`demoPanelNamespaces`): it, and the two files of the
+      // console it reads them with. No other file of the page may.
+      const own = demoPanelFiles.some((f) => file.endsWith(join(...f))) ? new Set<string>(demoPanelNamespaces) : new Set<string>()
       for (const [, namespace] of readFileSync(file, 'utf8').matchAll(key)) {
-        assert.ok(allowed.has(namespace as never), `${path}: ${file.slice(src.length + 1)} uses '${namespace}.', not in ${areasOf(path).join(' + ')}`)
+        assert.ok(allowed.has(namespace as never) || own.has(namespace), `${path}: ${file.slice(src.length + 1)} uses '${namespace}.', not in ${areasOf(path).join(' + ')}`)
       }
     }
   }

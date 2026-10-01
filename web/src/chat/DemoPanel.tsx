@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { loadNamespaces } from '../i18n/areas'
+import { demoPanelNamespaces, loadNamespaces } from '../i18n/areas'
 import { useI18n, useT } from '../i18n/context'
 import { translator, type Dictionary, type MessageKey, type Translate } from '../i18n/translate'
 import { applyDemoFault, getDemoTickets, startScenario } from '../server/demo.functions'
@@ -68,7 +68,7 @@ export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations
   const [desk, setDesk] = useState<{ locale: string; t: Translate } | null>(null)
   useEffect(() => {
     let current = true
-    void loadNamespaces(['table', 'operator'], locale).then((messages: Dictionary) => { if (current) setDesk({ locale, t: translator(messages) }) })
+    void loadNamespaces(demoPanelNamespaces, locale).then((messages: Dictionary) => { if (current) setDesk({ locale, t: translator(messages) }) })
     return () => { current = false }
   }, [locale])
   const deskT = desk?.locale === locale ? desk.t : null
