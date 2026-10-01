@@ -79,6 +79,9 @@ time plus 120 s wait, 91.5% resolved on first contact, 9.9% escalated.
 ## 2. Learned component: intent classifier
 
 `make train-eval` → `eval/reports/intent_classifier.md`.
+What the model is for and where it fails: [`docs/MODEL_CARD.md`](docs/MODEL_CARD.md). How much its representation and regularization
+choices matter, and whether more data would help (dev only; the shipped model was fixed before it ran):
+[`docs/evidence/model_study.md`](docs/evidence/model_study.md).
 
 **Labels and data.**
 - The supplied data can't provide valid intent labels:
