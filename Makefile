@@ -8,7 +8,7 @@ WEB_PORT ?= 3000
 # Combined development always connects to its local API, unless overridden.
 AGENT_API_URL ?= http://127.0.0.1:$(API_PORT)
 
-.PHONY: gate model-study model-card validate-data-ml lineage operator-labels retention test-resilience loadtest loadtest-fixture loadtest-http setup ingest ingest-demo analysis label-signal train-eval workload eval eval-adversarial eval-ablation check-readme eval-failures eval-failures-live eval-live-sample eval-live-sample-report eval-failures-local eval-live live-smoke test serve docker-build all mlflow-ui
+.PHONY: gate model-study model-card unit-economics validate-data-ml lineage gold operator-labels retention test-resilience loadtest loadtest-fixture loadtest-http setup ingest ingest-demo analysis label-signal train-eval workload eval eval-adversarial eval-ablation check-readme eval-failures eval-failures-live eval-live-sample eval-live-sample-report eval-failures-local eval-live live-smoke test serve docker-build all mlflow-ui
 .PHONY: web-setup serve-web web-build web-typecheck web-test serve-fixture serve-all-fixture serve-all
 .PHONY: env env-check env-fill evidence up down clean-volumes monitoring-up up-llm-local up-llm-host up-dataset lock lock-check alerts-check compose-e2e
 .PHONY: human-set-export human-set-sheet human-set-pages human-set-agreement human-set-cases human-set-eval human-set-report
@@ -116,6 +116,9 @@ model-study:      ## sensitivity and learning curve of the intent classifier on 
 model-card:       ## the intent classifier's model card, rendered from the reports -> docs/MODEL_CARD.md
 	$(PY) -m eval.model_card
 
+unit-economics:   ## where the human time goes and what automating the slice is worth under stated scenarios -> docs/evidence/unit_economics.md
+	$(PY) -m analysis.unit_economics
+
 label-signal:     ## is there signal in the fraud labels? -> docs/evidence/label_signal.md
 	$(PY) -m analysis.label_signal
 
@@ -200,6 +203,9 @@ validate-data-ml: ## contratos, calidad, linaje, frescura, clasificador vs líne
 
 evidence:         ## regenera la evidencia versionada: docs/evidence/data_ml_validation.{md,json} con la fecha y el commit de hoy (paso explícito; validate-data-ml y gate no escriben)
 	$(PY) -m eval.validate_data_ml --out-dir docs/evidence
+
+gold:             ## gold marts built from silver and reconciled to it (rolls back on a mismatch); `make gold VERIFY=1` only re-checks
+	$(PY) -m data.gold $(if $(VERIFY),--verify)
 
 lineage:          ## the served warehouse traced back to its source files and their hashes (exit 1 if the chain is broken)
 	$(PY) -m data.lineage --verify --raw-dir data/raw

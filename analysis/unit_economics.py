@@ -1,0 +1,130 @@
+"""Where the human time goes, and what automating the account/payment slice is worth under stated scenarios.
+
+    python -m analysis.unit_economics        # reads three committed reports, writes docs/evidence/unit_economics.{md,json}
+
+Inputs are figures already measured and versioned, so nothing here is new data and a reader can rerun it:
+- docs/evidence/baseline_metrics.json: contacts, handle time and first-contact resolution of the historical contacts;
+- eval/reports/system_eval.json: the keyword bot's safe automated resolution on the held-out cases;
+- eval/reports/system_eval_live.json: Claude Sonnet 5's, with its 95% interval, and what a model call costs.
+
+Part 1 is measured. Part 2 is a scenario table, not a forecast: the share of phone contacts that would move to a text
+channel, and the agent cost per hour, are assumptions the data does not carry, and are labeled as such in the report.
+"""
+from __future__ import annotations
+
+import json
+from datetime import datetime, timezone
+from pathlib import Path
+
+BASELINE = Path("docs/evidence/baseline_metrics.json")
+OFFLINE = Path("eval/reports/system_eval.json")
+LIVE = Path("eval/reports/system_eval_live.json")
+LIVE_SYSTEM = "proposed (live: claude-sonnet-5)"
+OUT_JSON, OUT_MD = Path("docs/evidence/unit_economics.json"), Path("docs/evidence/unit_economics.md")
+SHIFTS = (0.0, 0.10, 0.25, 0.50)  # assumed share of phone contacts that would move to a text channel
+AGENT_USD_PER_HOUR = (5, 10, 20)  # assumed: the data does not carry an agent cost
+
+
+def where_the_time_goes(baseline: dict) -> list[dict]:
+    """Contacts, handle hours and their shares by reason. Hours are contacts x average handle time, wait excluded."""
+    rows = [{"reason": r["reason_category"], "contacts": r["contacts"], "aht_s": r["aht_s"], "fcr_pct": r["fcr_pct"],
+             "handle_hours": r["contacts"] * r["aht_s"] / 3600} for r in baseline["operations_by_reason"]]
+    contacts, hours = sum(r["contacts"] for r in rows), sum(r["handle_hours"] for r in rows)
+    for r in rows:
+        r["contact_share_pct"] = round(100 * r["contacts"] / contacts, 1)
+        r["hours_share_pct"] = round(100 * r["handle_hours"] / hours, 1)
+        r["handle_hours"] = round(r["handle_hours"])
+    return sorted(rows, key=lambda r: -r["handle_hours"])
+
+
+def scenarios(monthly: float, text_share: float, aht_s: float, sar: float, model_usd_per_case: float) -> list[dict]:
+    """One row per assumed channel shift: in-scope contacts, automated ones, hours saved, the dollars at each assumed rate."""
+    transactional_hours = monthly * aht_s / 3600
+    out = []
+    for shift in SHIFTS:
+        in_scope = monthly * (text_share + (1 - text_share) * shift)
+        automated = in_scope * sar
+        hours = automated * aht_s / 3600
+        out.append({"phone_to_text_shift_pct": round(100 * shift), "in_scope_contacts": round(in_scope), "automated_contacts": round(automated),
+                    "agent_hours_saved": round(hours, 1), "share_of_transactional_hours_pct": round(100 * hours / transactional_hours, 1),
+                    "usd_avoided": {str(r): round(hours * r) for r in AGENT_USD_PER_HOUR}, "model_cost_usd": round(in_scope * model_usd_per_case, 2)})
+    return out
+
+
+def compute() -> dict:
+    baseline = json.loads(BASELINE.read_text(encoding="utf-8"))
+    offline = json.loads(OFFLINE.read_text(encoding="utf-8"))["systems"]["baseline"]["safe_automated_resolution"]
+    live = json.loads(LIVE.read_text(encoding="utf-8"))["systems"][LIVE_SYSTEM]
+    t = baseline["transaccional"]
+    monthly, text_share = t["monthly_contacts_median"], t["text_channel_pct"] / 100
+    aht = next(r["aht_s"] for r in baseline["operations_by_reason"] if r["reason_category"] == "Transaccional")
+    cost = live["cost_per_attempted_case_usd"]
+    sars = {"keyword bot (offline)": offline["rate"], "Sonnet 5, lower bound of its 95% interval": live["safe_automated_resolution"]["ci95"][0],
+            "Sonnet 5 (live)": live["safe_automated_resolution"]["rate"]}
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "inputs": {"monthly_transactional_contacts_median": monthly, "text_channel_share": text_share, "aht_s": aht,
+                   "model_usd_per_attempted_case": cost, "sar": sars, "live_n_in_scope": live["safe_automated_resolution"]["n"]},
+        "where_the_time_goes": where_the_time_goes(baseline),
+        "scenarios_at_live_sar": scenarios(monthly, text_share, aht, sars["Sonnet 5 (live)"], cost),
+        "sar_sensitivity_today": {name: scenarios(monthly, text_share, aht, sar, cost)[0] for name, sar in sars.items()},
+    }
+
+
+def _usd(row: dict) -> str:
+    return " / ".join(f"{row['usd_avoided'][str(r)]:,}" for r in AGENT_USD_PER_HOUR)
+
+
+def to_markdown(m: dict) -> str:
+    i = m["inputs"]
+    rates = " / ".join(str(r) for r in AGENT_USD_PER_HOUR)
+    lines = ["# Unit economics: where the human time goes, and what automating this slice is worth", "",
+             f"Generated by `python -m analysis.unit_economics` at {m['generated_at']} from `docs/evidence/baseline_metrics.json`, "
+             "`eval/reports/system_eval.json` and `eval/reports/system_eval_live.json`. No new data: every input is a figure already measured and versioned.", "",
+             "## 1. Where the human time goes (measured)", "",
+             "Handle hours are contacts times average handle time, queue wait excluded, over the historical contacts.", "",
+             "| Reason | Contacts | Share of contacts | Avg handle (s) | Handle hours | Share of hours | First-contact resolution |", "|---|---|---|---|---|---|---|"]
+    lines += [f"| {r['reason']} | {r['contacts']:,} | {r['contact_share_pct']}% | {r['aht_s']:.0f} | {r['handle_hours']:,} | {r['hours_share_pct']}% | {r['fcr_pct']}% |"
+              for r in m["where_the_time_goes"]]
+    top = m["where_the_time_goes"][0]
+    tr = next(r for r in m["where_the_time_goes"] if r["reason"] == "Transaccional")
+    queja = next(r for r in m["where_the_time_goes"] if r["reason"] == "Queja")
+    rank = "the largest" if top["reason"] == "Transaccional" else f"second to {top['reason']}"
+    lines += ["", f"The account/payment slice (`Transaccional`) is {tr['contact_share_pct']}% of contacts and {tr['hours_share_pct']}% of handle hours, {rank} by hours. "
+              f"It is also the slice humans already resolve best ({tr['fcr_pct']}% in the first contact), which makes it the safest one to automate and not necessarily the one with the most to gain: "
+              f"complaints (`Queja`) are {queja['hours_share_pct']}% of the hours and are resolved in the first contact {queja['fcr_pct']}% of the time. This workflow does not touch them.", "",
+              "## 2. What automating the slice is worth (scenarios, not a forecast)", "",
+              f"Today the assistant's channel is text, which carries {round(100 * i['text_channel_share'])}% of the {i['monthly_transactional_contacts_median']:,.0f} "
+              "monthly transactional contacts; the rest is phone, and voice is not built. Two inputs are **assumptions the data does not carry**: "
+              f"how much of the phone volume would move to a text channel, and what an agent hour costs ({rates} USD). "
+              f"The safe-resolution rate is Sonnet 5's measured live rate, {i['sar']['Sonnet 5 (live)']:.1%}, on {i['live_n_in_scope']} in-scope held-out synthetic cases.", "",
+              f"| Phone contacts moving to text (assumed) | In-scope contacts / month | Automated | Agent hours saved | Share of transactional hours | USD avoided at {rates} per hour | Model cost (USD) |",
+              "|---|---|---|---|---|---|---|"]
+    lines += [f"| {s['phone_to_text_shift_pct']}% | {s['in_scope_contacts']:,} | {s['automated_contacts']:,} | {s['agent_hours_saved']} | {s['share_of_transactional_hours_pct']}% | {_usd(s)} | {s['model_cost_usd']} |"
+              for s in m["scenarios_at_live_sar"]]
+    lines += ["", "### Sensitivity to the safe-resolution rate, with today's text volume", "",
+              f"| Rate used | Rate | Automated / month | Agent hours saved | USD avoided at {rates} per hour |", "|---|---|---|---|---|"]
+    lines += [f"| {name} | {i['sar'][name]:.1%} | {s['automated_contacts']:,} | {s['agent_hours_saved']} | {_usd(s)} |" for name, s in m["sar_sensitivity_today"].items()]
+    base = m["scenarios_at_live_sar"][0]
+    lines += ["", "## What this says, and what it does not", "",
+              f"- **The model's price is not what decides the economics.** A model call costs about USD {i['model_usd_per_attempted_case']} per attempted case: "
+              f"USD {base['model_cost_usd']} a month for all of today's text contacts, against USD {base['usd_avoided']['5']:,}–{base['usd_avoided']['20']:,} of agent time avoided. "
+              "Halving or doubling the price changes nothing visible.",
+              f"- **Volume and the safe-resolution rate decide it.** Today's text traffic yields about {base['agent_hours_saved']} agent hours a month, "
+              f"{base['share_of_transactional_hours_pct']}% of the transactional hours: small in absolute terms. The lever the data points to is the channel mix, not the model: "
+              f"phone is {round(100 * (1 - i['text_channel_share']))}% of this demand.",
+              "- **The scenarios do not say that phone customers would move.** The shift is an assumption, voice is not built, and nothing in the data measures willingness to change channel.",
+              f"- **The safe-resolution rate is measured on synthetic, team-written held-out cases** and may not hold on production traffic. Its interval is wide because only {i['live_n_in_scope']} of the live cases are in scope.",
+              "- **Agent cost per hour is assumed**, shown as a range, and escalated contacts keep costing what they cost today, so only the automated ones count as saved.", ""]
+    return "\n".join(lines)
+
+
+def main() -> None:
+    m = compute()
+    OUT_JSON.write_text(json.dumps(m, indent=2, ensure_ascii=False), encoding="utf-8")
+    OUT_MD.write_text(to_markdown(m), encoding="utf-8")
+    print(OUT_MD.read_text(encoding="utf-8"))
+
+
+if __name__ == "__main__":
+    main()

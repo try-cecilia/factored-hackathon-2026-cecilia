@@ -111,3 +111,33 @@ describe('serve.mjs compresses the build\'s text files when asked', () => {
     assert.equal(res.headers['content-encoding'], undefined)
   })
 })
+
+describe('security headers', () => {
+  const csp = "frame-ancestors 'none'; base-uri 'none'; object-src 'none'; form-action 'self'"
+
+  test('every kind of answer carries them: a static file, the health check, a page, a refused encoding', async () => {
+    for (const [path, encoding] of [[`/assets/${script}`, undefined], ['/_healthz', undefined], ['/', undefined], [`/assets/${script}`, 'identity;q=0, *;q=0']] as const) {
+      const { headers } = await raw(path, encoding)
+      assert.equal(headers['content-security-policy'], csp, path)
+      assert.equal(headers['x-content-type-options'], 'nosniff', path)
+      assert.equal(headers['x-frame-options'], 'DENY', path)
+      assert.equal(headers['referrer-policy'], 'same-origin', path)
+    }
+  })
+
+  test('HSTS is not sent on this http run, and only an all-https public origin turns it on', async () => {
+    assert.equal((await raw('/_healthz')).headers['strict-transport-security'], undefined)
+    const hsts = async (origin: string) => {
+      const port = await freePort()
+      const child = spawn(process.execPath, ['serve.mjs'], { cwd: web, env: { ...process.env, PORT: String(port), HOST: '127.0.0.1', AGENT_API_URL: 'http://127.0.0.1:9', WEB_PUBLIC_ORIGIN: origin }, stdio: 'ignore' })
+      try {
+        for (let i = 0; i < 100 && !(await fetch(`http://127.0.0.1:${port}/_healthz`).then((r) => r.ok, () => false)); i++) await new Promise((wait) => setTimeout(wait, 50))
+        return (await fetch(`http://127.0.0.1:${port}/_healthz`)).headers.get('strict-transport-security')
+      } finally {
+        child.kill()
+      }
+    }
+    assert.equal(await hsts('https://console.bank.example'), 'max-age=15724800; includeSubDomains')
+    assert.equal(await hsts('https://a.example,http://127.0.0.1:3000'), null)
+  })
+})

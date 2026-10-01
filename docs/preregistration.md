@@ -30,9 +30,11 @@ these messages, and messages labeled "something else" are dropped and counted.
 | The "ideal model" result (99.2%) | An **upper bound**: what the policy layers give when the classifier is perfect | An expected result. No real model reaches it |
 | The adversarial model result (60.5%) | The safety floor holds even with a deliberately bad model (0 unsafe) | Anything about quality |
 | The live runs (95.0%, 0 / 132 unsafe) | The behavior of Sonnet 5 on the held-out sample **before** the trace review rule | The current system. They must be re-measured after that rule; the summary says "before" wherever it cites them |
-| The intent classifier test split (n=85, 84.7% against the bot's 62.4%) | The learned classifier beats the bot **on this team-written held-out set** | An across-the-board win: on `requires_escalation` it recalls 60.0% against the bot's 80.0%, so escalation is left to the separate guard (93.3% recall on the same split, `LIMITATIONS.md`). Intervals are wide (n=15 per class) |
+| The intent classifier test split (n=85, 84.7% against the bot's 63.5%) | The learned classifier beats the bot **on this team-written held-out set** | An across-the-board win: on `requires_escalation` it recalls 60.0% against the bot's 86.7%, so escalation is left to the separate guard (93.3% recall on the same split, `LIMITATIONS.md`). Intervals are wide (n=15 per class). The bot's 63.5% and 86.7% include two patterns added after scoring that match two test utterances: see EVALUATION.md, "Contamination of the test split" |
 | Human agents 91.5% against our rates | Each figure on its own denominator | A head-to-head comparison: historical contacts against oracle-labeled test cases |
 | The monthly projection (about 955 automated contacts) | An order of magnitude, from contact volumes | A measurement |
+| The fraud-label analysis (`docs/evidence/label_signal.md`, ADR-005: AUC 0.506 from the transaction's own fields) | That `is_fraud` holds nothing a model could learn, so there is no fraud model | A pre-registered result: it was run before this file existed and had no gate fixed in advance. It is cited as a measurement, and ADR-005 says what would reopen it |
+| The behavioral composite against `is_fraud` (`docs/evidence/behavior_association.md`, AUC 0.504 [0.494, 0.513]) | That the composite has no detectable association with the label, under rules frozen in `docs/BEHAVIORAL_EVIDENCE.md` before it was computed | That it is useless to a reviewer, or that it detects real fraud: it is shown as descriptive evidence of a customer's own history, never as a score |
 | The organizer's transcripts | Contact volumes and handling times | Training or evaluation text: 42 distinct customer texts, none varying with the contact reason (`docs/data_quality.md`) |
 | The quality report (0 errors, 16 warnings) | The data was loaded under contracts and each warning is counted | That the warned fields are right. The rows are kept as delivered and the answers show their dates |
 | Any human-set figure below the floor of G0 | Nothing | It is printed as NOT A RESULT |
@@ -55,3 +57,7 @@ Add a dated line here for every change to a gate, with the reason.
   - G3 compares the lowest live run with the keyword bot, each with its Wilson 95% interval.
   - G4's drop is 95.0% minus the lowest live run (the registered 95.0% is Sonnet 5's run 1, also the lowest of its
     three runs).
+- **2026-10-01: behavioral composite.** The contract (`docs/BEHAVIORAL_EVIDENCE.md`) and its wording gates were committed
+  before any association with `is_fraud` was computed (the git history orders the two commits). The first run gave AUC
+  0.504, which the gates word as "no detectable association"; no formula, band or weight changed afterwards. This is the
+  only evaluation in the repository whose gate was fixed before its result, apart from the human-written set above.

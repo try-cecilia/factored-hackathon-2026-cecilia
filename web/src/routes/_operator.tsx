@@ -2,6 +2,7 @@ import { createFileRoute, Outlet, redirect, useRouter, useRouterState } from '@t
 import { useEffect } from 'react'
 import { getOperatorView, loadQueue } from '../server/operator.functions'
 import operatorStylesheet from '../styles/operator.css?url'
+import { NewCasesProvider } from './-operator/NewCases'
 import { OperatorShell } from './-operator/OperatorShell'
 import { isAutomatic, refreshQuietly } from './-operator/refresh'
 import { guarded } from './-operator/reload'
@@ -48,9 +49,11 @@ function OperatorLayout() {
   }, [router, watching])
   return (
     <div className="op">
-      <OperatorShell view={view} queue={queue}>
-        <Outlet />
-      </OperatorShell>
+      <NewCasesProvider queue={queue}>
+        <OperatorShell view={view} queue={queue}>
+          <Outlet />
+        </OperatorShell>
+      </NewCasesProvider>
     </div>
   )
 }
