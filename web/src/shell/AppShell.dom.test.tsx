@@ -1,4 +1,4 @@
-import { act, screen, within } from '@testing-library/react'
+import { act, cleanup, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactElement, ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -94,6 +94,14 @@ describe('AppShell', () => {
     expect(within(nav).getByRole('button', { name: /Casos/ })).toBeTruthy()
     await user.click(screen.getByRole('button', { name: 'Expandir la barra lateral' }))
     expect(screen.queryByRole('button', { name: 'Expandir la barra lateral' })).toBeNull()
+  })
+
+  it('the bar carries "copy conversation" for the customer, with no sandbox, and it waits for a conversation', async () => {
+    await draw()
+    expect((screen.getByRole('button', { name: 'Copiar conversación' }) as HTMLButtonElement).disabled).toBe(true)
+    cleanup()
+    await draw({ history: withCase })
+    expect((screen.getByRole('button', { name: 'Copiar conversación' }) as HTMLButtonElement).disabled).toBe(false)
   })
 
   it('the language switcher is in the bar, in both languages', async () => {

@@ -2,6 +2,7 @@ import { Link, useNavigate, useRouter } from '@tanstack/react-router'
 import { lazy, Suspense, use, useCallback, useEffect, useId, useRef, useState, type ReactNode, type RefObject } from 'react'
 import type { DemoScenario } from '../chat/types'
 import { useConversation } from '../chat/ConversationProvider'
+import { CopyConversation } from '../chat/CopyConversation'
 import { useSessionNotice } from '../chat/useSessionNotice'
 import { LockIcon } from '../chat/icons'
 import { useT } from '../i18n/context'
@@ -190,6 +191,7 @@ export function AppShell({ session, kit, children }: { session: Session; kit: Pr
             <h1 className="shell__title">{t('conversation.title')}</h1>
             <span className="shell__trust"><LockIcon />{t('conversation.trust')}</span>
             <div className="shell__tools">
+              <CopyConversation />
               <Suspense fallback={null}>
                 <DemoToggle kit={kit} open={demoOpen} onToggle={() => setDemoOpen((open) => !open)} />
               </Suspense>
