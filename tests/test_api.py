@@ -190,6 +190,24 @@ def test_the_session_can_be_read_back_without_extending_it(client):
     assert s["token"] not in json.dumps(body)
 
 
+def test_a_session_ends_at_its_ttl_from_issue_however_often_it_is_used(monkeypatch):
+    """Absolute lifetime, not an idle timeout: using a session never moves its end (V3.3.1, V3.3.2)."""
+    from types import SimpleNamespace
+
+    from agent.session import auth
+
+    now = [1_000.0]
+    monkeypatch.setattr(auth, "time", SimpleNamespace(time=lambda: now[0]))
+    store = auth.SessionStore(ttl_seconds=900)
+    session = store.issue("CLI-FIX0001")
+    for _ in range(5):  # busy: one use a minute, never idle for more than 60 s
+        now[0] += 60
+        assert store.validate(session.token).expires_at == session.expires_at == 1_900.0
+    now[0] = 1_901.0  # 901 s after issue, 60 s after the last use
+    with pytest.raises(auth.ExpiredSession):
+        store.validate(session.token)
+
+
 @pytest.mark.parametrize("case", ["missing", "garbage", "revoked", "expired"])
 def test_reading_a_session_that_is_not_live_is_a_401(client, case):
     from agent.session.auth import default_store
