@@ -133,7 +133,15 @@ async function send(res, response) {
 
 const server = createServer(async (req, res) => {
   try {
-    const { pathname } = new URL(req.url, 'http://localhost')
+    // A request target that is not a valid URL or has a bad percent-encoding is the client's mistake: 400, not a 500 with a logged stack.
+    let pathname
+    try {
+      pathname = new URL(req.url, 'http://localhost').pathname
+      decodeURIComponent(pathname)
+    } catch {
+      res.writeHead(400, { ...SECURITY, 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' })
+      return res.end('Bad Request')
+    }
     if (pathname === '/_healthz') {
       if (req.method !== 'GET' && req.method !== 'HEAD') {
         res.writeHead(405, { ...SECURITY, allow: 'GET, HEAD', 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' })

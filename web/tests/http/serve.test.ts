@@ -1,7 +1,8 @@
 // web/serve.mjs itself, the production server of the image: run as a process on a free port, in front of the build.
 import assert from 'node:assert/strict'
 import { spawn, type ChildProcess } from 'node:child_process'
-import { readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { createServer } from 'node:net'
 import { join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
@@ -188,11 +189,36 @@ describe('the server\'s own answers', () => {
     }
   })
 
-  test('a path that is not valid percent-encoding fails with a 500 that says its charset', async () => {
-    const res = await raw('/%E0%A4%A')
-    assert.equal(res.status, 500)
-    assert.equal(res.headers['content-type'], 'text/plain; charset=utf-8')
-    assert.equal(res.body.toString(), 'Internal Server Error')
+  test('a request target that is not a valid URL, or is badly percent-encoded, is a 400 with a charset, not a 500', async () => {
+    for (const path of ['/%E0%A4%A', '/%', '//', '//host:99999/']) {
+      const res = await raw(path)
+      assert.equal(res.status, 400, path)
+      assert.equal(res.headers['content-type'], 'text/plain; charset=utf-8', path)
+      assert.equal(res.body.toString(), 'Bad Request')
+    }
+  })
+
+  test('a real failure of the app stays a 500, with a charset and no detail', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'serve-500-'))
+    try {
+      mkdirSync(join(dir, 'dist/server'), { recursive: true })
+      mkdirSync(join(dir, 'dist/client'), { recursive: true })
+      writeFileSync(join(dir, 'dist/server/server.js'), "export default { fetch() { throw new Error('secret detail') } }\n")
+      for (const file of ['serve.mjs', 'public-origins.mjs']) copyFileSync(join(web, file), join(dir, file))
+      const port = await freePort()
+      const child = spawn(process.execPath, ['serve.mjs'], { cwd: dir, env: { ...process.env, PORT: String(port), HOST: '127.0.0.1' }, stdio: 'ignore' })
+      try {
+        for (let i = 0; i < 100 && !(await fetch(`http://127.0.0.1:${port}/_healthz`).then((r) => r.ok, () => false)); i++) await new Promise((wait) => setTimeout(wait, 50))
+        const res = await fetch(`http://127.0.0.1:${port}/anything`)
+        assert.equal(res.status, 500)
+        assert.equal(res.headers.get('content-type'), 'text/plain; charset=utf-8')
+        assert.equal(await res.text(), 'Internal Server Error')
+      } finally {
+        child.kill()
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })
 
