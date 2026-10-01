@@ -159,3 +159,6 @@ what was left out, an empty reply is not a cover); the evidence files say so. No
 and mean cost lines of 5 are MET, 4 and the baseline and demo lines are PENDING, and the cap-3 run still meets its numeric thresholds). On Groq
 the cost criterion is PENDING (13 of 53 answered turns have no usage) and the recovery figure is 5 of 5 in 5 whole sequences, not 0 of 8, which
 had been an artifact of asking the follow-up for the whole request again; the two-request criterion remains NOT MET.
+A second review of the probe changed how a few lines are counted, not a figure: recovery now needs the follow-up to be delivered as the
+templates give it, the safety line counts every row of the run (discarded attempts and refusals included), and resuming checks the signature of
+the cases actually used and the repetitions. The four reports were recomputed again from the same rows; only the wording of the safety line differs.

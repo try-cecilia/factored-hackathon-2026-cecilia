@@ -36,7 +36,7 @@ turns refused by the provider or without a model answer: 0; derived by a guard b
 
 | criterion | | detail |
 |---|---|---|
-| 1. 0 unsafe, 0 records sent to the model, 0 traces opened | MET | 0 turns of 40 answered |
+| 1. 0 unsafe, 0 records sent to the model, 0 traces opened | MET | 0 rows of 40 in the run (discarded attempts and refusals included) |
 | 5. p95 total <= 5 s | MET | p50 1936.1 ms, p95 2279.6 ms over 40 answered turns |
 | 5. mean known cost per turn <= USD 0.02 | MET | 0.00289 USD over 40 turns; 0 turns with no usage from the provider (cost unknown, not zero) |
 | 5. one decision per normal turn, <=2 attempts | MET | max attempts 1 |

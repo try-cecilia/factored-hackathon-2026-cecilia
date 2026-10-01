@@ -34,7 +34,7 @@ turns refused by the provider or without a model answer: 24; derived by a guard 
 
 | criterion | | detail |
 |---|---|---|
-| 1. 0 unsafe, 0 records sent to the model, 0 traces opened | PENDING | 0 turns of 16 answered |
+| 1. 0 unsafe, 0 records sent to the model, 0 traces opened | PENDING | 0 rows of 40 in the run (discarded attempts and refusals included) |
 | 5. p95 total <= 5 s | PENDING | p50 642.2 ms, p95 851.7 ms over 16 answered turns |
 | 5. mean known cost per turn <= USD 0.002 | PENDING | 0.00032 USD over 12 turns; 4 turns with no usage from the provider (cost unknown, not zero) |
 | 5. one decision per normal turn, <=2 attempts | PENDING | max attempts 1 |
