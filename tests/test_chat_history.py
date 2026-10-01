@@ -149,7 +149,7 @@ def test_the_history_survives_a_restart_and_an_older_conversation_still_loads(tm
     store = ConversationStore(db_path=db)
     conv = store.get("ref-1")
     store.record_turn(conv, "hola", type("R", (), {"response_text": "Hola", "trace_id": "t1", "disposition": "AUTO_RESOLVE",
-                                                   "category": "none", "language": "es", "ticket_id": None, "degraded": False})())
+                                                   "category": "none", "language": "es", "ticket_id": None, "degraded": False, "choice": None})())
     store.save("ref-1")
     assert [t["text"] for t in ConversationStore(db_path=db).get("ref-1").transcript] == ["hola", "Hola"]
     assert _Conversation(**{"messages": [], "requests": [], "language": "es"}).transcript == []  # saved before this field existed
@@ -181,7 +181,7 @@ def test_a_conversation_purged_from_the_database_is_not_served_from_memory(tmp_p
     store = ConversationStore(db_path=db)
     conv = store.get("ref-a")
     store.record_turn(conv, "hola", type("R", (), {"response_text": "Hola", "trace_id": "t", "disposition": "AUTO_RESOLVE",
-                                                   "category": "none", "language": "es", "ticket_id": None, "degraded": False})())
+                                                   "category": "none", "language": "es", "ticket_id": None, "degraded": False, "choice": None})())
     store.save("ref-a")
     with sqlite3.connect(db) as c:
         c.execute("DELETE FROM conversations")  # what ops/retention.py does to a stale row
@@ -267,3 +267,19 @@ def test_a_conversation_saved_before_language_set_keeps_the_language_it_had_lear
             conn.execute("UPDATE conversations SET data = ? WHERE key = ?", (json.dumps(saved), key))
     reloaded = ConversationStore(db_path=db)
     assert (reloaded.get("pt").language_set, reloaded.get("es").language_set, reloaded.get("silent").language_set) == (True, True, False)
+
+
+def test_a_clarification_says_what_its_options_are_in_the_reply_and_in_the_history(client, monkeypatch):
+    """The screen sends a name for a product and a number for a movement: the API says which, instead of the screen reading it
+    off the words of the reply."""
+    from agent.core.orchestrator import default_orchestrator
+    from eval.fake_llm import FakeLLMClient, tool_call_response
+
+    fake = FakeLLMClient([tool_call_response("list_transactions", {"product_id": "Cuenta Ahorro"}), tool_call_response("get_account_summary", {})])
+    monkeypatch.setattr(default_orchestrator, "_llm", lambda: fake)
+    tok = token(client)
+    asked = chat(client, tok, "movimientos de mi cuenta de ahorros").json()
+    assert asked["disposition"] == "CLARIFY" and asked["choice"] == "product"
+    assert chat(client, tok, "mis saldos").json()["choice"] is None
+    turns = [t for t in history(client, tok).json()["turns"] if t["role"] == "assistant"]
+    assert turns[0]["choice"] == "product" and "choice" not in turns[1]

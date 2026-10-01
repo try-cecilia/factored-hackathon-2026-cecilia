@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { KEY_PATTERN, parseSend, sendChat, type ChatSession, type ChatTransport } from './chat-core.ts'
+import { KEY_PATTERN, parseReply, parseSend, sendChat, type ChatSession, type ChatTransport } from './chat-core.ts'
 
 const KEY = '0b0c7b1e-6f43-4d59-8f5e-3f0f6a1f7c11'
 
@@ -99,4 +99,11 @@ test('a send without a valid key is refused before it reaches the API', () => {
   assert.throws(() => parseSend({ message: 'hola', key: 'has spaces in it!' }))
   assert.throws(() => parseSend({ message: '   ', key: KEY }))
   assert.ok(KEY_PATTERN.test(KEY))
+})
+
+test('the kind of the options of a clarification comes through, and only a known one', () => {
+  assert.equal(parseReply({ ...reply, disposition: 'CLARIFY', choice: 'product' })?.choice, 'product')
+  assert.equal(parseReply({ ...reply, disposition: 'CLARIFY', choice: 'movement' })?.choice, 'movement')
+  assert.equal(parseReply({ ...reply, choice: 'other' })?.choice, undefined)
+  assert.equal(parseReply({ ...reply, choice: null })?.choice, undefined)
 })

@@ -186,6 +186,7 @@ class ChatResponse(BaseModel):
     ticket_id: str | None = None
     latency_ms: float
     degraded: bool = False  # limited mode: the model was unavailable, so the code answered alone (the screen says so)
+    choice: Literal["product", "movement"] | None = None  # what the numbered options of a CLARIFY are: the screen sends a name or a number
     why: dict | None = None  # DEMO_MODE only: the rule, what the model received and chose, what the code verified
 
 
@@ -410,7 +411,7 @@ def _run_turn(req: ChatRequest) -> ChatResponse:
     shown = demo.enabled()  # which rule decided is for the trace log; outside the jury demo it would guide an attacker
     return ChatResponse(trace_id=r.trace_id, disposition=r.disposition, response_text=r.response_text,
                         language=r.language, category=r.category, policy_rule=r.policy_rule if shown else "",
-                        ticket_id=r.ticket_id, latency_ms=round(r.latency_ms, 1), degraded=r.degraded,
+                        ticket_id=r.ticket_id, latency_ms=round(r.latency_ms, 1), degraded=r.degraded, choice=r.choice,
                         why=demo.explain(r, req.session_token) if shown else None)
 
 
@@ -424,6 +425,7 @@ class HistoryTurn(BaseModel):
     language: str | None = None
     ticket_id: str | None = None
     degraded: bool = False
+    choice: Literal["product", "movement"] | None = None
 
 
 class HistoryCase(BaseModel):

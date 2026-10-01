@@ -44,6 +44,7 @@ export function parseReply(body: unknown): Reply | null {
     latency_ms: typeof r.latency_ms === 'number' ? r.latency_ms : 0,
   }
   if (r.degraded === true) reply.degraded = true
+  if (r.choice === 'product' || r.choice === 'movement') reply.choice = r.choice
   if (typeof r.why === 'object' && r.why !== null) reply.why = r.why as Why
   return reply
 }
