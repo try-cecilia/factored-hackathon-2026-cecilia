@@ -12,8 +12,8 @@ Requirement text is quoted from ASVS 4.0.3, © OWASP Foundation, licensed CC BY-
 
 | Status | Count |
 |---|---|
-| Implemented | 55 |
-| Partial | 22 |
+| Implemented | 54 |
+| Partial | 23 |
 | Not applicable | 46 |
 | Limitation | 4 |
 | **Total Level 1 requirements** | **127** |
@@ -90,7 +90,7 @@ The rows to read first are the Limitations and Partials, listed again in `SECURI
 | **V5.1.2** Verify that frameworks protect against mass parameter assignment attacks, or that the application has countermeasures to protect against unsafe parameter assignment, such as marking fields private or similar. | Implemented | Request bodies are Pydantic models with named fields (`api/main.py`); unknown fields are ignored, never bound to a record. |
 | **V5.1.3** Verify that all input (HTML form fields, REST requests, URL parameters, HTTP headers, cookies, batch files, RSS feeds, etc) is validated using positive validation (allow lists). | Implemented | Length and pattern limits on every field (`api/main.py`: PIN `^\d{6}$`, message at most 1,000 characters, note at most 300), and a 16 KiB body cap (`api/middleware.py`). |
 | **V5.1.4** Verify that structured data is strongly typed and validated against a defined schema including allowed characters, length and pattern (e.g. credit card numbers, e-mail addresses, telephone numbers, or validating that two related fields are reasonable, such as checking that suburb and zip/postcode match). | Implemented | Pydantic schemas, with `Literal` types for ticket actions (`api/main.py`). |
-| **V5.1.5** Verify that URL redirects and forwards only allow destinations which appear on an allow list, or show a warning when redirecting to potentially untrusted content. | Implemented | The API has no redirects. The web's post-login `redirect` accepts only a same-origin path (`web/src/server/safe-path.ts`, `sameOriginPath`). |
+| **V5.1.5** Verify that URL redirects and forwards only allow destinations which appear on an allow list, or show a warning when redirecting to potentially untrusted content. | Partial | The API has no redirects. The operator login accepts only a same-origin path (`web/src/server/safe-path.ts`, `sameOriginPath`). The customer login did not: it used a looser local copy, so `/login?redirect=https%3A%2F%2Fevil.invalid` sent a signed-in user to another site (an open redirect). The fix, with an HTTP test per variant, is in PR #23; until it merges this row is Partial. |
 | **V5.2.1** Verify that all untrusted HTML input from WYSIWYG editors or similar is properly sanitized with an HTML sanitizer library or framework feature. | Not applicable | No rich-text or WYSIWYG input. |
 | **V5.2.2** Verify that unstructured data is sanitized to enforce safety measures such as allowed characters and length. | Implemented | Customer text is capped at 1,000 characters and normalized before inspection or masking (`agent/llm/privacy.py`). |
 | **V5.2.3** Verify that the application sanitizes user input before passing to mail systems to protect against SMTP or IMAP injection. | Not applicable | The system sends no email. |

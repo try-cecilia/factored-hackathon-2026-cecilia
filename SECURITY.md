@@ -65,6 +65,7 @@ promise about response time: this is a prototype with no on-call.
    (`LIMITATIONS.md`).
 9. **No self-service data export or removal, and no privacy notice** in the web (V8.3.2, V8.3.3).
 10. **Traces and tickets keep customer data**, with no redaction before they are exported anywhere (V7.1.2).
+11. **The customer login had an open redirect** (V5.1.5): it used a looser local copy of the same-origin check, so a signed-in user could be sent to another site by `/login?redirect=https%3A%2F%2Fevil.invalid`. The fix and its HTTP tests are in PR #23; this line goes when it merges.
 
 ## What this document does not show
 
