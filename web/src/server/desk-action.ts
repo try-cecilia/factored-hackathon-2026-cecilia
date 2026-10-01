@@ -9,7 +9,7 @@ const clean = (value: unknown) => (typeof value === 'string' ? value.trim() : ''
 export function parseDeskAction(input: unknown) {
   const { action, expected_version, reason, message } = (input ?? {}) as Record<string, unknown>
   if (!ACTIONS.includes(action as DeskAction)) throw new Error('action is not valid')
-  if (expected_version !== undefined && !Number.isInteger(expected_version)) throw new Error('expected_version must be an integer')
+  if (expected_version !== undefined && !(Number.isInteger(expected_version) && (expected_version as number) >= 0)) throw new Error('expected_version must be an integer from 0 up')
   const note = clean(reason).slice(0, 300)
   // What the customer reads, kept on one line: the chat shows it as a line of news.
   const text = clean(message).replace(/\s+/g, ' ').slice(0, 500)
