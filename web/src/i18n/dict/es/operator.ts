@@ -273,7 +273,6 @@ export const operator = {
       movementFallback: 'movimiento',
     },
     evidence: {
-      count: '{count} elementos',
       flagged: '{count} marcadas · score {threshold}+',
       none: 'Este caso no trae evidencia adjunta.',
       caption: 'Movimientos recientes del cliente',

@@ -275,7 +275,6 @@ export const operator: Like<typeof es> = {
       movementFallback: 'movimentação',
     },
     evidence: {
-      count: '{count} itens',
       flagged: '{count} sinalizadas · score {threshold}+',
       none: 'Este caso não traz evidências anexadas.',
       caption: 'Movimentações recentes do cliente',
