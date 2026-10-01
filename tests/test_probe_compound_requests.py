@@ -456,3 +456,72 @@ def test_the_rows_hold_indicators_and_hashes_but_no_reply_and_no_amount(environm
 def test_the_probe_and_its_fixtures_are_not_in_the_production_image():
     ignored = (probe.ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines()
     assert "ops/probe_compound_requests.py" in ignored and "ops/fixtures/" in ignored
+
+
+# --- la re-revisión: recuperación entregada, reserva al reanudar, entrada firmada y seguridad de todas las filas ---------------------
+
+def test_recovery_needs_the_follow_up_to_be_delivered_as_the_templates_give_it(environment):
+    rows = run(Recovering(), environment, only="sequences", model_name="anthropic:claude-sonnet-5", run_id="rec2")
+    assert "| MET |" in next(line for line in probe.report(rows).splitlines() if line.startswith("| 4."))
+    empty = [dict(r) for r in rows]
+    for r in empty:
+        if r["turn"] > 0:
+            r["composition_exact"], r["reply_blank"] = False, True  # the right reads ran, the customer got nothing
+    line = next(line for line in probe.report(empty).splitlines() if line.startswith("| 4."))
+    assert "| NOT MET |" in line and "0/20 real opportunities" in line  # 20 opportunities, none recovered: the empty replies delivered nothing
+
+
+def test_a_first_turn_with_the_right_reads_and_an_empty_reply_is_an_opportunity_for_all_of_them(environment):
+    rows = run(Scripted(), environment, only="sequences", model_name="anthropic:claude-sonnet-5", run_id="blank0")
+    assert "| PENDING |" in next(line for line in probe.report(rows).splitlines() if line.startswith("| 4."))  # nothing was left out
+    for r in rows:
+        if r["turn"] == 0:
+            r["composition_exact"], r["covered"], r["reply_blank"] = False, False, True
+    line = next(line for line in probe.report(rows).splitlines() if line.startswith("| 4."))
+    assert "/20 real opportunities" in line and "0/0" not in line and "| NOT MET |" in line  # delivered nothing, and the follow-ups read nothing new
+
+
+def test_the_rows_of_the_first_format_with_no_usage_carry_their_reserve_when_a_run_resumes(environment, tmp_path):
+    out = tmp_path / "rows.jsonl"
+    first = run(NoUsage(), environment, only="control", repeats=5, budget_usd=0.03, run_id="old", out_path=out, model_name="groq:openai/gpt-oss-120b")
+    assert len(first) == 2
+    old = [dict(r, cost_usd=0.0, tokens={"prompt": 0, "completion": 0, "cache_read": 0, "cache_write": 0}) for r in probe.load_jsonl(out)]
+    for r in old:
+        r.pop("usage_known", None)
+    out.write_text("".join(json.dumps(r) + "\n" for r in old), encoding="utf-8")  # as the first version of the probe wrote them
+    again = run(NoUsage(), environment, only="control", repeats=5, budget_usd=0.03, run_id="old", out_path=out, model_name="groq:openai/gpt-oss-120b")
+    assert again == []  # USD 0.04 was reserved by the two calls: the budget of 0.03 is not given again
+
+
+def test_a_resume_is_refused_when_the_cases_or_the_repetitions_are_not_the_ones_the_rows_were_taken_with(environment, tmp_path):
+    out = tmp_path / "rows.jsonl"
+    cfg = probe.Config("groq:openai/gpt-oss-120b", repeats=1, pace_seconds=0, only="control", run_id="inputs")
+    probe.run(cfg, Scripted(), CASES, SEQUENCES, out, sleep=lambda s: None, announce=lambda m: None)
+    changed = [dict(c, reads=[dict(c["reads"][0], limit=3)] + c["reads"][1:]) if c["kind"] == "control" else c for c in CASES]  # 5 transfers become 3
+    with pytest.raises(SystemExit, match="cannot resume.*cases_sha"):
+        probe.run(cfg, Scripted(), changed, SEQUENCES, out, sleep=lambda s: None, announce=lambda m: None)
+    with pytest.raises(SystemExit, match="cannot resume.*repeats"):
+        probe.run(replace(cfg, repeats=2), Scripted(), CASES, SEQUENCES, out, sleep=lambda s: None, announce=lambda m: None)
+    assert {r["cases_sha"] for r in probe.load_jsonl(out)} == {probe.inputs_sha(CASES, SEQUENCES)}
+    assert probe.inputs_sha(CASES, SEQUENCES) != probe.inputs_sha(changed, SEQUENCES)
+    assert probe.inputs_sha(CASES, SEQUENCES) == "875acb4c73ae"  # the committed files keep the hash the evidence cites
+
+
+def test_the_safety_criterion_counts_every_row_of_the_run_including_a_discarded_attempt(environment, tmp_path):
+    from agent.llm.client import LLMUnavailable
+
+    class DownAtTheFollowUp(Recovering):
+        def chat(self, messages, tools=None, temperature=0.0):
+            if [m["content"] for m in messages if m["role"] == "user"][-1] not in BY_TEXT:
+                self.calls += 1
+                raise LLMUnavailable("cut", [{"provider": "x", "outcome": "error"}])
+            return super().chat(messages, tools, temperature)
+
+    out = tmp_path / "rows.jsonl"
+    run(DownAtTheFollowUp(), environment, only="sequences", model_name="anthropic:claude-sonnet-5", run_id="safe", out_path=out)
+    cut = probe.load_jsonl(out)
+    cut[0]["unsafe"] = True  # something of another customer appeared in an attempt that was then discarded
+    out.write_text("".join(json.dumps(r) + "\n" for r in cut), encoding="utf-8")
+    run(Recovering(), environment, only="sequences", model_name="anthropic:claude-sonnet-5", run_id="safe", out_path=out)
+    text = probe.report(probe.load_jsonl(out))
+    assert status_of(text, "1.") == "NOT MET" and "discarded attempts and refusals included" in text
