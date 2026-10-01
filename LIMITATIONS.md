@@ -380,8 +380,14 @@ service, and as our own roadmap.
   customer gets today.
 - A message with several requests is answered by the reads the model declares, of which the code runs at most two per
   turn ([ADR-001](docs/decisions/ADR-001-model-interprets-code-speaks.md)). Which reads the model declares is its
-  judgment (prompt 3.2.0, rules 9 to 11) and is measured by no report: the offline evaluation scripts the model and
-  the live evaluation has no compound case. What the code guarantees is what happens next: the reads that run are
+  judgment (prompt 3.2.1, rules 9 to 11, with examples in Spanish and Portuguese) and is measured by no committed
+  report: the offline evaluation scripts the model and the live evaluation has no compound case. The probe that
+  measures it (`ops/probe_compound_requests.py`, criteria written beforehand in `docs/preregistration.md` section 4)
+  is run by hand with a provider key. The providers differ: Anthropic's Claude 4 and later call several tools in one
+  response by default, while Groq's documentation lists `openai/gpt-oss-120b` and `gpt-oss-20b` (the fallback) without
+  parallel tool use, so on the fallback a request for two things may be served with only one of the reads; the
+  `parallel_tool_calls` parameter exists but does not add the missing support. Asking for the two things in separate
+  messages works everywhere. What the code guarantees is what happens next: the reads that run are
   rendered under their own heading, a clarification for one read does not discard the others (one question per turn;
   the rest are named and kept in the model's history), the reads it did not run are named in a template ("Quedó sin
   atender: ..."), a trace request takes the turn alone wherever it is declared, and a read whose reply would be
