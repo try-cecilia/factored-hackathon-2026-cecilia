@@ -238,7 +238,7 @@ monitoring and traces. How the keys are configured:
   API), that an invalid id does not reach the API, that without our own origin it is refused, and that a 401 ends that session without
   `Set-Cookie`, a late one too.
 - *Walkthrough with screenshots.* With `python -m ops.seed_operator_demo` (cases of different ages, and others added while the console is
-  open), in Spanish and Portuguese: `docs/demo/operador-cola-01-vencidos-es.png` to `operador-cola-05-filtro-vencidos-pt.png` (age in
+  open), in Spanish and Portuguese: `docs/demo/operador-cola-01-vencidos-es.png` to `operador-cola-07-25-filas-detalle-pt.png` (the last two: 25 rows with a case open at 1440×900) (age in
   amber, "Vencidos" filter, new cases with their counter and their button) and `docs/demo/operador-contexto-01-caso-es.png`,
   `operador-contexto-02-caso-pt.png` (the customer section).
 

@@ -56,6 +56,8 @@
   border-radius: 14px; background: var(--color-fill-subtle);
 }
 .op-head { display: flex; align-items: center; gap: 10px; min-height: 32px; }
+/* The list scrolls when it is taller than the window; its rows must not shrink to fit (a wrapped filter strip would then spill over what follows). */
+.op-list > * { flex-shrink: 0; }
 .op-head h1 { color: var(--color-ink-app); font-size: var(--text-base); font-weight: var(--font-weight-bold); letter-spacing: -0.02em; line-height: 20px; }
 .op-head h1.op-mono { font-size: var(--text-base); }
 .op-head p { font-size: var(--text-compact-sm); }
