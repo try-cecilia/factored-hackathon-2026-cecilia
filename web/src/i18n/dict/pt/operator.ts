@@ -90,6 +90,12 @@ export const operator: Like<typeof es> = {
     actionFailed: 'Não foi possível concluir a ação. Conferir o estado do caso antes de repeti-la.',
     noPanelData: 'Ainda não há dados para este painel.',
   },
+  segment: {
+    Basic: 'Básico',
+    Plus: 'Plus',
+    Premium: 'Premium',
+    Student: 'Estudante',
+  },
   context: {
     title: 'Contexto do cliente',
     note: 'Somente leitura. Contas e cartões aparecem com os quatro últimos dígitos.',

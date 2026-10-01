@@ -88,6 +88,12 @@ export const operator = {
     actionFailed: 'No se pudo completar la acción. Revisar el estado del caso antes de repetirla.',
     noPanelData: 'Todavía no hay datos para este panel.',
   },
+  segment: {
+    Basic: 'Básico',
+    Plus: 'Plus',
+    Premium: 'Premium',
+    Student: 'Estudiante',
+  },
   context: {
     title: 'Contexto del cliente',
     note: 'Solo lectura. Las cuentas y tarjetas se muestran con los últimos cuatro dígitos.',

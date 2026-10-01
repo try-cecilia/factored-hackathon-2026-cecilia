@@ -32,6 +32,13 @@ const MOVEMENT_STATUSES: Record<string, MessageKey> = {
   Pending: 'operator.context.movementStatus.Pending',
   Declined: 'operator.context.movementStatus.Declined',
 }
+// The customer's segment, as the warehouse names it (Basic, Plus, Premium, Student).
+const SEGMENTS: Record<string, MessageKey> = {
+  Basic: 'operator.segment.Basic',
+  Plus: 'operator.segment.Plus',
+  Premium: 'operator.segment.Premium',
+  Student: 'operator.segment.Student',
+}
 const TRACE_STATUSES: Record<string, MessageKey> = { open: 'operator.context.traceStatus.open' }
 
 const named = (keys: Record<string, MessageKey>, t: Translate, value: string | null | undefined) =>
@@ -41,6 +48,7 @@ export const productTypeName = (t: Translate, value: string | null | undefined) 
 export const productStatusName = (t: Translate, value: string | null | undefined) => named(PRODUCT_STATUSES, t, value)
 export const movementTypeName = (t: Translate, value: string | null | undefined) => named(MOVEMENT_TYPES, t, value)
 export const movementStatusName = (t: Translate, value: string | null | undefined) => named(MOVEMENT_STATUSES, t, value)
+export const segmentName = (t: Translate, value: string | null | undefined) => named(SEGMENTS, t, value)
 export const traceStatusName = (t: Translate, value: string | null | undefined) => named(TRACE_STATUSES, t, value)
 
 /** A product's mark as the operator reads it: the last four digits behind dots, never more. */

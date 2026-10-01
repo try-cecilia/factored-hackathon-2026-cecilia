@@ -8,6 +8,7 @@ import { CloseIcon } from '../../ui/table/icons'
 import { ago, clock, CLOSED, explainKey, money, shortStamp, when } from './format'
 import { FRAUD_SCORE_FLAG, isFlagged, resolutionMessage, scoreLabel, ticketSummary } from './summary'
 import { conflictOf, holdConflict, type Conflict } from './conflicts'
+import { segmentName } from './context'
 import { evidenceTypeName, keyName, nextStepText, questionTexts, reasonText, reviewReasonName, ruleName } from './notes'
 import { KeyValues } from './ui'
 
@@ -148,7 +149,7 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
           <StatusIndicator tone={tones[desk.status]}><strong>{state}</strong></StatusIndicator>
           <span className="op-muted">
             {t('operator.ticket.meta', { age: ago(ticket.created_at, locale) })}
-            {[ticket.country, ticket.language ? ticket.language.toUpperCase() : t('operator.queue.unknownLanguage'), ticket.segment].filter(Boolean).map((part) => ` · ${part}`)}
+            {[ticket.country, ticket.language ? ticket.language.toUpperCase() : t('operator.queue.unknownLanguage'), ticket.segment && segmentName(t, ticket.segment)].filter(Boolean).map((part) => ` · ${part}`)}
           </span>
         </p>
       </header>

@@ -417,3 +417,25 @@ describe('a case without priority or language', () => {
     expect(summary).not.toContain('undefined')
   })
 })
+
+describe('the customer segment in the header', () => {
+  const header = () => document.querySelector('.op-ticket__state')!.textContent
+  it.each([
+    ['es', 'Student', 'Estudiante'],
+    ['es', 'Basic', 'Básico'],
+    ['pt', 'Student', 'Estudante'],
+    ['pt', 'Basic', 'Básico'],
+    ['es', 'Premium', 'Premium'],
+    ['pt', 'Plus', 'Plus'],
+  ] as const)('is said in the language of the operator (%s: %s)', (locale, segment, said) => {
+    const t = ticket('open', { segment })
+    renderWithI18n(<TicketPanel ticket={t} view={{ canAct: true, operator: 'ana.ruiz' }} act={vi.fn()} reload={vi.fn(async () => true)} />, locale)
+    expect(header()).toContain(` · ${said}`)
+    if (said !== segment) expect(header()).not.toContain(segment)
+  })
+
+  it('a segment the console does not know is shown as it came', () => {
+    setup(ticket('open', { segment: 'Retail' }))
+    expect(header()).toContain(' · Retail')
+  })
+})
