@@ -80,7 +80,7 @@ Afirma: EVALUATION.md §2, eval/reports/intent_classifier.md.
 
 | Prueba | Resultado | Evidencia |
 |---|---|---|
-| beats the keyword baseline on the same test split with intervals | PASS | test n=85: aprendido 84.7% [75.6–90.8] vs palabras clave 62.4% [51.7–71.9]; diferencia pareada +22.4 pts [+9.4, +35.3], McNemar p=0.001878; piso mayoritaria 17.6% [11.0–27.1] |
+| beats the keyword baseline on the same test split with intervals | PASS | test n=85: aprendido 84.7% [75.6–90.8] vs palabras clave 63.5% [52.9–73.0]; diferencia pareada +21.2 pts [+8.2, +34.1], McNemar p=0.002935; piso mayoritaria 17.6% [11.0–27.1] |
 | the committed report is what the code and data produce | PASS | build_report() sobre los CSV del repo reproduce las 1148 cifras del reporte JSON versionado y el texto completo del Markdown (solo se excluyen la hora de generación y la versión de sklearn); hashes de datos == los de los archivos |
 | altering any published metric makes the comparison fail | PASS | cada una de las 1148 cifras del reporte (incluidos macro-F1 aprendido, exactitud PT y exactitud sin frases de plantilla), alterada de a una, hace que la comparación falle en exactamente esa ruta |
 | the deployed model is the one that was selected and reported | PASS | eval/models/intent_clf.joblib da las mismas probabilidades que el modelo reentrenado (356 frases, tol 1e-9); meta: char+word, τ=0.55, mismo hash de entrenamiento |

@@ -99,7 +99,7 @@ time plus 120 s wait, 91.5% resolved on first contact, 9.9% escalated.
     question mark; the old exact-text check let it through);
   - 0.60–0.90 is usually a shorter form of a template: kept, listed, and the
     test result is also given without those phrases (79 of 85 left;
-    learned 83.5%, keywords 63.3%);
+    learned 83.5%, keywords 64.6%);
   - the dev split against the test split (which chose the model against
     which scores it) has a highest similarity of 0.83, no pair at ≥ 0.90.
   - The cut-offs were read off the distribution of the whole held-out
@@ -118,21 +118,21 @@ time plus 120 s wait, 91.5% resolved on first contact, 9.9% escalated.
 
 | | Keyword baseline | Learned |
 |---|---|---|
-| Accuracy | 62.4% [51.7–71.9] | **84.7% [75.6–90.8]** |
-| Macro-F1 | 0.65 | **0.85** |
-| Portuguese accuracy | 58.3% | 80.6% |
+| Accuracy | 63.5% [52.9–73.0] | **84.7% [75.6–90.8]** |
+| Macro-F1 | 0.66 | **0.85** |
+| Portuguese accuracy | 61.1% | 80.6% |
 
 - Both are scored on the same 85 utterances, so the difference is estimated
-  on them directly: **+22.4 points** (paired bootstrap 95% [+9.4, +35.3];
-  the learned classifier is right where the keywords are wrong on 27
-  utterances and the reverse on 8; exact McNemar p = 0.0019). The two Wilson
+  on them directly: **+21.2 points** (paired bootstrap 95% [+8.2, +34.1];
+  the learned classifier is right where the keywords are wrong on 26
+  utterances and the reverse on 8; exact McNemar p = 0.0029). The two Wilson
   intervals above do not overlap either.
 - A floor below the keyword baseline: always answering the most common
   training class (`payment_status`) gets 17.6% [11.0–27.1].
 
 | Escalation guard (runs before the LLM) | Recall | False escalations |
 |---|---|---|
-| Lexicon only | 80.0% | 0.0% |
+| Lexicon only | 86.7% | 0.0% |
 | Classifier only | 46.7% | 0.0% |
 | **Lexicon OR classifier (runtime)** | **93.3%** | **0.0%** |
 
@@ -140,6 +140,13 @@ time plus 120 s wait, 91.5% resolved on first contact, 9.9% escalated.
 - One escalation missed on test: "vou processar o banco" ("I'll sue the bank",
   in PT). It is reported but **not** added to the lexicon, because that would be
   tuning on test.
+- **Contamination of the test split, disclosed.** The patterns `no fui yo` / `yo no fui` and `não fui eu` / `eu não fui` were added
+  after the held-out set was scored, and two test utterances contain them ("hay un retiro de cajero que no fui yo", "tem um
+  saque que não fui eu"). They moved the lexicon-only recall from 80.0% to 86.7% (2 of 15, inside the interval), the keyword
+  baseline from 62.4% to 63.5% and the paired difference from +22.4 to +21.2 points. The patterns came from reading another
+  team's public repository, not from these two utterances, but the split is no longer "scored once" for the lexicon and the
+  keyword baseline. The learned model and the combined guard (93.3%) did not change. Read the lexicon-only and keyword figures
+  as an upper bound; only a set written by people outside the team settles it (`docs/human_set.md`).
 - Weak spots: slang (33%), and `payment_status` vs `balance_inquiry` confusion
   ("cupo disponible", "tarjeta al corriente").
 
