@@ -78,6 +78,15 @@ export const applyDemoFault = createServerFn({ method: 'POST' })
     }
   })
 
+/** A text's code with its parameters, as the API sends it; anything else is no code, and the text shows as it came. */
+function textCode(value: unknown): NonNullable<DemoTicket['reason_code']> | null {
+  if (!value || typeof value !== 'object') return null
+  const { code, params } = value as { code?: unknown; params?: unknown }
+  if (typeof code !== 'string') return null
+  const plain = params && typeof params === 'object' && !Array.isArray(params)
+  return { code, params: plain ? (params as Record<string, string | number>) : undefined }
+}
+
 export const getDemoTickets = createServerFn({ method: 'GET' }).handler(async (): Promise<DemoTicket[]> => {
   const token = getSessionToken()
   if (!token) return []
@@ -92,6 +101,9 @@ export const getDemoTickets = createServerFn({ method: 'GET' }).handler(async ()
       reason: String(t.reason ?? ''),
       suggested_next_step: String(t.suggested_next_step ?? ''),
       open_questions: Array.isArray(t.open_questions) ? t.open_questions.map(String) : [],
+      reason_code: textCode(t.reason_code),
+      open_question_codes: Array.isArray(t.open_question_codes) ? t.open_question_codes.map(textCode) : undefined,
+      next_step_code: typeof t.next_step_code === 'string' ? t.next_step_code : null,
       created_at: typeof t.created_at === 'number' ? t.created_at : 0,
     }))
   } catch {

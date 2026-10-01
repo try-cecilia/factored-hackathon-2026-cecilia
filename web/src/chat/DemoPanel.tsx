@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useI18n, useT } from '../i18n/context'
 import type { MessageKey } from '../i18n/translate'
 import { applyDemoFault, getDemoTickets, startScenario } from '../server/demo.functions'
+import { nextStepText, questionTexts, reasonText } from '../routes/-operator/notes'
 import { Button, IconButton } from '../ui'
+import { priorityOf } from '../ui/table/priority'
 import type { Entry, UserEntry } from './conversation'
 import { newMessageKey } from './key'
 import type { DemoFault, DemoScenario, DemoTicket } from './types'
@@ -277,12 +279,13 @@ export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations
             <article key={ticket.ticket_id} className="demo__card">
               <div className="demo__row">
                 <code>{ticket.queue}</code>
-                <span className="demo__tag">{ticket.priority}</span>
+                <span className="demo__tag">{t(`table.priority.${priorityOf(ticket.priority)}`)}</span>
               </div>
               <dl className="demo__facts">
                 <dt>{t('demo.bank.request')}</dt><dd>{ticket.request}</dd>
-                <dt>{t('demo.bank.reason')}</dt><dd>{ticket.reason}</dd>
-                <dt>{t('demo.bank.next')}</dt><dd>{ticket.suggested_next_step}</dd>
+                <dt>{t('demo.bank.reason')}</dt><dd>{reasonText(t, ticket)}</dd>
+                {ticket.open_questions.length > 0 && <><dt>{t('demo.bank.questions')}</dt><dd>{questionTexts(t, ticket).join(' · ')}</dd></>}
+                <dt>{t('demo.bank.next')}</dt><dd>{nextStepText(t, ticket)}</dd>
               </dl>
               <code className="demo__muted">{ticket.ticket_id}</code>
             </article>

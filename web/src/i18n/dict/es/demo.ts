@@ -58,6 +58,7 @@ export const demo = {
     empty: 'Todavía no hay casos de esta sesión. Probar con «Cargo no reconocido».',
     request: 'Pedido',
     reason: 'Motivo',
+    questions: 'Preguntas abiertas',
     next: 'Próximo paso',
   },
 }

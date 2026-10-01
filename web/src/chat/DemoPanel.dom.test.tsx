@@ -1,10 +1,11 @@
-import { screen } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { renderWithI18n } from '../test/render'
 import { DemoPanel } from './DemoPanel'
 import type { DemoScenario } from './types'
 
-vi.mock('../server/demo.functions', () => ({ applyDemoFault: vi.fn(), getDemoTickets: async () => [], startScenario: vi.fn() }))
+const tickets = vi.hoisted(() => ({ list: [] as unknown[] }))
+vi.mock('../server/demo.functions', () => ({ applyDemoFault: vi.fn(), getDemoTickets: async () => tickets.list, startScenario: vi.fn() }))
 
 const scenario: DemoScenario = {
   id: 'normal_balance', path: 'normal', customer_id: 'CLI-FIX0001', language: 'es', fault: null, turns: ['¿Cuál es mi saldo?'], expect: ['AUTO_RESOLVE'],
@@ -32,5 +33,45 @@ describe('DemoPanel', () => {
     const old = { ...scenario, title: { en: 'x', es: 'Consulta de saldo' }, look_for: { en: 'x', es: 'Se responde.' } }
     draw('pt', [old])
     expect(screen.getByText('Consulta de saldo')).toBeTruthy()
+  })
+
+  describe('the bank view, as the agent receives the ticket, in the language of the interface', () => {
+    const coded = {
+      ticket_id: 'T-0123456789', queue: 'fraud_ops', priority: 'Critical', category: 'fraud',
+      request: 'No reconozco un cargo',
+      reason: 'Safety signal in the request: fraud.', reason_code: { code: 'safety_signal', params: { categories: 'fraud' } },
+      open_questions: ["Confirm whether the customer's card/account must be blocked.", 'Verify identity with a stronger factor before acting.'],
+      open_question_codes: [{ code: 'confirm_block' }, { code: 'verify_identity' }],
+      suggested_next_step: 'Call the customer back on the registered number; block the card if confirmed; open a dispute case.', next_step_code: 'fraud',
+      created_at: 1,
+    }
+    it('in Spanish the reason, the questions, the next step and the priority are Spanish', async () => {
+      tickets.list = [coded]
+      draw('es')
+      const card = within((await screen.findByText('fraud_ops')).closest('article') as HTMLElement)
+      expect(card.getByText('Crítica')).toBeTruthy()
+      expect(card.getByText(/Señal de seguridad en el pedido: Fraude/)).toBeTruthy()
+      expect(card.getByText(/Confirmar si hay que bloquear la tarjeta/)).toBeTruthy()
+      expect(card.getByText(/Llamar al cliente al número registrado/)).toBeTruthy()
+      expect(card.queryByText(/Safety signal|Critical|Call the customer|Confirm whether/)).toBeNull()
+    })
+
+    it('in Portuguese too', async () => {
+      tickets.list = [coded]
+      draw('pt')
+      const card = within((await screen.findByText('fraud_ops')).closest('article') as HTMLElement)
+      expect(card.getByText('Crítica')).toBeTruthy()
+      expect(card.getByText(/Sinal de segurança no pedido/)).toBeTruthy()
+      expect(card.queryByText(/Safety signal|Critical|Call the customer|Confirm whether/)).toBeNull()
+    })
+
+    it('a ticket without codes, or with one the console does not know, shows its text as it came', async () => {
+      tickets.list = [{ ...coded, priority: 'Urgente', reason_code: { code: 'a_new_reason' }, open_question_codes: undefined, next_step_code: null }]
+      draw('es')
+      const card = within((await screen.findByText('fraud_ops')).closest('article') as HTMLElement)
+      expect(card.getByText('Safety signal in the request: fraud.')).toBeTruthy()
+      expect(card.getByText(/Call the customer back/)).toBeTruthy()
+      expect(card.getByText('Desconocida')).toBeTruthy()
+    })
   })
 })

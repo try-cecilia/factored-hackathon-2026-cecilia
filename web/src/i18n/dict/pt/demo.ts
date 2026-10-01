@@ -60,6 +60,7 @@ export const demo: Like<typeof es> = {
     empty: 'Ainda não há casos desta sessão. Experimente «Cobrança não reconhecida».',
     request: 'Pedido',
     reason: 'Motivo',
+    questions: 'Perguntas em aberto',
     next: 'Próximo passo',
   },
 }
