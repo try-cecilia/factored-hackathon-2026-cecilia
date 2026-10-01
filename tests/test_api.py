@@ -101,6 +101,11 @@ def test_a_customer_id_outside_the_allowed_characters_is_refused_before_any_look
     assert "customer_id" in json.dumps(r.json()["detail"])
 
 
+def test_a_pin_is_six_ascii_digits_not_digits_of_another_script(client):
+    for pin in ("\u0661\u0662\u0663\u0664\u0665\u0666", "12345\u0666", "12345 ", "１２３４５６"):
+        assert client.post("/auth/session", json={"customer_id": "CLI-FIX0001", "pin": pin}).status_code == 422, repr(pin)
+
+
 def test_the_shipped_customer_ids_still_log_in(client):
     for cid in ("CLI-FIX0001", "CLI-FIX0004"):
         assert login(client, cid=cid).status_code == 200

@@ -151,9 +151,9 @@ chat_ip_limiter = RateLimiter(int(os.environ.get("CHAT_IP_RATE_PER_MIN", "120"))
 
 class SessionRequest(BaseModel):
     # An allow list, not just a length: no NUL, control character, space or quote ever reaches the lookup or the lockout counter.
-    # Ascii only (`[0-9]` and not `\d`, which in Python also matches other scripts' digits).
+    # ASCII only, and so is the PIN's pattern below: `\d` would also match other scripts' digits.
     customer_id: str = Field(min_length=3, max_length=32, pattern=r"^[A-Za-z0-9._-]+$")
-    pin: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
+    pin: str = Field(min_length=6, max_length=6, pattern=r"^[0-9]{6}$")
 
 
 class SessionResponse(BaseModel):
