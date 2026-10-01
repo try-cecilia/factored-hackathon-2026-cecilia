@@ -1,4 +1,5 @@
 import type { MessageKey, Translate } from '../../i18n/translate.ts'
+import type { ContextProduct } from '../../server/customer-context.ts'
 
 // The warehouse names things in its own words (product types in Spanish, statuses in English). The console says them in the operator's
 // language, and a value it does not know is shown as it came, never hidden.
@@ -53,3 +54,6 @@ export const traceStatusName = (t: Translate, value: string | null | undefined) 
 
 /** A product's mark as the operator reads it: the last four digits behind dots, never more. */
 export const maskOf = (last4: string | null) => (last4 ? `•••• ${last4}` : '••••')
+
+/** A product that is not active (blocked, suspended, closed, or a status this console does not know). A product without a status is not counted. */
+export const isInactive = (p: ContextProduct) => Boolean(p.status && p.status !== 'Active')
