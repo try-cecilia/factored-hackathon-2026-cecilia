@@ -74,6 +74,7 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
   const evidence = ticket.evidence.filter((e) => e.type === 'transaction')
   const otherEvidence = ticket.evidence.filter((e) => e.type !== 'transaction')
   const flagged = evidence.filter(isFlagged).length
+  const evidenceIds = new Set(evidence.flatMap((e) => (e.id ? [e.id] : [])))
   const last = desk.history.at(-1)
   // The filing of the case is an event too, the first of all.
   const events = desk.history.length + 1
@@ -243,7 +244,7 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
           {customerData?.warehouse.available && (
             <>
               <ProductsFold data={customerData} />
-              <MovementsFold data={customerData} />
+              <MovementsFold data={customerData} inEvidence={evidenceIds} />
             </>
           )}
 
@@ -255,46 +256,35 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
             >
               {flagged > 0 && <p className="op-flagged-count">{t(flagged === 1 ? 'operator.ticket.evidence.flaggedOne' : 'operator.ticket.evidence.flaggedOther', { count: flagged, threshold: FRAUD_SCORE_FLAG })}</p>}
               {evidence.length > 0 && (
-                <div className="op-ev-scroll" tabIndex={0} role="region" aria-label={t('operator.ticket.evidence.caption')}>
-                  <table className="op-ev">
-                    <caption className="sr-only">{t('operator.ticket.evidence.caption')}</caption>
-                    <thead>
-                      <tr>
-                        <th scope="col">{t('operator.ticket.evidence.date')}</th>
-                        <th scope="col" className="op-ev__end">{t('operator.ticket.evidence.amount')}</th>
-                        <th scope="col">{t('operator.ticket.evidence.merchant')}</th>
-                        <th scope="col" className="op-ev__end">{t('operator.ticket.evidence.score')}</th>
-                        <th scope="col" className="op-ev__end">{t('operator.ticket.evidence.behavior')}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {evidence.map((e) => (
-                        <tr key={e.id ?? shortStamp(e.detail.transaction_date)} data-flagged={isFlagged(e) ? '' : undefined}>
-                          <td className="op-mono" title={e.id ?? undefined}>{shortStamp(e.detail.transaction_date)}</td>
-                          <td className="op-mono op-ev__end">{money(e.detail.amount, e.detail.currency)}</td>
-                          <td title={merchantOf(e) || undefined}>{merchantOf(e) || '—'}</td>
-                          <td className="op-mono op-ev__end">
-                            {isFlagged(e) && (
+                <ul className="op-plain op-evrows" aria-label={t('operator.ticket.evidence.caption')}>
+                  {evidence.map((e) => {
+                    const hot = isFlagged(e)
+                    const b = behaviorOf(e)
+                    return (
+                      <li key={e.id ?? shortStamp(e.detail.transaction_date)} data-flagged={hot ? '' : undefined}>
+                        <span className="op-mono op-evrows__date" title={e.id ?? undefined}>{shortStamp(e.detail.transaction_date)}</span>
+                        <span className="op-evrows__who">{merchantOf(e) || '—'}</span>
+                        <span className="op-mono op-evrows__amount">{money(e.detail.amount, e.detail.currency)}</span>
+                        <span className="op-evrows__meta">
+                          <span className="op-mono">
+                            {hot && (
                               <>
                                 <svg className="op-flag" viewBox="0 0 20 20" width="10" height="10" aria-hidden="true" focusable="false"><path d="M5 17V3.5M5 4h9l-2 3.5L14 11H5" fill="currentColor" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" strokeLinecap="round" /></svg>
                                 <span className="sr-only">{t('operator.ticket.evidence.flag', { score: scoreLabel(e) })}</span>
                               </>
                             )}
-                            <span aria-hidden={isFlagged(e) || undefined}>{scoreLabel(e)}</span>
-                          </td>
-                          <td className="op-mono op-ev__end">
-                            {(() => {
-                              const b = behaviorOf(e)
-                              return b ? `${Math.round(b.composite)} · ${t(`operator.ticket.evidence.band.${b.band}`)}` : <span title={t('operator.ticket.evidence.behaviorNone')}>—</span>
-                            })()}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                            <span aria-hidden={hot || undefined}>{t('operator.ticket.evidence.score')} {scoreLabel(e)}</span>
+                          </span>
+                          <span className="op-mono op-evrows__deviation" title={b ? t('operator.ticket.evidence.behaviorHint') : t('operator.ticket.evidence.behaviorNone')} aria-describedby="op-behavior-hint">
+                            {t('operator.ticket.evidence.behavior')} {b ? `${Math.round(b.composite)} · ${t(`operator.ticket.evidence.band.${b.band}`)}` : '—'}
+                          </span>
+                        </span>
+                      </li>
+                    )
+                  })}
+                </ul>
               )}
-              {evidence.length > 0 && <p className="op-muted">{t('operator.ticket.evidence.behaviorNote')}</p>}
+              {evidence.length > 0 && <p id="op-behavior-hint" className="op-muted">{t('operator.ticket.evidence.behaviorNote')}</p>}
               {otherEvidence.map((e, i) => (
                 <div key={i}>
                   <h4>{evidenceTypeName(t, e.type)}{e.id ? ` · ${e.id}` : ''}</h4>

@@ -252,24 +252,18 @@ textarea.op-input:focus { box-shadow: 0 0 0 2px var(--color-cecil-blue); }
 .op-tag--success { background: color-mix(in srgb, var(--color-success) 12%, transparent); color: var(--color-success); }
 .op-tag--danger { background: color-mix(in srgb, var(--color-danger) 12%, transparent); color: var(--color-danger); }
 .op-tag--neutral { background: var(--color-fill-muted); color: var(--color-ink-70); }
+.op-tag--info { background: var(--color-row-selected); color: var(--color-cecil-blue); }
 
-/* Evidencia: las transacciones con score 70 o más van marcadas */
-.op-ev { width: 100%; border-collapse: separate; border-spacing: 0; table-layout: fixed; }
-.op-ev th { height: 20px; padding: 0 8px; color: var(--color-ink-70); font-size: var(--text-compact-2xs); font-weight: var(--font-weight-medium); line-height: 12px; text-align: left; }
-.op-ev td { height: 24px; padding: 0 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.op-ev th:nth-child(1), .op-ev td:nth-child(1) { width: 92px; }
-.op-ev th:nth-child(2), .op-ev td:nth-child(2) { width: 118px; }
-.op-ev th:nth-child(4), .op-ev td:nth-child(4) { width: 56px; }
-.op-ev td:first-child, .op-ev th:first-child { border-radius: var(--radius-compact) 0 0 var(--radius-compact); }
-.op-ev td:last-child, .op-ev th:last-child { border-radius: 0 var(--radius-compact) var(--radius-compact) 0; }
-.op-ev .op-ev__end { text-align: right; }
-.op-ev td.op-mono { color: var(--color-ink-70); }
-.op-ev td.op-mono:nth-child(2) { color: var(--color-ink-app); }
-.op-ev tr[data-flagged] td { height: 26px; background: color-mix(in srgb, var(--color-danger) 9%, transparent); color: var(--color-danger); font-weight: var(--font-weight-medium); }
-.op-ev tr[data-flagged] td:nth-child(3) { font-weight: var(--font-weight-semibold); }
-/* In the narrow drawer the table keeps its columns and scrolls sideways instead of cutting the date and the amount */
-.op-ev-scroll { margin-inline: -8px; overflow-x: auto; }
-.op-ev-scroll .op-ev { min-width: 440px; }
+/* Evidencia: las transacciones con score 70 o más van marcadas. Cada movimiento son dos líneas, para que la desviación se lea entera sin scroll */
+.op-evrows { display: flex; flex-direction: column; gap: 2px; }
+.op-evrows li { display: grid; grid-template-columns: 84px minmax(0, 1fr) auto; align-items: baseline; gap: 2px 8px; padding: 8px 12px; border-radius: var(--radius-control); font-size: var(--text-compact-md); line-height: 16px; }
+.op-evrows__date { color: var(--color-ink-70); font-size: var(--text-compact-sm); }
+.op-evrows__who { color: var(--color-ink-app); overflow-wrap: anywhere; }
+.op-evrows__meta { display: flex; flex-wrap: wrap; grid-column: 2 / -1; gap: 0 14px; color: var(--color-gray-600); font-size: var(--text-compact-sm); }
+.op-evrows__deviation { cursor: help; }
+.op-evrows li[data-flagged] { background: color-mix(in srgb, var(--color-danger) 9%, transparent); }
+.op-evrows li[data-flagged] .op-evrows__who { color: var(--color-danger); font-weight: var(--font-weight-semibold); }
+.op-evrows li[data-flagged] .op-evrows__amount, .op-evrows li[data-flagged] .op-evrows__meta > :first-child { color: var(--color-danger); font-weight: var(--font-weight-medium); }
 .op-flag { margin-right: 3px; vertical-align: -1px; }
 .op-kv { display: flex; flex-direction: column; gap: 3px; margin: 4px 0 0; }
 .op-kv > div { display: grid; grid-template-columns: minmax(96px, 160px) 1fr; gap: 10px; }

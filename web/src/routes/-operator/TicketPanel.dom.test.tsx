@@ -283,9 +283,9 @@ describe('evidence', () => {
     expect(screen.getByRole('button', { name: /^Evidencia/ }).textContent).toContain('4 · 2 marcados')
     await unfold(/^Evidencia/)
     expect(screen.getByText('2 marcados · score 70+')).toBeTruthy()
-    const table = screen.getByRole('table', { name: 'Movimientos recientes del cliente' })
-    const flagged = within(table).getAllByRole('row').filter((row) => row.hasAttribute('data-flagged'))
-    expect(flagged.map((row) => within(row).getAllByRole('cell')[2].textContent)).toEqual(['Amazon MX · US', 'DigitalOcean · US'])
+    const list = screen.getByRole('list', { name: 'Movimientos recientes del cliente' })
+    const flagged = within(list).getAllByRole('listitem').filter((row) => row.hasAttribute('data-flagged'))
+    expect(flagged.map((row) => row.querySelector('.op-evrows__who')?.textContent)).toEqual(['Amazon MX · US', 'DigitalOcean · US'])
     expect(within(flagged[0]).getByText('Marcado, score 91')).toBeTruthy()
   })
 
@@ -301,13 +301,52 @@ describe('evidence', () => {
     expect(screen.getByRole('button', { name: /^Evidencia/ }).textContent).toContain('3')
     expect(screen.getByRole('button', { name: /^Evidencia/ }).textContent).not.toContain('marcados')
     await unfold(/^Evidencia/)
-    const table = screen.getByRole('table', { name: 'Movimientos recientes del cliente' })
-    const rows = within(table).getAllByRole('row').slice(1)
-    expect(within(rows[0]).getAllByRole('cell')[4].textContent).toBe('62 · elevada')
-    expect(within(rows[1]).getAllByRole('cell')[4].textContent).toBe('—')
-    expect(within(rows[2]).getAllByRole('cell')[4].textContent).toBe('—')
+    const rows = within(screen.getByRole('list', { name: 'Movimientos recientes del cliente' })).getAllByRole('listitem')
+    const deviation = (row: HTMLElement) => row.querySelector('.op-evrows__deviation')!.textContent
+    expect(deviation(rows[0])).toBe('Desviación 62 · elevada')
+    expect(deviation(rows[1])).toBe('Desviación —')
+    expect(deviation(rows[2])).toBe('Desviación —')
     expect(rows.some((row) => row.hasAttribute('data-flagged'))).toBe(false)
     expect(screen.getByText(/no es una probabilidad de fraude ni una determinación de fraude/)).toBeTruthy()
+  })
+})
+
+describe('the deviation of a movement', () => {
+  const detail = { transaction_date: '2026-09-28T14:02:00', amount: 199, currency: 'USD', merchant_name: 'Uber', transaction_country: 'US', fraud_score: 8 }
+  const withBehavior = (band: string) => ticket('claimed', {
+    evidence: [
+      { type: 'transaction', id: 'tx1', flagged: false, detail: { ...detail, behavior: { composite: 62.4, band, components: {}, prior_count: 40 } } },
+      { type: 'transaction', id: 'tx2', flagged: false, detail },
+    ],
+  }, { version: 1 })
+
+  it.each([
+    ['es', 'elevated', 'Desviación 62 · elevada', /^Cuánto se aparta este movimiento del historial del propio cliente.*no es un modelo de fraude ni decide nada\.$/, 'Historial insuficiente para describirlo'],
+    ['pt', 'moderate', 'Desvio 62 · moderado', /^Quanto esta movimentação se afasta do histórico do próprio cliente.*não é um modelo de fraude nem decide nada\.$/, 'Histórico insuficiente para descrever'],
+  ] as const)('reads whole, and explains in %s what it is: how far the movement is from the own history, not a fraud model', async (locale, band, text, hint, none) => {
+    renderWithI18n(<TicketPanel ticket={withBehavior(band)} view={{ canAct: true, operator: 'ana.ruiz' }} act={vi.fn()} reload={vi.fn(async () => true)} />, locale)
+    await userEvent.setup().click(screen.getByRole('button', { name: /^Evid/ }))
+    const [shown, missing] = Array.from(document.querySelectorAll<HTMLElement>('.op-evrows__deviation'))
+    expect(shown.textContent).toBe(text)
+    expect(shown.title).toMatch(hint)
+    expect(missing.title).toBe(none)
+    // The same sentence is there for a screen reader, not only for a pointer: the visible note under the list.
+    const note = document.getElementById(shown.getAttribute('aria-describedby')!)
+    expect(note?.textContent).toMatch(/probabilidade de fraude|probabilidad de fraude/)
+    expect(document.querySelector('table')).toBeNull() // no columns to cut: nothing is truncated or scrolled sideways
+  })
+
+  it('marks in "Movimientos" the ones that "Evidencia" already shows, and only those', async () => {
+    const context: CustomerContext = {
+      warehouse: { available: true, as_of: null }, products: [], pending_omitted: 0, cases: [], traces: [],
+      movements: ['tx1', 'tx9'].map((id) => ({ transaction_id: id, date: '2026-09-28T14:02:00', product_id: 'P', type: 'Purchase', amount: 199, currency: 'USD', merchant: id, status: 'Approved', pending: false })),
+    }
+    setup(withBehavior('elevated'), undefined, { loadContext: async () => ({ ok: true, data: context }) })
+    await userEvent.setup().click(await screen.findByRole('button', { name: /^Movimientos/ }))
+    const rows = screen.getAllByRole('listitem').filter((li) => li.closest('.op-moves'))
+    expect(rows).toHaveLength(2)
+    expect(within(rows[0]).getByText('En evidencia').title).toMatch(/también está en la sección Evidencia/)
+    expect(within(rows[1]).queryByText('En evidencia')).toBeNull()
   })
 })
 
@@ -527,7 +566,7 @@ describe('the drawer, summary first', () => {
     expect(within(folds()).getByText('Rastreos').closest('.op-fold')?.textContent).toContain('Ninguno')
     for (const fold of within(folds()).getAllByRole('button')) expect(fold.getAttribute('aria-expanded')).toBe('false')
     // Closed means closed: nothing of what is inside is in the page.
-    expect(screen.queryByRole('table')).toBeNull()
+    expect(screen.queryByRole('list', { name: 'Movimientos recientes del cliente' })).toBeNull()
     expect(screen.queryByText('Tarjeta de débito')).toBeNull()
     expect(screen.queryByText('¿Autorizó el cliente el cargo?')).toBeNull()
   })
