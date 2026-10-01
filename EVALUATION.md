@@ -709,7 +709,10 @@ them. The committed reports stay the reviewed record.
 - Only the Markdown report is attached to a system run: the JSON report
   carries customer ids.
 - The store is local and git-ignored (`mlruns/`: sqlite and artifacts).
-  `MLFLOW_TRACKING_URI` points it at a tracking server instead.
+  `MLFLOW_TRACKING_URI` points it at a tracking server instead. What a reader of the
+  repository can see is a versioned snapshot, [`docs/evidence/ml_tracking.md`](docs/evidence/ml_tracking.md)
+  (`make tracking-report`): the runs, the code and data hashes they ran on, and a check that each one says
+  what its committed report says.
 - mlflow comes with `make setup` (`requirements-tracking.txt`). The serving
   image does not carry it; without it, a run is skipped with one line. A
   tracking failure is reported, never raised.
