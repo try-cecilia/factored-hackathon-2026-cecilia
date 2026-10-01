@@ -69,3 +69,23 @@ def test_no_category_means_that_component_is_unavailable_not_novel():
 @pytest.mark.parametrize("n", [1, 3])
 def test_a_customer_without_history_has_nothing_to_compare(n):
     assert all(r["composite"] is None for r in score_customer(steady(n)).values())
+
+
+def test_a_history_over_the_cap_keeps_the_latest_rows_so_the_shown_movements_are_still_described(monkeypatch):
+    from agent.tools import account_tools
+
+    base = datetime(2025, 1, 1)
+    table = [dict(transaction_id=f"t{i:02d}", transaction_date=base + timedelta(days=i), amount=100.0, currency="USD", channel="Web",
+                  merchant_category="Food", transaction_country="México", product_id="p", transaction_type="Payment",
+                  merchant_name="m", transaction_status="Posted", is_fraud=False, fraud_score=None) for i in range(12)]
+
+    def fake_rows(sql, params):  # honors the one thing under test: the direction of the ORDER BY and the LIMIT
+        rows = sorted(table, key=lambda r: r["transaction_date"], reverse="DESC" in sql.split("ORDER BY")[1])
+        return rows[:params[-1]]
+
+    monkeypatch.setattr(account_tools, "_rows", fake_rows)
+    monkeypatch.setattr(account_tools, "data_as_of", lambda: None)
+    monkeypatch.setattr(account_tools, "MAX_BEHAVIOR_HISTORY", 8)
+    items = account_tools.recent_activity_for_review("c1", limit=2)["items"]
+    assert [t["transaction_id"] for t in items] == ["t11", "t10"]
+    assert all(t["behavior"] is not None and t["behavior"]["composite"] == 0.0 for t in items)

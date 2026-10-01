@@ -33,7 +33,7 @@ MAX_TRANSACTIONS = 50
 MAX_FX_FALLBACK_DAYS = 7
 TRACEABLE_TYPES = ("Transfer", "Payment", "Deposit")  # what operations can follow; a pending card purchase just posts
 MAX_TRACE_CANDIDATES = 5
-MAX_BEHAVIOR_HISTORY = 5000  # a customer's rows read to describe their recent movements; the data averages about 30
+MAX_BEHAVIOR_HISTORY = 5000  # the customer's latest rows, read to describe their recent movements; the data averages about 30
 TRACE_REVIEW_AFTER_DAYS = 90  # synthetic policy: a movement "pending" for longer than this is a case for a person
 
 
@@ -333,7 +333,7 @@ def recent_activity_for_review(customer_id: str, limit: int = 10) -> dict:
                          FROM transactions WHERE customer_id = ? ORDER BY transaction_date DESC LIMIT ?""",
                       [customer_id, limit])
         history = _rows("""SELECT transaction_id, transaction_date, amount, currency, channel, merchant_category, transaction_country
-                           FROM transactions WHERE customer_id = ? ORDER BY transaction_date, transaction_id LIMIT ?""",
+                           FROM transactions WHERE customer_id = ? ORDER BY transaction_date DESC, transaction_id DESC LIMIT ?""",
                         [customer_id, MAX_BEHAVIOR_HISTORY])
         behavior = evidence_for(history, [t["transaction_id"] for t in items])  # docs/BEHAVIORAL_EVIDENCE.md: descriptive only
         for t in items:
