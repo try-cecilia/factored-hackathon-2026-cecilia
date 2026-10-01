@@ -1,4 +1,4 @@
-import { useNavigate } from '@tanstack/react-router'
+import { useLocation, useNavigate } from '@tanstack/react-router'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useT } from '../i18n/context'
 import type { Session } from '../server/auth.functions'
@@ -44,6 +44,7 @@ function useOnline() {
 export function ChatView({ session }: { session: Session }) {
   const t = useT()
   const navigate = useNavigate()
+  const { href } = useLocation()
   const { entries, cases, sending, ended, historyFailed, send, retry, reload } = useConversation()
   const { showCase } = useShell()
   const composer = useRef<ComposerHandle>(null)
@@ -84,8 +85,9 @@ export function ChatView({ session }: { session: Session }) {
   }, [sending])
 
   const signIn = useCallback(() => {
-    void navigate({ to: '/login', search: { redirect: '/chat', motivo: 'expired' }, replace: true })
-  }, [navigate])
+    // Back to the page it was on, with its query and fragment: the login checks it again before it goes there.
+    void navigate({ to: '/login', search: { redirect: href, motivo: 'expired' }, replace: true })
+  }, [navigate, href])
 
   const reloadHistory = useCallback(async () => {
     setReloading(true)
