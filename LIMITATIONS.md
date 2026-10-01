@@ -399,7 +399,13 @@ service, and as our own roadmap.
   third. Report: [`docs/evidence/compound_probe_anthropic.md`](docs/evidence/compound_probe_anthropic.md). What this
   does not show: a recovery rate after a half answer (the model never gave one, so there was no opportunity; it is
   tested offline with a controlled history), the p95 against the previous prompt, the behavior on the deployed demo
-  (to be checked there in both languages), and the cap at 3 (a separate run; the default stays 2).
+  (to be checked there in both languages), and a readability review of three sections on desktop and mobile. **The cap stays at 2.** The run with the cap at 3 (set inside the probe
+  only) met the numeric thresholds with Sonnet 5: all three reads declared and answered in 40 of 40 turns [91-100%], every case 10 of 10 in
+  both languages, p95 2.3 s (2.6 s at cap 2), USD 0.0029 per turn
+  ([`docs/evidence/compound_probe_anthropic_cap3.md`](docs/evidence/compound_probe_anthropic_cap3.md)); it is not applied because the
+  readability review was not done and only the main model qualifies, so a shorter reply with the third read named as unattended is the
+  product decision for now (on the fallback, 16 answered turns, 0 declared more than one read:
+  [`compound_probe_groq_cap3.md`](docs/evidence/compound_probe_groq_cap3.md)).
   **The fallback is a documented limit.** Groq's documentation lists `openai/gpt-oss-120b` and `gpt-oss-20b` without
   parallel tool use (`parallel_tool_calls` exists but does not add the support). The same probe on `openai/gpt-oss-120b`
   is **partial**: the account's rate limit refused 167 of the 220 turns, and in the 53 that were answered the model

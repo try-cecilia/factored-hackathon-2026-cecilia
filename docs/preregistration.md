@@ -143,6 +143,12 @@ No threshold above changed. Claude Sonnet 5: criterion 1 met (0 unsafe, 0 record
 case 10 of 10, the real phrases and their Portuguese equivalents 10 of 10); criterion 3 met (20 of 20); criterion 4 has no real
 opportunity (the model covered both reads on the first turn of every sequence), so no live rate is claimed; criterion 5 met on p95 (3.0 s),
 attempts (1) and mean known cost (USD 0.0026), and **not measured** on the 25% increase over the baseline, which was not run; criterion 6
-is pending the deployment. The cap-3 run is separate and its result is not in this paragraph; the cap stays 2. GPT-OSS 120B on Groq: the
+is pending the deployment. The cap stays 2. GPT-OSS 120B on Groq: the
 run is partial (167 of 220 turns refused by the provider's rate limit); on the 53 answered turns criterion 2 was not met (0 of 15) because
 the model declared one read per turn, which is the limit this section says is documented.
+
+**Outcome of the cap-3 run (2026-10-01, same commit and prompt; `docs/evidence/compound_probe_*_cap3.md`).** Claude Sonnet 5: the three reads
+declared in 40 of 40 turns [91-100%] and answered in 40 of 40, every case 10 of 10, 0 unsafe, p95 2.28 s against 2.64 s at cap 2 (ratio 0.86,
+under 1.25). The numeric thresholds for raising the cap are met. The readability review the section also requires was not done, and only the
+main model qualifies, so by this section's own rule the cap stays 2 (default, in the product and in every deployment) until the user decides
+otherwise. GPT-OSS 120B on Groq: partial (24 of 40 turns refused by the rate limit); 0 of 16 answered turns declared more than one read.
