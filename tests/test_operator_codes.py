@@ -80,7 +80,7 @@ def test_the_evidence_notes_are_questions_with_a_code_too(monkeypatch):
     unsafe, _ = router.pre_llm("me robaron la tarjeta, es un fraude", "Active")
     ticket = filed(unsafe)
     assert ticket["open_question_codes"][-1] == {"code": "evidence_failed", "params": {"error_type": "RuntimeError"}}
-    assert ticket["open_questions"][-1] == "Could not gather recent activity automatically: db down"
+    assert ticket["open_questions"][-1] == "Could not gather recent activity automatically: RuntimeError"
 
 
 def test_the_parameters_carry_nothing_the_ticket_did_not_already_hold():
@@ -128,11 +128,11 @@ def test_the_parameters_carry_no_raw_error_text(monkeypatch):
     assert ticket["open_question_codes"][-1] == {"code": "evidence_failed", "params": {"error_type": "RuntimeError"}}
 
 
-def test_the_english_fallback_keeps_the_raw_message_as_before():
-    ticket = filed(router.after_tool(RAW_MESSAGES["data_unavailable"]))
+def test_the_english_fallback_keeps_the_message_of_our_own_errors_and_only_the_type_of_an_unexpected_one():
+    ticket = filed(router.after_tool(RAW_MESSAGES["data_unavailable"]))  # a message our code wrote
     assert ticket["reason"] == "Data needed for a verified answer is unavailable: balance missing for product PRD-AB12CD34EF56"
-    ticket = filed(router.after_tool(RAW_MESSAGES["tool_failure"]))
-    assert ticket["reason"] == f"Tool failure: {RAW_MESSAGES['tool_failure']}"
+    ticket = filed(router.after_tool(RAW_MESSAGES["tool_failure"]))  # whatever the database or a library said stays out of the ticket
+    assert ticket["reason"] == "Tool failure: ToolError" and not any(leak in json.dumps(ticket) for leak in ("bank.duckdb", "C:/srv", "Cannot open file"))
 
 
 def test_a_ticket_filed_before_the_codes_still_reads_the_same(tmp_path):
