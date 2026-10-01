@@ -379,3 +379,47 @@ def test_a_read_that_is_incomplete_keeps_the_valid_part_and_a_value_that_does_no
     orch.handle_message(tok, "¿y lo otro?")
     kept = fake.calls[1][2:-1][1]["content"]
     assert "get_exchange_rate(on_date=2024-01-16, source_currency=USD)" in kept and "list_transactions(limit=3)" in kept
+
+
+@pytest.mark.parametrize("bad", ["2024-99-99", {"bad": "value"}, ["2024-01-16"], 7.5, "mañana"])
+def test_a_date_the_tools_would_reject_is_left_out_of_the_history_and_the_rest_is_kept(bad):
+    fx = ("get_exchange_rate", {"source_currency": "USD", "target_currency": "MXN", "on_date": bad})
+    listing = ("list_transactions", {"start_date": bad, "end_date": "2024-01-16T10:30:00", "limit": 4})
+    orch, tok, fake = session([tool_call_response(*PENDING, TRANSFERS_5, fx, listing), tool_call_response(*CARD)])
+    orch.handle_message(tok, "pendientes, transferencias, el dólar y movimientos")
+    orch.handle_message(tok, "¿y lo otro?")
+    kept = fake.calls[1][2:-1][1]["content"]
+    assert "get_exchange_rate(source_currency=USD, target_currency=MXN)" in kept
+    assert "list_transactions(limit=4, end_date=2024-01-16)" in kept  # the valid ones stay, the timestamp as the tool reads it: a date
+    assert "2024-99" not in kept and "bad" not in kept and "mañana" not in kept
+
+
+def test_the_history_and_the_tool_use_one_rule_for_a_date():
+    import json
+
+    from agent.core.orchestrator import Orchestrator
+
+    for value in ("2024-01-16", "2024-01-16T10:30:00", "2024-99-99", "mañana", " ", 7.5, {"a": 1}):
+        try:
+            tools.parse_date(value, "on_date")
+            accepted = isinstance(value, str)  # the history also wants text, which is what the schema declares
+        except Exception:
+            accepted = False
+        call = {"name": "get_exchange_rate", "arguments": json.dumps({"source_currency": "USD", "target_currency": "MXN", "on_date": value})}
+        _, views = Orchestrator._unattended([call], [], "es")
+        assert ("on_date=" in views[0]) == accepted, value
+
+
+def test_requiring_the_mandatory_arguments_is_unchanged_and_a_bad_date_is_still_the_tools_to_reject():
+    from agent.core.orchestrator import sanitize_args
+    from agent.tools.errors import MissingSlot
+
+    raw = {"source_currency": "usd", "target_currency": "MXN", "on_date": "2024-99-99"}
+    args, _ = sanitize_args("get_exchange_rate", raw, [])  # same as before: dates are the tool's to judge
+    assert args == {"source_currency": "USD", "target_currency": "MXN", "on_date": "2024-99-99"}
+    with pytest.raises(MissingSlot):
+        sanitize_args("get_exchange_rate", {"source_currency": "USD"}, [])
+    assert sanitize_args("get_exchange_rate", {"source_currency": "USD"}, [], require=False)[0] == {"source_currency": "USD"}
+    orch, tok, _ = session([tool_call_response("get_exchange_rate", raw)])
+    r = orch.handle_message(tok, "el dólar al 99 del 99")
+    assert r.disposition == "CLARIFY" and r.verified_facts == []  # the tool rejects it: a question, as before

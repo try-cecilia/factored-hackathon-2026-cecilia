@@ -103,7 +103,8 @@ def _owned_product(customer_id: str, product_id: str) -> dict:
     return rows[0]
 
 
-def _parse_date(value: Optional[str], name: str) -> Optional[date]:
+def parse_date(value: Optional[str], name: str) -> Optional[date]:
+    """The one rule for a date argument (YYYY-MM-DD, or a timestamp's first ten characters); the orchestrator reuses it."""
     if value in (None, ""):
         return None
     try:
@@ -188,7 +189,7 @@ def list_transactions(
             _owned_product(customer_id, product_id)
         if transaction_type and transaction_type not in TRANSACTION_TYPES:
             raise InvalidArgument(f"transaction_type must be one of {list(TRANSACTION_TYPES)}", missing_slots=["transaction_type"])
-        start, end = _parse_date(start_date, "start_date"), _parse_date(end_date, "end_date")
+        start, end = parse_date(start_date, "start_date"), parse_date(end_date, "end_date")
         if start and end and start > end:
             raise InvalidArgument("start_date is after end_date", missing_slots=["start_date", "end_date"])
         n = max(1, min(int(limit or 10), MAX_TRANSACTIONS))
@@ -248,7 +249,7 @@ def get_exchange_rate(customer_id: str, source_currency: str, target_currency: s
         bad = [n for n, v in (("source_currency", src), ("target_currency", tgt)) if v not in CURRENCIES]
         if bad or src == tgt:
             raise InvalidArgument(f"currencies must be two different values of {sorted(CURRENCIES)}", missing_slots=bad or ["target_currency"])
-        requested = _parse_date(on_date, "on_date") or data_as_of()
+        requested = parse_date(on_date, "on_date") or data_as_of()
         oldest = requested - timedelta(days=MAX_FX_FALLBACK_DAYS)
 
         def lookup(a, b):
@@ -298,7 +299,7 @@ def request_trace(customer_id: str, product_id: Optional[str] = None, amount: An
     def _run():
         if product_id:
             _owned_product(customer_id, product_id)
-        day = _parse_date(on_date, "on_date")
+        day = parse_date(on_date, "on_date")
         clauses = ["t.customer_id = ?", "t.transaction_status = 'Pending'", f"t.transaction_type IN ({', '.join('?' * len(TRACEABLE_TYPES))})"]
         params: list = [customer_id, *TRACEABLE_TYPES]
         if product_id:

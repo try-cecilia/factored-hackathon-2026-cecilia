@@ -924,6 +924,14 @@ class Orchestrator:
                         args.update(sanitize_args(name, {key: value}, catalog, require=False)[0])
                     except Exception:  # noqa: BLE001 - left out of what the history keeps
                         pass
+            for key in ("start_date", "end_date", "on_date"):  # the tools' own rule for a date, so the history never offers one they reject
+                if key in args:
+                    try:
+                        if not isinstance(args[key], str):
+                            raise InvalidArgument(f"{key} must be text")
+                        args[key] = account_tools.parse_date(args[key], key).isoformat()
+                    except InvalidArgument:
+                        args.pop(key)
             ref = str(raw.get("product_id")) if str(raw.get("product_id")) in vocabulary else ""
             parts.append(render.read_part(name, args, lang))
             views.append(_call_view(name, args, alias, ref))
