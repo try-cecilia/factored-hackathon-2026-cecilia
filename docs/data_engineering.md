@@ -46,7 +46,7 @@ command was run later with `make` (see "Run again, on another machine").
 
 ## What a full load costs (measured)
 
-Everything below is from one run, `20261001T022411Z-5bf225`, local files into a new DuckDB file, with nothing else running:
+**Measurements by Ivan, from PR #21, not reproduced in this integration** (the raw files and S3 were not available here). Everything below is from one run, `20261001T022411Z-5bf225`, local files into a new DuckDB file, with nothing else running:
 Windows 11 (10.0.26200) on AMD64, 12 logical CPUs, Python 3.11.8, DuckDB 1.5.5 with 12 threads and a 1.8 GiB memory
 limit. The machine is now recorded in each load's `params` (`_ingestion_log`), so a later figure can be read against it.
 
@@ -99,14 +99,14 @@ give: `tests/test_baseline_gold.py` compares both on a fixture that includes a c
 committed `docs/evidence/baseline_metrics.json` came out identical after the change. The report's other figures need columns
 the mart does not carry (segment, hour of day, the survey join) and still read silver.
 
-The three marts build in 3.9 s on the database above.
+The three marts build in 3.9 s on the database above (Ivan's measurement from PR #21, not reproduced in this integration; so are the 3,927 rows of `gold_contact_demand` in the table above).
 
 ## The Parquet copy
 
 `make lake` writes one zstd Parquet file per silver table and gold mart under `data/lake/` (git-ignored), then a
-`manifest.json` last, so a half-written export has none. On the database above: 12 files, **284 MB** against 1,266 MB of
+`manifest.json` last, so a half-written export has none. On the database above (Ivan's measurements from PR #21, not reproduced in this integration): 12 files, **284 MB** against 1,266 MB of
 source CSV, written in 5.0 s. `make lake VERIFY=1` needs no warehouse: it re-hashes every file and reads its row count and
-schema back, and with the warehouse it also compares each table's row count. It took 0.7 s here. A file that was edited,
+schema back, and with the warehouse it also compares each table's row count. It took 0.7 s there. A file that was edited,
 truncated, swapped or deleted fails, as does a warehouse table that changed after the export (`tests/test_lake.py`).
 
 ## Run again, on another machine
@@ -123,7 +123,7 @@ average above 80 from other test suites), so the times are an upper bound.
 | `make lake` | 8 files, 253.7 MB | 1.7 to 1.8 |
 | `make lake VERIFY=1` | every file matches the manifest, and the row counts match the warehouse | 0.3 |
 
-The two marts' row counts are the ones in the table above. The 3.9 s, 12 files, 284 MB and 5.0 s of this page include
+The two marts' row counts are the ones in the table above. The 3.9 s, 12 files, 284 MB and 5.0 s of this page (Ivan's measurements from PR #21) include
 `gold_contact_demand` and the contact tables, which this copy lacks, so they were not reproduced and are not corrected.
 `make pipeline INGEST=ingest-local RAW_DATA_DIR=<folder outside the repository>`, the whole chain in one command, ran on the
 test fixtures in 1.6 s with every step exiting 0, lineage included.
