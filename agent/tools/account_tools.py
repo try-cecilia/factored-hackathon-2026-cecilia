@@ -31,6 +31,7 @@ CREDIT_PRODUCT_TYPES = {"Tarjeta Crédito", "Préstamo Personal", "Préstamo Hip
 CURRENCIES = {"MXN", "COP", "ARS", "USD"}
 MAX_TRANSACTIONS = 50
 MAX_FX_FALLBACK_DAYS = 7
+TRANSACTION_TYPES = ("Deposit", "Withdrawal", "Transfer", "Payment", "Purchase", "Adjustment")  # data/contracts.py: type_enum
 TRACEABLE_TYPES = ("Transfer", "Payment", "Deposit")  # what operations can follow; a pending card purchase just posts
 MAX_TRACE_CANDIDATES = 5
 MAX_BEHAVIOR_HISTORY = 5000  # the customer's latest rows, read to describe their recent movements; the data averages about 30
@@ -179,11 +180,14 @@ def list_transactions(
     end_date: Optional[str] = None,
     status: Optional[str] = None,
     limit: int = 10,
+    transaction_type: Optional[str] = None,
 ) -> dict:
     def _run():
         _check_freshness()
         if product_id:
             _owned_product(customer_id, product_id)
+        if transaction_type and transaction_type not in TRANSACTION_TYPES:
+            raise InvalidArgument(f"transaction_type must be one of {list(TRANSACTION_TYPES)}", missing_slots=["transaction_type"])
         start, end = _parse_date(start_date, "start_date"), _parse_date(end_date, "end_date")
         if start and end and start > end:
             raise InvalidArgument("start_date is after end_date", missing_slots=["start_date", "end_date"])
@@ -197,16 +201,20 @@ def list_transactions(
             clauses.append("process_date <= ?"); params.append(end)
         if status:
             clauses.append("transaction_status = ?"); params.append(status)
+        if transaction_type:
+            clauses.append("transaction_type = ?"); params.append(transaction_type)
         items = _rows(
             f"""SELECT transaction_id, transaction_date, product_id, transaction_type, amount, currency,
                        channel, merchant_name, transaction_status, is_fraud, fraud_score
                 FROM transactions WHERE {' AND '.join(clauses)}
                 ORDER BY transaction_date DESC LIMIT ?""", params + [n])
         return {"items": items, "as_of": data_as_of(), "limit": n,
-                "filters": {"product_id": product_id, "start_date": start, "end_date": end, "status": status}}
+                "filters": {"product_id": product_id, "start_date": start, "end_date": end, "status": status,
+                            "transaction_type": transaction_type}}
 
     return _audited("list_transactions", customer_id,
-                    {"product_id": product_id, "start_date": start_date, "end_date": end_date, "status": status, "limit": limit}, _run)
+                    {"product_id": product_id, "start_date": start_date, "end_date": end_date, "status": status, "limit": limit,
+                     "transaction_type": transaction_type}, _run)
 
 
 def get_payment_status(customer_id: str, product_id: str) -> dict:
