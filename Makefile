@@ -8,7 +8,11 @@ WEB_PORT ?= 3000
 # Combined development always connects to its local API, unless overridden.
 AGENT_API_URL ?= http://127.0.0.1:$(API_PORT)
 
-.PHONY: gate label-scan real-speech tracking-report model-study model-card unit-economics validate-data-ml lineage gold operator-labels retention test-resilience loadtest loadtest-fixture loadtest-http setup ingest ingest-demo analysis label-signal train-eval workload eval eval-adversarial eval-ablation check-readme eval-failures eval-failures-live eval-live-sample eval-live-sample-report eval-failures-local eval-live live-smoke test serve docker-build all mlflow-ui
+# The raw source files: `ingest-local` loads from here and `lineage` re-hashes them from here, so both always read the same folder.
+RAW_DATA_DIR ?= data/raw
+QUALITY_REPORT ?= data/reports/quality_report.json
+
+.PHONY: gate label-scan real-speech tracking-report model-study model-card unit-economics validate-data-ml lineage gold pipeline ingest-local lake operator-labels retention test-resilience loadtest loadtest-fixture loadtest-http setup ingest ingest-demo analysis label-signal train-eval workload eval eval-adversarial eval-ablation check-readme eval-failures eval-failures-live eval-live-sample eval-live-sample-report eval-failures-local eval-live live-smoke test serve docker-build all mlflow-ui
 .PHONY: web-setup serve-web web-build web-typecheck web-test serve-fixture serve-all-fixture serve-all
 .PHONY: env env-check env-fill evidence up down clean-volumes monitoring-up up-llm-local up-llm-host up-dataset lock lock-check alerts-check compose-e2e
 .PHONY: human-set-export human-set-sheet human-set-pages human-set-agreement human-set-cases human-set-eval human-set-report
@@ -102,12 +106,23 @@ compose-e2e:      ## the whole stack from scratch on the fixture in its own thro
 	sh ops/compose_e2e.sh
 
 ingest:           ## full warehouse (serving + analysis tables) from S3, with contracts + lineage
-	$(PY) -m data.pipeline --profile all --report data/reports/quality_report.json
+	$(PY) -m data.pipeline --profile all --raw-dir $(RAW_DATA_DIR) --report $(QUALITY_REPORT)
+
+ingest-local:     ## the same full load, from a local directory (RAW_DATA_DIR, data/raw by default) instead of S3
+	$(PY) -m data.pipeline --profile all --source local --raw-dir $(RAW_DATA_DIR) --report $(QUALITY_REPORT)
+
+pipeline:         ## the whole chain, stopping at the first step that fails: ingest -> gold -> gold VERIFY -> lineage -> lake -> lake VERIFY (INGEST=ingest-local reads a local directory)
+	$(MAKE) $(or $(INGEST),ingest)
+	$(MAKE) gold
+	$(MAKE) gold VERIFY=1
+	$(MAKE) lineage
+	$(MAKE) lake
+	$(MAKE) lake VERIFY=1
 
 ingest-demo:      ## small deterministic sample for demo deploys (5k customers, last 12 months)
 	$(PY) -m data.pipeline --profile serving --sample-customers 5000 --since 2025-06-17 --report data/reports/quality_report_demo.json
 
-analysis:         ## problem evidence + human baseline -> docs/evidence/baseline_metrics.md
+analysis: gold    ## problem evidence + human baseline -> docs/evidence/baseline_metrics.md (its contact figures read the gold mart, so the marts are rebuilt first)
 	$(PY) -m analysis.baseline_contact_center
 
 real-speech:      ## the intent classifier, untouched, on 1,090 real calls to an e-banking line (MInDS-14, es-ES/pt-PT) -> docs/evidence/real_speech.md
@@ -213,8 +228,11 @@ evidence:         ## regenera la evidencia versionada: docs/evidence/data_ml_val
 gold:             ## gold marts built from silver and reconciled to it (rolls back on a mismatch); `make gold VERIFY=1` only re-checks
 	$(PY) -m data.gold $(if $(VERIFY),--verify)
 
+lake:             ## silver and gold as Parquet files with a manifest of hashes -> data/lake; `make lake VERIFY=1` re-hashes and re-reads them
+	$(PY) -m data.lake $(if $(VERIFY),--verify --with-db)
+
 lineage:          ## the served warehouse traced back to its source files and their hashes (exit 1 if the chain is broken)
-	$(PY) -m data.lineage --verify --raw-dir data/raw
+	$(PY) -m data.lineage --verify --raw-dir $(RAW_DATA_DIR)
 
 operator-labels: ## las decisiones del operador como etiquetas + barrido del umbral de antigüedad
 	$(PY) -m eval.operator_labels

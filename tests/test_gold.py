@@ -112,3 +112,15 @@ def test_every_mart_builds_and_reconciles_on_the_real_contract(tmp_path, monkeyp
         assert built["gold_daily_activity"]["n_rows"] > 0 and verify(con) == []
     finally:
         con.close()
+
+
+def test_a_column_whose_type_drifts_from_the_contract_fails_the_build(silver, monkeypatch):
+    drifted = replace(MARTS[1], sql=MARTS[1].sql.replace("count(*) AS n_transactions", "CAST(count(*) AS VARCHAR) AS n_transactions"), reconcile=())
+    monkeypatch.setattr(gold, "MARTS", (drifted,))
+    with pytest.raises(GoldError, match="columns differ from the contract.*n_transactions VARCHAR"):
+        build(silver)
+
+
+def test_the_declared_columns_are_the_real_ones_on_every_mart(silver):
+    # the contract is not a copy that can rot: it is compared with what each query returns, here and on every build
+    assert [r["status"] for r in build(silver)] == ["built", "built", "skipped"]
