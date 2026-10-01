@@ -49,7 +49,7 @@ Gains:
 
 Costs:
 - **Replies are templated.** They read more like a bank statement than a conversation. For a banking channel that is usually a feature, and the templates exist in Spanish and Portuguese.
-- **No chained lookups.** The model cannot read one result to decide the next lookup. This workflow does not need it: every question maps to one or two independent lookups.
+- **No chained lookups.** The model cannot read one result to decide the next lookup. This workflow does not need it: every question maps to one or two independent lookups. Two in one message depend on the model declaring both: measured on Claude Sonnet 5 (80 of 80 two-request turns covered) and shown to be a limit on the fallback, GPT-OSS on Groq, which offers no parallel tool use (`docs/evidence/compound_probe_anthropic.md`, `compound_probe_groq.md`; LIMITATIONS.md).
 - **The customer's own words still reach the provider**, masked. That is unavoidable for a language model; production would also pick a provider or deployment under the bank's data-processing terms.
 
 ## Alternatives considered

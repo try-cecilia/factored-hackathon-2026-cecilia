@@ -137,3 +137,12 @@ development phrases is allowed before the frozen measurement; later changes need
 
 **Prices used for the estimate** (list prices, to be checked on the day): GPT-OSS 120B USD 0.15 / 0.60 per million input /
 output tokens, Sonnet 5 USD 2 / 10, cache read 0.1 and write 1.25 times the input price.
+
+**Outcome of the first live run (2026-10-01, commit `ef0802e`, prompt 3.2.1, cap 2; reports in `docs/evidence/compound_probe_*.md`).**
+No threshold above changed. Claude Sonnet 5: criterion 1 met (0 unsafe, 0 records sent, 0 traces opened); criterion 2 met (80 of 80, every
+case 10 of 10, the real phrases and their Portuguese equivalents 10 of 10); criterion 3 met (20 of 20); criterion 4 has no real
+opportunity (the model covered both reads on the first turn of every sequence), so no live rate is claimed; criterion 5 met on p95 (3.0 s),
+attempts (1) and mean known cost (USD 0.0026), and **not measured** on the 25% increase over the baseline, which was not run; criterion 6
+is pending the deployment. The cap-3 run is separate and its result is not in this paragraph; the cap stays 2. GPT-OSS 120B on Groq: the
+run is partial (167 of 220 turns refused by the provider's rate limit); on the 53 answered turns criterion 2 was not met (0 of 15) because
+the model declared one read per turn, which is the limit this section says is documented.
