@@ -130,16 +130,22 @@ def to_markdown(s: dict) -> str:
         ci = "" if c["shipped"] else f"[{c['vs_shipped_ci95'][0]:+.4f}, {c['vs_shipped_ci95'][1]:+.4f}]"
         lines.append(f"| {c['variant']} | {c['C']:g} | {c['dev_macro_f1']:.4f} | {c['dev_accuracy']:.4f} | {diff} | {ci} | {mark} |")
     lines += ["", f"The best cell on dev is {best['variant']} with C = {best['C']:g} ({best['dev_macro_f1']:.4f}). {n_distinct} of the {len(cells) - 1} other configurations "
-              "differ from the shipped one by more than the noise of this dev set. We do not adopt any of them: the shipped model stays.", "",
+              "differ from the shipped one by more than the noise of this dev set, all of them for the worse. We do not adopt any of them: the shipped model stays. "
+              "Read the shipped row as the optimistic one: its representation was chosen on this same dev set, so part of its margin is selection.", "",
               "## 2. Would more data of the same kind help?", "",
               f"Dev macro-F1 of the shipped configuration trained on a share of the training data (stratified subsamples, {SUBSAMPLES} per share, seed {SEED}; "
               "the full set is one run).", "",
               "| Share of training data | Utterances | Runs | Mean dev macro-F1 | Min | Max |", "|---|---|---|---|---|---|"]
     lines += [f"| {round(100 * r['fraction'])}% | {r['n_train']} | {r['runs']} | {r['dev_macro_f1_mean']:.4f} | {r['dev_macro_f1_min']:.4f} | {r['dev_macro_f1_max']:.4f} |"
               for r in s["learning_curve"]]
-    first, last = s["learning_curve"][0], s["learning_curve"][-1]
+    first, before, last = s["learning_curve"][0], s["learning_curve"][-2], s["learning_curve"][-1]
+    rising = last["dev_macro_f1_mean"] > before["dev_macro_f1_max"]
     lines += ["", f"From {round(100 * first['fraction'])}% to {round(100 * last['fraction'])}% of the training data the mean dev macro-F1 goes from {first['dev_macro_f1_mean']:.4f} to {last['dev_macro_f1_mean']:.4f}. "
-              "Read the last steps of the curve, not the first: if it is still rising there, more data helps; if it has flattened, the limit is somewhere else.", "",
+              f"The last step, from {round(100 * before['fraction'])}% to {round(100 * last['fraction'])}%, adds {last['dev_macro_f1_mean'] - before['dev_macro_f1_mean']:+.4f}, "
+              + (f"more than the whole spread of the {round(100 * before['fraction'])}% subsamples ({before['dev_macro_f1_min']:.4f} to {before['dev_macro_f1_max']:.4f}): the curve is still rising at the end, "
+                 "which says more data of this kind would probably help. " if rising else
+                 f"inside the spread of the {round(100 * before['fraction'])}% subsamples ({before['dev_macro_f1_min']:.4f} to {before['dev_macro_f1_max']:.4f}): the curve has flattened, so the limit is not the amount of data. ")
+              + "Two cautions: the full-data point is one run, and it is the configuration chosen on this dev set.", "",
               "## What this does not show", "",
               "- Every number here is on the dev half of a held-out set written by the same team that wrote the training text, so shared phrasing habits can flatter all of it (`EVALUATION.md`).",
               f"- {s['n_dev']} dev utterances is small: an interval that contains 0 means \"we cannot tell\", not \"they are equal\".",
