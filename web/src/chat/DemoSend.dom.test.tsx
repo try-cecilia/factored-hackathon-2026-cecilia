@@ -17,6 +17,7 @@ const startScenario = vi.hoisted(() => vi.fn())
 vi.mock('@tanstack/react-router', () => ({
   Link: ({ to, children, ...rest }: { to: string; children?: ReactNode }) => <a href={to} {...rest}>{children}</a>,
   useNavigate: () => vi.fn(),
+  useLocation: () => ({ href: '/chat' }), // ChatView reads it to come back to the same page after signing in again
   useRouter: () => ({ invalidate: () => router.invalidate() }),
 }))
 vi.mock('../server/auth.functions', () => ({ logout: vi.fn() }))

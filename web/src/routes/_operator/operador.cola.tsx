@@ -6,11 +6,15 @@ import type { Locale } from '../../i18n/locales'
 import type { MessageKey, Translate } from '../../i18n/translate'
 import type { DeskStatus, QueueRow } from '../../server/operator.functions'
 import { Button, DataTable, PriorityChip, priorityOf, StatusIndicator, type Column, type SortState, type StatusTone } from '../../ui'
-import { ageShort, categoryName, statusKey, when } from '../-operator/format'
+import { AgeCell } from '../-operator/AgeCell'
+import { categoryName, statusKey } from '../-operator/format'
+import { NewCasesBar, NewMark } from '../-operator/NewCases'
 import { useMinute } from '../-operator/now'
 import {
   countryOptions, distinct, filterTickets, filtersOf, hasFilters, inScope, isClosed, orderTickets, pageSlice, tabCounts, validateSearch, type QueueSearch, type StatusTab,
 } from '../-operator/queue'
+import { isOverdue } from '../-operator/sla'
+import { FilterSelect, SearchBox } from '../-operator/QueueControls'
 import { LocaleCell, Notice } from '../-operator/ui'
 
 const PAGE_SIZE = 25
@@ -46,11 +50,11 @@ const rowId = (r: QueueRow) => r.ticket_id
 function makeColumns(t: Translate, locale: Locale, now: number): Column<QueueRow>[] {
   return [
     { id: 'priority', header: t('operator.queue.columns.priority'), width: 88, sortable: true, cell: (r) => <PriorityChip priority={priorityOf(r.priority)} /> },
-    { id: 'ticket', header: t('operator.queue.columns.ticket'), width: 76, mono: true, rowHeader: true, sortable: true, cell: (r) => r.ticket_id.slice(0, 8) },
+    { id: 'ticket', header: t('operator.queue.columns.ticket'), width: 92, mono: true, rowHeader: true, sortable: true, cell: (r) => <>{r.ticket_id.slice(0, 8)}<NewMark id={r.ticket_id} /></> },
     { id: 'queue', header: t('operator.queue.columns.queue'), width: 132, mono: true, muted: true, truncate: true, sortable: true, cell: (r) => r.queue },
     { id: 'request', header: t('operator.queue.columns.request'), truncate: true, sortable: true, cell: (r) => <span title={categoryName(t, r.category)}>{r.request}</span> },
     { id: 'locale', header: t('operator.queue.columns.locale'), width: 64, mono: true, muted: true, sortable: true, cell: (r) => <LocaleCell row={r} /> },
-    { id: 'age', header: t('operator.queue.columns.age'), width: 52, align: 'end', mono: true, muted: true, sortable: true, cell: (r) => <span title={t('operator.queue.ageTitle', { date: when(r.created_at, locale) })}>{ageShort(r.created_at, now)}</span> },
+    { id: 'age', header: t('operator.queue.columns.age'), width: 64, align: 'end', mono: true, muted: true, sortable: true, cell: (r) => <AgeCell row={r} now={now} locale={locale} /> },
     { id: 'status', header: t('operator.queue.columns.status'), width: 108, sortable: true, cell: (r) => <StatusIndicator tone={tones[r.desk.status]}>{t(statusKey[r.desk.status])}</StatusIndicator> },
     { id: 'operator', header: t('operator.queue.columns.operator'), width: 92, mono: true, truncate: true, sortable: true, cell: (r) => r.desk.operator ?? '—' },
   ]
@@ -82,12 +86,15 @@ function Queue() {
     return () => document.removeEventListener('keydown', onKey)
   }, [])
 
+  const now = useMinute()
   const tickets = result.ok ? result.data : NO_ROWS
   const filters = filtersOf(search, q)
   const me = view.operator
-  const scope = useMemo(() => inScope(tickets, filters, me), [tickets, filters.view, filters.queue, filters.priority, filters.country, filters.language, filters.q, me]) // eslint-disable-line react-hooks/exhaustive-deps
+  const scope = useMemo(() => inScope(tickets, filters, me, now), [tickets, filters.view, filters.queue, filters.priority, filters.country, filters.language, filters.q, filters.overdue, me, now]) // eslint-disable-line react-hooks/exhaustive-deps
   const counts = tabCounts(scope)
-  const rows = useMemo(() => orderTickets(filterTickets(scope, filters, me), sort), [scope, filters.tab, sort, me]) // eslint-disable-line react-hooks/exhaustive-deps
+  // How many the button would show: the scope without its own filter, so it does not read 0 while it is on.
+  const overdueCount = useMemo(() => inScope(tickets, { ...filters, overdue: false }, me, now).filter((row) => isOverdue(row, now)).length, [tickets, filters.view, filters.queue, filters.priority, filters.country, filters.language, filters.q, me, now]) // eslint-disable-line react-hooks/exhaustive-deps
+  const rows = useMemo(() => orderTickets(filterTickets(scope, filters, me, now), sort), [scope, filters.tab, sort, me, now]) // eslint-disable-line react-hooks/exhaustive-deps
   const pending = scope.filter((ticket) => !isClosed(ticket)).length
   const countries = useMemo(() => countryOptions(tickets), [tickets])
   const languages = useMemo(() => distinct(tickets, (ticket) => ticket.language), [tickets])
@@ -106,7 +113,6 @@ function Queue() {
 
   const title = search.cola ?? t(search.vista === 'mias' ? 'operator.queue.title.mine' : search.vista === 'sin-asignar' ? 'operator.queue.title.unassigned' : 'operator.queue.title.all')
 
-  const now = useMinute()
   const columns = useMemo(() => makeColumns(t, locale, now), [t, locale, now])
   const openTicket = useCallback(
     (r: QueueRow) => void navigate({ to: '/operador/cola/$ticketId', params: { ticketId: r.ticket_id }, search: ((prev: QueueSearch) => prev) as never }),
@@ -130,13 +136,9 @@ function Queue() {
         <div className="op-head">
           <h1 className={search.cola ? 'op-mono' : undefined}>{title}</h1>
           <span className="op-count" aria-label={String(pending)}>{result.ok ? pending : ''}</span>
+          <NewCasesBar />
           <div className="op-head__spacer" />
-          <label className="op-search">
-            <svg viewBox="0 0 20 20" width="12" height="12" aria-hidden="true" focusable="false"><circle cx="9" cy="9" r="5.5" fill="none" stroke="currentColor" strokeWidth="1.7" /><path d="M13.2 13.2 17 17" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" /></svg>
-            <span className="sr-only">{t('operator.queue.search')}</span>
-            <input ref={searchBox} type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('operator.queue.searchPlaceholder')} autoComplete="off" spellCheck={false} />
-            <kbd aria-hidden="true">{t('operator.queue.searchHint')}</kbd>
-          </label>
+          <SearchBox value={q} onChange={setQ} inputRef={searchBox} />
           <Button variant="ghost" size="sm" onClick={() => router.invalidate()}>{t('operator.refresh')}</Button>
         </div>
 
@@ -153,10 +155,14 @@ function Queue() {
                   </Link>
                 ))}
               </div>
-              <FilterSelect name={t('operator.queue.filter.priority')} value={search.prioridad} onChange={(v) => set({ prioridad: v })}
+              <FilterSelect field="prioridad" name={t('operator.queue.filter.priority')} value={search.prioridad} onChange={(v) => set({ prioridad: v })}
                 options={PRIORITIES.map((p) => ({ value: p, label: t(`table.priority.${p.toLowerCase() as Lowercase<typeof p>}`) }))} />
-              <FilterSelect name={t('operator.queue.filter.country')} value={filters.country} onChange={(v) => set({ pais: v })} options={countries} />
-              <FilterSelect name={t('operator.queue.filter.language')} value={search.idioma} onChange={(v) => set({ idioma: v })} options={languages.map((l) => ({ value: l, label: l.toUpperCase() }))} />
+              <FilterSelect field="pais" name={t('operator.queue.filter.country')} value={filters.country} onChange={(v) => set({ pais: v })} options={countries} />
+              <FilterSelect field="idioma" name={t('operator.queue.filter.language')} value={search.idioma} onChange={(v) => set({ idioma: v })} options={languages.map((l) => ({ value: l, label: l.toUpperCase() }))} />
+              <button type="button" className="op-toggle" aria-pressed={filters.overdue} onClick={() => set({ vencidos: filters.overdue ? undefined : 'si' })}>
+                {t('operator.queue.filter.overdue')}
+                <span className="op-mono">{overdueCount}</span>
+              </button>
               {hasFilters(filters) && <Button variant="ghost" size="xs" onClick={clear}>{t('operator.queue.filter.clear')}</Button>}
               <div className="op-head__spacer" />
               <span className="op-order" aria-live="polite">{orderLabel}</span>
@@ -182,18 +188,5 @@ function Queue() {
         <Outlet />
       </aside>
     </div>
-  )
-}
-
-/** A filter that looks like the pills of the design and is a native select underneath: keyboard and screen readers get it for free. */
-function FilterSelect({ name, value, onChange, options }: { name: string; value: string | undefined; onChange: (value: string | undefined) => void; options: { value: string; label: string }[] }) {
-  return (
-    <label className="op-select" data-set={value ? '' : undefined}>
-      <select aria-label={name} value={value ?? ''} onChange={(e) => onChange(e.target.value || undefined)}>
-        <option value="">{name}</option>
-        {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
-      <svg viewBox="0 0 20 20" width="10" height="10" aria-hidden="true" focusable="false"><path d="M5 8l5 5 5-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-    </label>
   )
 }

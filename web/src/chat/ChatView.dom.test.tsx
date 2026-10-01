@@ -1,4 +1,4 @@
-import { act, screen } from '@testing-library/react'
+import { act, fireEvent, screen } from '@testing-library/react'
 import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Session } from '../server/auth.functions'
@@ -11,7 +11,8 @@ import type { HistoryResult } from './types'
 // ChatLog asks for the clock's formatter once per render: counting those calls counts its renders.
 const renders = vi.hoisted(() => ({ log: 0 }))
 vi.mock('./clock', () => ({ useTimeParts: () => { renders.log += 1; return () => undefined } }))
-vi.mock('@tanstack/react-router', () => ({ useNavigate: () => vi.fn() }))
+const router = vi.hoisted(() => ({ navigate: vi.fn(), href: '/chat' }))
+vi.mock('@tanstack/react-router', () => ({ useNavigate: () => router.navigate, useLocation: () => ({ href: router.href }) }))
 vi.mock('../server/chat.functions', () => ({ sendMessage: vi.fn(), getHistory: vi.fn(), getCase: vi.fn() }))
 
 const session: Session = { customer_id: 'CLI-FIX0001', session_ref: 's1', segment: 'Premium', country: 'México', customer_status: 'Active', expires_at: 0, expires_in: 900 }
@@ -30,7 +31,11 @@ beforeEach(() => {
   window.matchMedia = ((query: string) => ({ matches: false, media: query, addEventListener: () => {}, removeEventListener: () => {} })) as unknown as typeof window.matchMedia
   globalThis.ResizeObserver = class { observe() {} disconnect() {} unobserve() {} } as unknown as typeof ResizeObserver
 })
-afterEach(() => vi.useRealTimers())
+afterEach(() => {
+  vi.useRealTimers()
+  router.navigate.mockReset()
+  router.href = '/chat'
+})
 
 describe('ChatView', () => {
   it('the session countdown does not draw the conversation again before its notice, and the notice and the end still come', async () => {
@@ -79,5 +84,18 @@ describe('ChatView', () => {
 
     await act(() => vi.advanceTimersByTimeAsync(301_000))
     expect(screen.getByText('Tu sesión venció')).toBeTruthy()
+  })
+
+  it('signing in again after the session ended comes back to the page it was on, with its query and fragment', async () => {
+    router.href = '/chat?x=1#foo'
+    renderWithI18n(
+      <ShellProvider value={{ showCase: () => {} }}>
+        <ConversationProvider sessionRef="s1" initial={history}><ChatView session={session} /></ConversationProvider>
+      </ShellProvider>,
+    )
+    await act(() => vi.advanceTimersByTimeAsync(15 * 60_000 + 5_000))
+    expect(screen.getByText('Tu sesión venció')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /Ingresar de nuevo/ }))
+    expect(router.navigate).toHaveBeenCalledWith({ to: '/login', search: { redirect: '/chat?x=1#foo', motivo: 'expired' }, replace: true })
   })
 })

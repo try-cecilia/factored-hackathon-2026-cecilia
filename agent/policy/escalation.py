@@ -208,7 +208,8 @@ def _evidence_for(decision: Decision, customer_id: str, actions: list[dict[str, 
                 flagged = bool(t["is_fraud"]) or (t["fraud_score"] is not None and t["fraud_score"] >= FRAUD_SCORE_FLAG)
                 evidence.append({"type": "transaction", "id": t["transaction_id"], "flagged": flagged,
                                  "detail": {k: t[k] for k in ("transaction_date", "amount", "currency", "merchant_name",
-                                                              "transaction_country", "transaction_status", "fraud_score")}})
+                                                              "transaction_country", "transaction_status", "fraud_score")}
+                                            | {"behavior": t.get("behavior")}})
             evidence.sort(key=lambda e: not e["flagged"])
         except Exception as exc:  # noqa: BLE001 - evidence is best-effort; the ticket must still be filed
             notes.append(question("evidence_failed", str(exc), error_type=type(exc).__name__))

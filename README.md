@@ -48,6 +48,8 @@ only after it is read back ([ADR-002](docs/decisions/ADR-002-one-action-confirme
 4. **Run it:** `make test` needs no keys and no network; `make ingest-demo && make serve` runs the app on
    your machine; `make all` rebuilds every number ([Quick start](#quick-start)).
 5. **What is still missing:** [`LIMITATIONS.md`](LIMITATIONS.md).
+   **Security controls and gaps:** [`SECURITY.md`](SECURITY.md), with the [ASVS Level 1 checklist](docs/asvs-level1-checklist.md).
+   **How the data flows, what a full load costs, and what is not built:** [`docs/data_engineering.md`](docs/data_engineering.md).
 6. **See where each requirement of the brief is met:** [`docs/requirements_traceability.md`](docs/requirements_traceability.md).
 7. **Try everything locally, step by step** (customer, operator, metrics): [Try everything locally](#try-everything-locally-step-by-step).
 
