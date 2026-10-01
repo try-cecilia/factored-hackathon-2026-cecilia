@@ -378,3 +378,12 @@ service, and as our own roadmap.
   that needs a push channel (websockets) through the API, the web server and
   the hosting. Both are next steps; the resolution message is the one update a
   customer gets today.
+- A message with several requests is answered by the reads the model chooses, at most two per turn
+  ([ADR-001](docs/decisions/ADR-001-model-interprets-code-speaks.md)). Which reads those are is the model's
+  judgment (prompt 3.2.0, rules 9 to 11) and is measured by no report: the offline evaluation scripts the model and
+  the live evaluation has no compound case. What the code guarantees is what happens next: both reads are rendered
+  under their own heading, a clarification for one read does not discard the other, reads beyond the second are
+  named in a template ("Quedó sin atender: ..."), and a read whose reply would be identical to the one just sent gets
+  a notice instead (alternating: asked a third time in a row, the data is shown again). Without the model, a
+  compound request is handed to a person, as any request the degraded mode does not read; it does not read
+  movements, so it cannot answer "my pending movements" even when the classifier recognizes the intent.
