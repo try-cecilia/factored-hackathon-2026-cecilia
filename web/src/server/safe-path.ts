@@ -27,3 +27,16 @@ export function sameOriginPath(value: unknown) {
     return undefined
   }
 }
+
+// The pages behind the customer's session (src/routes/_authed): the only places a customer is sent on to after signing in.
+// A path of this site that is no page ("/@host", "/nada", the operator console's) would end on a "Not Found".
+export const CUSTOMER_DESTINATIONS: ReadonlySet<string> = new Set(['/chat'])
+
+/** `sameOriginPath`, and a page the customer can open: anything else is nothing, and the caller goes to its default destination. */
+export function customerDestination(value: unknown) {
+  const path = sameOriginPath(value)
+  if (!path) return undefined
+  const { pathname, search, hash } = new URL(path, BASE)
+  const page = pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname
+  return CUSTOMER_DESTINATIONS.has(page) ? page + search + hash : undefined
+}
