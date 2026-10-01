@@ -80,7 +80,7 @@ def test_retraining_the_classifier_in_a_new_process_rewrites_the_same_bytes(tmp_
     import subprocess
 
     script = ("import sys; from pathlib import Path; from eval import evaluate_intent_classifier as e\n"
-              "for name in ('MODEL_OUT', 'META_OUT', 'REPORT_JSON', 'REPORT_MD'):\n"
+              "for name in ('MODEL_OUT', 'JSON_OUT', 'META_OUT', 'REPORT_JSON', 'REPORT_MD'):\n"
               "    setattr(e, name, Path(sys.argv[1]) / getattr(e, name).name)\n"
               "e.track = lambda report: None\n"
               "e.main()\n")
@@ -89,7 +89,7 @@ def test_retraining_the_classifier_in_a_new_process_rewrites_the_same_bytes(tmp_
         done = subprocess.run([sys.executable, "-c", script, str(tmp_path / run)], cwd=tracking.ROOT,
                               capture_output=True, text=True, encoding="utf-8", errors="replace")
         assert done.returncode == 0, done.stderr[-3000:]  # the trainer's own error, when it fails on CI
-    for name in ("intent_clf.joblib", "intent_clf_meta.json"):
+    for name in ("intent_clf.joblib", "intent_clf.json", "intent_clf_meta.json"):
         assert (tmp_path / "a" / name).read_bytes() == (tmp_path / "b" / name).read_bytes(), name
 
 
