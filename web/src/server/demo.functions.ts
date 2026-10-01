@@ -1,5 +1,6 @@
 import { createServerFn } from '@tanstack/react-start'
-import type { DemoFault, DemoScenario, DemoTicket } from '../chat/types'
+import type { DemoFault, DemoScenario, DemoTicket, DemoTrace } from '../chat/types'
+import { parseTraces } from './demo-core'
 import { AgentApiError, agentApi, agentFetch } from './agent-api'
 import { getSessionToken, setSessionToken } from './session-cookie'
 
@@ -106,6 +107,16 @@ export const getDemoTickets = createServerFn({ method: 'GET' }).handler(async ()
       next_step_code: typeof t.next_step_code === 'string' ? t.next_step_code : null,
       created_at: typeof t.created_at === 'number' ? t.created_at : 0,
     }))
+  } catch {
+    return []
+  }
+})
+
+export const getDemoTraces = createServerFn({ method: 'GET' }).handler(async (): Promise<DemoTrace[]> => {
+  const token = getSessionToken()
+  if (!token) return []
+  try {
+    return parseTraces(await agentApi<unknown>('/demo/traces', { method: 'POST', body: { session_token: token } }))
   } catch {
     return []
   }

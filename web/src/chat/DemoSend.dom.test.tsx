@@ -12,6 +12,7 @@ import type { DemoScenario, HistoryResult, Reply } from './types'
 
 const router = vi.hoisted(() => ({ invalidate: async () => {} }))
 const sendMessage = vi.hoisted(() => vi.fn())
+const traced = vi.hoisted(() => ({ list: [] as unknown[] }))
 const startScenario = vi.hoisted(() => vi.fn())
 vi.mock('@tanstack/react-router', () => ({
   Link: ({ to, children, ...rest }: { to: string; children?: ReactNode }) => <a href={to} {...rest}>{children}</a>,
@@ -20,7 +21,7 @@ vi.mock('@tanstack/react-router', () => ({
 }))
 vi.mock('../server/auth.functions', () => ({ logout: vi.fn() }))
 vi.mock('../server/locale.functions', () => ({ setLocale: vi.fn() }))
-vi.mock('../server/demo.functions', () => ({ applyDemoFault: vi.fn(), getDemoTickets: async () => [], startScenario }))
+vi.mock('../server/demo.functions', () => ({ applyDemoFault: vi.fn(), getDemoTickets: async () => [], getDemoTraces: async () => traced.list, startScenario }))
 const getHistory = vi.hoisted(() => vi.fn())
 vi.mock('../server/chat.functions', () => ({ sendMessage, getHistory, getCase: vi.fn() }))
 
@@ -106,6 +107,7 @@ beforeEach(() => {
   startScenario.mockReset().mockResolvedValue({ ok: true })
   sendMessage.mockReset().mockReturnValue(new Promise(() => {}))
   getHistory.mockReset()
+  traced.list = []
   history.initial = { ok: true, cases: [], turns: [] }
 })
 afterEach(() => vi.restoreAllMocks())
@@ -445,6 +447,27 @@ describe('a scenario of the demo panel sends its first message through the chat'
     expect(sendMessage.mock.calls[1][0].data.key).not.toBe(sendMessage.mock.calls[0][0].data.key)
     expect(within(card).getByRole('button', { name: 'Reintentar paso 1' })).toBeTruthy()
     expect(within(card).queryByText('✓ Resuelto')).toBeNull()
+  })
+
+  it('the trace the yes opens shows in the bank view with that reply, without asking for it', async () => {
+    const user = userEvent.setup()
+    const proposal: Reply = { ...reply('CLARIFY', 'Encontré un movimiento pendiente. ¿Quieres que abra un pedido de rastreo? Responde sí o no.'), category: 'confirm_action' }
+    sendMessage
+      .mockResolvedValueOnce({ ok: true, reply: proposal })
+      .mockImplementationOnce(async () => {
+        traced.list = [{ trace_id: 'TR-15B5F466D9D65B60', transaction_id: 'TXN-FIX0006', queue: 'payments_ops', status: 'open', sla_business_days: 2, created_at: 1 }]
+        return { ok: true, reply: reply('AUTO_RESOLVE', 'Listo: abrí el pedido de rastreo TR-15B5F466D9D65B60.') }
+      })
+    await draw()
+    const card = await load(user, 'Rastreo')
+    expect(await within(card).findByText('✓ Pregunta')).toBeTruthy()
+    expect(screen.queryByText('TR-15B5F466D9D65B60', { selector: 'dd code' })).toBeNull()
+
+    await user.click(await within(card).findByRole('button', { name: 'Enviar paso 2' }))
+
+    const bank = within(await screen.findByRole('region', { name: 'Vista del banco' }))
+    expect(await bank.findByText('TR-15B5F466D9D65B60')).toBeTruthy()
+    expect(bank.getByText('2 días hábiles')).toBeTruthy()
   })
 
   it('a step the API already has is not sent again from the card: the button is off and the card points at the chat', async () => {

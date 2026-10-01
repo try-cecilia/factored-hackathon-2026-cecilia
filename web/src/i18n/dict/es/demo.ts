@@ -60,5 +60,12 @@ export const demo = {
     reason: 'Motivo',
     questions: 'Preguntas abiertas',
     next: 'Próximo paso',
+    traces: 'Pedidos de rastreo',
+    traceId: 'Pedido',
+    movement: 'Movimiento',
+    sla: 'Plazo',
+    slaOne: '1 día hábil',
+    slaMany: '{n} días hábiles',
+    traceStatus: { open: 'Abierto' },
   },
 }

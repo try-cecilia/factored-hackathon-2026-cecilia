@@ -7,8 +7,13 @@ import { renderWithI18n } from '../test/render'
 import { DemoPanel } from './DemoPanel'
 import type { DemoScenario } from './types'
 
-const tickets = vi.hoisted(() => ({ list: [] as unknown[] }))
-vi.mock('../server/demo.functions', () => ({ applyDemoFault: vi.fn(), getDemoTickets: async () => tickets.list, startScenario: vi.fn() }))
+const tickets = vi.hoisted(() => ({ list: [] as unknown[], traces: [] as unknown[], asked: 0 }))
+vi.mock('../server/demo.functions', () => ({
+  applyDemoFault: vi.fn(),
+  getDemoTickets: async () => { tickets.asked += 1; return tickets.list },
+  getDemoTraces: async () => tickets.traces,
+  startScenario: vi.fn(),
+}))
 
 const scenario: DemoScenario = {
   id: 'normal_balance', path: 'normal', customer_id: 'CLI-FIX0001', language: 'es', fault: null, turns: ['¿Cuál es mi saldo?'], expect: ['AUTO_RESOLVE'],
@@ -85,6 +90,40 @@ describe('DemoPanel', () => {
       expect(card.getByText('Safety signal in the request: fraud.')).toBeTruthy()
       expect(card.getByText(/Call the customer back/)).toBeTruthy()
       expect(card.getByText('Desconocida')).toBeTruthy()
+    })
+  })
+
+  describe('the bank view lists the trace requests this session opened, as operations receives them', () => {
+    const trace = { trace_id: 'TR-15B5F466D9D65B60', transaction_id: 'TXN-FIX0006', queue: 'payments_ops', status: 'open', sla_business_days: 2, created_at: 1 }
+
+    it('in Spanish: the number, the movement, the state and the term, and not the empty note', async () => {
+      tickets.list = []
+      tickets.traces = [trace]
+      await drawAsCustomer('es')
+      const card = within((await screen.findByText('TR-15B5F466D9D65B60')).closest('article') as HTMLElement)
+      expect(card.getByText('payments_ops')).toBeTruthy()
+      expect(card.getByText('TXN-FIX0006')).toBeTruthy()
+      expect(card.getByText('Abierto')).toBeTruthy()
+      expect(card.getByText('2 días hábiles')).toBeTruthy()
+      expect(screen.getByText('Pedidos de rastreo')).toBeTruthy()
+      expect(screen.queryByText(/Todavía no hay casos/)).toBeNull()
+    })
+
+    it('in Portuguese too', async () => {
+      tickets.list = []
+      tickets.traces = [{ ...trace, sla_business_days: 1 }]
+      await drawAsCustomer('pt')
+      const card = within((await screen.findByText('TR-15B5F466D9D65B60')).closest('article') as HTMLElement)
+      expect(card.getByText('Aberto')).toBeTruthy()
+      expect(card.getByText('1 dia útil')).toBeTruthy()
+      expect(screen.getByText('Pedidos de rastreamento')).toBeTruthy()
+    })
+
+    it('with neither a ticket nor a trace the bank view says there is nothing yet', async () => {
+      tickets.list = []
+      tickets.traces = []
+      await drawAsCustomer('es')
+      expect(await screen.findByText(/Todavía no hay casos/)).toBeTruthy()
     })
   })
 })

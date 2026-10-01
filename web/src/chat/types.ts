@@ -87,4 +87,14 @@ export type DemoTicket = {
   created_at: number
 }
 
+/** A trace request this session opened, as payments operations receives it (`POST /demo/traces`): what the bank view shows of it. */
+export type DemoTrace = {
+  trace_id: string
+  transaction_id: string
+  queue: string
+  status: string
+  sla_business_days: number
+  created_at: number
+}
+
 export type DemoFault = 'expire_session' | 'llm_outage' | 'llm_restore'

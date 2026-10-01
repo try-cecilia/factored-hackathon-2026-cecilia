@@ -231,6 +231,9 @@ def test_the_bank_view_shows_the_trace_this_session_opened_as_operations_receive
     assert opened["disposition"] == "AUTO_RESOLVE" and opened["why"]["rule"] == "action:trace_opened"
     traces = client.post("/demo/traces", json={"session_token": mine}).json()
     assert len(traces) == 1 and traces[0]["trace_id"] in opened["response_text"] and traces[0]["queue"] == "payments_ops"
+    # What the panel's bank view shows of it: its number, the movement, the state and the term; no ticket was filed for it.
+    assert traces[0]["transaction_id"] == "TXN-FIX0006" and traces[0]["status"] == "open" and traces[0]["sla_business_days"] == 2
+    assert client.post("/demo/tickets", json={"session_token": mine}).json() == []
     assert client.post("/demo/traces", json={"session_token": other}).json() == []
 
 def test_the_trace_scenario_can_start_clean_after_an_earlier_run_without_touching_other_customers(client, monkeypatch):

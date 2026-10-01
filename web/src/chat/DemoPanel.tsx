@@ -2,13 +2,13 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { demoPanelNamespaces, loadNamespaces } from '../i18n/areas'
 import { useI18n, useT } from '../i18n/context'
 import { translator, type Dictionary, type MessageKey, type Translate } from '../i18n/translate'
-import { applyDemoFault, getDemoTickets, startScenario } from '../server/demo.functions'
+import { applyDemoFault, getDemoTickets, getDemoTraces, startScenario } from '../server/demo.functions'
 import { nextStepText, questionTexts, reasonText } from '../routes/-operator/notes'
 import { Button, IconButton } from '../ui'
 import { priorityOf } from '../ui/table/priority'
 import type { Entry, UserEntry } from './conversation'
 import { newMessageKey } from './key'
-import type { DemoFault, DemoScenario, DemoTicket } from './types'
+import type { DemoFault, DemoScenario, DemoTicket, DemoTrace } from './types'
 import './DemoPanel.css'
 
 /**
@@ -23,6 +23,7 @@ type Active = { scenario: DemoScenario; from: string; base: number | null; steps
 
 const PATHS = ['normal', 'ambiguous', 'out_of_scope', 'action', 'human', 'attack', 'failure'] as const
 const DISPOSITIONS = ['AUTO_RESOLVE', 'CLARIFY', 'ABSTAIN', 'ESCALATE'] as const
+const TRACE_STATUSES = ['open'] as const
 const FAULTS = ['llm_outage', 'expire_session', 'clear_traces'] as const
 
 function known<T extends string>(list: readonly T[], value: string): value is T {
@@ -63,6 +64,7 @@ export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations
   const [modelDown, setModelDown] = useState(false)
   const [note, setNote] = useState<MessageKey | null>(null)
   const [tickets, setTickets] = useState<DemoTicket[]>([])
+  const [traces, setTraces] = useState<DemoTrace[]>([])
   // The bank view reads the ticket as the operator's console does, with the console's texts: the customer's page does not carry them
   // (areas.ts), so the panel, which only exists in the demo, asks for the ones it needs when it is drawn, in the language it is in.
   const [desk, setDesk] = useState<{ locale: string; t: Translate } | null>(null)
@@ -77,15 +79,16 @@ export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations
   const text = (pair: { en: string; es: string; pt?: string }) => (locale === 'pt' ? pair.pt : undefined) ?? pair.es
   const disposition = (value: string) => (known(DISPOSITIONS, value) ? t(`demo.dispositions.${value}`) : value)
 
-  const refreshTickets = useCallback(async () => {
-    try {
-      setTickets(await getDemoTickets())
-    } catch {
-      setTickets([])
-    }
+  // What this session left with the bank: the tickets a person receives and the trace requests operations receives. A trace is the
+  // action's success, and no ticket: it is read from its own list. It is read again with each reply, since a reply may have opened one.
+  const replies = entries.filter((e) => e.role === 'assistant').length
+  const refreshBank = useCallback(async () => {
+    const [mine, traced] = await Promise.all([getDemoTickets().catch((): DemoTicket[] => []), getDemoTraces().catch((): DemoTrace[] => [])])
+    setTickets(mine)
+    setTraces(traced)
   }, [])
 
-  useEffect(() => { void refreshTickets() }, [refreshTickets, sessionRef, escalations])
+  useEffect(() => { void refreshBank() }, [refreshBank, sessionRef, escalations, replies])
 
   async function run(scenario: DemoScenario) {
     setBusy(true)
@@ -280,12 +283,13 @@ export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations
       <section aria-label={t('demo.bank.title')}>
         <div className="demo__row">
           <h3>{t('demo.bank.title')}</h3>
-          <Button variant="ghost" size="sm" onClick={() => void refreshTickets()}>{t('demo.bank.refresh')}</Button>
+          <Button variant="ghost" size="sm" onClick={() => void refreshBank()}>{t('demo.bank.refresh')}</Button>
         </div>
-        {tickets.length === 0 ? (
+        {tickets.length === 0 && traces.length === 0 ? (
           <p className="demo__muted">{t('demo.bank.empty')}</p>
         ) : !deskT ? null : (
-          tickets.map((ticket) => (
+          <>
+          {tickets.map((ticket) => (
             <article key={ticket.ticket_id} className="demo__card">
               <div className="demo__row">
                 <code>{ticket.queue}</code>
@@ -299,7 +303,22 @@ export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations
               </dl>
               <code className="demo__muted">{ticket.ticket_id}</code>
             </article>
-          ))
+          ))}
+          {traces.length > 0 && <h4>{t('demo.bank.traces')}</h4>}
+          {traces.map((trace) => (
+            <article key={trace.trace_id} className="demo__card">
+              <div className="demo__row">
+                <code>{trace.queue}</code>
+                <span className="demo__tag">{known(TRACE_STATUSES, trace.status) ? t(`demo.bank.traceStatus.${trace.status}`) : trace.status}</span>
+              </div>
+              <dl className="demo__facts">
+                <dt>{t('demo.bank.traceId')}</dt><dd><code>{trace.trace_id}</code></dd>
+                <dt>{t('demo.bank.movement')}</dt><dd><code>{trace.transaction_id}</code></dd>
+                <dt>{t('demo.bank.sla')}</dt><dd>{t(trace.sla_business_days === 1 ? 'demo.bank.slaOne' : 'demo.bank.slaMany', { n: trace.sla_business_days })}</dd>
+              </dl>
+            </article>
+          ))}
+          </>
         )}
       </section>
     </aside>

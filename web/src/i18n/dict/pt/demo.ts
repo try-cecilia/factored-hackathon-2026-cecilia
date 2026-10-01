@@ -62,5 +62,12 @@ export const demo: Like<typeof es> = {
     reason: 'Motivo',
     questions: 'Perguntas em aberto',
     next: 'Próximo passo',
+    traces: 'Pedidos de rastreamento',
+    traceId: 'Pedido',
+    movement: 'Movimentação',
+    sla: 'Prazo',
+    slaOne: '1 dia útil',
+    slaMany: '{n} dias úteis',
+    traceStatus: { open: 'Aberto' },
   },
 }
