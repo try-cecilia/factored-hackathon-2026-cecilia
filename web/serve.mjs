@@ -7,7 +7,8 @@
 //     (CF-Connecting-IP on Render). Unset, this server writes the connection's own address into `x-peer-address` (dropping
 //     any value the client sent) and points the app at it, so the API's per-client limits see one address per user.
 //
-// GET /_healthz answers 200 while this process is up, whatever the API is doing; /api/agent/health is the one that asks it.
+// GET (or HEAD) /_healthz answers 200 while this process is up, whatever the API is doing; any other method is a 405.
+// /api/agent/health is the one that asks the API.
 // The build's text files (JS, CSS...) go compressed when the browser asks for it (brotli or gzip, see `encodingFor`); the pages
 // the app renders do not: they carry session data next to what a visitor can put in the URL (BREACH).
 import { createServer } from 'node:http'
@@ -16,6 +17,7 @@ import { extname, join, normalize, resolve, sep } from 'node:path'
 import { pipeline, Readable } from 'node:stream'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { constants, createBrotliCompress, createGzip } from 'node:zlib'
+import { publicOrigins } from './public-origins.mjs'
 
 const root = fileURLToPath(new URL('.', import.meta.url))
 const clientDir = resolve(root, 'dist/client')
@@ -25,6 +27,9 @@ const PEER_HEADER = 'x-peer-address'
 if (!process.env.TRUSTED_CLIENT_IP_HEADER) process.env.TRUSTED_CLIENT_IP_HEADER = PEER_HEADER
 
 const { default: app } = await import(pathToFileURL(resolve(root, 'dist/server/server.js')).href)
+
+// The largest request body any POST may carry: the API's own cap (api/middleware.py, 16 KiB) in front of it. More is a 413 before the app sees it.
+const maxBody = 16_384
 
 const TYPES = {
   '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
@@ -38,9 +43,9 @@ const TYPES = {
 // cannot add without a browser to check it against. What it does say cannot break a page: nothing may frame it, change its base,
 // embed an object, or receive a form from it at another origin.
 const CSP = "frame-ancestors 'none'; base-uri 'none'; object-src 'none'; form-action 'self'"
-// HSTS only when every public origin is https: a browser ignores it over http, and a local run on http must stay reachable.
-const publicOrigins = (process.env.WEB_PUBLIC_ORIGIN ?? '').split(',').map((o) => o.trim()).filter(Boolean)
-const HSTS = publicOrigins.length > 0 && publicOrigins.every((o) => o.startsWith('https://')) ? { 'strict-transport-security': 'max-age=15724800; includeSubDomains' } : {}
+// HSTS only when every public origin is https: a browser ignores it over http, and a local run on http must stay reachable. The origins
+// are read by the parser the origin check uses (public-origins.mjs): a value it refuses, or one that mixes schemes, sends no HSTS.
+const HSTS = publicOrigins(process.env.WEB_PUBLIC_ORIGIN)?.[0].startsWith('https:') ? { 'strict-transport-security': 'max-age=15724800; includeSubDomains' } : {}
 const SECURITY = { 'x-content-type-options': 'nosniff', 'x-frame-options': 'DENY', 'referrer-policy': 'same-origin', 'content-security-policy': CSP, ...HSTS }
 
 // Images and fonts are compressed already.
@@ -81,7 +86,29 @@ function staticFile(pathname) {
   return file
 }
 
-function toRequest(req) {
+class BodyTooLarge extends Error {}
+
+/** The request's body, whole, or BodyTooLarge once it passes `maxBody` (by its declared length, or by counting what arrives). It
+ *  stops reading at the limit instead of destroying the stream, which would drop the connection before the 413 can be sent. */
+function readBody(req) {
+  return new Promise((done, fail) => {
+    if (Number(req.headers['content-length']) > maxBody) return fail(new BodyTooLarge())
+    const chunks = []
+    let size = 0
+    const onData = (chunk) => {
+      size += chunk.length
+      if (size <= maxBody) return chunks.push(chunk)
+      req.off('data', onData)
+      req.pause()
+      fail(new BodyTooLarge())
+    }
+    req.on('data', onData)
+    req.once('end', () => done(Buffer.concat(chunks)))
+    req.once('error', fail)
+  })
+}
+
+function toRequest(req, body) {
   const headers = new Headers()
   for (const [name, value] of Object.entries(req.headers)) {
     if (value === undefined) continue
@@ -89,8 +116,7 @@ function toRequest(req) {
   }
   if (process.env.TRUSTED_CLIENT_IP_HEADER === PEER_HEADER) headers.set(PEER_HEADER, req.socket.remoteAddress ?? '')
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`)
-  const body = req.method === 'GET' || req.method === 'HEAD' ? undefined : Readable.toWeb(req)
-  return new Request(url, { method: req.method, headers, body, duplex: 'half' })
+  return new Request(url, { method: req.method, headers, body })
 }
 
 async function send(res, response) {
@@ -107,8 +133,12 @@ const server = createServer(async (req, res) => {
   try {
     const { pathname } = new URL(req.url, 'http://localhost')
     if (pathname === '/_healthz') {
+      if (req.method !== 'GET' && req.method !== 'HEAD') {
+        res.writeHead(405, { ...SECURITY, allow: 'GET, HEAD', 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' })
+        return res.end('Method Not Allowed')
+      }
       res.writeHead(200, { ...SECURITY, 'content-type': 'application/json', 'cache-control': 'no-store' })
-      return res.end('{"status":"alive"}')
+      return res.end(req.method === 'HEAD' ? undefined : '{"status":"alive"}')
     }
     const file = req.method === 'GET' || req.method === 'HEAD' ? staticFile(pathname) : null
     if (file) {
@@ -130,10 +160,15 @@ const server = createServer(async (req, res) => {
       if (!encoding) return createReadStream(file).pipe(res)
       return pipeline(createReadStream(file), compressor[encoding](), res, () => {})
     }
-    await send(res, await app.fetch(toRequest(req)))
+    const body = req.method === 'GET' || req.method === 'HEAD' ? undefined : await readBody(req)
+    await send(res, await app.fetch(toRequest(req, body)))
   } catch (error) {
+    if (error instanceof BodyTooLarge) {
+      res.writeHead(413, { ...SECURITY, 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store', connection: 'close' })
+      return res.end('Payload Too Large')
+    }
     console.error(error)
-    if (!res.headersSent) res.writeHead(500, { ...SECURITY, 'content-type': 'text/plain' })
+    if (!res.headersSent) res.writeHead(500, { ...SECURITY, 'content-type': 'text/plain; charset=utf-8' })
     res.end('Internal Server Error')
   }
 })
