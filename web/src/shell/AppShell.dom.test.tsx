@@ -18,7 +18,7 @@ vi.mock('@tanstack/react-router', () => ({
 }))
 vi.mock('../server/auth.functions', () => ({ logout }))
 vi.mock('../server/locale.functions', () => ({ setLocale: vi.fn() }))
-vi.mock('../server/demo.functions', () => ({ applyDemoFault: vi.fn(), getDemoTickets: async () => [], startScenario: vi.fn() }))
+vi.mock('../server/demo.functions', () => ({ applyDemoFault: vi.fn(), getDemoTickets: async () => [], getDemoTraces: async () => [], startScenario: vi.fn() }))
 vi.mock('../server/chat.functions', () => ({
   sendMessage: vi.fn(),
   getHistory: vi.fn(),

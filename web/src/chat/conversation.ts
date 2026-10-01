@@ -18,7 +18,9 @@ export type UserEntry = {
 /** Why a message did not go through. `ended`: the session was over, so nothing was sent. `answer_gone`: the API has the message
  * but no longer has its reply (the idempotency table dropped it and the reload does not bring it back). */
 export type FailureKind = Exclude<SendFailure, 'session_expired'> | 'ended' | 'answer_gone'
-export type AssistantEntry = { id: number; role: 'assistant'; reply: Reply; at: number }
+/** `to` is the id of the user entry the reply answers: a reply that arrives late (a retry) is not by its side in the conversation.
+ * A reply read back from the history has none: it answers the message before it. */
+export type AssistantEntry = { id: number; role: 'assistant'; reply: Reply; at: number; to?: number }
 /** An event of the conversation, not a message. */
 export type NoteEntry = { id: number; role: 'note'; note: 'restored'; at: number }
 export type Entry = UserEntry | AssistantEntry | NoteEntry

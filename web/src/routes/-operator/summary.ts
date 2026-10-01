@@ -21,6 +21,17 @@ export const scoreLabel = (e: Evidence) => {
   return score === null || Number.isNaN(score) ? '—' : String(score)
 }
 
+const BANDS = ['low', 'moderate', 'elevated', 'high'] as const
+export type BehaviorBand = (typeof BANDS)[number]
+
+/** How far a movement is from the customer's own history (agent/policy/behavior.py). Descriptive only: nothing here may flag, sort or route. */
+export function behaviorOf(e: Evidence): { composite: number; band: BehaviorBand } | null {
+  const b = e.detail.behavior
+  if (typeof b !== 'object' || b === null || Array.isArray(b)) return null
+  const { composite, band } = b as { composite?: unknown; band?: unknown }
+  return typeof composite === 'number' && BANDS.includes(band as BehaviorBand) ? { composite, band: band as BehaviorBand } : null
+}
+
 /** What the customer was told when the case was resolved. An API that does not send `message` still has it in the resolve event. */
 export function resolutionMessage(desk: DeskState): string | null {
   if (desk.status !== 'resolved') return null

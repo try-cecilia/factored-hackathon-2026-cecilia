@@ -72,8 +72,18 @@ const sources: Record<Locale, Sources> = {
   },
 }
 
-export async function loadMessages(areas: readonly Area[], locale: Locale): Promise<Dictionary> {
-  const wanted = [...new Set(areas.flatMap((area) => areaNamespaces[area]))]
+/**
+ * What the demo panel's bank view reads beyond the customer area: the console's texts (`table` for the priority, `operator` for the
+ * codes of a ticket). The panel asks for them when it is drawn, only in the demo; the customer's page never carries them.
+ */
+export const demoPanelNamespaces = ['table', 'operator'] as const satisfies readonly Namespace[]
+
+/** Some namespaces by name, in a language: for what a page needs beyond its areas (the demo panel's bank view reads the console's texts). */
+export async function loadNamespaces(wanted: readonly Namespace[], locale: Locale): Promise<Dictionary> {
   const texts = await Promise.all(wanted.map((namespace) => sources[locale][namespace]()))
   return Object.fromEntries(wanted.map((namespace, i) => [namespace, texts[i]]))
+}
+
+export async function loadMessages(areas: readonly Area[], locale: Locale): Promise<Dictionary> {
+  return loadNamespaces([...new Set(areas.flatMap((area) => areaNamespaces[area]))], locale)
 }

@@ -2,6 +2,7 @@ import { Link, useNavigate, useRouter } from '@tanstack/react-router'
 import { lazy, Suspense, use, useCallback, useEffect, useId, useRef, useState, type ReactNode, type RefObject } from 'react'
 import type { DemoScenario } from '../chat/types'
 import { useConversation } from '../chat/ConversationProvider'
+import { useSessionNotice } from '../chat/useSessionNotice'
 import { LockIcon } from '../chat/icons'
 import { useT } from '../i18n/context'
 import { logout, type Session } from '../server/auth.functions'
@@ -46,7 +47,10 @@ export function AppShell({ session, kit, children }: { session: Session; kit: Pr
   const t = useT()
   const navigate = useNavigate()
   const router = useRouter()
-  const { cases, entries, sending, ended, send, refreshCase } = useConversation()
+  const { sessionRef, cases, entries, sending, ended, send, onSend, retry, refreshCase } = useConversation()
+  // The same end the chat's composer goes by: what is over for the composer is over for the demo panel's step buttons.
+  const notice = useSessionNotice(session)
+  const over = ended || notice === 0
   const phone = useMediaQuery(PHONE)
   const narrow = useMediaQuery(NARROW)
   const [collapsed, setCollapsed] = useState(false)
@@ -71,7 +75,8 @@ export function AppShell({ session, kit, children }: { session: Session; kit: Pr
 
   const closeCase = useCallback(() => setCaseView((view) => view && { ...view, open: false }), [])
   useDismiss(menuOpen, phone, () => setMenuOpen(false), side)
-  useDismiss(demoOpen, narrow, () => setDemoOpen(false), demo)
+  // Reopened with a scenario in course, the drawer opens on its card (with the steps) and not at the top of the list.
+  useDismiss(demoOpen, narrow, () => setDemoOpen(false), demo, undefined, () => demo.current?.querySelector<HTMLElement>('[data-active-scenario]') ?? null)
   // Always modal, on every screen: the view is over the page, and Escape gives the focus back to what opened it.
   // Opened from the phone drawer's row, the drawer closes at once: the focus comes back to the menu button instead.
   useDismiss(caseOpen, true, closeCase, casePanel, () => document.getElementById('shell-menu'))
@@ -199,10 +204,16 @@ export function AppShell({ session, kit, children }: { session: Session; kit: Pr
             {(scenarios) => (
               <DemoPanel
                 scenarios={scenarios}
-                sessionRef={session.session_ref}
+                sessionRef={sessionRef}
+                entries={entries}
                 pending={sending}
                 escalations={escalations}
+                open={demoOpen}
+                ended={over}
                 send={send}
+                onSend={onSend}
+                retry={retry}
+                overlay={narrow}
                 onSessionChanged={() => router.invalidate()}
                 onClose={() => setDemoOpen(false)}
               />

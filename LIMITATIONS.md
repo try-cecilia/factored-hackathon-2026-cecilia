@@ -61,6 +61,12 @@ service, and as our own roadmap.
    templates, trace replies included.
 ## Data and ML
 
+- **The behavioral deviation shown to the operator does not detect the fraud labels.** Its AUC against `is_fraud` is
+  0.504 [0.494, 0.513] (`docs/evidence/behavior_association.md`), under rules frozen before it was computed
+  (`docs/BEHAVIORAL_EVIDENCE.md`). It describes how far a movement is from that customer's own history, is labeled so on
+  the screen, and routes nothing. It is not evidence that a flagged movement is fraud, or that an unflagged one is not.
+  It is also computed per ticket from the customer's whole history (up to 5,000 rows), a read the handoff budget bounds.
+
 - **No usable text in the supplied data.** 171K transcripts hold 42 distinct
   customer texts, the text doesn't vary with the contact reason, 100% of agent
   texts contain unrendered placeholders, and there is no Portuguese. So every

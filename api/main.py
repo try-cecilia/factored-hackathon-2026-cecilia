@@ -52,9 +52,10 @@ from agent.session.identity import AuthError, IdentityUnavailable, LockedOut, de
 from agent.session.operators import OperatorDirectory
 from agent.tools import account_tools
 from agent.tools.audit import default_audit_log, default_trace_log
+from agent.tools.traces import default_traces
 from agent.policy.desk import Conflict, DeskError, NotFound, default_desk
 from agent.policy.escalation import default_queue
-from api import access, demo, idempotency, middleware
+from api import access, customer_context, demo, idempotency, middleware
 from api.human_queue import listing as human_queue_listing
 from api.observability import ObservabilityMiddleware, RouteTemplates, readiness
 from api.security import SecurityHeadersMiddleware, configure_cors, constant_time_equals
@@ -501,6 +502,15 @@ def ticket(ticket_id: str) -> dict:
     if found is None:
         raise HTTPException(404, "ticket not found")
     return {**found, "desk": default_desk.state(ticket_id)}
+
+
+@app.get("/admin/tickets/{ticket_id}/customer_context", dependencies=[Depends(require_admin)])
+def ticket_customer_context(ticket_id: str) -> dict:
+    """The case's customer, read-only: products (masked), latest movements, other cases and trace requests. See api/customer_context.py."""
+    found = default_queue.get(ticket_id)
+    if found is None:
+        raise HTTPException(404, "ticket not found")
+    return customer_context.for_ticket(found, default_queue, default_desk, default_traces)
 
 
 @app.post("/admin/tickets/{ticket_id}/{action}")
