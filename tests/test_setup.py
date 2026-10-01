@@ -17,7 +17,7 @@ from ops import bootstrap_env, check_locks
 ROOT = Path(__file__).resolve().parent.parent
 EXAMPLE = (ROOT / ".env.example").read_text(encoding="utf-8")
 # Read by developer tooling or by libraries (boto3 reads AWS_*), not settings a deployment chooses
-NOT_SETTINGS = {"GIT_FILTER_REPO", "CLOUDFLARE_SECRETS", "PW_CHANNEL", "LLM_MODEL", "GIT_SHA"}
+NOT_SETTINGS = {"GIT_FILTER_REPO", "CLOUDFLARE_SECRETS", "PW_CHANNEL", "LLM_MODEL", "GIT_SHA", "PYTHON_DOTENV_DISABLED"}  # the last: python-dotenv's own switch, which the probe sets
 SCANNED = ["agent", "api", "ops", "data"]
 SKIPPED_FILES = {"export_public.py", "record_demo.py"}
 
