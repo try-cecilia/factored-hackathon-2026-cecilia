@@ -140,6 +140,13 @@ time plus 120 s wait, 91.5% resolved on first contact, 9.9% escalated.
 - One escalation missed on test: "vou processar o banco" ("I'll sue the bank",
   in PT). It is reported but **not** added to the lexicon, because that would be
   tuning on test.
+- **Contamination of the test split, disclosed.** The patterns `no fui yo` / `yo no fui` and `não fui eu` / `eu não fui` were added
+  after the held-out set was scored, and two test utterances contain them ("hay un retiro de cajero que no fui yo", "tem um
+  saque que não fui eu"). They moved the lexicon-only recall from 80.0% to 86.7% (2 of 15, inside the interval), the keyword
+  baseline from 62.4% to 63.5% and the paired difference from +22.4 to +21.2 points. The patterns came from reading another
+  team's public repository, not from these two utterances, but the split is no longer "scored once" for the lexicon and the
+  keyword baseline. The learned model and the combined guard (93.3%) did not change. Read the lexicon-only and keyword figures
+  as an upper bound; only a set written by people outside the team settles it (`docs/human_set.md`).
 - Weak spots: slang (33%), and `payment_status` vs `balance_inquiry` confusion
   ("cupo disponible", "tarjeta al corriente").
 
