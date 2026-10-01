@@ -21,15 +21,17 @@ const scenario: DemoScenario = {
   look_for: { en: 'Answered from verified data.', es: 'Se responde con datos verificados.', pt: 'Respondida com dados verificados.' },
 }
 
+const noCopy = { state: null, disabled: true, copy: async () => {} }
+
 const draw = (locale: 'es' | 'pt', scenarios = [scenario]) =>
-  renderWithI18n(<DemoPanel scenarios={scenarios} sessionRef="s" entries={[]} pending={false} escalations={0} open ended={false} send={async () => null} onSend={() => () => {}} retry={() => {}} overlay={false} onSessionChanged={async () => {}} onClose={() => {}} />, locale)
+  renderWithI18n(<DemoPanel scenarios={scenarios} sessionRef="s" entries={[]} pending={false} escalations={0} open ended={false} send={async () => null} onSend={() => () => {}} retry={() => {}} overlay={false} copy={noCopy} onSessionChanged={async () => {}} onClose={() => {}} />, locale)
 
 // The page the customer gets: the texts of the customer area only, as the root loader resolves them, and not the console's.
 async function drawAsCustomer(locale: Locale, open = true) {
   const messages = await loadMessages(areasOf('/chat'), locale)
   return render(
     <I18nProvider locale={locale} messages={messages}>
-      <DemoPanel scenarios={[scenario]} sessionRef="s" entries={[]} pending={false} escalations={0} open={open} ended={false} send={async () => null} onSend={() => () => {}} retry={() => {}} overlay={false} onSessionChanged={async () => {}} onClose={() => {}} />
+      <DemoPanel scenarios={[scenario]} sessionRef="s" entries={[]} pending={false} escalations={0} open={open} ended={false} send={async () => null} onSend={() => () => {}} retry={() => {}} overlay={false} copy={noCopy} onSessionChanged={async () => {}} onClose={() => {}} />
     </I18nProvider>,
   )
 }
@@ -135,7 +137,7 @@ describe('DemoPanel', () => {
       const messages = await loadMessages(areasOf('/chat'), 'es')
       const panel = (open: boolean) => (
         <I18nProvider locale="es" messages={messages}>
-          <DemoPanel scenarios={[scenario]} sessionRef="s" entries={[]} pending={false} escalations={0} open={open} ended={false} send={async () => null} onSend={() => () => {}} retry={() => {}} overlay onSessionChanged={async () => {}} onClose={() => {}} />
+          <DemoPanel scenarios={[scenario]} sessionRef="s" entries={[]} pending={false} escalations={0} open={open} ended={false} send={async () => null} onSend={() => () => {}} retry={() => {}} overlay copy={noCopy} onSessionChanged={async () => {}} onClose={() => {}} />
         </I18nProvider>
       )
       const view = render(panel(false))

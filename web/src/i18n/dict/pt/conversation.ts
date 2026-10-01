@@ -67,6 +67,12 @@ export const conversation: Like<typeof es> = {
     callsOne: '1 chamada · {ms} ms',
     callsMany: '{n} chamadas · {ms} ms',
   },
+  copy: {
+    action: 'Copiar conversa',
+    copied: 'Conversa copiada',
+    failed: 'Não foi possível copiar',
+    title: 'Conversa com a Cecilia',
+  },
   trace: {
     yes: 'Sim',
     no: 'Não',

@@ -6,6 +6,7 @@ import { Button, SystemNote } from '../ui'
 import { ChatLog } from './ChatLog'
 import { Composer, type ComposerHandle } from './Composer'
 import { useConversation } from './ConversationProvider'
+import { CopyNotice } from './CopyConversation'
 import { useSessionNotice } from './useSessionNotice'
 import { useShell } from '../shell/ShellContext'
 import './chat.css'
@@ -30,7 +31,7 @@ export function ChatView({ session }: { session: Session }) {
   const navigate = useNavigate()
   const { href } = useLocation()
   const { entries, cases, sending, ended, historyFailed, send, retry, reload } = useConversation()
-  const { showCase } = useShell()
+  const { showCase, copied } = useShell()
   const composer = useRef<ComposerHandle>(null)
   const end = useRef<HTMLDivElement>(null)
   const content = useRef<HTMLDivElement>(null)
@@ -119,6 +120,8 @@ export function ChatView({ session }: { session: Session }) {
       </div>
       <div className="chat__foot">
         <div className="chat__notices" role="status">
+          {/* How "copy conversation" went: here, where it covers no message, and the button says it to the screen reader. */}
+          {copied && <SystemNote tone={copied === 'ok' ? 'success' : 'neutral'}><CopyNotice state={copied} /></SystemNote>}
           {!online && <SystemNote tone="neutral">{t('conversation.session.offline')}</SystemNote>}
           {over ? (
             <SystemNote tone="neutral">{t('conversation.session.expired')}</SystemNote>
