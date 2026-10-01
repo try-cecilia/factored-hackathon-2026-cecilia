@@ -248,10 +248,10 @@ def test_the_ci_python_job_ends_with_the_clean_tree_check_and_every_step_that_wr
 def test_the_classifier_evaluation_can_write_its_outputs_elsewhere_and_leaves_the_versioned_ones_alone(tmp_path, monkeypatch):
     from eval import evaluate_intent_classifier as eic
 
-    watched = [eic.MODEL_OUT, eic.META_OUT, eic.REPORT_JSON, eic.REPORT_MD]
+    watched = [eic.MODEL_OUT, eic.JSON_OUT, eic.META_OUT, eic.REPORT_JSON, eic.REPORT_MD]
     before = [p.read_bytes() for p in watched]
     monkeypatch.setattr(eic, "track", lambda report: None)
-    for name in ("MODEL_OUT", "META_OUT", "REPORT_JSON", "REPORT_MD"):  # main() repoints the module's paths: put them back afterwards
+    for name in ("MODEL_OUT", "JSON_OUT", "META_OUT", "REPORT_JSON", "REPORT_MD"):  # main() repoints the module's paths: put them back afterwards
         monkeypatch.setattr(eic, name, getattr(eic, name))
     eic.main(["--out-dir", str(tmp_path)])
     assert sorted(p.name for p in tmp_path.iterdir()) == sorted(p.name for p in watched)
