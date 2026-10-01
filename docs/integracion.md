@@ -173,7 +173,7 @@ monitoring and traces. How the keys are configured:
   one click (as in the approved artboard), with no confirmation dialog: the protection is `expected_version` plus the key's name in the history.
   Resolve is enabled only once the message for the customer has been written.
 - *Customer data.* The console shows what the API already returns to the read key: the ticket (with its
-  `customer_id`, the truncated request and the evidence). From the traces it does **not** show the answer text, what the
+  `customer_id`, the truncated request and the evidence) and the customer's context (below). From the traces it does **not** show the answer text, what the
   model saw or the tool arguments: the BFF lets through only a fixed set of fields (`loadTraceLog` and
   `loadTrace` in `web/src/server/operator.functions.ts`).
 - *Trying it without real data or model keys:* `python -m ops.seed_operator_demo --dir /tmp/cecilai-operator-demo`
@@ -190,6 +190,57 @@ monitoring and traces. How the keys are configured:
   through `refreshQuietly`. The evidence flags as a risk the movements that the API flagged or whose score reaches 70
   (`FRAUD_SCORE_FLAG` in `agent/policy/escalation.py`). The console's texts are in `web/src/i18n/dict/{es,pt}/operator.ts` and
   `monitor.ts`; what comes from the API (the customer's request, reasons, next steps) is shown as is, untranslated.
+- *Time in queue and urgency.* The "Edad" (age) column counts from when the case was handed over (`created_at`), and an **open** case that has
+  waited longer than its objective is marked in amber with an icon and a text for screen readers (color alone would not reach everyone). The
+  "Vencidos" (overdue) button (`vencidos=si` in the URL) keeps only those cases, with their number, and combines with the other filters and the tabs. The
+  objectives are in a single table, `TARGET_MINUTES` in `web/src/routes/-operator/sla.ts`, by category family: security
+  (`fraud`, `theft`, `account_takeover`, `safety`, `security`, `classifier_escalation`) **15 min**, regulatory (`legal_or_regulator`,
+  `compliance_hold`) **2 h**, and the rest (`data_unavailable`, `tool_failure`, `llm_unavailable`, `trace_*` and any new category)
+  **4 h**. **They are a demo objective, not a commitment of the bank**: there is no case SLA defined today, and this table is the
+  proposal to discuss. The objective measures the wait until a person takes the case, so a case that was taken or decided is not marked
+  (so neither `claimed` nor `resolved` ever is). The count uses the minute of `now.ts`, not a clock of its own, and the tests
+  (`sla.test.ts`, `queue.test.ts`) fix the time.
+- *New cases.* The queue already re-reads itself every 30 s (`refresh.ts`); what arrives in those reads is marked **new** until the
+  operator looks at it: a blue dot and the word "Nuevo" (new) for screen readers in the row, `+N` on "Todos abiertos" in the sidebar,
+  "N casos nuevos" with the "Marcar como vistos" (mark as seen) button in the queue header, and `(N)` in front of the tab title on every
+  page of the console. A case stops being new when it is opened or with that button; re-reading the queue does not count as looking at it. Only
+  pending cases count (one that someone else already decided is not news). A tab's first read is its starting point: on entering, everything
+  pending is not announced as news. What is "seen" is the list of ids of the tab itself in `sessionStorage`
+  (`cecilai.operator.seen`, `web/src/routes/-operator/seen.ts`): it does not touch the API, it ends with the tab and a new tab starts from
+  its own first read; without `sessionStorage` (a browser that denies it) the console goes on, with that session's memory. The announcement
+  for screen readers is an always-present `role="status"` `aria-live="polite"` region (`NewCasesAnnouncer`) that speaks when the number
+  **goes up** (even when it returns to a number already said: 2, 1 and 2 again: the region empties for 150 ms and repeats it) and does not
+  move the focus. There is no sound and no browser `Notification` API. It lives in `NewCases.tsx`, with tests in `seen.test.ts` and
+  `NewCases.dom.test.tsx`.
+- *The customer's context in the case.* Under the evidence, a read-only section with the customer's products (type, currency, status and
+  only the **last four digits** of the number), their ten latest movements **plus every pending one**, however old, highlighted (the row and
+  the word "Pendiente"), and their other cases and trace requests, with a link to each case. It is served by
+  `GET /admin/tickets/{ticket_id}/customer_context` (`api/customer_context.py`), with the **read key** that the queue already uses: the
+  operator key does not open it, neither does a customer session, and a case that does not exist gives 404. It reads the warehouse with the
+  connection and the data date of `agent/tools/account_tools.py`, but **not through its tools**: those write `str(error)` to the audit log
+  when they fail, `/admin/audit_log` serves it, and a message can quote a path, a query or a customer. The query cuts the number to its
+  last four digits in the database (the number is never read). It respects freshness like the tools: with `FRESHNESS_ENFORCE=1` and data
+  older than `FRESHNESS_SLO_HOURS`, the warehouse block comes out `unavailable`, not current. Pending movements have an explicit cap,
+  `PENDING_SHOWN = 100`, far above what a customer holds: if it were reached, the response carries `pending_omitted` and the console says
+  "y N pendiente(s) más" (and N more). The read is left in the audit log as a `customer_context_read` event with the case, the outcome
+  (`ok` or `unavailable`) and, if it failed, only the exception's type. It carries no full number, document, contact, fraud score or
+  channel; the product and movement ids are the same ones the console already shows in the pending action. If the warehouse does not answer,
+  the response is still 200 with `warehouse.available: false`, and the section says that products and movements are not available and keeps
+  the cases and trace requests, which come from other files; the failure is counted (`customer_context_unavailable` in `/admin/capacity`) and
+  logged only by the exception's type, never by its message. The console reads it apart from the case (`loadCustomerContext`, which lets
+  through only a fixed set of fields, in `web/src/server/customer-context.ts`), after showing the case: a slow or down warehouse neither
+  delays nor breaks the panel, and the section offers "Reintentar" (retry). It has its row in the matrix of `api/access.py` and in the table of
+  `docs/operations.md`. Tests: `tests/test_customer_context.py`, `web/src/server/customer-context.test.ts`,
+  `web/src/routes/-operator/CustomerContext.dom.test.tsx` and, against the production build, `web/tests/http/customer-context.test.ts`: it
+  calls the server function the way the browser does (`GET /_serverFn/<id>?payload=`, with `seroval`, the same version the framework uses; it
+  is in `dependencies` because the server build imports it at run time and the image installs only those) and checks that without a session
+  the API is not asked, that it reads with the read key and not the operator's, that only the fixed fields pass (with decoy fields in the fake
+  API), that an invalid id does not reach the API, that without our own origin it is refused, and that a 401 ends that session without
+  `Set-Cookie`, a late one too.
+- *Walkthrough with screenshots.* With `python -m ops.seed_operator_demo` (cases of different ages, and others added while the console is
+  open), in Spanish and Portuguese: `docs/demo/operador-cola-01-vencidos-es.png` to `operador-cola-05-filtro-vencidos-pt.png` (age in
+  amber, "Vencidos" filter, new cases with their counter and their button) and `docs/demo/operador-contexto-01-caso-es.png`,
+  `operador-contexto-02-caso-pt.png` (the customer section).
 
 **How it is verified.** `tests/test_operators.py`, `tests/test_operator_auth.py` (includes `/admin/operator/me`) and, for the console,
 `make web-test web-typecheck web-build` plus the walkthrough with screenshots in `docs/demo/operador-kit-*.png` (`LIMITATIONS.md` says what
