@@ -82,7 +82,9 @@ const compressor = {
 function staticFile(pathname) {
   if (pathname === '/' || pathname.includes('\0')) return null
   const file = resolve(clientDir, '.' + sep + normalize(decodeURIComponent(pathname)))
-  if (!file.startsWith(clientDir + sep) || !existsSync(file) || !statSync(file).isFile()) return null
+  // Only a file inside the build whose extension has a type above: a backup, an editor's leftover or an archive that ended up in
+  // dist/client is not served (the app answers 404), and no file goes out as application/octet-stream.
+  if (!file.startsWith(clientDir + sep) || !Object.hasOwn(TYPES, extname(file)) || !existsSync(file) || !statSync(file).isFile()) return null
   return file
 }
 
@@ -150,7 +152,7 @@ const server = createServer(async (req, res) => {
       }
       const encoding = chosen === 'identity' ? null : chosen
       res.writeHead(200, {
-        ...SECURITY, 'content-type': TYPES[extname(file)] ?? 'application/octet-stream',
+        ...SECURITY, 'content-type': TYPES[extname(file)],
         'cache-control': pathname.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'public, max-age=300',
         // A cache in between keeps one copy per encoding.
         ...(compressible && { vary: 'accept-encoding' }),

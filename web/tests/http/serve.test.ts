@@ -1,7 +1,7 @@
 // web/serve.mjs itself, the production server of the image: run as a process on a free port, in front of the build.
 import assert from 'node:assert/strict'
 import { spawn, type ChildProcess } from 'node:child_process'
-import { readdirSync, readFileSync } from 'node:fs'
+import { readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
@@ -193,5 +193,27 @@ describe('the server\'s own answers', () => {
     assert.equal(res.status, 500)
     assert.equal(res.headers['content-type'], 'text/plain; charset=utf-8')
     assert.equal(res.body.toString(), 'Internal Server Error')
+  })
+})
+
+describe('the web tier serves only the extensions it has a type for (V12.5.1)', () => {
+  const probes = ['__probe.bak', '__probe.swp', '__probe.zip', '__probe.js.map.orig', '__probe']
+  after(() => probes.forEach((name) => rmSync(join(web, 'dist/client', name), { force: true })))
+
+  test('a stray editor, backup or archive file in dist/client is not served; a known type still is', async () => {
+    for (const name of probes) writeFileSync(join(web, 'dist/client', name), 'secret')
+    writeFileSync(join(web, 'dist/client/__probe.txt'), 'plain')
+    try {
+      for (const name of probes) {
+        const res = await raw(`/${name}`)
+        assert.notEqual(res.status, 200, name)
+        assert.ok(!res.body.toString().includes('secret'), name)
+      }
+      const known = await raw('/__probe.txt')
+      assert.equal(known.status, 200)
+      assert.equal(known.headers['content-type'], 'text/plain; charset=utf-8')
+    } finally {
+      rmSync(join(web, 'dist/client/__probe.txt'), { force: true })
+    }
   })
 })
