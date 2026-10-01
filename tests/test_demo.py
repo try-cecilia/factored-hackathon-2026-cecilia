@@ -61,6 +61,30 @@ def test_without_a_movement_the_assistant_can_trace_the_scenario_is_not_offered(
         demo._scenarios.cache_clear()
 
 
+def test_if_the_date_of_the_data_cannot_be_read_only_the_trace_scenario_goes(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from api import demo
+
+    def broken():
+        raise RuntimeError("as_of unavailable")
+
+    monkeypatch.setattr(demo_customers, "data_as_of", broken)
+    monkeypatch.setenv("DEMO_MODE", "1")
+    demo._scenarios.cache_clear()
+    try:
+        roles = demo_customers.roles()
+        assert "pending" not in roles and {"multi", "arrears", "no_dpd", "abroad", "suspended"} <= set(roles)
+        assert demo_customers.pick() == ["CLI-FIX0001", "CLI-FIX0002", "CLI-FIX0005"]
+        reply = TestClient(main.app).get("/demo/scenarios")
+        assert reply.status_code == 200
+        ids = {s["id"] for s in reply.json()}
+        assert "normal_balance" in ids and "action_trace" not in ids
+    finally:
+        monkeypatch.undo()
+        demo._scenarios.cache_clear()
+
+
 @pytest.fixture
 def client(monkeypatch, tmp_path):
     identity.default_identity._failures.clear()

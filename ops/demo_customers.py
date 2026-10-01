@@ -19,6 +19,7 @@ that is not theirs.
 """
 from __future__ import annotations
 
+import logging
 from datetime import date
 
 from agent.tools.account_tools import TRACEABLE_TYPES, _review_reason, data_as_of
@@ -67,12 +68,25 @@ def choose_pending(rows: list[dict], as_of: date | None) -> dict | None:
     return None
 
 
+log = logging.getLogger(__name__)
+
+
+def _pending() -> dict | None:
+    """The `pending` role, or None. If the date the warehouse is as of, or the candidates, cannot be read, only this role is left out:
+    the other five do not depend on it, and without a date the age check cannot run, so no movement is chosen without it."""
+    try:
+        return choose_pending(_rows(PENDING), data_as_of())
+    except Exception:
+        log.warning("demo: the pending movement could not be chosen; the trace scenario is left out", exc_info=True)
+        return None
+
+
 def roles() -> dict[str, dict]:
     """role -> the customer (and what its scenario needs); a role the warehouse cannot fill is left out."""
     found = {"multi": _first(MULTI),
              "arrears": _first(CREDIT_PRODUCT.format(dpd="p.days_past_due > 0")),
              "no_dpd": _first(CREDIT_PRODUCT.format(dpd="p.days_past_due IS NULL")),
-             "suspended": _first(SUSPENDED), "pending": choose_pending(_rows(PENDING), data_as_of())}
+             "suspended": _first(SUSPENDED), "pending": _pending()}
     abroad = _first(ABROAD, [(found["multi"] or {}).get("customer_id", "")])
     found["abroad"] = abroad and {**abroad, "currency": LOCAL_CURRENCY[abroad["country"]]}
     order = ("multi", "arrears", "no_dpd", "abroad", "suspended", "pending")
