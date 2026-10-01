@@ -2,7 +2,7 @@
 .shell { display: flex; height: 100dvh; background: var(--color-paper); color: var(--color-ink-app); }
 .shell__side { display: flex; flex: none; height: 100%; }
 .shell__main { display: flex; flex: 1 1 0; flex-direction: column; min-width: 0; }
-.shell__bar { display: flex; flex: none; align-items: center; gap: 12px; min-height: 56px; padding: 0 20px; }
+.shell__bar { display: flex; flex: none; align-items: center; gap: 12px; min-height: 56px; padding: 0 20px; container: bar / inline-size; }
 .shell__title { margin: 0; font-size: var(--text-compact-lg); font-weight: var(--font-weight-bold); letter-spacing: -0.02em; line-height: 20px; }
 .shell__trust {
   display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: var(--radius-pill);
@@ -17,6 +17,13 @@
   box-shadow: 0 1px 1px #0F0A1414, 0 8px 24px -8px #0F0A148C; color: var(--color-ink-70); font-size: var(--text-xs); font-weight: var(--font-weight-medium); white-space: nowrap;
 }
 .shell__copied[data-outcome='error'] { color: var(--color-danger); }
+/* A bar with no room for the label (a phone, or the demo panel open beside the chat) keeps the copy button's icon; the label stays for screen readers. */
+@container bar (max-width: 780px) {
+  .shell__copy-label { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .shell__copy .ui-btn { width: 28px; padding: 0; gap: 0; }
+  .shell__tools { gap: 6px; }
+  .shell__trust { padding: 0 8px; }
+}
 .shell__page { display: flex; flex: 1 1 0; flex-direction: column; min-height: 0; }
 .shell__demo { flex: none; width: 340px; height: 100%; overflow-y: auto; background: var(--color-fill-subtle); }
 .shell__demo[inert] { display: none; }
@@ -56,8 +63,6 @@
   .shell__case { width: 100vw; box-shadow: none; }
   .shell__trust { display: none; }
   .shell__bar { gap: 8px; padding: 0 12px; }
-  /* On a phone the copy button keeps only its icon; the label stays for screen readers. */
-  .shell__copy-label { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   /* The title stays for screen readers; on a phone the bar has room only for the controls. */
   .shell__title { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 }

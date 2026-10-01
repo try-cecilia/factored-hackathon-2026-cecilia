@@ -28,7 +28,7 @@ export function CopyConversation() {
   const said = copied === 'ok' ? t('conversation.copy.copied') : copied === 'error' ? t('conversation.copy.failed') : ''
   return (
     <span className="shell__copy">
-      <Button variant="ghost" size="sm" disabled={!hasMessages(entries)} leadingIcon={<CopyIcon size={14} />} onClick={() => void copy()}>
+      <Button variant="ghost" size="sm" title={t('conversation.copy.action')} disabled={!hasMessages(entries)} leadingIcon={<CopyIcon size={14} />} onClick={() => void copy()}>
         <span className="shell__copy-label">{t('conversation.copy.action')}</span>
       </Button>
       <span className="sr-only" role="status">{said}</span>
