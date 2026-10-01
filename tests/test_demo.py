@@ -31,6 +31,36 @@ def test_each_demo_role_gets_a_customer_that_shows_its_behavior():
     assert demo_customers.pick() == ["CLI-FIX0001", "CLI-FIX0002", "CLI-FIX0005", "CLI-FIX0004"]
 
 
+def test_the_trace_scenario_is_not_given_a_movement_a_person_must_review():
+    from datetime import date, datetime
+
+    as_of = date(2024, 3, 15)
+    old = {"customer_id": "CLI-A", "transaction_type": "Deposit", "transaction_date": datetime(2023, 11, 26),  # more than 90 days before as_of
+           "opening_date": date(2020, 1, 1), "registration_date": date(2020, 1, 1)}
+    before_opening = {"customer_id": "CLI-B", "transaction_type": "Payment", "transaction_date": datetime(2024, 1, 20),
+                      "opening_date": date(2024, 1, 25), "registration_date": date(2020, 1, 1)}
+    before_registration = {"customer_id": "CLI-C", "transaction_type": "Payment", "transaction_date": datetime(2024, 1, 20),
+                           "opening_date": date(2020, 1, 1), "registration_date": date(2024, 1, 25)}
+    valid = {"customer_id": "CLI-D", "transaction_type": "Transfer", "transaction_date": datetime(2024, 1, 20),
+             "opening_date": date(2020, 1, 1), "registration_date": date(2020, 1, 1)}
+    # The first by id is too old, and the next two contradict the customer's own records: the one that is traceable is chosen.
+    assert demo_customers.choose_pending([old, before_opening, before_registration, valid], as_of) == {"customer_id": "CLI-D", "transaction_type": "Transfer"}
+    assert demo_customers.choose_pending([old, before_opening, before_registration], as_of) is None
+
+
+def test_without_a_movement_the_assistant_can_trace_the_scenario_is_not_offered(monkeypatch):
+    from api import demo
+
+    monkeypatch.setattr(demo_customers, "choose_pending", lambda rows, as_of: None)
+    assert "pending" not in demo_customers.roles()
+    demo._scenarios.cache_clear()  # built once from the warehouse: this one is built without the movement, and not kept
+    try:
+        assert "action_trace" not in {s["id"] for s in demo._scenarios()}
+    finally:
+        monkeypatch.undo()
+        demo._scenarios.cache_clear()
+
+
 @pytest.fixture
 def client(monkeypatch, tmp_path):
     identity.default_identity._failures.clear()
