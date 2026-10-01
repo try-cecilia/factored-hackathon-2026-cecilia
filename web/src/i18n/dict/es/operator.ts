@@ -234,7 +234,7 @@ export const operator = {
       title: 'Requiere atención',
       pendingMovement: '{type} pendiente',
       flaggedMovement: 'Movimiento marcado',
-      score: 'score {score}',
+      score: 'score {score} del banco (no es de un modelo propio)',
     },
     nextStep: 'Próximo paso sugerido',
     openQuestions: 'Preguntas abiertas',

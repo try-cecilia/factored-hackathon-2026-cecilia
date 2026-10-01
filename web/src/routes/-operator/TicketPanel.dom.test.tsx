@@ -598,7 +598,7 @@ describe('the drawer, summary first', () => {
     expect(rows[0].textContent).toContain('Movimiento marcado')
     expect(rows[0].textContent).toContain('199.00 USD')
     expect(rows[0].textContent).toContain('Amazon MX')
-    expect(rows[0].textContent).toContain('score 91')
+    expect(rows[0].textContent).toContain('score 91 del banco (no es de un modelo propio)')
   })
 
   it.each([

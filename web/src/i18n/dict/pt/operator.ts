@@ -236,7 +236,7 @@ export const operator: Like<typeof es> = {
       title: 'Requer atenção',
       pendingMovement: '{type} pendente',
       flaggedMovement: 'Movimentação sinalizada',
-      score: 'score {score}',
+      score: 'score {score} do banco (não é de um modelo próprio)',
     },
     nextStep: 'Próximo passo sugerido',
     openQuestions: 'Perguntas em aberto',
