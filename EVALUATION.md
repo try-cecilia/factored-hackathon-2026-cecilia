@@ -99,7 +99,7 @@ time plus 120 s wait, 91.5% resolved on first contact, 9.9% escalated.
     question mark; the old exact-text check let it through);
   - 0.60–0.90 is usually a shorter form of a template: kept, listed, and the
     test result is also given without those phrases (79 of 85 left;
-    learned 83.5%, keywords 63.3%);
+    learned 83.5%, keywords 64.6%);
   - the dev split against the test split (which chose the model against
     which scores it) has a highest similarity of 0.83, no pair at ≥ 0.90.
   - The cut-offs were read off the distribution of the whole held-out
@@ -118,21 +118,21 @@ time plus 120 s wait, 91.5% resolved on first contact, 9.9% escalated.
 
 | | Keyword baseline | Learned |
 |---|---|---|
-| Accuracy | 62.4% [51.7–71.9] | **84.7% [75.6–90.8]** |
-| Macro-F1 | 0.65 | **0.85** |
-| Portuguese accuracy | 58.3% | 80.6% |
+| Accuracy | 63.5% [52.9–73.0] | **84.7% [75.6–90.8]** |
+| Macro-F1 | 0.66 | **0.85** |
+| Portuguese accuracy | 61.1% | 80.6% |
 
 - Both are scored on the same 85 utterances, so the difference is estimated
-  on them directly: **+22.4 points** (paired bootstrap 95% [+9.4, +35.3];
-  the learned classifier is right where the keywords are wrong on 27
-  utterances and the reverse on 8; exact McNemar p = 0.0019). The two Wilson
+  on them directly: **+21.2 points** (paired bootstrap 95% [+8.2, +34.1];
+  the learned classifier is right where the keywords are wrong on 26
+  utterances and the reverse on 8; exact McNemar p = 0.0029). The two Wilson
   intervals above do not overlap either.
 - A floor below the keyword baseline: always answering the most common
   training class (`payment_status`) gets 17.6% [11.0–27.1].
 
 | Escalation guard (runs before the LLM) | Recall | False escalations |
 |---|---|---|
-| Lexicon only | 80.0% | 0.0% |
+| Lexicon only | 86.7% | 0.0% |
 | Classifier only | 46.7% | 0.0% |
 | **Lexicon OR classifier (runtime)** | **93.3%** | **0.0%** |
 

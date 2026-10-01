@@ -35,6 +35,7 @@ ESCALATION_PATTERNS: dict[str, list[str]] = {
         r"\b(yo )?no (lo |la )?(autorice|solicite|pedi)\b",
         r"\b(eu )?nao (o |a )?(fiz|realizei)\b(?! (o|meu|um|nenhum) pagamento)",
         r"\b(eu )?nao (o |a )?(autorizei|solicitei|pedi)\b",
+        r"\b(yo no fui|no fui yo)\b", r"\b(eu nao fui|nao fui eu)\b",
         r"\bno autorizad[oa]s?\b", r"\bnao autorizad[oa]s?\b",
         r"\bsin (mi )?(permiso|autorizacion|consentimiento)\b", r"\bsem (minha )?(permissao|autorizacao|consentimento)\b",
         r"\balguien (uso|usaron|entro|saco|hizo)\b", r"\balguem (usou|entrou|sacou|fez)\b",
