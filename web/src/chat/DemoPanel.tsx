@@ -38,12 +38,14 @@ function known<T extends string>(list: readonly T[], value: string): value is T 
 // so), so an unrelated message does not move the scenario. Each reply says which message it answers (`to`), because a retry's
 // reply comes late, after other messages.
 
-export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations, ended, send, onSend, retry, overlay, onSessionChanged, onClose }: {
+export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations, open, ended, send, onSend, retry, overlay, onSessionChanged, onClose }: {
   scenarios: DemoScenario[]
   sessionRef: string
   entries: Entry[]
   pending: boolean
   escalations: number
+  /** The panel is on screen: wide screens from the start, a phone when its drawer is opened. What the bank view needs is asked for then. */
+  open: boolean
   /** The session is over: no step can be sent (loading a scenario starts another). */
   ended: boolean
   /** The chat's own send: the messages of a scenario go through it, with the same key, the same state and the same retry. */
@@ -65,14 +67,18 @@ export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations
   const [note, setNote] = useState<MessageKey | null>(null)
   const [tickets, setTickets] = useState<DemoTicket[]>([])
   const [traces, setTraces] = useState<DemoTrace[]>([])
+  // Nothing of the bank view is asked for until the panel has been on screen: a phone that never opens the drawer asks for nothing.
+  const [seen, setSeen] = useState(open)
+  useEffect(() => { if (open) setSeen(true) }, [open])
   // The bank view reads the ticket as the operator's console does, with the console's texts: the customer's page does not carry them
-  // (areas.ts), so the panel, which only exists in the demo, asks for the ones it needs when it is drawn, in the language it is in.
+  // (areas.ts), so the panel, which only exists in the demo, asks for the ones it needs once it is shown, in the language it is in.
   const [desk, setDesk] = useState<{ locale: string; t: Translate } | null>(null)
   useEffect(() => {
+    if (!seen) return
     let current = true
     void loadNamespaces(demoPanelNamespaces, locale).then((messages: Dictionary) => { if (current) setDesk({ locale, t: translator(messages) }) })
     return () => { current = false }
-  }, [locale])
+  }, [seen, locale])
   const deskT = desk?.locale === locale ? desk.t : null
 
   // The scenarios' own texts come from the API in Spanish, English and Portuguese; an API without Portuguese gives the Spanish.
@@ -88,7 +94,7 @@ export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations
     setTraces(traced)
   }, [])
 
-  useEffect(() => { void refreshBank() }, [refreshBank, sessionRef, escalations, replies])
+  useEffect(() => { if (seen) void refreshBank() }, [seen, refreshBank, sessionRef, escalations, replies])
 
   async function run(scenario: DemoScenario) {
     setBusy(true)

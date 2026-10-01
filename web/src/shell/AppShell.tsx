@@ -208,6 +208,7 @@ export function AppShell({ session, kit, children }: { session: Session; kit: Pr
                 entries={entries}
                 pending={sending}
                 escalations={escalations}
+                open={demoOpen}
                 ended={over}
                 send={send}
                 onSend={onSend}

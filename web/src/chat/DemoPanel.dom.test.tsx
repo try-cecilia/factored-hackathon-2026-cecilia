@@ -22,14 +22,14 @@ const scenario: DemoScenario = {
 }
 
 const draw = (locale: 'es' | 'pt', scenarios = [scenario]) =>
-  renderWithI18n(<DemoPanel scenarios={scenarios} sessionRef="s" entries={[]} pending={false} escalations={0} ended={false} send={async () => null} onSend={() => () => {}} retry={() => {}} overlay={false} onSessionChanged={async () => {}} onClose={() => {}} />, locale)
+  renderWithI18n(<DemoPanel scenarios={scenarios} sessionRef="s" entries={[]} pending={false} escalations={0} open ended={false} send={async () => null} onSend={() => () => {}} retry={() => {}} overlay={false} onSessionChanged={async () => {}} onClose={() => {}} />, locale)
 
 // The page the customer gets: the texts of the customer area only, as the root loader resolves them, and not the console's.
-async function drawAsCustomer(locale: Locale) {
+async function drawAsCustomer(locale: Locale, open = true) {
   const messages = await loadMessages(areasOf('/chat'), locale)
   return render(
     <I18nProvider locale={locale} messages={messages}>
-      <DemoPanel scenarios={[scenario]} sessionRef="s" entries={[]} pending={false} escalations={0} ended={false} send={async () => null} onSend={() => () => {}} retry={() => {}} overlay={false} onSessionChanged={async () => {}} onClose={() => {}} />
+      <DemoPanel scenarios={[scenario]} sessionRef="s" entries={[]} pending={false} escalations={0} open={open} ended={false} send={async () => null} onSend={() => () => {}} retry={() => {}} overlay={false} onSessionChanged={async () => {}} onClose={() => {}} />
     </I18nProvider>,
   )
 }
@@ -124,6 +124,26 @@ describe('DemoPanel', () => {
       tickets.traces = []
       await drawAsCustomer('es')
       expect(await screen.findByText(/Todavía no hay casos/)).toBeTruthy()
+    })
+  })
+
+  describe('nothing of the bank view is asked for until the panel is shown', () => {
+    it('a panel that is not on screen asks for nothing, and asks when it is shown', async () => {
+      tickets.list = []
+      tickets.traces = []
+      tickets.asked = 0
+      const messages = await loadMessages(areasOf('/chat'), 'es')
+      const panel = (open: boolean) => (
+        <I18nProvider locale="es" messages={messages}>
+          <DemoPanel scenarios={[scenario]} sessionRef="s" entries={[]} pending={false} escalations={0} open={open} ended={false} send={async () => null} onSend={() => () => {}} retry={() => {}} overlay onSessionChanged={async () => {}} onClose={() => {}} />
+        </I18nProvider>
+      )
+      const view = render(panel(false))
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      expect(tickets.asked).toBe(0)
+      view.rerender(panel(true))
+      await screen.findByText(/Todavía no hay casos/)
+      expect(tickets.asked).toBeGreaterThan(0)
     })
   })
 })
