@@ -39,6 +39,7 @@ ROOT = Path(__file__).resolve().parent.parent
 # alimenta el reporte de desarrollo, que la compuerta no compara).
 POLICY_GLOBS = (
     "agent/**/*.py",
+    "eval/models/intent_clf.json",        # el modelo que se carga en ejecución (JSON, sin pickle)
     "eval/models/intent_clf.joblib",      # el clasificador que alimenta la guarda de escalación en ejecución
     "eval/models/intent_clf_meta.json",   # ...y su umbral
     "eval/run_system_eval.py",            # el juez (disposition_ok, seguridad, traspaso), los fallos simulados y el modelo ideal y adversarial

@@ -58,14 +58,12 @@ promise about response time: this is a prototype with no on-call.
    hands out test PINs, exist there. They answer 404 everywhere else.
 5. **The team's console keys sit in a tracked file of the private repository** (`CLAVES_CONSOLA.md`). The public export
    removes it from every commit, and the keys must be rotated if access to the private repository ever widens.
-6. **The intent model is a pickle** (`joblib`) committed to the repository and loaded without an integrity check
-   (V5.5.3). It is never loaded from user input.
-7. **CSRF on the customer's web login and chat rests on `SameSite=Lax`** alone (V4.2.2).
-8. **State is single-process**: sessions, rate limits and conversations live in one SQLite file and one process
+6. **CSRF on the customer's web login and chat rests on `SameSite=Lax`** alone (V4.2.2).
+7. **State is single-process**: sessions, rate limits and conversations live in one SQLite file and one process
    (`LIMITATIONS.md`).
-9. **No self-service data export or removal, and no privacy notice** in the web (V8.3.2, V8.3.3).
-10. **Traces and tickets keep customer data**, with no redaction before they are exported anywhere (V7.1.2).
-11. **The customer login had an open redirect** (V5.1.5): it used a looser local copy of the same-origin check, so a signed-in user could be sent to another site by `/login?redirect=https%3A%2F%2Fevil.invalid`. The fix and its HTTP tests are in PR #23; this line goes when it merges.
+8. **No self-service data export or removal, and no privacy notice** in the web (V8.3.2, V8.3.3).
+9. **Traces and tickets keep customer data**, with no redaction before they are exported anywhere (V7.1.2).
+10. **The customer login had an open redirect** (V5.1.5): it used a looser local copy of the same-origin check, so a signed-in user could be sent to another site by `/login?redirect=https%3A%2F%2Fevil.invalid`. The fix and its HTTP tests are in PR #23; this line goes when it merges.
 
 ## What this document does not show
 

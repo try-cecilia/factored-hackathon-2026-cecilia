@@ -127,6 +127,13 @@ service, and as our own roadmap.
 - **No fraud model.** `fraud_score`/`is_fraud` are shown to the human reviewer
   as evidence but don't drive automated decisions. Measured: `is_fraud` is not learnable from the transaction (AUC 0.506 on a chronological split, [label_signal.md](docs/evidence/label_signal.md)), and `fraud_score >= 70` has 100% precision (999/999) but recalls 23.1% of all frauds (999/4,316; 29.2% of those that carry a score), which is how a score built from the label behaves ([ADR-005](docs/decisions/ADR-005-no-fraud-or-risk-model.md)). This workflow escalates
   fraud; it doesn't adjudicate it.
+- **The intent classifier is much weaker on real speech than on our own text.** Zero-shot on 1,090 real calls to an
+  e-banking line (MInDS-14, es-ES and pt-PT, ASR transcripts; `docs/evidence/real_speech.md`, protocol fixed before the
+  run): on the primary mapping it is right 73.4% of the time against 91.1% for the keyword rules, because it reads 24.6%
+  of the out-of-scope requests as needing a person and 11.7% as an in-scope request. On the in-scope calls alone it does
+  better than the keywords (89.6% against 81.9%). The runtime escalation guard sent 5.2% [3.9-6.8] of real, non-escalation
+  calls to a person, at the edge of the 5% we aimed for. The model was not changed after seeing this: the 84.7% on team-written
+  text says nothing about out-of-scope handling on real customers.
 
 ## Security and privacy
 

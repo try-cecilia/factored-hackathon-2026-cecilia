@@ -33,6 +33,7 @@ from sklearn.metrics import confusion_matrix, f1_score, precision_recall_fscore_
 
 from agent.llm import baseline_classifier
 from agent.llm.intent_classifier import VARIANTS, load_rows, train
+from agent.policy import intent_model
 from agent.policy.signals import contains_escalation_signal, escalation_categories
 from eval import leakage, tracking
 from eval.stats import fmt, paired_accuracy, rate, zero_event_upper_bound
@@ -40,6 +41,7 @@ from eval.stats import fmt, paired_accuracy, rate, zero_event_upper_bound
 TRAIN = "eval/test_cases/intent_dataset.csv"
 HELDOUT = "eval/test_cases/heldout_utterances.csv"
 MODEL_OUT = Path("eval/models/intent_clf.joblib")
+JSON_OUT = Path("eval/models/intent_clf.json")  # what the server loads: data only, scored in pure Python (agent/policy/intent_model.py)
 META_OUT = Path("eval/models/intent_clf_meta.json")
 REPORT_JSON = Path("eval/reports/intent_classifier.json")
 REPORT_MD = Path("eval/reports/intent_classifier.md")
@@ -189,8 +191,8 @@ def main(argv: list[str] | tuple = ()) -> None:
                                                  "(eval/models, eval/reports): what a check that only wants to see the result uses")
     args = ap.parse_args(argv)
     if args.out_dir:
-        global MODEL_OUT, META_OUT, REPORT_JSON, REPORT_MD  # the four paths are module settings that track() reads too
-        MODEL_OUT, META_OUT, REPORT_JSON, REPORT_MD = (args.out_dir / p.name for p in (MODEL_OUT, META_OUT, REPORT_JSON, REPORT_MD))
+        global MODEL_OUT, JSON_OUT, META_OUT, REPORT_JSON, REPORT_MD  # the five paths are module settings that track() reads too
+        MODEL_OUT, JSON_OUT, META_OUT, REPORT_JSON, REPORT_MD = (args.out_dir / p.name for p in (MODEL_OUT, JSON_OUT, META_OUT, REPORT_JSON, REPORT_MD))
     train_rows, held = load_rows(TRAIN), load_rows(HELDOUT)
     report, model = build_report(train_rows, held)
     chosen, tau = report["chosen_variant"], report["escalation_threshold"]
@@ -203,6 +205,7 @@ def main(argv: list[str] | tuple = ()) -> None:
         if hasattr(part, "_stop_words_id"):
             del part._stop_words_id
     joblib.dump(model, MODEL_OUT)
+    JSON_OUT.write_text(json.dumps(intent_model.export(model), separators=(",", ":")), encoding="utf-8")
     META_OUT.write_text(json.dumps({"escalation_threshold": tau, "variant": chosen, "trained_on": TRAIN, "train_n": len(train_rows),
                                     "train_sha256": report["versions"]["train_sha256"], "sklearn": sklearn.__version__},
                                    indent=2), encoding="utf-8")

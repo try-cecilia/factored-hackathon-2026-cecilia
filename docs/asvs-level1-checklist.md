@@ -12,8 +12,8 @@ Requirement text is quoted from ASVS 4.0.3, © OWASP Foundation, licensed CC BY-
 
 | Status | Count |
 |---|---|
-| Implemented | 54 |
-| Partial | 23 |
+| Implemented | 56 |
+| Partial | 21 |
 | Not applicable | 46 |
 | Limitation | 4 |
 | **Total Level 1 requirements** | **127** |
@@ -109,9 +109,9 @@ The rows to read first are the Limitations and Partials, listed again in `SECURI
 | **V5.3.8** Verify that the application protects against OS command injection and that operating system calls use parameterized OS queries or use contextual command line output encoding. | Implemented | No `subprocess` or `os.system` in `agent/` or `api/` (checked by search). |
 | **V5.3.9** Verify that the application protects against Local File Inclusion (LFI) or Remote File Inclusion (RFI) attacks. | Implemented | The static page is read from a fixed path, `web/serve.mjs` resolves files inside `dist/client`, and ticket ids are keys in a log file, never paths. |
 | **V5.3.10** Verify that the application protects against XPath injection or XML injection attacks. | Not applicable | The system parses no XML. |
-| **V5.5.1** Verify that serialized objects use integrity checks or are encrypted to prevent hostile object creation or data tampering. | Partial | Sessions are stored as JSON rows in SQLite. The intent model is a committed `joblib` file loaded without an integrity check (V5.5.3). |
+| **V5.5.1** Verify that serialized objects use integrity checks or are encrypted to prevent hostile object creation or data tampering. | Implemented | Sessions are stored as JSON rows in SQLite. The intent model is a JSON file (`eval/models/intent_clf.json`) scored in pure Python (`agent/policy/intent_model.py`): there is no serialized object to rebuild. |
 | **V5.5.2** Verify that the application correctly restricts XML parsers to only use the most restrictive configuration possible and to ensure that unsafe features such as resolving external entities are disabled to prevent XML eXternal Entity (XXE) attacks. | Not applicable | The system parses no XML. |
-| **V5.5.3** Verify that deserialization of untrusted data is avoided or is protected in both custom code and third-party libraries (such as JSON, XML and YAML parsers). | Partial | `agent/policy/intent_guard.py` calls `joblib.load` (pickle) on `eval/models/intent_clf.joblib`, built by `make train-eval` and committed. It is never loaded from user input, but a tampered repository file would execute code on load. |
+| **V5.5.3** Verify that deserialization of untrusted data is avoided or is protected in both custom code and third-party libraries (such as JSON, XML and YAML parsers). | Implemented | No pickle is loaded at runtime. `agent/policy/intent_guard.py` parses the intent model with `json.loads`, which can only produce data; a tampered file can change an answer, not run code. The sklearn pickle (`intent_clf.joblib`) remains only as the trainer's output and the test reference. |
 | **V5.5.4** Verify that when parsing JSON in browsers or JavaScript-based backends, JSON.parse is used to parse the JSON document. Do not use eval() to parse JSON. | Implemented | The web parses with `response.json()`; no `eval`. |
 
 ## V6 — Stored cryptography
