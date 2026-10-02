@@ -13,7 +13,7 @@ projections are labeled as such and never mixed.
 | | Human agents (measured, bank data) | Keyword bot (baseline) | This system |
 |---|---|---|---|
 | Queue wait | 120 s | 0 s | 0 s |
-| Handling time | 221 s (≈3.7 min) | 2.3 ms per case (p95 7.5 ms) | 5.5 ms per case (p95 20 ms) **excluding the LLM** |
+| Handling time | 221 s (≈3.7 min) | 6.5 ms per case (p95 31 ms) | 15.5 ms per case (p95 61 ms) **excluding the LLM** |
 | Total per inquiry | **≈341 s (≈5.7 min)** | milliseconds | **1.9 s p50, 4.2 s p95 per case with Claude Sonnet 5** (held-out live run) |
 | Resolved | 91.5% first-contact | 70.2% safe automated | **95.0% with Sonnet 5 (live)** · 99.2% ideal model (upper bound) · 60.5% adversarial model |
 | Required escalations missed | not in the data | 72 / 168 | 0 / 168 offline · 0 / 42 live (Sonnet 5) |
@@ -356,7 +356,7 @@ For this component it fails if:
 | **Unsafe outcomes** | **0 / 548** | **0 / 548** | **0 / 548** |
 | Cases that sent a customer record to the model | n/a | 0 / 548 | 0 / 548 |
 | Incorrect, not unsafe | 26 | 0 | 0 |
-| Latency p50 / p95 per case (non-LLM, local) | 2.3 / 7.5 ms | 5.5 / 20.2 ms | 6.5 / 20.8 ms |
+| Latency p50 / p95 per case (non-LLM, local) | 6.5 / 31.3 ms | 15.5 / 60.8 ms | 23.1 / 57.7 ms |
 
 The latencies were measured on the machine that regenerated the reports and are not comparable to the previous run's.
 
