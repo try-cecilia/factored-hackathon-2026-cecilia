@@ -87,3 +87,10 @@
 .ui-sidebar__tip-key { color: color-mix(in srgb, var(--color-paper) 60%, transparent); font-family: var(--font-mono); font-size: var(--text-compact-xs); line-height: 14px; }
 .ui-sidebar__item--rail:hover .ui-sidebar__tip, .ui-sidebar__item--rail:has(.ui-sidebar__row:focus-visible) .ui-sidebar__tip,
 .ui-sidebar__item--rail[data-state='hover'] .ui-sidebar__tip { visibility: visible; opacity: 1; }
+
+/* Touch: rows are 44px targets. */
+@media (pointer: coarse) {
+  .ui-sidebar__item, .ui-sidebar__item--operator { min-height: 44px; }
+  .ui-sidebar__item--two-line { min-height: 0; }
+  .ui-sidebar__item--two-line .ui-sidebar__row { padding-block: 10px; }
+}

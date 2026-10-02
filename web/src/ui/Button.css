@@ -70,3 +70,9 @@
   font-size: var(--text-compact-xs); font-weight: var(--font-weight-semibold); letter-spacing: 0; line-height: 14px;
 }
 .ui-btn:has(.ui-btn__count) { padding-inline: 12px; }
+
+/* Touch: every button is at least a 44px target (WCAG 2.5.5), whatever size it draws at with a mouse. */
+@media (pointer: coarse) {
+  .ui-btn { min-height: 44px; }
+  .ui-btn--icon { min-width: 44px; }
+}

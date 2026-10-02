@@ -20,3 +20,6 @@
 .ui-answer__fact { display: contents; }
 .ui-answer__panel dt { color: var(--color-ink-70); }
 .ui-answer__panel dd { margin: 0; color: var(--color-ink-app); font-weight: var(--font-weight-semibold); overflow-wrap: anywhere; }
+@media (pointer: coarse) {
+  .ui-answer__why { height: 36px; padding: 0 12px; }
+}

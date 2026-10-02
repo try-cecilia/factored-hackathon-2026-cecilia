@@ -15,3 +15,14 @@
 .ui-pager__page[aria-current='page'] { background: var(--color-fill-muted); font-weight: var(--font-weight-semibold); cursor: default; }
 .ui-pager__page:focus-visible { outline: none; box-shadow: var(--ring-focus); }
 .ui-pager__gap { display: inline-flex; width: 20px; justify-content: center; color: var(--color-ink-70); font-size: var(--text-compact-sm); }
+
+/* Narrow: the range and the controls each take a line when they do not fit on one. */
+@media (max-width: 640px) {
+  .ui-pager { flex-wrap: wrap; height: auto; min-height: 40px; padding-block: 4px; row-gap: 0; }
+  .ui-pager__controls { flex-wrap: wrap; margin-left: auto; }
+}
+/* Touch: page numbers are 44px targets. */
+@media (pointer: coarse) {
+  .ui-pager { height: auto; min-height: 52px; }
+  .ui-pager__page { width: 44px; height: 44px; }
+}

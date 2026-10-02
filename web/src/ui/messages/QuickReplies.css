@@ -1,9 +1,9 @@
 /* Quick replies (Paper "UI · Chat messages" · Clarify): 30px tonal chips, radius 8. */
 .ui-quick { display: flex; flex-wrap: wrap; gap: 8px; }
 .ui-quick__chip {
-  display: inline-flex; align-items: center; height: 30px; padding: 0 12px; border: 0; border-radius: var(--radius-control);
+  display: inline-flex; align-items: center; min-height: 30px; max-width: 100%; padding: 7px 12px; border: 0; border-radius: var(--radius-control);
   background: var(--color-fill-subtle); color: var(--color-ink-app); font: inherit; font-size: var(--text-compact-md);
-  font-weight: var(--font-weight-medium); line-height: 16px; text-align: left; cursor: pointer;
+  font-weight: var(--font-weight-medium); line-height: 16px; text-align: left; overflow-wrap: anywhere; cursor: pointer;
   transition: background-color 0.12s ease;
 }
 .ui-quick__chip:hover:not(:disabled), .ui-quick__chip[data-state='hover'] { background: var(--color-fill-muted); }
@@ -11,3 +11,7 @@
 .ui-quick__chip:focus-visible, .ui-quick__chip[data-state='focus'] { outline: none; box-shadow: var(--ring-focus); }
 .ui-quick__chip[aria-pressed='true'] { background: var(--color-row-selected); color: var(--color-cecil-blue); font-weight: var(--font-weight-semibold); cursor: default; }
 .ui-quick__chip:disabled { color: var(--color-disabled-text); cursor: default; }
+/* Touch: each option is a 44px target. A label too long for the line wraps inside its chip instead of running off the screen. */
+@media (pointer: coarse) {
+  .ui-quick__chip { min-height: 44px; padding-inline: 14px; }
+}
