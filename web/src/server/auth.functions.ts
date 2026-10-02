@@ -1,6 +1,6 @@
 import { createServerFn } from '@tanstack/react-start'
 import { AgentApiError, agentApi } from './agent-api'
-import { clearSessionToken, getSessionToken, setSessionToken, wasReplaced } from './session-cookie'
+import { clearSessionToken, getSessionToken, setSessionToken } from './session-cookie'
 import { PublicError } from './rpc-guard'
 
 export type Credentials = { customer_id: string; pin: string }
@@ -50,20 +50,20 @@ export const login = createServerFn({ method: 'POST' })
     }
   })
 
-// Leaving is the person's decision: the cookie goes even when the API could not be asked to revoke the session (a 500, no answer, a
-// dropped connection), and the answer says whether it did, so the page can tell the truth. The one exception is a login of this same
-// browser that finished WHILE this waited: its Set-Cookie may already be in the browser, and a deletion after it would orphan that
-// session. A token replaced before this request began is not that case: the request carried it, so the browser still holds it (the
-// login's answer never arrived), and it is the cookie to remove.
+// Leaving is the person's decision, and it is about THIS browser: the cookie goes always, even when the API could not be asked to
+// revoke the session (a 500, no answer, a dropped connection), and whatever else happened while this waited. The answer says whether
+// the revocation was confirmed, so the page can tell the truth; when it was not, the token may stay valid in the API until it expires.
+// A login of another tab that finished meanwhile is closed in this browser too (the person signs in again, and its token also lives
+// until it expires): the server cannot tell it from one whose answer was lost, and that one must not keep the person signed in.
+// Only the passive reads leave the cookie alone (chat-core.ts): they are not the person's decision.
 export const logout = createServerFn({ method: 'POST' }).handler(async (): Promise<LogoutResult> => {
   const token = getSessionToken()
   if (!token) return { revoked: true }
-  const replacedBefore = wasReplaced(token)
   const revoked = await agentApi('/auth/session', { method: 'DELETE', token, timeoutMs: LOGOUT_TIMEOUT_MS }).then(
     () => true,
     () => false,
   )
-  if (replacedBefore || !wasReplaced(token)) clearSessionToken()
+  clearSessionToken()
   return { revoked }
 })
 

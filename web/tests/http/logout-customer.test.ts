@@ -54,30 +54,49 @@ describe('signing out of the customer session', () => {
     assert.equal(app.seen.length, before)
   })
 
-  test('a login that replaced the cookie meanwhile keeps its cookie: the sign-out that was waiting on the API does not delete it', async () => {
-    for (const order of ['logout first', 'logout last'] as const) {
-      const old = `tok-old-${order.replace(' ', '-')}-0123456789`
-      const fresh = `tok-new-${order.replace(' ', '-')}-0123456789`
-      app.nextTokens(old)
-      await app.signIn()
-      app.nextTokens(fresh)
-      const stale = withCookie(old)
-      const slow = app.hold((req) => req.method === 'DELETE' && req.headers['x-session-token'] === old)
-      const signingOut = app.rpc('logout', { headers: stale }) // waits inside the API
-      await slow.reached
-      const replaced = await app.signIn(undefined, undefined, stale) // another tab signs in again over the same cookie
-      slow.release(500) // the API finally fails the revocation of the old token
-      const out = await signingOut
+  // The policy: leaving removes the cookie of THIS browser, always. The server cannot tell a login of another tab whose answer arrived
+  // from one whose answer was lost, and the second must not keep the person signed in. The cost is stated: a concurrent login that did
+  // reach the browser is closed there too (the person signs in again), and its token stays valid in the API until it expires.
+  test('a login of another tab that finished while the sign-out waited is closed in the browser too, and its token stays valid in the API', async () => {
+    const old = 'tok-policy-old-0123456789'
+    const fresh = 'tok-policy-new-0123456789'
+    app.nextTokens(old)
+    await app.signIn()
+    app.nextTokens(fresh)
+    const stale = withCookie(old)
+    const slow = app.hold((req) => req.method === 'DELETE' && req.headers['x-session-token'] === old)
+    const signingOut = app.rpc('logout', { headers: stale })
+    await slow.reached
+    const replaced = await app.signIn(undefined, undefined, stale) // delivered to the browser
+    slow.release(500)
+    const out = await signingOut
+    assert.ok(clearsTheCookie(out), 'the sign-out removes the cookie whatever happened meanwhile')
 
-      const jar = cookieJar(SESSION)
-      jar.apply(new Response(null, { headers: { 'Set-Cookie': `cecilai_session=${old}; Path=/` } }))
-      const responses = order === 'logout first' ? [out, replaced] : [replaced, out]
-      for (const response of responses) jar.apply(response)
-      const kept = jar.session()
-      assert.equal(kept, `cecilai_session=${fresh}`, `${order}: the browser keeps the new session`)
-      assert.ok(await opensChat(jar.header()), `${order}: and it opens the chat`)
-      assert.deepEqual((await rpcOutcome(out)).result, { revoked: false }, order)
-    }
+    const jar = cookieJar(SESSION)
+    jar.apply(new Response(null, { headers: { 'Set-Cookie': `cecilai_session=${old}; Path=/` } }))
+    for (const response of [replaced, out]) jar.apply(response)
+    assert.equal(jar.session(), null, 'the browser holds no session: the person signs in again')
+    assert.equal(app.isLive(fresh), true, 'the concurrent login stays valid in the API until it expires')
+    assert.deepEqual((await rpcOutcome(out)).result, { revoked: false })
+  })
+
+  // A login whose answer is lost DURING the wait: the browser still holds the cookie the request carried, and it must go.
+  test('a login whose response is lost while the sign-out waits does not keep the old cookie alive', async () => {
+    const old = 'tok-lost-during-old-0123456789'
+    app.nextTokens(old)
+    const jar = cookieJar(SESSION)
+    jar.apply(await app.signIn())
+    app.nextTokens('tok-lost-during-new-0123456789')
+    const slow = app.hold((req) => req.method === 'DELETE' && req.headers['x-session-token'] === old)
+    const signingOut = app.rpc('logout', { headers: { Cookie: jar.header() } })
+    await slow.reached
+    await app.signIn(undefined, undefined, { Cookie: jar.header() }) // the answer is dropped on the way
+    slow.release(500)
+    const out = await signingOut
+    assert.ok(clearsTheCookie(out), `no deletion in: ${out.headers.getSetCookie().join(' | ')}`)
+    jar.apply(out)
+    assert.equal(jar.session(), null)
+    assert.equal(await opensChat(`cecilai_session=${old}`), true, 'the revocation was not confirmed: the old token lives until it expires')
   })
 
   // The other way round: the API issued a new token, but its answer never reached the browser (the connection dropped), so the browser
