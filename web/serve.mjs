@@ -47,6 +47,10 @@ const CSP = "frame-ancestors 'none'; base-uri 'none'; object-src 'none'; form-ac
 // are read by the parser the origin check uses (public-origins.mjs): a value it refuses, or one that mixes schemes, sends no HSTS.
 const HSTS = publicOrigins(process.env.WEB_PUBLIC_ORIGIN)?.[0].startsWith('https:') ? { 'strict-transport-security': 'max-age=15724800; includeSubDomains' } : {}
 const SECURITY = { 'x-content-type-options': 'nosniff', 'x-frame-options': 'DENY', 'referrer-policy': 'same-origin', 'content-security-policy': CSP, ...HSTS }
+// What the app answers (pages, server functions, errors, redirects) carries a person's session, conversation or tickets: no cache, shared or
+// browser's, may keep it. Set here over whatever the app said, so a header from the framework or a route cannot weaken it; the files of the
+// build, answered above, keep their own policy. `pragma` is for a cache that predates Cache-Control.
+const PRIVATE = { 'cache-control': 'private, no-store', pragma: 'no-cache' }
 
 // Images and fonts are compressed already.
 const COMPRESSIBLE = new Set(['.js', '.mjs', '.css', '.html', '.json', '.svg', '.txt', '.map'])
@@ -126,7 +130,7 @@ async function send(res, response) {
   for (const [name, value] of response.headers) if (name !== 'set-cookie') headers[name] = value
   const cookies = response.headers.getSetCookie()
   if (cookies.length) headers['set-cookie'] = cookies
-  res.writeHead(response.status, { ...SECURITY, ...headers })
+  res.writeHead(response.status, { ...SECURITY, ...headers, ...PRIVATE })
   if (!response.body) return res.end()
   Readable.fromWeb(response.body).on('error', () => res.destroy()).pipe(res)
 }
@@ -178,7 +182,7 @@ const server = createServer(async (req, res) => {
       return res.end('Payload Too Large')
     }
     console.error(error)
-    if (!res.headersSent) res.writeHead(500, { ...SECURITY, 'content-type': 'text/plain; charset=utf-8' })
+    if (!res.headersSent) res.writeHead(500, { ...SECURITY, ...PRIVATE, 'content-type': 'text/plain; charset=utf-8' })
     res.end('Internal Server Error')
   }
 })
