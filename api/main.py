@@ -3,7 +3,7 @@
 - /auth/session exchanges customer_id + test PIN for a short-lived token
   (agent/session/identity.py); /chat only ever accepts that token. GET
   /auth/session with X-Session-Token reads the session back without extending
-  it; DELETE revokes it (always 204). A web BFF holds the token and calls these.
+  it; DELETE revokes it (204 even for an unknown token). A web BFF holds the token and calls these.
 - Behind that BFF, CLIENT_IP_HEADER=X-Client-IP makes per-IP limits use the end
   user's address, safe only when nothing but the BFF can reach the API.
 - /admin/* require X-Admin-Key == ADMIN_API_KEY and are disabled (503) when
@@ -26,6 +26,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import math
 import os
 import threading
@@ -60,6 +61,8 @@ from api.human_queue import listing as human_queue_listing
 from api.observability import ObservabilityMiddleware, RouteTemplates, readiness
 from api.security import SecurityHeadersMiddleware, configure_cors, constant_time_equals
 from ops.drift import recent_rows, report as drift_report, save_baseline as save_drift_baseline
+
+logger = logging.getLogger("cecilai.api")
 
 serialize_policy_writers()  # the ticket queue and the desk append under the same lock as the retention purge (agent/filelock.py)
 
@@ -336,10 +339,16 @@ def read_session(x_session_token: str | None = Header(default=None)) -> SessionI
 
 @app.delete("/auth/session", status_code=204)
 def end_session(x_session_token: str | None = Header(default=None)) -> Response:
-    """Logout. Always 204, so an unknown or already revoked token is not an error."""
+    """Logout. 204 for an unknown or already revoked token too. The revocation comes first and is the only step whose failure
+    is the caller's (an error, never a 204 over a live session); wiping the history is a separate task whose failure is
+    counted by type and does not undo the logout."""
     if x_session_token:
-        default_orchestrator.conversations.clear_transcript(session_ref(x_session_token))
         default_store.revoke(x_session_token)
+        try:
+            default_orchestrator.conversations.clear_transcript(session_ref(x_session_token))
+        except Exception as exc:  # noqa: BLE001 - the session is already over; nothing of the error reaches the client or the log
+            observability.count_failure(f"logout_transcript_clear:{type(exc).__name__}")
+            logger.warning("logout: the history could not be cleared (%s)", type(exc).__name__)
     return Response(status_code=204)
 
 

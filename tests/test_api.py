@@ -240,3 +240,41 @@ def test_logout_ends_the_session_and_never_fails(client):
     admin = {"X-Admin-Key": "test-admin-key"}
     logs = client.get("/admin/audit_log?limit=500", headers=admin).text + client.get("/admin/trace_log", headers=admin).text
     assert token not in logs
+
+
+def test_logout_revokes_first_and_a_failing_history_clean_up_cannot_keep_the_session_alive(client, monkeypatch):
+    from agent import observability
+    from agent.core.orchestrator import default_orchestrator
+
+    def broken(ref):
+        raise OSError("disk full at /secret/path")
+
+    monkeypatch.setattr(default_orchestrator.conversations, "clear_transcript", broken)
+    before = dict(observability.failure_counts())
+    token = login(client).json()["token"]
+    headers = {"X-Session-Token": token}
+    assert client.delete("/auth/session", headers=headers).status_code == 204
+    assert client.get("/auth/session", headers=headers).status_code == 401  # revoked all the same
+    r = client.post("/chat", json={"session_token": token, "message": "¿Cuál es mi saldo?"})
+    assert r.json()["disposition"] == "REAUTH_REQUIRED"
+    counted = {k: v - before.get(k, 0) for k, v in observability.failure_counts().items() if v != before.get(k, 0)}
+    assert counted == {"logout_transcript_clear:OSError": 1}  # by type, never the raw message
+    assert "secret" not in json.dumps(observability.failure_counts())
+
+
+def test_logout_does_not_report_success_when_the_revocation_itself_failed(client, monkeypatch):
+    from agent.session.auth import default_store
+
+    token = login(client).json()["token"]
+    cleared = []
+    monkeypatch.setattr(main.default_orchestrator.conversations, "clear_transcript", lambda ref: cleared.append(ref))
+
+    def broken(t):
+        raise OSError("state store down")
+
+    monkeypatch.setattr(default_store, "revoke", broken)
+    r = TestClient(main.app, raise_server_exceptions=False).delete("/auth/session", headers={"X-Session-Token": token})
+    assert r.status_code == 500 and "state store" not in r.text  # not a 204: the session is still alive
+    assert cleared == []  # and its history is not wiped while the customer can still use it
+    monkeypatch.undo()
+    assert default_store.validate(token).customer_id == "CLI-FIX0001"
