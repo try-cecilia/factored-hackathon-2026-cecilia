@@ -29,7 +29,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf 
     && useradd --create-home --uid 10001 web
 COPY --from=prod-deps --chown=web:web /app/node_modules ./node_modules
 COPY --from=build --chown=web:web /app/dist ./dist
-COPY --chown=web:web serve.mjs package.json ./
+COPY --chown=web:web serve.mjs public-origins.mjs package.json ./
 USER web
 EXPOSE 3000
 HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=3 CMD curl -fs http://127.0.0.1:${PORT}/_healthz || exit 1

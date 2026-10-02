@@ -41,7 +41,8 @@ export async function startCustomerApp(fake: FakeApi) {
   const get = (path: string, headers: Record<string, string> = {}) =>
     built.default.fetch(new Request(`${ORIGIN}${path}`, { headers, redirect: 'manual' }))
   // The sign-in server function, called the way the browser calls it: its id is read from the build, not written here.
-  const signIn = async (base = ORIGIN) => {
+  // `proof` is what the browser says about where the call came from; the default is a call from the app's own page.
+  const signIn = async (base = ORIGIN, proof: Record<string, string> = { Origin: base, 'Sec-Fetch-Site': 'same-origin' }) => {
     const assets = join(import.meta.dirname, '../../dist/server/assets')
     const file = readdirSync(assets).find((f) => f.startsWith('auth.functions-') && readFileSync(join(assets, f), 'utf8').includes('name: "login"'))
     const id = /id: "([0-9a-f]+)",\s*name: "login"/.exec(readFileSync(join(assets, file ?? ''), 'utf8'))?.[1]
@@ -49,7 +50,7 @@ export async function startCustomerApp(fake: FakeApi) {
     return built.default.fetch(
       new Request(`${base}/_serverFn/${id}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-tsr-serverFn': 'true', Accept: 'application/json', Origin: base, 'Sec-Fetch-Site': 'same-origin' },
+        headers: { 'Content-Type': 'application/json', 'x-tsr-serverFn': 'true', Accept: 'application/json', ...proof },
         body: SIGN_IN_BODY,
       }),
     )

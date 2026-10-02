@@ -2,7 +2,9 @@
 // message component a reply gets, and which cases the conversation has opened. Pure so it is tested without a DOM.
 import { resolveMessage } from '../ui/messages/disposition.ts'
 import type { DeliveryState } from '../ui/loaders/delivery.ts'
+import type { Translate } from '../i18n/translate.ts'
 import { parseOptions, type Options } from './format.ts'
+import type { CaseRow } from './ConversationProvider.tsx'
 import type { HistoryCase, HistoryEntry, Reply, SendFailure } from './types.ts'
 
 export type UserEntry = {
@@ -206,6 +208,17 @@ const PENDING = new Set(['data_unavailable', 'tool_failure', 'llm_unavailable', 
 export function caseCategoryKey(category: string): string {
   if (KNOWN_CATEGORIES.has(category)) return category
   return PENDING.has(category) ? 'pending' : 'other'
+}
+
+const STATUS = { open: 1, claimed: 1, approved: 1, rejected: 1, handed_back: 1, stale: 1, resolved: 1 }
+
+/** Where a case stands, in the customer's words, as the handoff message and the sidebar say it. */
+export function caseStatusText(t: Translate, row: CaseRow | undefined): string {
+  if (!row || row.state.state === 'loading') return t('cases.loading')
+  if (row.state.state === 'error') return t('cases.unavailable')
+  if (row.state.state === 'not_found') return t('cases.notFound')
+  const key = row.state.status
+  return t(`cases.status.${key in STATUS ? (key as keyof typeof STATUS) : 'unknown'}`)
 }
 
 const WARN_SECONDS = 120

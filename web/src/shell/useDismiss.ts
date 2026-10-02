@@ -2,8 +2,9 @@ import { useEffect, useRef, type RefObject } from 'react'
 
 /**
  * A panel that slides over the page (the sidebar on a phone, the demo panel on a small screen): Escape closes it, the focus goes
- * into it when it opens and back to what opened it when it closes, and Tab and Shift+Tab wrap inside it (the page behind is made
- * `inert` by the caller; this keeps the focus from leaving the panel for the browser's own controls).
+ * into it when it opens and back to what opened it when it closes (unless the caller has already put it elsewhere on the page), and
+ * Tab and Shift+Tab wrap inside it (the page behind is made `inert` by the caller; this keeps the focus from leaving the panel for
+ * the browser's own controls).
  */
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]'
 
@@ -57,6 +58,10 @@ export function useDismiss(
     document.addEventListener('keydown', onKey)
     return () => {
       document.removeEventListener('keydown', onKey)
+      // Whoever closed the panel may already have put the focus somewhere on the page (the demo panel sends its message and focuses
+      // the chat's input): that choice stays. Only a focus left in the panel, or lost, goes back to what opened it.
+      const here = document.activeElement
+      if (here instanceof HTMLElement && here !== document.body && document.contains(here) && !here.closest('[inert]') && !panel.current?.contains(here)) return
       const back = opener.current
       if (back instanceof HTMLElement && document.contains(back) && !back.closest('[inert]')) back.focus()
       else fallbackRef.current?.()?.focus()

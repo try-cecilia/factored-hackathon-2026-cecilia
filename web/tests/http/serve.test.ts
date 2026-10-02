@@ -1,7 +1,8 @@
 // web/serve.mjs itself, the production server of the image: run as a process on a free port, in front of the build.
 import assert from 'node:assert/strict'
 import { spawn, type ChildProcess } from 'node:child_process'
-import { readdirSync, readFileSync } from 'node:fs'
+import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { createServer } from 'node:net'
 import { join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
@@ -37,16 +38,20 @@ before(async () => {
 after(() => server.kill())
 
 // fetch() would decode the body and hide the header it came with: a raw request keeps both as sent.
-async function raw(path: string, acceptEncoding?: string, method = 'GET') {
+async function raw(path: string, acceptEncoding?: string, method = 'GET', body?: Buffer | Buffer[]) {
   const { request } = await import('node:http')
   return new Promise<{ status: number; headers: Record<string, string | string[] | undefined>; body: Buffer }>((done, fail) => {
-    const req = request(`${base}${path}`, { method, headers: acceptEncoding === undefined ? {} : { 'accept-encoding': acceptEncoding } }, (res) => {
+    // A Buffer goes with its Content-Length; an array of chunks goes chunked, with no length declared.
+    const headers: Record<string, string> = acceptEncoding === undefined ? {} : { 'accept-encoding': acceptEncoding }
+    if (body !== undefined) headers['content-type'] = 'application/x-www-form-urlencoded'
+    const req = request(`${base}${path}`, { method, headers }, (res) => {
       const chunks: Buffer[] = []
       res.on('data', (c: Buffer) => chunks.push(c))
       res.on('end', () => done({ status: res.statusCode ?? 0, headers: res.headers, body: Buffer.concat(chunks) }))
     })
     req.on('error', fail)
-    req.end()
+    if (Array.isArray(body)) for (const chunk of body) req.write(chunk)
+    req.end(Array.isArray(body) ? undefined : body)
   })
 }
 
@@ -139,5 +144,102 @@ describe('security headers', () => {
     }
     assert.equal(await hsts('https://console.bank.example'), 'max-age=15724800; includeSubDomains')
     assert.equal(await hsts('https://a.example,http://127.0.0.1:3000'), null)
+    // The parser the origin check uses decides, not a prefix: a value it refuses (a path, userinfo, a wildcard, a blank entry) sends none.
+    for (const refused of ['https://console.bank.example/path', 'https://trusted.example@attacker.invalid', 'https://*.bank.example', 'https://a.example,', 'https://a.example, ,https://b.example']) {
+      assert.equal(await hsts(refused), null, refused)
+    }
+    assert.equal(await hsts('https://a.example, https://B.example:8443/'), 'max-age=15724800; includeSubDomains')
+  })
+})
+
+// What the one server in front of the app answers for itself: a hostile body, a method nobody uses, a path that is not a path.
+describe('the server\'s own answers', () => {
+  const KIB = 1024
+  const form = (bytes: number) => Buffer.from('admin_key=' + 'x'.repeat(bytes - 'admin_key='.length))
+
+  test('a POST body over 16 KiB is a 413 before the app sees it, declared by its length or sent in chunks', async () => {
+    for (const path of ['/operador/sesion', '/login', '/_serverFn/anything']) {
+      const declared = await raw(path, undefined, 'POST', form(20 * KIB))
+      assert.equal(declared.status, 413, path)
+      assert.equal(declared.headers['content-type'], 'text/plain; charset=utf-8')
+      assert.equal(declared.headers['content-security-policy'], "frame-ancestors 'none'; base-uri 'none'; object-src 'none'; form-action 'self'")
+      const chunked = await raw(path, undefined, 'POST', [form(10 * KIB), form(10 * KIB)])
+      assert.equal(chunked.status, 413, `${path} chunked`)
+    }
+  })
+
+  test('a body at the limit still reaches the app: the cap is on size, not on posting', async () => {
+    const res = await raw('/operador/sesion', undefined, 'POST', form(16 * KIB))
+    assert.notEqual(res.status, 413)
+    assert.notEqual(res.status, 500)
+    const small = await raw('/operador/sesion', undefined, 'POST', form(40))
+    assert.notEqual(small.status, 413)
+  })
+
+  test('the health check answers GET and HEAD only; any other method is a 405 that names them', async () => {
+    assert.equal((await raw('/_healthz')).status, 200)
+    const head = await raw('/_healthz', undefined, 'HEAD')
+    assert.equal(head.status, 200)
+    assert.equal(head.body.length, 0)
+    for (const method of ['PATCH', 'POST', 'PUT', 'DELETE']) {
+      const res = await raw('/_healthz', undefined, method)
+      assert.equal(res.status, 405, method)
+      assert.equal(res.headers.allow, 'GET, HEAD')
+      assert.equal(res.headers['content-type'], 'text/plain; charset=utf-8')
+    }
+  })
+
+  test('a request target that is not a valid URL, or is badly percent-encoded, is a 400 with a charset, not a 500', async () => {
+    for (const path of ['/%E0%A4%A', '/%', '//', '//host:99999/']) {
+      const res = await raw(path)
+      assert.equal(res.status, 400, path)
+      assert.equal(res.headers['content-type'], 'text/plain; charset=utf-8', path)
+      assert.equal(res.body.toString(), 'Bad Request')
+    }
+  })
+
+  test('a real failure of the app stays a 500, with a charset and no detail', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'serve-500-'))
+    try {
+      mkdirSync(join(dir, 'dist/server'), { recursive: true })
+      mkdirSync(join(dir, 'dist/client'), { recursive: true })
+      writeFileSync(join(dir, 'dist/server/server.js'), "export default { fetch() { throw new Error('secret detail') } }\n")
+      for (const file of ['serve.mjs', 'public-origins.mjs']) copyFileSync(join(web, file), join(dir, file))
+      const port = await freePort()
+      const child = spawn(process.execPath, ['serve.mjs'], { cwd: dir, env: { ...process.env, PORT: String(port), HOST: '127.0.0.1' }, stdio: 'ignore' })
+      try {
+        for (let i = 0; i < 100 && !(await fetch(`http://127.0.0.1:${port}/_healthz`).then((r) => r.ok, () => false)); i++) await new Promise((wait) => setTimeout(wait, 50))
+        const res = await fetch(`http://127.0.0.1:${port}/anything`)
+        assert.equal(res.status, 500)
+        assert.equal(res.headers.get('content-type'), 'text/plain; charset=utf-8')
+        assert.equal(await res.text(), 'Internal Server Error')
+      } finally {
+        child.kill()
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('the web tier serves only the extensions it has a type for (V12.5.1)', () => {
+  const probes = ['__probe.bak', '__probe.swp', '__probe.zip', '__probe.js.map.orig', '__probe']
+  after(() => probes.forEach((name) => rmSync(join(web, 'dist/client', name), { force: true })))
+
+  test('a stray editor, backup or archive file in dist/client is not served; a known type still is', async () => {
+    for (const name of probes) writeFileSync(join(web, 'dist/client', name), 'secret')
+    writeFileSync(join(web, 'dist/client/__probe.txt'), 'plain')
+    try {
+      for (const name of probes) {
+        const res = await raw(`/${name}`)
+        assert.notEqual(res.status, 200, name)
+        assert.ok(!res.body.toString().includes('secret'), name)
+      }
+      const known = await raw('/__probe.txt')
+      assert.equal(known.status, 200)
+      assert.equal(known.headers['content-type'], 'text/plain; charset=utf-8')
+    } finally {
+      rmSync(join(web, 'dist/client/__probe.txt'), { force: true })
+    }
   })
 })

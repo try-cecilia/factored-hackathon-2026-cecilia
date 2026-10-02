@@ -15,4 +15,6 @@ test('the other actions are as before: a rejection keeps its reason and nothing 
   assert.deepEqual(parseDeskAction({ action: 'claim' }), { action: 'claim', expected_version: undefined, reason: undefined, message: undefined })
   assert.throws(() => parseDeskAction({ action: 'close' }), /action is not valid/)
   assert.throws(() => parseDeskAction({ action: 'approve', expected_version: '3' }), /expected_version/)
+  assert.throws(() => parseDeskAction({ action: 'approve', expected_version: -10 }), /expected_version/)
+  assert.deepEqual(parseDeskAction({ action: 'claim', expected_version: 0 }).expected_version, 0)
 })

@@ -106,6 +106,17 @@ describe('the case view', () => {
     expect(document.activeElement).toBe(opener)
   })
 
+  it('a click on the scrim closes it and gives the focus back to the button that opened it', async () => {
+    const user = userEvent.setup()
+    const { container } = await draw()
+    const opener = screen.getByRole('button', { name: /^Ver caso 55d09c14/ })
+    await user.click(opener)
+    await screen.findByRole('dialog')
+    await user.click(container.querySelector('.shell__scrim--case') as HTMLElement)
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(document.activeElement).toBe(opener)
+  })
+
   it('Tab stays inside it', async () => {
     const user = userEvent.setup()
     await draw()
