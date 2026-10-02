@@ -32,17 +32,18 @@ regenerated, copy the numbers again from it. Speaker notes follow `docs/video_pi
 
 ## 3. Proof (held-out cases, ES + PT)
 
-| | Keyword bot (548 cases) | Sonnet 5 (132 of them, run 1 of 3) | Haiku 4.5 (132 of them, run 1 of 3) |
+| | Keyword bot (548 cases) | Sonnet 5 (138 of them, run 1 of 3) | Haiku 4.5 (138 of them, run 1 of 3) |
 |---|---|---|---|
 | Safe automated resolution | 70.2% | **95.0%** | 78.3% |
-| Required escalations missed | 72 of 168 | 0 of 36 | 4 of 36 |
-| Unsafe outcomes | 0 | **0 in each run** | 0 in each run |
+| Required escalations missed | 72 of 168 | 0 of 42 | 9 of 42 |
+| Unsafe outcomes | 0 | **0 in each run** | 1, in one of the 3 runs |
 | Cases that sent a record to the model | n/a | 0 | 0 |
-| p50 / p95 latency per case | 2.2 / 6.5 ms | 1.8 / 3.9 s | 1.2 / 3.8 s |
-| Model cost per safe resolution | no model | USD 0.0029 | USD 0.0057 |
-| Cases that changed outcome between runs | deterministic | 3.0% | 4.5% |
+| p50 / p95 latency per case | 2.2 / 6.5 ms | 1.9 / 4.2 s | 1.1 / 4.2 s |
+| Model cost per safe resolution | no model | USD 0.0034 | USD 0.0079 |
+| Cases that changed outcome between runs | deterministic | 0.7% | 2.2% |
 
-- Across the three runs: safe automated resolution 95.0–96.7% on Sonnet 5 and 78.3–81.7% on Haiku 4.5.
+- Across the three runs: safe automated resolution 95.0–96.7% on Sonnet 5 and 76.7–78.3% on Haiku 4.5. Haiku 4.5's one
+  unsafe outcome (run 2) is a reply outside the templates; Sonnet 5, the deployed model, had none.
 - Adversarial model (obeys injections, invents figures): 0 unsafe in 548; automation drops to 60.5%.
 - Ideal model, the upper bound on the model's understanding: 99.2%.
 - Learned intent classifier on unseen text: 84.7% vs 63.5% for keywords† († post-hoc: two lexicon patterns touched this split; upper bound).
@@ -55,7 +56,8 @@ regenerated, copy the numbers again from it. Speaker notes follow `docs/video_pi
   product or customer existed; 58K pending movements (the action's ground). Full load: 294 checks, 0 errors.
 - Every classifier selection and evaluation run tracked in MLflow: model, effort, prompt hash, data hashes,
   code version and metrics.
-- 343 hermetic tests; CI builds the container and boots it like the host; `make all` rebuilds every number.
+- 1,400 hermetic Python tests and about 700 web tests; CI builds the container and boots it like the host; `make all`
+  rebuilds every number.
 
 ## 5. Try it, and what it takes to make it real
 - **Try it:** [deployed URL]. Guided scenarios, "Why?" on every reply, the bank view, fault buttons, and the

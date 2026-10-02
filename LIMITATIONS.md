@@ -6,11 +6,14 @@ service, and as our own roadmap.
 ## Not yet measured
 
 1. **The live models, beyond a sample.** Claude Sonnet 5 and Haiku 4.5 ran on
-   132 of the 548 held-out test cases, three runs each
+   138 of the 548 held-out test cases (3 of every case type in each language), three runs each, on 2026-10-02
    ([`eval/reports/SYSTEM_EVAL_LIVE.md`](eval/reports/SYSTEM_EVAL_LIVE.md)).
    The intervals are wide (Sonnet 5's safe automated resolution is 95.0%
-   [86.3–98.3]), a segment or country cell holds 15–20 in-scope cases, and
-   0 unsafe outcomes in 132 bounds the true rate only below ≈2.3%. Groq ran only
+   [86.3–98.3]), a segment or country cell holds 12–20 in-scope cases, and
+   0 unsafe outcomes in 138 bounds the true rate only below ≈2.2%. Sonnet 5, the deployed model, had none in any run;
+   Haiku 4.5 had one in its second run (1 of 138, `text_outside_the_templates`, item 5). The report keeps the per-case
+   rows of run 1 only, so an outcome of runs 2 and 3 is known by its count and type (the report's spread and the MLflow
+   child runs), not by its case. Groq ran only
    the small sample of item 3; more needs a key. Its default is the open-weights
    `openai/gpt-oss-120b`, because Llama 3.3 70B left Groq's self-serve tiers
    on 2026-08-16.
@@ -58,7 +61,10 @@ service, and as our own roadmap.
    - *A quote is excused by rendering.* On a dead session, the exact rendering of a public fact (`get_exchange_rate`) is removed before looking for the
      customer's data; the same figures written another way are not removed, and are flagged.
    The replies measured (548 generated rows in each of the ideal and adversarial runs, and 226 reserved rows in each) contain no text outside the
-   templates, trace replies included.
+   templates, trace replies included. In the live run of 2026-10-02, one reply of Haiku 4.5 (run 2 of 3, 1 of 138) was text outside the
+   templates. Only run 1 keeps its rows, so it could not be inspected: either model text reached a reply, or a reply was built from templates in
+   a way the judge does not rebuild (the two-request notices of prompt 3.2.1 are the newest compositions). Sonnet 5 had none in any run. Keeping
+   every run's rows is the next fix; it changes `eval/run_system_eval.py`, which is in the fingerprint, so every report would be measured again.
 ## Data and ML
 
 - **The behavioral deviation shown to the operator does not detect the fraud labels.** Its AUC against `is_fraud` is

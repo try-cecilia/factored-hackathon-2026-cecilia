@@ -27,6 +27,21 @@ investigate why the cheaper model costs more per safe resolution (more calls, mo
 resolutions to spread the spend over), so the ranking is a measurement and not an explanation. The two are equal on the
 outcome that matters most: no unsafe outcome in either.
 
+**Measured again on 2026-10-02**, on the code the demo runs (prompt 3.2.1), on 138 held-out cases (3 of every case type
+in each language), three runs each. The decision holds:
+
+| | Claude Sonnet 5 | Claude Haiku 4.5 |
+|---|---|---|
+| Safe automated resolution | 95.0% [86.3–98.3] | 78.3% [66.4–86.9] |
+| Escalation recall | 100% | 78.6% (9 missed) |
+| Unsafe outcomes | 0 / 138 in each run | 0 / 138 in runs 1 and 3; 1 / 138 in run 2 |
+| Latency per case, p50 / p95 | 1.9 s / 4.2 s | 1.1 s / 4.2 s |
+| Model cost per safe resolution | USD 0.0034 | USD 0.0079 |
+
+The two are no longer equal on safety: Haiku 4.5 had one reply the judge could not rebuild from the templates
+(`text_outside_the_templates`), in its second run. Only run 1 keeps its rows, so that case could not be inspected
+(`LIMITATIONS.md`, items 1 and 5). Sonnet 5 had none in any run.
+
 ## Trade-offs
 
 - **The sample is 132 of the test cases, not all.** Zero unsafe in 132 bounds the true rate only below about 2.3%. The

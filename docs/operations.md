@@ -321,7 +321,7 @@ python ops/export_public.py . ../factored-hackathon-2026-<team> <redactions-file
 | Clients that ignore `Retry-After` | same 17.2–17.3 chats/s served, 288–640 refusals per level answered in 123 ms–2.0 s (p95), no errors | `eval/reports/LOADTEST_HTTP_NO_BACKOFF.md` (the second command of `make loadtest-http`): refusing costs almost nothing, so a hammering client does not slow the ones being served |
 | Per-session rate limit | 20/min: 30 back-to-back messages gave 20 answers and 10 refusals with 429 | same report |
 | LLM calls per turn | at most 1 (design v3); turns decided by the pre-LLM checks make none | 0.80 per case with Sonnet 5 on the held-out sample (`llm_calls_per_case`) |
-| LLM latency and cost | Claude Sonnet 5 (effort low): 1.8 s p50 / 3.9 s p95 per case, USD 0.0014 per case (0.0029 per safe resolution); Haiku 4.5: 1.2 / 3.8 s, USD 0.0023 per case | `make eval-live`, 132 held-out cases, `eval/reports/SYSTEM_EVAL_LIVE.md`; the tools + rules prefix is prompt-cached (≈1.7K of ≈2.1K input tokens in the smoke run on prompt 3.0.0, `eval/reports/LIVE_SMOKE.md`) |
+| LLM latency and cost | Claude Sonnet 5 (effort low): 1.9 s p50 / 4.2 s p95 per case, USD 0.0015 per case (0.0034 per safe resolution); Haiku 4.5: 1.1 / 4.2 s, USD 0.0030 per case | `make eval-live`, 138 held-out cases (2026-10-02), `eval/reports/SYSTEM_EVAL_LIVE.md`; the tools + rules prefix is prompt-cached (≈1.7K of ≈2.1K input tokens in the smoke run on prompt 3.0.0, `eval/reports/LIVE_SMOKE.md`) |
 | LLM provider | the real ceiling: provider rate limits (per key, per minute), **not measured here**: the live evaluation sends one conversation at a time | scale with paid tiers, multiple keys, or a smaller model for tool routing |
 | Local model (`local`, Ollama) | throughput is that of the hardware running it, **not measured**: Ollama was not installed on the machine that built this branch; the provider is tested against a fake server (`tests/test_local_llm.py`) | costs 0 per token. A CPU-only model is slow and its first call loads it: raise `LLM_TIMEOUT_SECONDS`, `LLM_TOTAL_BUDGET_SECONDS` and `TURN_BUDGET_SECONDS` (`.env.example`) |
 | DuckDB | single writer; many readers (the API opens read-only) | ingestion and serving can run side by side |
@@ -581,7 +581,7 @@ table and the file list different alerts.
 | circuit breaker open | a provider is being skipped | `CecilaiCircuitOpen` | open for 5 minutes, for a provider with a key |
 | escalation rate by category | drift in data quality (`data_unavailable`) or demand | `CecilaiEscalationRateShifted` | ±50% week over week per category, over 20 escalations a day |
 | p95 turn latency | UX and budget | `CecilaiTurnLatencyP95High` | above 8 s for 10 minutes |
-| cost per safe resolution | unit economics | `CecilaiCostPerSafeResolutionHigh` | above USD 0.01 (about 3x the measured 0.0029); set your own |
+| cost per safe resolution | unit economics | `CecilaiCostPerSafeResolutionHigh` | above USD 0.01 (about 3x the measured 0.0034); set your own |
 | daily model budget | degraded mode is coming or here | `CecilaiLlmBudgetNearlyGone`, `CecilaiLlmBudgetExhausted` | 80% spent; exhausted |
 | `_dq_results` failed errors, `_ingestion_log` failures | pipeline health | `CecilaiQualityChecksFailing`, `CecilaiIngestionFailed` | any, for 10 minutes |
 | data older than its SLO | stale answers | `CecilaiDataStale` | age above `FRESHNESS_SLO_HOURS` for 15 minutes, only with `FRESHNESS_ENFORCE=1` (the static dataset never fires it) |

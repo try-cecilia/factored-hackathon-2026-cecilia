@@ -14,10 +14,10 @@ projections are labeled as such and never mixed.
 |---|---|---|---|
 | Queue wait | 120 s | 0 s | 0 s |
 | Handling time | 221 s (≈3.7 min) | 2.3 ms per case (p95 7.5 ms) | 5.5 ms per case (p95 20 ms) **excluding the LLM** |
-| Total per inquiry | **≈341 s (≈5.7 min)** | milliseconds | **1.8 s p50, 3.9 s p95 per case with Claude Sonnet 5** (held-out live run) |
-| Resolved | 91.5% first-contact | 70.2% safe automated | **95.0% with Sonnet 5 (live, measured before the trace review rule)** · 99.2% ideal model (upper bound) · 60.5% adversarial model |
-| Required escalations missed | not in the data | 72 / 168 | 0 / 168 offline · 0 / 36 live (Sonnet 5, before the trace review rule) |
-| Unsafe outcomes | not in the data | 0 / 548 | 0 / 548 offline · 0 / 132 live (before the trace review rule), in each of 3 runs |
+| Total per inquiry | **≈341 s (≈5.7 min)** | milliseconds | **1.9 s p50, 4.2 s p95 per case with Claude Sonnet 5** (held-out live run) |
+| Resolved | 91.5% first-contact | 70.2% safe automated | **95.0% with Sonnet 5 (live)** · 99.2% ideal model (upper bound) · 60.5% adversarial model |
+| Required escalations missed | not in the data | 72 / 168 | 0 / 168 offline · 0 / 42 live (Sonnet 5) |
+| Unsafe outcomes | not in the data | 0 / 548 | 0 / 548 offline · 0 / 138 live with Sonnet 5, in each of 3 runs (Haiku 4.5: 1 in one of its 3) |
 | Channels | phone + text | text | text (15% of these contacts today) |
 
 - **Time is the win.** Humans already resolve 91.5%, but each contact costs the
@@ -26,14 +26,14 @@ projections are labeled as such and never mixed.
   120 s for every reason.)
   Without the LLM its own layers answer in milliseconds (58–80 turns/s on one
   thread, section 6). With Claude Sonnet 5 on the held-out sample, a case
-  takes 1.8 s at the median and 3.9 s at p95 (Haiku 4.5: 1.2 s and 3.8 s).
+  takes 1.9 s at the median and 4.2 s at p95 (Haiku 4.5: 1.1 s and 4.2 s).
 - **Against the keyword bot:** more safe resolutions (95.0% live with Sonnet 5,
   99.2% as the upper bound, vs 70.2%) and no missed required escalations (0 vs
   72). The bot fails on language and on the action: multi-turn,
   code-switching, paraphrases, injections, and money that never arrived.
 - **Against humans, carefully:** the 91.5% is first-contact resolution on
   historical contacts. Our rates are measured on 548 oracle-labeled test
-  cases, 132 of them with live models. Different denominators, so the two are
+  cases, 138 of them with live models. Different denominators, so the two are
   not directly comparable.
   The system does not replace agents: it covers text channels and hands them
   fraud, missing-data and suspended-account cases with the evidence already
@@ -43,7 +43,7 @@ projections are labeled as such and never mixed.
   reserved set found 16 crashes (a broken profile lookup, audit log, trace log or handoff queue) and a degraded-mode gap
   in Portuguese; they were fixed after seeing them, so those numbers are regression evidence, not held-out.
 - **Projection (not a measurement):** ≈1,005 text-channel contacts per month.
-  That gives ≈699 automated per month at the keyword bot's rate as a floor,
+  That gives ≈705 automated per month at the keyword bot's rate as a floor,
   and ≈955 (≈59 agent-hours) at Sonnet 5's live rate. Each automated contact
   skips ≈120 s of waiting.
 
@@ -282,8 +282,8 @@ For this component it fails if:
   action ("ya bloqueé tu tarjeta") next to its tool calls (30%). It tests
   whether safety depends on the model.
 - **Proposed + live model:** `make eval-live` runs one stratified sample of
-  132 test cases (3 per case type and language, spread so that each
-  country·segment cell gets 11) on each model in `EVAL_MODELS` (default:
+  138 test cases (3 per case type and language, spread over the 12
+  country·segment cells) on each model in `EVAL_MODELS` (default:
   Claude Sonnet 5, Claude Haiku 4.5 and `openai/gpt-oss-120b` on Groq), 3
   repeats each. A model whose API key is missing is skipped, never reported in
   degraded mode. Per model it reports:
@@ -402,60 +402,52 @@ and country (MX/CO/AR) is reported per cell in `SYSTEM_EVAL.md`.
   attribute enters any decision.
 - n = 60–120 per cell, so these are small-sample comparisons.
 
-**Live models (test split, the 132-case sample, 3 runs each). Measured before the trace review rule of 2026-09-29: out of date until it is re-run with a key.** `make
-eval-live` → [`eval/reports/SYSTEM_EVAL_LIVE.md`](eval/reports/SYSTEM_EVAL_LIVE.md).
-The table shows run 1, as the report does; the ranges are across the three runs.
+**Live models (test split, the 138-case sample, 3 runs each), measured on 2026-10-02 on the code the demo runs (prompt
+3.2.1).** `make eval-live` → [`eval/reports/SYSTEM_EVAL_LIVE.md`](eval/reports/SYSTEM_EVAL_LIVE.md). The sample is 3 cases of
+every case type in each language (23 types × 2 languages, `--limit 138`; the 132 of the earlier runs gives 2 per group since
+the trace-review type was added). The table shows run 1, as the report does; the ranges are across the three runs.
 
 | | Claude Sonnet 5 (effort low) | Claude Haiku 4.5 |
 |---|---|---|
-| Safe automated resolution (n=60) | 95.0% [86.3–98.3]; 95.0–96.7% across runs | 78.3% [66.4–86.9]; 78.3–81.7% across runs |
-| Correct disposition (n=126) | 99.2% | 79.4% |
-| Containment | 72.7% | 75.0% |
-| Escalation recall (n=36) | 100% | 88.9% (4 missed) |
-| Unnecessary transfers (n=84) | 0.0% | 1.2% |
+| Safe automated resolution (n=60) | 95.0% [86.3–98.3]; 95.0–96.7% across runs | 78.3% [66.4–86.9]; 76.7–78.3% across runs |
+| Correct disposition (n=132) | 97.7% | 78.0% |
+| Containment | 68.1% | 73.9% |
+| Escalation recall (n=42) | 100% | 78.6% (9 missed) |
+| Unnecessary transfers (n=84) | 2.4% | 3.6% |
 | Handoff completeness | 100% | 100% |
-| **Unsafe outcomes** | **0 / 132 in each run** | **0 / 132 in each run** |
-| Cases that sent a customer record to the model | 0 / 132 | 0 / 132 |
-| Latency p50 / p95 per case | 1.78 / 3.86 s | 1.24 / 3.82 s |
-| Model calls per case | 0.80 | 0.89 |
-| Cost per attempted case / per safe resolution | USD 0.0014 / 0.0029 | USD 0.0023 / 0.0057 |
-| Cases whose outcome changed between runs | 3.0% [1.2–7.5] | 4.5% [2.1–9.6] |
+| **Unsafe outcomes** | **0 / 138 in each run** | 0 / 138 in runs 1 and 3; **1 / 138 in run 2** |
+| Cases that sent a customer record to the model | 0 / 138 in each run | 0 / 138 in each run |
+| Latency p50 / p95 per case | 1.91 / 4.17 s | 1.06 / 4.17 s |
+| Model calls per case | 0.80 | 0.91 |
+| Cost per attempted case / per safe resolution | USD 0.0015 / 0.0034 | USD 0.0030 / 0.0079 |
+| Cases whose outcome changed between runs | 0.7% [0.1–4.0] | 2.2% [0.7–6.2] |
 
-The unsafe count is 0 in each of the three runs of both models (the report's spread). The report carries the
-privacy count of run 1 only; runs 2 and 3 also sent no record, as their MLflow child runs show
-(`records_sent_to_model`). Reports from now on carry the spread of that rate too.
+The unsafe and privacy counts of every run come from the report's spread (`repeat_variability`) and from the MLflow child
+run of each repeat. Haiku 4.5's one unsafe outcome is in run 2, of type `text_outside_the_templates`: a reply the judge could
+not rebuild from the templates and the turn's data. The report keeps the per-case rows of run 1 only, so that case could not
+be inspected: it may be text from the model that reached the reply, or a reply built from templates in a way the judge does
+not rebuild. Sonnet 5, the deployed model, had none in any run.
 
-- Sonnet 5 missed 3 in-scope cases, none unsafe. Twice it looked up the
-  payment status of the card or loan whose balance was asked ("¿cuánto tengo
-  en mi tarjeta de crédito terminada en …?"), and once it asked a clarifying
-  question on "quanto está o dólar hoje?". All three customers are Plus,
-  hence Plus 80% (n = 15) against 100% in the other segments, with
-  overlapping intervals.
-- Haiku 4.5 more often replies without looking anything up: it asks to
-  clarify on every exchange-rate request (0/6), never proposes a trace (0 of
-  the 12 action cases right), and on 4 of the 6 cases of money that never
-  arrived it asks instead of handing the case to a person. A reply without a
-  lookup carries no figure, so none of that is unsafe. Its other 4 wrong
-  outcomes: 3 requests for the balance of "my savings account" from
-  customers who have more than one, where instead of naming the account type
-  (which makes the system ask which one) it asked for the whole summary
-  (twice) or for both accounts (once), so the reply showed them all: the
-  customer's own data, so not unsafe. And one multi-turn case handed to a
-  person, its only unnecessary transfer.
-- The action with Sonnet 5: in run 1, 6 of 6 confirmations traced, each in
-  the tracing service's records. No run had an unsafe outcome, so no trace
-  was opened after a "no" in any of the three.
-- Sonnet 5's 4 changed cases are two exchange-rate requests and two
-  injections with no id (which accept any safe outcome); Haiku 4.5's 6 are
-  mostly exchange-rate requests.
-- Sonnet 5 at effort low is the model the deploy uses (`render.yaml`): of the
-  two measured, the higher safe resolution and the lower cost per safe
-  resolution; it is also cheaper per attempted case.
+- Sonnet 5 missed 3 in-scope cases, none unsafe: twice a Spanish trace confirmation ended with the trace still proposed
+  (`action:trace_proposed`), and once, on a Portuguese code-switched question, the product it looked up was not found
+  (`ResourceNotFound`) and it asked which one. Its 2 unnecessary transfers are trace confirmations.
+- Most of Haiku 4.5's misses carry no tool chosen by the model, and the rule that decided them is the intent classifier's
+  (`intent_classifier:*` in the report): it asked again instead of standing down on the 6 trace cancellations, asked to
+  clarify on 5 of the 6 exchange-rate requests (the sixth failed on an invalid argument), completed none of the 6 trace
+  confirmations, and missed 9 required escalations on trace reviews and on money that never arrived. Its other two: a
+  request about an ambiguous product type answered instead of clarified (the customer's own data, so not unsafe) and a
+  multi-turn case handed to a person.
+- The action with Sonnet 5: in run 1, 4 of the 6 confirmations were traced, each found in the tracing service's records;
+  the other 2 ended with the trace still proposed. No trace was opened after a "no" in any run (no unsafe outcome).
+- The case that changed between runs with Sonnet 5 is the Portuguese code-switched question above (asked once, answered
+  twice); Haiku 4.5's 3 are Portuguese requests for a balance, an exchange rate and movements.
+- Sonnet 5 at effort low is the model the deploy uses (`render.yaml`): of the two measured, the higher safe resolution, no
+  unsafe outcome in any run and the lower cost per safe resolution; it is also cheaper per attempted case.
 
 **Projection (labeled, not measured).** Text-channel account/payment contacts
-are ≈ 1,005/month (measured). At the keyword bot's SAR that is ≈ 699
+are ≈ 1,005/month (measured). At the keyword bot's SAR that is ≈ 705
 automated per month; at Sonnet 5's live SAR, ≈ 955 (≈ 59 agent-hours); at the
-ideal-model upper bound, ≈ 993. Each automated contact skips the measured
+ideal-model upper bound, ≈ 997. Each automated contact skips the measured
 ~120 s wait. The live SAR is measured on held-out synthetic cases; production
 traffic may differ.
 
@@ -465,7 +457,7 @@ handling times an agent cost per hour that the data does not carry, so it is
 an assumption shown as a range (5, 10 and 20 USD per hour). The monthly model
 cost counts every text contact (cost per attempted case), not only the
 resolved ones. Scripted and adversarial runs bill nothing, so they print no ROI.
-With Sonnet 5 the model costs USD 0.0029 per safe resolution, about USD 1.42 a
+With Sonnet 5 the model costs USD 0.0034 per safe resolution, about USD 1.55 a
 month for every text contact, against USD 293–1,172 a month of agent time
 avoided at 5–20 USD per hour.
 
