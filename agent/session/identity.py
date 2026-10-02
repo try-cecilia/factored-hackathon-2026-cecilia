@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import itertools
 import os
 import sys
 import threading
@@ -58,6 +59,18 @@ def derive_test_pin(customer_id: str) -> str:
     return f"{int(digest, 16) % 1_000_000:06d}"
 
 
+class _Failure(float):
+    """A failed attempt: its timestamp (what the lockout window reads) and a number no other failure has (what a success reads
+    to clear exactly the failures it began after, however equal two timestamps are)."""
+
+    seq: int
+
+    def __new__(cls, when: float, seq: int) -> "_Failure":
+        failure = super().__new__(cls, when)
+        failure.seq = seq
+        return failure
+
+
 @dataclass(frozen=True)
 class CustomerRecord:
     customer_id: str
@@ -69,12 +82,14 @@ class CustomerRecord:
 class IdentityService:
     def __init__(self, store: SessionStore | None = None):
         self.store = default_store if store is None else store  # an empty store is falsy (__len__)
-        self._failures: dict[str, list[float]] = {}  # per customer: when each failed attempt was resolved
+        self._failures: dict[str, list[float]] = {}  # per customer: the failed attempts (_Failure: timestamp and number)
+        self._failure_seq = itertools.count()  # numbers the failures; used only under the lock
         self._inflight: dict[str, int] = {}  # per customer: attempts that hold a place and have not been resolved yet
         self._lock = threading.Lock()
 
     def _recent_failures(self, customer_id: str, now: float) -> list[float]:
-        recent = [t for t in self._failures.get(customer_id, []) if now - t < LOCKOUT_WINDOW_S]
+        recent = [t if isinstance(t, _Failure) else _Failure(t, next(self._failure_seq))  # one set from outside gets its number here
+                  for t in self._failures.get(customer_id, []) if now - t < LOCKOUT_WINDOW_S]
         self._failures[customer_id] = recent
         return recent
 
@@ -84,23 +99,23 @@ class IdentityService:
         ).fetchone()
         return CustomerRecord(*row) if row else None
 
-    def _reserve(self, customer_id: str) -> tuple[float, list[float]]:
+    def _reserve(self, customer_id: str) -> tuple[float, frozenset[int]]:
         """Takes one of the account's MAX_FAILURES places, or raises LockedOut. Checking and taking are one step under the
         lock, so the places held by attempts still in the lookup count as failures: concurrent logins cannot pass the check
         together. Only this account's counters are touched, and the lock is not held while the warehouse answers.
-        Returns when the attempt began and the failures recorded by then: a success clears those and no others."""
+        Returns when the attempt began and the numbers of the failures recorded by then: a success clears those and no others."""
         now = time.time()
         with self._lock:
             before = self._recent_failures(customer_id, now)
             if len(before) + self._inflight.get(customer_id, 0) >= MAX_FAILURES:
                 raise LockedOut("too many failed attempts; try again later")
             self._inflight[customer_id] = self._inflight.get(customer_id, 0) + 1
-            return now, list(before)
+            return now, frozenset(failure.seq for failure in before)
 
-    def _resolve(self, customer_id: str, failed_at: float | None, clears: list[float] | None = None) -> None:
-        """Gives the reserved place back: as a recorded failure (`failed_at`), as a success that clears `clears` (the failures
-        that were recorded when it began, never those of attempts that ran beside it), or, with neither, as nothing (the
-        attempt ended in an error that was not a guess)."""
+    def _resolve(self, customer_id: str, failed_at: float | None, clears: frozenset[int] | None = None) -> None:
+        """Gives the reserved place back: as a recorded failure (`failed_at`), as a success that clears the failures numbered in
+        `clears` (the ones recorded when it began, never those of attempts that ran beside it, and a failure another success
+        already cleared is simply not there), or, with neither, as nothing (the attempt ended in an error that was not a guess)."""
         with self._lock:
             held = self._inflight.get(customer_id, 1) - 1
             if held > 0:
@@ -108,12 +123,9 @@ class IdentityService:
             else:
                 self._inflight.pop(customer_id, None)
             if failed_at is not None:
-                self._failures.setdefault(customer_id, []).append(failed_at)
+                self._failures.setdefault(customer_id, []).append(_Failure(failed_at, next(self._failure_seq)))
             elif clears is not None:
-                left = list(self._failures.get(customer_id, []))
-                for stamp in clears:
-                    if stamp in left:
-                        left.remove(stamp)
+                left = [f for f in self._failures.get(customer_id, []) if getattr(f, "seq", None) not in clears]
                 if left:
                     self._failures[customer_id] = left
                 else:
@@ -121,7 +133,7 @@ class IdentityService:
 
     def login(self, customer_id: str, pin: str) -> Session:
         reserved_at, before = self._reserve(customer_id)
-        outcome: tuple[float | None, list[float] | None] = (None, None)  # what to settle: an unexpected error settles as nothing
+        outcome: tuple[float | None, frozenset[int] | None] = (None, None)  # what to settle: an unexpected error settles as nothing
         try:
             expected = derive_test_pin(customer_id)
             record = self._lookup(customer_id)

@@ -206,3 +206,64 @@ def test_a_success_clears_what_was_recorded_before_it_began_and_five_failures_st
         assert not isinstance(err.value, LockedOut)
     with pytest.raises(LockedOut):
         svc.login(CUSTOMER, derive_test_pin(CUSTOMER))
+
+
+@pytest.mark.parametrize("order", [("a", "b"), ("b", "a")])
+@pytest.mark.parametrize("same_clock", [False, True])
+def test_two_successes_each_clear_only_the_failures_they_began_after(monkeypatch, order, same_clock):
+    """A and B are held in the lookup while one earlier failure stands. The first to resolve clears it; a new failure then comes in; the
+    second to resolve must not take that one too, even when the clock gave both failures the same timestamp."""
+    import types
+
+    from agent.session import identity
+
+    svc = service()
+    if same_clock:  # only identity's clock stands still, so waits and the framework's keep advancing
+        monkeypatch.setattr(identity, "time", types.SimpleNamespace(time=lambda: 12345.0))
+    with pytest.raises(AuthError):
+        svc.login(CUSTOMER, wrong_pin(CUSTOMER))
+    assert len(svc._failures[CUSTOMER]) == 1
+    entered = {name: threading.Event() for name in "ab"}
+    release = {name: threading.Event() for name in "ab"}
+    results = {name: queue.Queue() for name in "ab"}
+    real = svc._lookup
+
+    def lookup(customer_id):
+        name = threading.current_thread().name
+        if name in entered:
+            entered[name].set()
+            assert release[name].wait(WAIT), "the held lookup was never released"
+        return real(customer_id)
+
+    monkeypatch.setattr(svc, "_lookup", lookup)
+
+    def login(name):
+        try:
+            results[name].put(svc.login(CUSTOMER, derive_test_pin(CUSTOMER)))
+        except BaseException as exc:  # noqa: BLE001
+            results[name].put(exc)
+
+    workers = {name: threading.Thread(target=login, args=(name,), name=name, daemon=True) for name in "ab"}
+    first, last = order
+    try:
+        for name in "ab":
+            workers[name].start()
+            assert entered[name].wait(WAIT)
+        release[first].set()
+        workers[first].join(WAIT)
+        assert not isinstance(results[first].get(timeout=WAIT), BaseException)
+        assert not svc._failures.get(CUSTOMER)  # the earlier failure is gone
+        with pytest.raises(AuthError):
+            svc.login(CUSTOMER, wrong_pin(CUSTOMER))  # a new one, between the two resolutions
+        assert len(svc._failures[CUSTOMER]) == 1
+        release[last].set()
+        workers[last].join(WAIT)
+        assert not isinstance(results[last].get(timeout=WAIT), BaseException)
+    finally:
+        for name in "ab":
+            release[name].set()
+        for worker in workers.values():
+            if worker.ident is not None:
+                worker.join(WAIT)
+    assert not svc._inflight
+    assert len(svc._failures.get(CUSTOMER, [])) == 1  # the new failure survived both successes
