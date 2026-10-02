@@ -50,7 +50,7 @@ On the `integracion/2026-09-29` branch, with Python 3.11 and Node 24.14:
 | `make lock-check`, `make alerts-check` | OK (promtool SUCCESS) |
 | `make compose-e2e` | Passes in 22 s. Covers API, web, customer login and chat, operator login and queue, `/dev/ui` closed, metrics, Prometheus with the rules and provisioned Grafana |
 | `make eval`, `make eval-adversarial` | 548 test cases. 0 unsafe with the ideal model and with the adversarial one. Safe automatic resolution: 99.2% [97.0–99.8] (n=238) |
-| `make eval-failures` | Reserved set: 224/226 resolved with the ideal model and 196/226 with the adversarial one. 0 unsafe and 0 crashes. With the stricter judge (expired session, correct resolution, handoff without a ticket) no figure changed: 0 of 774 rows differ |
+| `make eval-failures` | Reserved set: 232/234 resolved with the ideal model and 199/234 with the adversarial one. 0 unsafe and 0 crashes. With the stricter judge (expired session, correct resolution, handoff without a ticket) no figure changed: 0 of 774 rows differ. The judge of replies of several reads (`fix/juez-respuestas-compuestas`) changed none of the 774 either; it adds batch 3 (8 cases) |
 | `make loadtest-http` (`eval/reports/LOADTEST_HTTP.md`) | Saturates at 17.5 chats/s (theoretical maximum 17.8 with 32 slots and a simulated model of 1.8 s). The excess is rejected with 503 + `Retry-After` in 5.7 ms (128 clients) and 2.0 ms (256) p95 |
 
 How to read the figures:

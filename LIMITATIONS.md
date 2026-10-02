@@ -25,26 +25,41 @@ service, and as our own roadmap.
    does (a disk mounted owned by root, its own port), then smoke-tests it, checks the disk survives a
    restart, and checks that a first load that fails or is killed leaves nothing a later boot would serve.
 
-3. **Failure handling with a live model.** The reserved failure set (`eval/heldout/`, 226 cases) ran in full with the scripted
+3. **Failure handling with a live model.** The reserved failure set (`eval/heldout/`, 234 cases) ran in full with the scripted
    ideal model and the deliberately bad one. With a live model only a small sample ran (Groq's `gpt-oss-120b`, 42 of the
-   226 cases and 23 of the generated workload, one run: `eval/reports/LIVE_SAMPLE_GROQ.md`): 0 unsafe, but 3 of 42 not handled as the
+   226 cases that the set had then (batch 3 came later) and 23 of the generated workload, one run: `eval/reports/LIVE_SAMPLE_GROQ.md`): 0 unsafe, but 3 of 42 not handled as the
    policy asks, and intervals of 20-30 points. That run is not reproducible from artifacts: its selected ids and per-case rows were not
    saved (the tables come from the console output). `eval/live_sample.py` versions the selection, the runner and the table for the next run. `make eval-failures-live` (or `eval-failures-local`) runs all of it.
 4. **The reserved set is small and no longer held out for what it found.** Five fixture customers, 17-31 cases per
-   category and language: the 95% intervals are 10 to 40 points wide, and 0 unsafe in 226 bounds the true rate
+   category and language: the 95% intervals are 10 to 40 points wide, and 0 unsafe in 234 bounds the true rate
    only below ≈1.3%. Batch 1 was written and committed before the system ran on it; batch 2 after seeing batch 1's
    failures and before fixing them; the fixes came after seeing both. Their post-fix numbers are regression evidence,
-   not a held-out measurement, for the failures they fixed. A fresh, human-written set is the remaining fix.
+   not a held-out measurement, for the failures they fixed. Batch 3 (8 cases: two requests in one message whose reply is
+   several templates) was written after the judge was fixed to recognise them, so it was never held out. A fresh, human-written set is the remaining fix.
 5. **The judge of replies reconstructs templates, from the outside.** By ADR-001 every reply is a fixed template (`agent/core/render.py`) or
    verified facts rendered. Three reviews found that recognising phrases (regex over "ya transferí", "no pude") or matching templates with
    wildcards is always one loophole behind, so `eval/run_system_eval.py` (`reply_template`) now rebuilds, exactly, the replies the system could
    have sent at each turn, and any text that is none of them is `text_outside_the_templates`, unsafe by itself. It rebuilds from: the fixed
    templates; `escalate_unverified` with the turn's own code (`trace_id[:8]`); `render.render_answer` over the turn's verified facts (with the
    customer's catalog labels, or without them for the degraded mode and the baseline); `render.clarify` over the catalog; the trace replies from
-   the customer's movements and the run's trace requests; and the `case_*` notices only for a ticket of the customer whose desk state says so.
-   What this leaves open:
+   the customer's movements and the run's trace requests; the notice that a read was just answered (`render.repeat_notice`, dated by a fact of the
+   turn); and the `case_*` notices only for a ticket of the customer whose desk state says so.
+   A reply of several blocks (two requests in one message, #42) is matched block by block, all in one language: the answer to the reads that ran
+   (against the turn's facts, as above), then the question that completes the one that could not (a clarification template, with the
+   catalog's options), then the note of what the turn left unattended (`render.unattended_notice`). Each block must be exact: text before, between
+   or after the blocks, or inside one, and a block with a figure the facts do not support, is `text_outside_the_templates`. A reply that is one
+   template is still judged as one template. What this leaves open:
+   - *The note of what was left unattended is checked by its words, not by what the model declared.* Which reads the turn left aside is not in
+     `TurnResult` (it is in the trace, `unattended_calls`), so the judge accepts the note when the parts are, each once, words that
+     `render.read_part` can write ("saldos", "estado de pago", "transferencias pendientes"…) and only after a reply that can carry it. A note that
+     names a read nobody asked for would pass; it carries no figure and no record. The same goes for the question: any clarification template
+     after an answer passes, not only the one for the slot the read was missing (a question for dates where the currency was missing would pass).
+     The notice that a read was just answered is accepted with the date of any fact of the turn, not the one `Orchestrator._repeated` picks.
+     Two replies, each exact, in the order the orchestrator writes them, is all this proves; that they are the right two for what was asked is
+     the orchestrator's tests (`tests/test_pedidos_compuestos.py`; the judge's tests and the reserved batch 3 run the real orchestrator with a scripted model).
    - *The orchestrator does not expose the template key or its parameters.* `TurnResult` has the category and the rule, not the message. The clean
-     fix is a system change, not made in this branch. Proposal: a field `TurnResult.reply = {"template": "<render.MSG key or 'answer'>", "params": {...}}`
+     fix is a system change, not made: the composition of #42 was taught to the judge without touching `agent/` (above), and the
+     gaps that remain are the ones that field would close. Proposal: a field `TurnResult.reply = {"template": "<render.MSG key or 'answer'>", "params": {...}}`
      set at each place that builds a reply (about 15 `TurnResult(...)` calls in `agent/core/orchestrator.py`, and `eval/baseline_bot.py`), never
      serialised by the API; the judge would compare the text to `render.MSG[key][lang].format(**params)` and check each param against the turn's
      data, instead of enumerating candidates. Impact: editing `agent/core/orchestrator.py` changes the policy fingerprint
@@ -60,10 +75,12 @@ service, and as our own roadmap.
      (it is caught by the ownership and figure checks); and when the facts are missing from the result, a correct-looking answer is flagged.
    - *A quote is excused by rendering.* On a dead session, the exact rendering of a public fact (`get_exchange_rate`) is removed before looking for the
      customer's data; the same figures written another way are not removed, and are flagged.
-   The replies measured (548 generated rows in each of the ideal and adversarial runs, and 226 reserved rows in each) contain no text outside the
-   templates, trace replies included. In the live run of 2026-10-02, one reply of Haiku 4.5 (run 2 of 3, 1 of 138) was text outside the
-   templates. Only run 1 keeps its rows, so it could not be inspected: either model text reached a reply, or a reply was built from templates in
-   a way the judge does not rebuild (the two-request notices of prompt 3.2.1 are the newest compositions). Sonnet 5 had none in any run. Keeping
+   The replies measured (548 generated rows in each of the ideal and adversarial runs, and 234 reserved rows in each) contain no text outside the
+   templates, trace replies included. Until the fix that taught the judge the replies of several reads, it called every such reply text outside the
+   templates, and neither the 548 generated cases (none has a turn with several reads) nor the reserved set before batch 3 had one to show it:
+   the gate was green and did not measure that edge. In the live run of 2026-10-02, one reply of Haiku 4.5 (run 2 of 3, 1 of 138) was text outside the
+   templates, judged by that older judge. Only run 1 keeps its rows, so it could not be inspected: either model text reached a reply, or it was one
+   of these compositions the judge did not rebuild (the two-request notices of prompt 3.2.1). The live reports were not judged again. Sonnet 5 had none in any run. Keeping
    every run's rows is the next fix; it changes `eval/run_system_eval.py`, which is in the fingerprint, so every report would be measured again.
 ## Data and ML
 
