@@ -99,30 +99,32 @@ handoffs rise, **but nothing unsafe gets through**. Safety does not depend on th
 
 The 48 that remain before the last rung are cases that require a person (fraud, suspended account) and that a chatbot answers anyway. The last rung adds several controls at once, and the confirmation of the action is not measured: the naive variants never open a trace. It is offline, with scripted models, and we built those variants ourselves: they do not measure what a real product would do without those controls, but what each group buys in this system.
 
-With live models, on a stratified sample of 132 of those cases (every case type in both
-languages, 11 per cell), three runs each
+With live models, on a stratified sample of 138 of those cases (every case type in both
+languages, 3 of each), three runs each, measured on 2026-10-02 on the code the demo runs
 ([`eval/reports/SYSTEM_EVAL_LIVE.md`](eval/reports/SYSTEM_EVAL_LIVE.md)):
 
 | | Claude Sonnet 5 | Claude Haiku 4.5 |
 |---|---|---|
 | Safe automated resolution | **95.0%** [86.3–98.3] | 78.3% [66.4–86.9] |
-| Escalation recall | 100% | 88.9% (4 missed) |
-| **Unsafe outcomes** | **0 / 132 in each run** | **0 / 132 in each run** |
-| Cases that sent a customer record to the model | 0 / 132 | 0 / 132 |
-| Latency per case, p50 / p95 | 1.8 s / 3.9 s | 1.2 s / 3.8 s |
-| Model cost per safe resolution | USD 0.0029 | USD 0.0057 |
-| Cases whose outcome changed between runs | 3.0% (4 of 132) | 4.5% (6 of 132) |
+| Escalation recall | 100% | 78.6% (9 missed) |
+| **Unsafe outcomes** | **0 / 138 in each run** | 0 / 138 in runs 1 and 3; **1 / 138 in run 2** |
+| Cases that sent a customer record to the model | 0 / 138 in each run | 0 / 138 in each run |
+| Latency per case, p50 / p95 | 1.9 s / 4.2 s | 1.1 s / 4.2 s |
+| Model cost per safe resolution | USD 0.0034 | USD 0.0079 |
+| Cases whose outcome changed between runs | 0.7% (1 of 138) | 2.2% (3 of 138) |
 
 The table shows run 1; across the three runs, safe automated resolution was 95.0–96.7% with
-Sonnet 5 and 78.3–81.7% with Haiku 4.5. Sonnet 5's 3 misses are not unsafe: twice it looked up the
-payment status of the product whose balance was asked about, and once it asked a clarifying question on an
-exchange-rate inquiry. Sonnet 5 is the model the deployment uses ([`render.yaml`](render.yaml)): of the two
-measured, the one with the higher safe resolution and the lower cost per safe resolution. Groq's `gpt-oss-120b` was
-not run: it needs a key. The intervals are Wilson 95%. Zero observed events bound the true rate
-below ≈3/n: ≈0.55% with 548 cases, ≈2.3% with 132.
+Sonnet 5 and 76.7–78.3% with Haiku 4.5. Sonnet 5's 3 misses are not unsafe: twice a Spanish trace
+confirmation ended with the trace still proposed, and once, on a Portuguese code-switched question, the product it
+looked up was not found (`ResourceNotFound`) and it asked which one. Haiku 4.5's unsafe outcome in run 2 is a reply the judge could not rebuild from
+the templates (`text_outside_the_templates`); the report keeps the rows of run 1 only, so that case could not be
+inspected ([`LIMITATIONS.md`](LIMITATIONS.md#not-yet-measured)). Sonnet 5 is the model the deployment uses
+([`render.yaml`](render.yaml)): of the two measured, the one with the higher safe resolution, no unsafe outcome in any
+run and the lower cost per safe resolution. Groq's `gpt-oss-120b` was not run: it needs a key. The intervals are
+Wilson 95%. Zero observed events bound the true rate below ≈3/n: ≈0.55% with 548 cases, ≈2.2% with 138.
 
 **Against human agents:** an inquiry handled by a person takes ≈341 s (120 s of queue + 221 s of
-call, measured). This system answers with no queue: 1.8 s per case at the median with Sonnet 5 (p95 3.9 s).
+call, measured). This system answers with no queue: 1.9 s per case at the median with Sonnet 5 (p95 4.2 s).
 See the [summary table](EVALUATION.md#summary-human-agents-vs-keyword-bot-vs-this-system).
 
 Learned component: the intent classifier beats the keyword baseline on text it
@@ -145,7 +147,7 @@ Full reports: [`EVALUATION.md`](EVALUATION.md) (method) ·
 | One workflow: accounts and payments | 35.0% of contacts and 91.5% first-contact resolution: it is measured against a real human baseline | Does not cover cards, disputes or credit | [ADR-003](docs/decisions/ADR-003-workflow-accounts-and-payments.md) |
 | The model interprets, the code speaks | Data, permissions and replies stay out of an injection's reach: the model receives no customer records and does not write to the customer | Replies are templates, more rigid than free text | [ADR-001](docs/decisions/ADR-001-model-interprets-code-speaks.md) |
 | One action, confirmed in code | Tracing a pending movement: the code judges the customer's "yes", and only what was read back is announced | Only one action, and it moves no money | [ADR-002](docs/decisions/ADR-002-one-action-confirmed-in-code.md) |
-| Claude Sonnet 5 in the deployment | Higher safe resolution (95.0% vs 78.3%), no missed escalation and a lower cost per safe resolution in what was measured | Measured on 132 cases, not on all of them; depends on one provider, with fallbacks | [ADR-004](docs/decisions/ADR-004-deployed-model-sonnet-5.md) |
+| Claude Sonnet 5 in the deployment | Higher safe resolution (95.0% vs 78.3%), no missed escalation, no unsafe outcome in any run and a lower cost per safe resolution in what was measured | Measured on 138 cases, not on all of them; depends on one provider, with fallbacks | [ADR-004](docs/decisions/ADR-004-deployed-model-sonnet-5.md) |
 | No fraud or risk model | `is_fraud` cannot be learned from the transaction (AUC 0.506, chronological split); `fraud_score` is shown to the person and does not decide | There is no fraud model to show: the learned component is the intent classifier | [ADR-005](docs/decisions/ADR-005-no-fraud-or-risk-model.md) |
 | The groups of controls are justified with a counterfactual | Under the same conditions and with no control at all, a bad model produces unsafe outcomes in most cases; with all of them, none | It is offline, with scripted models, with no effect attributed to individual controls, and we built the "naive" variants ourselves | [`ABLATION.md`](eval/reports/ABLATION.md) |
 | Render with paid instances, two services | They do not sleep while the jury is testing, and the disk keeps the warehouse | One instance per service, no replicas | [operations.md](docs/operations.md#deploy-on-render-the-jury-demo) |
