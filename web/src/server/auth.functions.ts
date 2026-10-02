@@ -1,6 +1,7 @@
 import { createServerFn } from '@tanstack/react-start'
 import { AgentApiError, agentApi } from './agent-api'
 import { clearSessionToken, getSessionToken, setSessionToken } from './session-cookie'
+import { PublicError } from './rpc-guard'
 
 export type Credentials = { customer_id: string; pin: string }
 
@@ -21,9 +22,9 @@ export type LoginResult = { ok: true } | { ok: false; status: number }
 function parseCredentials(input: unknown): Credentials {
   const { customer_id, pin } = (input ?? {}) as Record<string, unknown>
   if (typeof customer_id !== 'string' || customer_id.length < 3 || customer_id.length > 32) {
-    throw new Error('customer_id must be 3-32 characters')
+    throw new PublicError('customer_id must be 3-32 characters')
   }
-  if (typeof pin !== 'string' || !/^\d{6}$/.test(pin)) throw new Error('pin must be 6 digits')
+  if (typeof pin !== 'string' || !/^\d{6}$/.test(pin)) throw new PublicError('pin must be 6 digits')
   return { customer_id, pin }
 }
 

@@ -1,4 +1,5 @@
 import type { Disposition, Reply, SendResult, Why } from '../chat/types'
+import { PublicError } from './rpc-guard.ts'
 
 // The send path without the framework: what the API answered, and what that means for the customer. The server
 // function wires it to the session cookie and to agentFetch; tests wire it to fakes.
@@ -20,10 +21,10 @@ export const KEY_PATTERN = /^[A-Za-z0-9_-]{8,64}$/
 
 export function parseSend(input: unknown): { message: string; key: string } {
   const { message, key } = (input ?? {}) as Record<string, unknown>
-  if (typeof message !== 'string') throw new Error('message must be text')
+  if (typeof message !== 'string') throw new PublicError('message must be text')
   const trimmed = message.trim()
-  if (trimmed.length === 0 || trimmed.length > 1000) throw new Error('message must be 1-1000 characters')
-  if (typeof key !== 'string' || !KEY_PATTERN.test(key)) throw new Error('key must be 8-64 letters, digits, - or _')
+  if (trimmed.length === 0 || trimmed.length > 1000) throw new PublicError('message must be 1-1000 characters')
+  if (typeof key !== 'string' || !KEY_PATTERN.test(key)) throw new PublicError('key must be 8-64 letters, digits, - or _')
   return { message: trimmed, key }
 }
 

@@ -3,6 +3,7 @@ import { getCookie, getRequestHeader, setCookie } from '@tanstack/react-start/se
 import { isLocale, localeCookie, localeCookieMaxAge, type Locale } from '../i18n/locales.ts'
 import { resolveLocale } from '../i18n/resolve.ts'
 import { cookiePolicy } from './cookie-policy.ts'
+import { PublicError } from './rpc-guard'
 
 /** Cookie first, then Accept-Language, then Spanish; resolved on the server so the SSR comes out in the right language. */
 export const getLocale = createServerFn({ method: 'GET' }).handler(
@@ -10,7 +11,7 @@ export const getLocale = createServerFn({ method: 'GET' }).handler(
 )
 
 function parseLocale(input: unknown): Locale {
-  if (!isLocale(input)) throw new Error('unsupported locale')
+  if (!isLocale(input)) throw new PublicError('unsupported locale')
   return input
 }
 

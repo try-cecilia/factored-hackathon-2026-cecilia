@@ -1,4 +1,5 @@
 import { createCsrfMiddleware, createStart } from '@tanstack/react-start'
+import { failSafe } from './server/fail-safe'
 
 // The framework installs its own CSRF middleware for server functions only while the app has no start instance, so this file stating it
 // is what keeps the protection (and start.test.ts is what notices if it is dropped). Server functions are same-origin RPC: a call that
@@ -6,4 +7,5 @@ import { createCsrfMiddleware, createStart } from '@tanstack/react-start'
 // the origin check of the console's forms on top (src/server/same-origin.ts).
 const csrf = createCsrfMiddleware({ filter: (ctx) => ctx.handlerType === 'serverFn' })
 
-export const startInstance = createStart(() => ({ requestMiddleware: [csrf] }))
+// An unexpected failure inside a server function reaches the browser as a generic error (src/server/rpc-guard.ts).
+export const startInstance = createStart(() => ({ requestMiddleware: [csrf], functionMiddleware: [failSafe] }))

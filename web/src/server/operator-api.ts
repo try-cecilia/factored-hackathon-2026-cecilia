@@ -13,7 +13,9 @@ async function call<T>(path: string, headers: Record<string, string>, method: 'G
     const failure = (await response.json().catch(() => null)) as { detail?: unknown } | null
     return { ok: false, status: response.status, message: typeof failure?.detail === 'string' ? failure.detail : undefined }
   }
-  return { ok: true, data: (await response.json()) as T }
+  // A 2xx that is not JSON breaks the contract: 502 for the console to explain, never the parser's message (it quotes the body).
+  const data = await response.json().then((body: T) => ({ body }), () => null)
+  return data ? { ok: true, data: data.body } : { ok: false, status: 502 }
 }
 
 /** A read with the session's admin key; `touch` is false for the automatic refresh. A rejected key ends that session on the server. */

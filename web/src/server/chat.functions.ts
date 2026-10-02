@@ -3,6 +3,7 @@ import type { CaseResult, HistoryResult, SendResult } from '../chat/types'
 import { AgentApiError, agentFetch } from './agent-api'
 import { parseSend, sendChat } from './chat-core'
 import { loadHistory } from './history-core'
+import { PublicError } from './rpc-guard'
 import { clearSessionToken, getSessionToken } from './session-cookie'
 
 // The model call can take up to LLM_TOTAL_BUDGET_SECONDS (25 s by default) on the API side.
@@ -31,7 +32,7 @@ export const sendMessage = createServerFn({ method: 'POST' })
 
 function parseTicketId(input: unknown): { ticket_id: string } {
   const { ticket_id } = (input ?? {}) as Record<string, unknown>
-  if (typeof ticket_id !== 'string' || !/^[A-Za-z0-9-]{8,64}$/.test(ticket_id)) throw new Error('invalid ticket id')
+  if (typeof ticket_id !== 'string' || !/^[A-Za-z0-9-]{8,64}$/.test(ticket_id)) throw new PublicError('invalid ticket id')
   return { ticket_id }
 }
 

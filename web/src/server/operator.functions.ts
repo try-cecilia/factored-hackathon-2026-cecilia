@@ -3,6 +3,7 @@ import { toCustomerContext, type CustomerContext } from './customer-context'
 import { parseDeskAction } from './desk-action'
 import { adminRead, operatorAct, type Result } from './operator-api'
 import { publicOrigins } from './origin-check'
+import { PublicError } from './rpc-guard'
 import { sameOriginOnly } from './same-origin'
 import { operatorSessionState, takeFlash } from './operator-session'
 import { toQueueRow, type QueueRow } from './queue-row'
@@ -95,7 +96,7 @@ export const getPublicOrigins = createServerFn({ method: 'GET' }).handler(async 
 
 const idOf = (input: unknown, label: string) => {
   const value = clean((input as Record<string, unknown> | null)?.[label])
-  if (!/^[A-Za-z0-9_-]{4,64}$/.test(value)) throw new Error(`${label} is not valid`)
+  if (!/^[A-Za-z0-9_-]{4,64}$/.test(value)) throw new PublicError(`${label} is not valid`)
   return value
 }
 
