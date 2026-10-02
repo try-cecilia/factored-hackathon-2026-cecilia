@@ -3,6 +3,7 @@ import { toCustomerContext, type CustomerContext } from './customer-context'
 import { parseDeskAction } from './desk-action'
 import { adminRead, operatorAct, type Result } from './operator-api'
 import { publicOrigins } from './origin-check'
+import { sameOriginOnly } from './same-origin'
 import { operatorSessionState, takeFlash } from './operator-session'
 import { toQueueRow, type QueueRow } from './queue-row'
 
@@ -123,6 +124,7 @@ export const loadCustomerContext = createServerFn({ method: 'GET' })
 
 // `reason` is the internal note of a rejection; `message`, what the customer reads when the case is resolved.
 export const actOnTicket = createServerFn({ method: 'POST' })
+  .middleware([sameOriginOnly])
   .validator((input: unknown) => ({ ticket_id: idOf(input, 'ticket_id'), ...parseDeskAction(input) }))
   .handler(({ data }) =>
     operatorAct<DeskState>(`/admin/tickets/${data.ticket_id}/${data.action}`, {

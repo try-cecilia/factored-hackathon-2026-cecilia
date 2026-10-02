@@ -5,6 +5,7 @@ import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { pathToFileURL } from 'node:url'
 import { join } from 'node:path'
+import { rpcRequest, type RpcInit } from './rpc.ts'
 
 export const ADMIN = 'admin-key-0123456789-abcdefgh'
 export const ANA = 'ana-key-0123456789-abcdefghij'
@@ -13,7 +14,7 @@ export const ORIGIN = 'http://console.test'
 type Handler = { fetch(request: Request): Promise<Response> }
 
 type ApiMode = 'ok' | 'revoked' | 'forbidden' | 'error'
-type ApiRequest = { url: string; admin?: string; operator?: string }
+type ApiRequest = { url: string; method: string; admin?: string; operator?: string }
 type Gate = { reached: Promise<void>; release: (status?: number) => void }
 
 export async function startConsole() {
@@ -25,12 +26,18 @@ export async function startConsole() {
   let context: { status: number; body: unknown } = { status: 200, body: {} }
   let contextGate: { onReach: () => void; released: Promise<number> } | null = null
   const requests: ApiRequest[] = []
+  // A raw answer in place of the API's own for the urls that start with `prefix`: a 200 whose body is not JSON, for instance.
+  let raw: { prefix: string; status: number; text: string } | null = null
   const api: Server = createServer(async (req, res) => {
     const reply = (status: number, body: unknown) => {
       res.writeHead(status, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify(body))
     }
-    requests.push({ url: req.url ?? '', admin: req.headers['x-admin-key'] as string | undefined, operator: req.headers['x-operator-key'] as string | undefined })
+    requests.push({ url: req.url ?? '', method: req.method ?? '', admin: req.headers['x-admin-key'] as string | undefined, operator: req.headers['x-operator-key'] as string | undefined })
+    if (raw && req.url?.startsWith(raw.prefix)) {
+      res.writeHead(raw.status, { 'Content-Type': 'application/json' })
+      return res.end(raw.text)
+    }
     const admin = req.headers['x-admin-key'] === ADMIN
     const operator = req.headers['x-operator-key'] === ANA
     if (req.url?.startsWith('/admin/operator/me')) return operator ? reply(200, { operator: 'ana' }) : reply(401, { detail: 'invalid operator key' })
@@ -51,6 +58,9 @@ export async function startConsole() {
       const status = await gate.released
       return status === 200 ? reply(200, []) : reply(status, { detail: 'held response' })
     }
+    // A decision on a ticket: the operator's own key, a POST. The desk state it answers is the minimum the console reads back.
+    const decision = req.method === 'POST' ? /^\/admin\/tickets\/([^/]+)\/(claim|approve|reject|release|resolve)$/.exec(req.url ?? '') : null
+    if (decision) return operator ? reply(200, { ticket_id: decision[1], status: 'claimed', operator: 'ana', trace_id: null, version: 1, history: [] }) : reply(401, { detail: 'invalid operator key' })
     if (req.url?.startsWith('/admin/') && mode !== 'ok') return reply({ revoked: 401, forbidden: 403, error: 500 }[mode], { detail: mode })
     if (req.url?.startsWith('/admin/')) return admin ? reply(200, req.url.startsWith('/admin/human_queue') ? [] : {}) : reply(401, { detail: 'invalid admin key' })
     reply(404, {})
@@ -86,8 +96,11 @@ export async function startConsole() {
     contextGate = { onReach: reached, released }
     return { reached: arrived, release }
   }
+  const rpc = (name: string, init?: RpcInit & { base?: string }) => built.default.fetch(rpcRequest(init?.base ?? ORIGIN, name, init))
   return {
-    send, hold, holdContext, requests,
+    send, rpc, hold, holdContext, requests,
+    answerRaw: (prefix: string, status: number, text: string) => void (raw = { prefix, status, text }),
+    answerNormally: () => void (raw = null),
     setApi: (next: ApiMode) => void (mode = next),
     setContext: (next: { status?: number; body?: unknown }) => void (context = { status: next.status ?? 200, body: next.body ?? context.body }),
     close: () => api.close(),
@@ -123,7 +136,7 @@ export async function opensConsole(app: { send: Awaited<ReturnType<typeof startC
 }
 
 /** A browser's cookie jar, enough for these tests: applies Set-Cookie headers in the order responses arrive. */
-export function cookieJar() {
+export function cookieJar(sessionName = /cecilai_operator$/) {
   const jar = new Map<string, string>()
   return {
     apply(response: Response) {
@@ -138,7 +151,7 @@ export function cookieJar() {
     },
     /** The session cookie as `name=value`, or null (the flash cookie is not a session). */
     session() {
-      const found = [...jar].find(([name]) => /cecilai_operator$/.test(name))
+      const found = [...jar].find(([name]) => sessionName.test(name))
       return found ? `${found[0]}=${found[1]}` : null
     },
     header() {
