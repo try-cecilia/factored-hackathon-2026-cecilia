@@ -341,12 +341,16 @@ def recent_activity_for_review(customer_id: str, limit: int = 10) -> dict:
                                 merchant_name, transaction_country, transaction_status, is_fraud, fraud_score
                          FROM transactions WHERE customer_id = ? ORDER BY transaction_date DESC LIMIT ?""",
                       [customer_id, limit])
-        history = _rows("""SELECT transaction_id, transaction_date, amount, currency, channel, merchant_category, transaction_country
-                           FROM transactions WHERE customer_id = ? ORDER BY transaction_date DESC, transaction_id DESC LIMIT ?""",
-                        [customer_id, MAX_BEHAVIOR_HISTORY])
-        behavior = evidence_for(history, [t["transaction_id"] for t in items])  # docs/BEHAVIORAL_EVIDENCE.md: descriptive only
+        result: dict[str, Any] = {"items": items}
+        try:  # optional: the deviation describes the movements, and without it the reviewer still needs them
+            history = _rows("""SELECT transaction_id, transaction_date, amount, currency, channel, merchant_category, transaction_country
+                               FROM transactions WHERE customer_id = ? ORDER BY transaction_date DESC, transaction_id DESC LIMIT ?""",
+                            [customer_id, MAX_BEHAVIOR_HISTORY])
+            behavior = evidence_for(history, [t["transaction_id"] for t in items])  # docs/BEHAVIORAL_EVIDENCE.md: descriptive only
+        except Exception as exc:  # noqa: BLE001 - only the type is kept: the message can carry ids and paths (the audit summary reads this key)
+            behavior, result["behavior_error"] = {}, type(exc).__name__
         for t in items:
             t["behavior"] = behavior.get(t["transaction_id"])
-        return {"items": items, "as_of": data_as_of()}
+        return result | {"as_of": data_as_of()}
 
     return _audited("recent_activity_for_review", customer_id, {"limit": limit}, _run)

@@ -80,6 +80,13 @@ service, and as our own roadmap.
 - **Known misses.** "vou processar o banco" escapes the escalation guard, and
   slang is weak (33%). Both are reported, and neither was tuned away on test
   (`make validate-data-ml` fails if that phrase enters the lexicon).
+- **"No fui yo" also escalates innocent sentences.** The lexicon sends any message with `no fui yo`, `yo no fui`, `não fui eu`
+  or `eu não fui` to fraud, Critical, before the classifier is read, so "no fui yo al banco ayer, quiero saber mi saldo" does
+  too (the classifier gives it P(escalation) 0.21, under 0.55). All 48 innocent sentences of a new registered set
+  (`eval/test_cases/not_me_lexicon_set.csv`) escalate. A rule that requires the disavowal to stand alone or to name a movement
+  cut that to 9 of 48 and cleared the four reported sentences, but lost one of 48 real disavowals at the guard, so the
+  pre-registered criterion failed and it was not applied (`docs/preregistration.md` 1c, `eval/reports/not_me_experiment.md`).
+  Next: a second rule on a second new set, or a product decision on how many missed disavowals a false Critical is worth.
 - **What "no leakage" does and does not show.** Chosen without the test split (the representation by template-grouped cross-validation on the training set plus dev, the threshold on dev), and proven
   by changing the test labels and seeing nothing chosen move
   (`docs/evidence/data_ml_validation.md`). Not shown, or done with the test
