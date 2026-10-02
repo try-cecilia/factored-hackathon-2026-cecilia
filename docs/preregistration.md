@@ -233,3 +233,8 @@ had been an artifact of asking the follow-up for the whole request again; the tw
 A second review of the probe changed how a few lines are counted, not a figure: recovery now needs the follow-up to be delivered as the
 templates give it, the safety line counts every row of the run (discarded attempts and refusals included), and resuming checks the signature of
 the cases actually used and the repetitions. The four reports were recomputed again from the same rows; only the wording of the safety line differs.
+
+**Criterion 6 (2026-10-02, after the authorized deploy).** The demo runs commit `9d90ea2`, which carries the measured prompt 3.2.1,
+schemas and cap, on Claude Sonnet 5. On a sandbox account, one two-request phrase per language ("dame mis pagos pendientes y mis
+ultimas 5 transferencias" and its Portuguese equivalent), each in a fresh session, answered both reads under their headings, as
+`AUTO_RESOLVE`. It is a check that the deployment behaves as measured, not a rate.

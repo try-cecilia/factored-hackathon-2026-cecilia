@@ -109,7 +109,7 @@ def test_contracts_every_table_has_types_key_row_model_and_they_agree(record_pro
         assert required <= set(NOT_NULL_COLUMNS.get(table, [])) | set(PRIMARY_KEYS[table]), f"{table}: {required}"
         for name, _, severity in DOMAIN_RULES.get(table, []):
             assert severity in ("error", "warn"), f"{table}.{name}"
-    record_property("evidence", f"{len(tables)} tablas: tipos, clave, NOT NULL y modelo pydantic coherentes; contrato {CONTRACT_VERSION}")
+    record_property("evidence", f"{len(tables)} tables: types, key, NOT NULL and pydantic model agree; contract {CONTRACT_VERSION}")
     assert f"contract version {CONTRACT_VERSION}" in DATA_QUALITY_DOC
 
 
@@ -123,7 +123,7 @@ def test_contracts_the_served_tables_have_the_dictionary_types_and_keys(fresh_db
             checked += 1
         assert q(fresh_db, "SELECT count(*) FROM (SELECT 1 FROM " + table + " GROUP BY " + ", ".join(PRIMARY_KEYS[table])
                  + " HAVING count(*) > 1)") == [(0,)], f"{table}: duplicate key in the served table"
-    record_property("evidence", f"{checked} columnas de {len(SERVING)} tablas servidas con el tipo del diccionario; sin claves repetidas")
+    record_property("evidence", f"{checked} columns of {len(SERVING)} served tables with the dictionary's type; no repeated keys")
 
 
 def test_contracts_a_violating_row_is_quarantined_with_its_reason_and_appears_in_the_report(fresh_db, tmp_path, record_property):
@@ -147,8 +147,8 @@ def test_contracts_a_violating_row_is_quarantined_with_its_reason_and_appears_in
     assert q(fresh_db, "SELECT DISTINCT _quarantine_run FROM _quarantine_transactions") == [(run_id,)]  # which load set them aside
     persisted = {r[0] for r in q(fresh_db, "SELECT check_name FROM _dq_results WHERE run_id = ? AND passed = false AND severity = 'error'", [run_id])}
     assert {"rule:status_enum", "type_cast:amount"} <= persisted
-    record_property("evidence", "2 de 5 filas del lote malo en _quarantine_transactions con motivo (rule:status_enum, cast:amount); "
-                                "checks de error fallidos en el reporte JSON y en _dq_results; las 3 válidas se cargaron")
+    record_property("evidence", "2 of 5 rows of the bad batch in _quarantine_transactions with a reason (rule:status_enum, cast:amount); "
+                                "failed error checks in the JSON report and in _dq_results; the 3 valid ones were loaded")
 
 
 def test_contracts_over_the_quarantine_threshold_the_load_stops_and_the_previous_state_stays(fresh_db, tmp_path, monkeypatch, capsys, record_property):
@@ -173,8 +173,8 @@ def test_contracts_over_the_quarantine_threshold_the_load_stops_and_the_previous
     body = json.loads(report.read_text(encoding="utf-8"))
     assert body["summary"]["status"] == "failed" and body["failure"]["table"] == "transactions"
     capsys.readouterr()
-    record_property("evidence", "lote con 40% en cuarentena (umbral 1%): PipelineError, tabla servida idéntica (mismo md5), "
-                                "carga 'failed' en _ingestion_log, `python -m data.pipeline` sale con error y el reporte dice status=failed")
+    record_property("evidence", "a batch with 40% quarantined (threshold 1%): PipelineError, served table identical (same md5), "
+                                "load 'failed' in _ingestion_log, `python -m data.pipeline` exits with an error and the report says status=failed")
 
 
 def test_contracts_a_missing_required_column_fails_the_load(fresh_db, own_raw, record_property):
@@ -188,7 +188,7 @@ def test_contracts_a_missing_required_column_fails_the_load(fresh_db, own_raw, r
         run_pipeline(["transactions"], RunConfig(source="local", raw_dir=own_raw))
     assert "missing required columns" in str(exc.value.cause) and "amount" in str(exc.value.cause)
     assert q(fresh_db, "SELECT count(*) FROM transactions") == before
-    record_property("evidence", "sin la columna obligatoria `amount` la carga falla ('missing required columns') y la tabla no cambia")
+    record_property("evidence", "without the required column `amount` the load fails ('missing required columns') and the table does not change")
 
 
 def test_contracts_a_value_that_would_be_rounded_to_fit_its_type_is_quarantined_not_stored_rounded(fresh_db, own_raw, record_property):
@@ -210,7 +210,7 @@ def test_contracts_a_value_that_would_be_rounded_to_fit_its_type_is_quarantined_
     assert q(fresh_db, "SELECT amount FROM transactions WHERE transaction_id = ?", [victim]) == before  # not overwritten with 200000.01
     assert q(fresh_db, "SELECT amount FROM transactions WHERE transaction_id = ?", [same])[0][0] == pytest.approx(54.5)
     assert any(c.check == "type_cast:amount" and c.failed == 1 and c.severity == "error" for c in result.checks)
-    record_property("evidence", "amount='200000.005' en un CSV real: error type_cast:amount, fila en cuarentena y no se guarda como 200000.01; '54.500' se acepta")
+    record_property("evidence", "amount='200000.005' in a real CSV: error type_cast:amount, the row is quarantined and not stored as 200000.01; '54.500' is accepted")
 
 
 def test_contracts_valid_amounts_of_any_magnitude_are_stored_exactly_and_only_a_rounding_one_is_rejected(fresh_db, own_raw, record_property):
@@ -248,15 +248,15 @@ def test_contracts_valid_amounts_of_any_magnitude_are_stored_exactly_and_only_a_
     assert set(served) == set(ids) - {"TXN-SWPBAD"}
     assert all(Decimal(served[t]) == Decimal(ids[t]) for t in served)  # stored as delivered, to the cent
     assert [c.failed for c in result.checks if c.check == "type_cast:amount"] == [1]
-    record_property("evidence", f"{len(served)} importes válidos de 0.01 a 9999999999999.99 (incluido 8995304.28) cargados exactos; "
-                                "200000.005 rechazado con cast:amount; una sola fila en cuarentena")
+    record_property("evidence", f"{len(served)} valid amounts from 0.01 to 9999999999999.99 (8995304.28 included) loaded exactly; "
+                                "200000.005 rejected with cast:amount; a single row quarantined")
 
 
 def test_contracts_the_fixture_warehouse_loads_without_a_single_cast_error(fresh_db, record_property):
     _, results = build_fixture_warehouse()
     assert not [(r.table, c.check) for r in results for c in r.checks if c.check.startswith("type_cast:") or c.check.startswith("cast:")]
     assert sum(r.rows_quarantined for r in results) == 0
-    record_property("evidence", f"la carga del fixture sin ningún type_cast ni fila en cuarentena ({sum(r.rows_staged for r in results)} filas leídas)")
+    record_property("evidence", f"the fixture's load with no type_cast and no row quarantined ({sum(r.rows_staged for r in results)} rows read)")
 
 
 def test_contracts_a_truncated_file_cannot_replace_the_rows_it_cuts_off(fresh_db, own_raw, record_property):
@@ -273,8 +273,8 @@ def test_contracts_a_truncated_file_cannot_replace_the_rows_it_cuts_off(fresh_db
     files = {f for f, in q(fresh_db, "SELECT DISTINCT _source_file FROM _quarantine_transactions")}
     assert result.rows_quarantined > 0 and files == {str(day.relative_to(own_raw))}
     assert q(fresh_db, "SELECT transaction_id, amount FROM transactions ORDER BY transaction_id") == served
-    record_property("evidence", f"un archivo cortado a mitad de la última fila: con el umbral por defecto la carga se detiene; aun tolerando todo, "
-                                f"sus {result.rows_quarantined} filas van a cuarentena (con su archivo de origen) y la tabla servida queda idéntica")
+    record_property("evidence", f"a file cut in the middle of its last row: with the default threshold the load stops; even tolerating everything, "
+                                f"its {result.rows_quarantined} rows go to quarantine (with their source file) and the served table stays identical")
 
 
 def test_contracts_the_documented_severities_are_the_ones_the_code_assigns(fresh_db, record_property):
@@ -299,7 +299,7 @@ def test_contracts_the_documented_severities_are_the_ones_the_code_assigns(fresh
         assert code[name] == expected[severity], f"{name}: the doc says {severity}, the code assigns {sorted(code[name])}"
     sample_default = inspect.signature(quality.pydantic_sample).parameters["n"].default
     assert sample_default == 1000
-    record_property("evidence", "tabla de severidades de docs/data_quality.md == severidades que asignan measure/pydantic_sample/quarantine; muestra pydantic = 1000")
+    record_property("evidence", "severity table in docs/data_quality.md == the severities measure/pydantic_sample/quarantine assign; pydantic sample = 1000")
 
 
 def test_contracts_each_documented_deviation_is_still_measured_as_a_warning(record_property):
@@ -307,7 +307,7 @@ def test_contracts_each_documented_deviation_is_still_measured_as_a_warning(reco
         rules = [(n, sev) for n, pred, sev in DOMAIN_RULES[d["table"]] if d["column"] in pred or d["column"] in n]
         assert rules and all(sev == "warn" for _, sev in rules), f"{d['table']}.{d['column']}: {rules}"
         assert d["column"] in DATA_QUALITY_DOC, f"{d['column']} is a deviation the doc does not mention"
-    record_property("evidence", f"{len(CONTRACT_DEVIATIONS)} desvíos del contrato: cada uno es una regla `warn` medida en cada carga y está en docs/data_quality.md")
+    record_property("evidence", f"{len(CONTRACT_DEVIATIONS)} contract deviations: each one is a `warn` rule measured on every load and listed in docs/data_quality.md")
 
 
 # ---------------------------------------------------------------- 2. Calidad
@@ -327,7 +327,7 @@ def test_quality_every_check_is_persisted_and_the_report_counts_them(fresh_db, t
     # A warning is measured and reported without blocking: the card missing days_past_due is served and counted.
     assert q(fresh_db, "SELECT failed FROM _dq_results WHERE run_id = ? AND check_name = 'rule:credit_fields_present'", [run_id]) == [(1,)]
     assert q(fresh_db, "SELECT count(*) FROM products WHERE product_id = 'PRD-FIX0007'") == [(1,)]
-    record_property("evidence", f"{len(rows)} checks de la corrida del fixture: los {len(rows)} en _dq_results y en el JSON; conteos del resumen recalculados")
+    record_property("evidence", f"{len(rows)} checks of the fixture's run: all {len(rows)} in _dq_results and in the JSON; summary counts recomputed")
 
 
 def test_quality_the_committed_full_run_report_is_the_one_the_doc_quotes(record_property):
@@ -360,8 +360,8 @@ def test_quality_the_committed_full_run_report_is_the_one_the_doc_quotes(record_
               if c["passed"] is False and c["failed"] and c["check"] != "pydantic_row_contract_sample"}
     unexplained = sorted(n for n in failed if f"`{n}`" not in findings and f"`cross:{n}`" not in findings)
     assert not unexplained, f"the report has failed checks the doc's findings do not mention: {unexplained}"
-    record_property("evidence", f"quality_report.json ({report['run_id']}): {s['checks_run']} checks, {s['errors_failed']} errores, "
-                                f"{s['warnings_failed']} advertencias, {rows:,} filas; {len(counted)} conteos del doc == los del reporte")
+    record_property("evidence", f"quality_report.json ({report['run_id']}): {s['checks_run']} checks, {s['errors_failed']} errors, "
+                                f"{s['warnings_failed']} warnings, {rows:,} rows; {len(counted)} counts in the doc == the report's")
 
 
 # ---------------------------------------------------------------- 3. Linaje
@@ -386,8 +386,8 @@ def test_lineage_every_served_row_traces_to_a_run_a_file_and_its_hash(fresh_db, 
     finally:
         con.close()
     n_files = sum(len(traced[t]["files"]) for t in SERVING)
-    record_property("evidence", f"{len(SERVING)} tablas servidas: fila -> run -> contrato/código -> archivo -> SHA-256 (recalculado del disco, {n_files} archivos); "
-                                "`python -m data.lineage --verify` sin problemas")
+    record_property("evidence", f"{len(SERVING)} served tables: row -> run -> contract/code -> file -> SHA-256 (recomputed from disk, {n_files} files); "
+                                "`python -m data.lineage --verify` with no problems")
 
 
 def test_lineage_a_broken_chain_is_detected(fresh_db, own_raw, record_property):
@@ -423,8 +423,8 @@ def test_lineage_a_broken_chain_is_detected(fresh_db, own_raw, record_property):
     assert any("other bytes" in p for p in problems())
     source.unlink()
     assert any("no longer under" in p for p in problems())
-    record_property("evidence", "se rompe la cadena de 5 maneras (fila sin run, run no exitoso, archivo sin hash, bytes cambiados, archivo borrado) y verify() lo dice; "
-                                "sin raw_dir, además, exige sha256 hex de 64, tamaño, URI, versión de contrato y de código, modo y horas no vacíos (10 casos negativos)")
+    record_property("evidence", "the chain is broken in 5 ways (a row with no run, a failed run, a file with no hash, changed bytes, a deleted file) and verify() says so; "
+                                "without raw_dir it also requires a 64-character hex sha256, size, URI, contract and code versions, mode and times not empty (10 negative cases)")
 
 
 @pytest.mark.parametrize("statement, expected", [
@@ -449,7 +449,7 @@ def test_lineage_an_incomplete_record_fails_verification_even_without_the_raw_fi
     finally:
         con.close()
     assert found and all(p.startswith("customers:") for p in found) and any(expected in p for p in found), found
-    record_property("evidence", f"{statement.split(' SET ')[1].split(' WHERE')[0]} -> verify() sin raw_dir: {found[0]}")
+    record_property("evidence", f"{statement.split(' SET ')[1].split(' WHERE')[0]} -> verify() without raw_dir: {found[0]}")
 
 
 def test_lineage_a_corrected_partition_shows_which_file_and_hash_each_row_came_from(fresh_db, own_raw, record_property):
@@ -467,7 +467,7 @@ def test_lineage_a_corrected_partition_shows_which_file_and_hash_each_row_came_f
         assert lineage.verify(con) == []  # each row's run still has its file, though two runs read a file of the same name
     finally:
         con.close()
-    record_property("evidence", "tras una partición corregida, la fila corregida apunta al run y al hash de raw_late y las demás a los del primer run")
+    record_property("evidence", "after a corrected partition, the corrected row points to the run and hash of raw_late and the others to those of the first run")
 
 
 # ---------------------------------------------------------------- 4. Frescura
@@ -489,7 +489,7 @@ def test_freshness_the_documented_defaults_and_the_as_of_date(record_property):
     assert summary["as_of"].isoformat() == "2024-01-16" == str(tools.data_as_of())
     assert RunConfig().lookback_days == 3 and "default 3" in DATA_QUALITY_DOC
     assert hasattr(tools._as_of_for, "cache_clear") and "read once per process" in DATA_QUALITY_DOC
-    record_property("evidence", "sin FRESHNESS_ENFORCE se sirve el dato de 2024 con as_of=2024-01-16; SLO por defecto 36 h; lookback 3 días")
+    record_property("evidence", "without FRESHNESS_ENFORCE the 2024 data is served with as_of=2024-01-16; default SLO 36 h; lookback 3 days")
 
 
 def test_freshness_stale_data_is_unavailable_on_the_gated_tools_and_only_on_them(monkeypatch, record_property):
@@ -505,7 +505,7 @@ def test_freshness_stale_data_is_unavailable_on_the_gated_tools_and_only_on_them
     assert tools.get_exchange_rate("CLI-FIX0001", "MXN", "USD", on_date="2024-01-15")["used_date"]
     for name in ("balance", "transaction", "payment"):
         assert name in section(DATA_QUALITY_DOC, "- **Freshness SLO.**", "## Findings")
-    record_property("evidence", "FRESHNESS_ENFORCE=1: saldo, movimientos y estado de pago -> DataUnavailable(as_of); perfil y tipo de cambio siguen")
+    record_property("evidence", "FRESHNESS_ENFORCE=1: balance, movements and payment status -> DataUnavailable(as_of); profile and exchange rate keep working")
 
 
 def test_freshness_the_limit_is_the_slo_in_hours_measured_from_the_data_date(monkeypatch, record_property):
@@ -520,7 +520,7 @@ def test_freshness_the_limit_is_the_slo_in_hours_measured_from_the_data_date(mon
     monkeypatch.setattr(tools, "data_as_of", lambda: None)  # a warehouse with no data has no date: never fresh
     with pytest.raises(DataUnavailable):
         tools.get_account_summary("CLI-FIX0004")
-    record_property("evidence", "as_of 2024-01-16: hoy+1 día (24 h) sirve; hoy+2 (48 h) bloquea con SLO 36; con SLO 48 sirve; sin fecha bloquea")
+    record_property("evidence", "as_of 2024-01-16: today+1 day (24 h) serves; today+2 (48 h) blocks with SLO 36; with SLO 48 it serves; with no date it blocks")
 
 
 def test_freshness_a_stale_warehouse_ends_in_an_escalation_not_an_answer(monkeypatch, record_property):
@@ -534,7 +534,7 @@ def test_freshness_a_stale_warehouse_ends_in_an_escalation_not_an_answer(monkeyp
     stale = orch.handle_message(token, ask)
     assert stale.disposition == "ESCALATE" and stale.category == "data_unavailable" and stale.ticket_id
     assert "2,455.81" not in stale.response_text  # the stale figure is not shown
-    record_property("evidence", "misma pregunta: sin política AUTO_RESOLVE con 'al 16/01/2024'; con dato vencido ESCALATE/data_unavailable con ticket y sin la cifra")
+    record_property("evidence", "the same question: without the policy, AUTO_RESOLVE with 'al 16/01/2024'; with stale data, ESCALATE/data_unavailable with a ticket and without the figure")
 
 
 # ---------------------------------------------------------------- 5. Componente aprendido contra una línea base
@@ -558,9 +558,9 @@ def test_learned_beats_the_keyword_baseline_on_the_same_test_split_with_interval
     assert paired["diff_ci95"][0] > 0 and paired["mcnemar_p"] < 0.01
     assert t["learned"]["macro_f1"] > t["baseline_keywords"]["macro_f1"]
     assert learned["rate"] > t["baseline_majority"]["accuracy"]["rate"]
-    record_property("evidence", f"test n={t['n']}: aprendido {fmt(learned).split(' (')[0]} vs palabras clave {fmt(base).split(' (')[0]}; "
-                                f"diferencia pareada {100 * paired['diff']:+.1f} pts [{100 * paired['diff_ci95'][0]:+.1f}, {100 * paired['diff_ci95'][1]:+.1f}], "
-                                f"McNemar p={paired['mcnemar_p']}; piso mayoritaria {fmt(t['baseline_majority']['accuracy']).split(' (')[0]}")
+    record_property("evidence", f"test n={t['n']}: learned {fmt(learned).split(' (')[0]} vs keywords {fmt(base).split(' (')[0]}; "
+                                f"paired difference {100 * paired['diff']:+.1f} pts [{100 * paired['diff_ci95'][0]:+.1f}, {100 * paired['diff_ci95'][1]:+.1f}], "
+                                f"McNemar p={paired['mcnemar_p']}; majority floor {fmt(t['baseline_majority']['accuracy']).split(' (')[0]}")
 
 
 VOLATILE = {"generated_at", "versions"}  # when it ran and with which library; the data hashes are checked against the files below
@@ -618,8 +618,8 @@ def test_learned_the_committed_report_is_what_the_code_and_data_produce(committe
     assert versions["train_sha256"] == hashlib.sha256(Path(evaluation.TRAIN).read_bytes()).hexdigest()
     assert versions["heldout_sha256"] == hashlib.sha256(Path(evaluation.HELDOUT).read_bytes()).hexdigest()
     leaves = numeric_leaves(committed)
-    record_property("evidence", f"build_report() sobre los CSV del repo reproduce las {len(leaves)} cifras del reporte JSON versionado y el texto completo del "
-                                "Markdown (solo se excluyen la hora de generación y la versión de sklearn); hashes de datos == los de los archivos")
+    record_property("evidence", f"build_report() over the repository's CSVs reproduces the {len(leaves)} figures of the versioned JSON report and the full text of the "
+                                "Markdown (only the generation time and the sklearn version are excluded); data hashes == the files'")
 
 
 def test_learned_altering_any_published_metric_makes_the_comparison_fail(committed, rebuilt, record_property):
@@ -633,8 +633,8 @@ def test_learned_altering_any_published_metric_makes_the_comparison_fail(committ
     # And the Markdown: a figure changed there is a different text.
     written = (ROOT / "eval" / "reports" / "intent_classifier.md").read_text(encoding="utf-8")
     assert MD_TIMESTAMP.sub("", written) != MD_TIMESTAMP.sub("", written.replace(f"| {committed['test']['learned']['macro_f1']} |", "| 0 |", 1))
-    record_property("evidence", f"cada una de las {len(leaves)} cifras del reporte (incluidos macro-F1 aprendido, exactitud PT y exactitud sin frases de plantilla), "
-                                "alterada de a una, hace que la comparación falle en exactamente esa ruta")
+    record_property("evidence", f"each of the report's {len(leaves)} figures (learned macro-F1, PT accuracy and accuracy without template phrases included), "
+                                "altered one at a time, makes the comparison fail at exactly that path")
 
 
 def test_learned_the_deployed_model_is_the_one_that_was_selected_and_reported(committed, rebuilt, record_property):
@@ -646,8 +646,8 @@ def test_learned_the_deployed_model_is_the_one_that_was_selected_and_reported(co
     assert np.allclose(deployed.predict_proba(texts), fresh.predict_proba(texts), atol=1e-9)
     assert meta["variant"] == committed["chosen_variant"] and meta["escalation_threshold"] == committed["escalation_threshold"]
     assert meta["train_sha256"] == committed["versions"]["train_sha256"]
-    record_property("evidence", f"eval/models/intent_clf.joblib da las mismas probabilidades que el modelo reentrenado ({len(texts)} frases, tol 1e-9); "
-                                f"meta: {meta['variant']}, τ={meta['escalation_threshold']}, mismo hash de entrenamiento")
+    record_property("evidence", f"eval/models/intent_clf.joblib gives the same probabilities as the retrained model ({len(texts)} phrases, tol 1e-9); "
+                                f"meta: {meta['variant']}, τ={meta['escalation_threshold']}, same training hash")
 
 
 def test_learned_the_paired_statistics_agree_with_a_hand_worked_case(record_property):
@@ -660,7 +660,7 @@ def test_learned_the_paired_statistics_agree_with_a_hand_worked_case(record_prop
     assert out["diff_ci95"][0] <= out["diff"] <= out["diff_ci95"][1]
     assert paired_accuracy(y, worse, better, resamples=2000, seed=1) == out  # seeded, so the committed report can be checked
     assert paired_accuracy(y, better, better)["mcnemar_p"] == 1.0
-    record_property("evidence", "diferencia pareada y McNemar exacto comprobados a mano en un caso de 10 ítems (4 a favor, 1 en contra, p = 12/32); el bootstrap es reproducible con semilla")
+    record_property("evidence", "paired difference and exact McNemar checked by hand on a 10-item case (4 for, 1 against, p = 12/32); the bootstrap is reproducible with a seed")
 
 
 # ---------------------------------------------------------------- 6. Sin fuga
@@ -691,8 +691,8 @@ def test_leakage_nothing_chosen_moves_when_the_test_split_changes(rebuilt, monke
         m.setattr(evaluation, "dev_test_split", split_with(perturb_dev=True))
         changed_dev, _ = evaluation.build_report(load_rows(evaluation.TRAIN), load_rows(evaluation.HELDOUT))
     assert _selection(changed_dev) != _selection(original)
-    record_property("evidence", f"con las etiquetas del test rotadas: variante ({original['chosen_variant']}), τ ({original['escalation_threshold']}), "
-                                "F1 de dev y barrido idénticos y la exactitud de test cambia; rotando dev sí cambia la selección (control positivo)")
+    record_property("evidence", f"with the test labels rotated: variant ({original['chosen_variant']}), τ ({original['escalation_threshold']}), "
+                                "dev F1 and sweep identical, and the test accuracy changes; rotating dev does change the selection (positive control)")
 
 
 def test_leakage_near_duplicates_between_train_dev_and_test(committed, record_property):
@@ -709,8 +709,8 @@ def test_leakage_near_duplicates_between_train_dev_and_test(committed, record_pr
     assert committed["leakage_dev_vs_test"]["excluded"] == []
     normalized = lambda texts: {leakage.normalize(t) for t in texts}  # noqa: E731
     assert not normalized(train) & (normalized(dev) | normalized(test))
-    record_property("evidence", f"similitud máxima de trigramas de caracteres (excluye ≥ {leakage.EXCLUDE_AT}): {worst}; "
-                                f"frases excluidas del puntaje: {len(dropped)} de {committed['heldout_n']}")
+    record_property("evidence", f"maximum character-trigram similarity (excludes ≥ {leakage.EXCLUDE_AT}): {worst}; "
+                                f"phrases excluded from the score: {len(dropped)} of {committed['heldout_n']}")
 
 
 def test_leakage_the_check_catches_a_copy_of_a_training_phrase_and_keeps_it_out_of_the_scores(committed, record_property):
@@ -719,7 +719,7 @@ def test_leakage_the_check_catches_a_copy_of_a_training_phrase_and_keeps_it_out_
     report, _ = evaluation.build_report(train, held + [{**held[0], "utterance": copy, "source": "injected"}])
     assert copy in leakage.excluded_utterances(report["leakage"])
     assert report["dev_n"] + report["test_n"] == len(held) + 1 - len(report["leakage"]["excluded"])
-    record_property("evidence", "una copia de una frase de entrenamiento (otra capitalización, puntuación y espacios) se detecta y no entra al puntaje")
+    record_property("evidence", "a copy of a training phrase (other capitalization, punctuation and spaces) is detected and does not enter the score")
 
 
 def test_leakage_the_only_input_of_the_learned_component_is_the_customers_words(record_property):
@@ -736,8 +736,8 @@ def test_leakage_the_only_input_of_the_learned_component_is_the_customers_words(
         imported = {a.name for n in ast.walk(ast.parse(inspect.getsource(module))) if isinstance(n, (ast.Import, ast.ImportFrom))
                     for a in n.names} | {n.module for n in ast.walk(ast.parse(inspect.getsource(module))) if isinstance(n, ast.ImportFrom)}
         assert not {i for i in imported if i and (i.split(".")[0] in ("duckdb", "data") or i.startswith("agent.tools"))}, module.__name__
-    record_property("evidence", "features = texto del cliente: train() solo lee `utterance` e `intent`; reentrenar con columnas basura da las mismas "
-                                "probabilidades; ni el clasificador ni la guarda importan duckdb, herramientas ni el warehouse (sin info posterior al resultado)")
+    record_property("evidence", "features = the customer's text: train() reads only `utterance` and `intent`; retraining with junk columns gives the same "
+                                "probabilities; neither the classifier nor the guard imports duckdb, tools or the warehouse (no information from after the outcome)")
 
 
 def test_leakage_the_two_datasets_are_the_ones_frozen_before_measuring_and_the_workloads_do_not_share_cases(committed, record_property):
@@ -750,8 +750,8 @@ def test_leakage_the_two_datasets_are_the_ones_frozen_before_measuring_and_the_w
     train = [r["utterance"] for r in load_rows(evaluation.TRAIN)]
     worst = {s: round(leakage.report(train, sorted({t for c in cs for t in c["turns"]}))["max"], 3) for s, cs in cases.items()}
     assert all(w < leakage.EXCLUDE_AT for w in worst.values()), worst
-    record_property("evidence", f"hashes de entrenamiento y held-out == los del reporte y del modelo desplegado; workloads dev/test sin (plantilla, cliente) "
-                                f"compartidos; similitud máxima de los turnos del workload con el entrenamiento: {worst}")
+    record_property("evidence", f"training and held-out hashes == those of the report and of the deployed model; dev/test workloads share no (template, customer) "
+                                f"pair; maximum similarity of the workload's turns to the training set: {worst}")
 
 
 def test_leakage_the_workload_generator_rejects_a_training_phrase_with_other_punctuation(record_property):
@@ -764,8 +764,8 @@ def test_leakage_the_workload_generator_rejects_a_training_phrase_with_other_pun
     assert disguised.strip().lower() != train.strip().lower()  # what the generator used to compare
     assert workload.leakage_check([SimpleNamespace(turns=[disguised, "algo que no se parece a nada del entrenamiento"])]) == [disguised]
     assert workload.leakage_check([SimpleNamespace(turns=[])]) == []
-    record_property("evidence", "el generador de workloads rechaza un turno que es una frase de entrenamiento con otra capitalización o puntuación "
-                                "(antes solo comparaba strip().lower())")
+    record_property("evidence", "the workload generator rejects a turn that is a training phrase with other capitalization or punctuation "
+                                "(before, it only compared strip().lower())")
 
 
 def test_leakage_the_test_misses_were_reported_not_tuned_away(committed, record_property):
@@ -777,7 +777,7 @@ def test_leakage_the_test_misses_were_reported_not_tuned_away(committed, record_
         assert not contains_escalation_signal(utterance), f"{utterance!r} is now in the lexicon: it was added after seeing test"
         assert probs(utterance).p_escalation < tau
         assert utterance in EVALUATION_DOC and utterance.split()[0] in LIMITATIONS_DOC
-    record_property("evidence", f"{len(misses)} escalación(es) omitida(s) en test, {misses}: siguen fuera del léxico y bajo τ={tau}; están declaradas en EVALUATION.md y LIMITATIONS.md")
+    record_property("evidence", f"{len(misses)} missed escalation(s) in test, {misses}: still outside the lexicon and under τ={tau}; declared in EVALUATION.md and LIMITATIONS.md")
 
 
 def test_leakage_evaluation_doc_section_2_quotes_the_committed_report(committed, record_property):
@@ -806,4 +806,4 @@ def test_leakage_evaluation_doc_section_2_quotes_the_committed_report(committed,
     assert f"**{100 * learned:.1f}% vs {100 * base:.1f}%**" in (ROOT / "README.md").read_text(encoding="utf-8")
     assert f"{100 * learned:.1f}% vs {100 * base:.1f}% for keywords" in (ROOT / "docs" / "slides_outline.md").read_text(encoding="utf-8")
     assert f"{committed['test_n']} utterances in the classifier test split" in LIMITATIONS_DOC
-    record_property("evidence", f"{len(expected)} cifras de EVALUATION.md §2 == eval/reports/intent_classifier.json; el titular coincide en README, slides_outline y LIMITATIONS")
+    record_property("evidence", f"{len(expected)} figures in EVALUATION.md §2 == eval/reports/intent_classifier.json; the headline matches in README, slides_outline and LIMITATIONS")

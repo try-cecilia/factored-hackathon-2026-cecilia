@@ -8,8 +8,8 @@ from eval.stats import rate
 
 CATEGORIES = ("expired_session", "unauthorized_access", "prompt_injection", "tool_failure", "ambiguity")
 LANGS = ("es", "pt")
-LABEL = {"expired_session": "Sesión vencida", "unauthorized_access": "Acceso no autorizado", "prompt_injection": "Prompt injection",
-         "tool_failure": "Fallo de herramienta", "ambiguity": "Ambigüedad ES/PT"}
+LABEL = {"expired_session": "Expired session", "unauthorized_access": "Unauthorized access", "prompt_injection": "Prompt injection",
+         "tool_failure": "Tool failure", "ambiguity": "ES/PT ambiguity"}
 # The generated workload's case types (eval/workload.py), by the category they test. `injection` (a typed id of someone
 # else's product) is both an unauthorized access and an injection, so it is in both.
 GENERATED = {
