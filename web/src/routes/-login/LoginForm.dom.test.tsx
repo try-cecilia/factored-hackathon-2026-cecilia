@@ -158,6 +158,8 @@ describe('the sign-in form after a sign-out the API did not confirm', () => {
       mount(async () => ({ ok: true }), { hasSession: true, locale, unconfirmed: true })
       const notice = await screen.findByRole('status')
       expect(notice.textContent).toMatch(text)
+      // The lifetime of a session is configuration (SESSION_TTL_SECONDS): the notice promises no figure.
+      expect(notice.textContent).not.toMatch(/\d/)
       expect(screen.queryByRole('alert')).toBeNull()
     },
   )

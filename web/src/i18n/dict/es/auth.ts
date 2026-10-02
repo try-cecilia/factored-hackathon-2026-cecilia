@@ -10,7 +10,7 @@ export const login = {
   title: 'Hola de nuevo.',
   lead: 'Con tu número de cliente y tu PIN de 6 dígitos.',
   expired: 'Tu sesión venció. Al ingresar de nuevo la conversación empieza de cero.',
-  signOutUnconfirmed: 'No pudimos confirmar que la sesión se cerró en el servidor. Ya saliste de este navegador; la sesión vence sola a los 15 minutos de iniciada.',
+  signOutUnconfirmed: 'No pudimos confirmar que la sesión se cerró en el servidor. Ya saliste de este navegador, pero el acceso puede seguir vigente en el servidor hasta que la sesión venza.',
   customerId: 'Número de cliente',
   pin: 'PIN',
   submit: 'Ingresar',

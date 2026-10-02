@@ -13,7 +13,7 @@ export const login: Like<typeof esLogin> = {
   title: 'Olá de novo.',
   lead: 'Com o seu número de cliente e o seu PIN de 6 dígitos.',
   expired: 'Sua sessão expirou. Ao entrar de novo, a conversa começa do zero.',
-  signOutUnconfirmed: 'Não foi possível confirmar que a sessão foi encerrada no servidor. Você já saiu deste navegador; a sessão expira sozinha 15 minutos depois de iniciada.',
+  signOutUnconfirmed: 'Não foi possível confirmar que a sessão foi encerrada no servidor. Você já saiu deste navegador, mas o acesso pode continuar válido no servidor até a sessão expirar.',
   customerId: 'Número de cliente',
   pin: 'PIN',
   submit: 'Entrar',
