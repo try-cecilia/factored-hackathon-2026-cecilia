@@ -10,7 +10,7 @@
   background: var(--color-paper); color: var(--color-ink-app); box-shadow: 0 1px 2px #0F0A1417;
 }
 .ui-lang__option:focus-visible { outline: none; box-shadow: var(--ring-focus); }
-/* Touch: 40px options in a 44px track. */
+/* Touch: each option is a 44px target, in a 48px track. */
 @media (pointer: coarse) {
-  .ui-lang__option { height: 40px; }
+  .ui-lang__option { height: 44px; }
 }

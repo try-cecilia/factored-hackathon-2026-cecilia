@@ -73,6 +73,5 @@
 
 /* Touch: every button is at least a 44px target (WCAG 2.5.5), whatever size it draws at with a mouse. */
 @media (pointer: coarse) {
-  .ui-btn { min-height: 44px; }
-  .ui-btn--icon { min-width: 44px; }
+  .ui-btn { min-width: 44px; min-height: 44px; }
 }

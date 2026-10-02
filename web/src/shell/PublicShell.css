@@ -57,3 +57,7 @@
   .pub__mascot { width: 56px; height: 56px; }
   .pub__main { justify-content: flex-start; }
 }
+/* Touch: the brand link home is a 44px target. */
+@media (pointer: coarse) {
+  .brand { min-height: 44px; }
+}
