@@ -126,7 +126,8 @@ describe('version conflict (409)', () => {
     const { rerender } = renderWithI18n(<TicketPanel ticket={seen} view={{ canAct: true, operator: 'ana.ruiz' }} act={act} reload={reload} />)
     const user = userEvent.setup()
     await user.click(button(/Aprobar rastreo/)!)
-    expect(reload).toHaveBeenCalledTimes(1)
+    // The panel reads the case again once the action has answered, after the click has returned.
+    await waitFor(() => expect(reload).toHaveBeenCalledTimes(1))
 
     // The server now holds v4: diego.m took it back to the assistant.
     const now = ticket('open', {}, { version: 4, history: [{ action: 'release', status: 'handed_back', operator: 'diego.m', ts: NOW - 60, detail: {} }] })
