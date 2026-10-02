@@ -168,7 +168,7 @@ function Queue() {
               <span className="op-order" aria-live="polite">{orderLabel}</span>
             </div>
             <DataTable
-              className="op-table"
+              className="op-table op-table--queue"
               density="compact"
               caption={t('operator.queue.caption')}
               rows={shown.rows}
