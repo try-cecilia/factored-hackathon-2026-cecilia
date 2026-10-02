@@ -22,3 +22,25 @@ test('the detail can shrink below the width of whatever it holds', () => {
     assert.match(block[1], /min-width:\s*0/, `${rule} can shrink`)
   }
 })
+
+// Seen at 360 px: the queue was a 760 px table scrolling sideways, and the request, the one column that says what the case is about,
+// started off the screen. On a phone each case is a card: the request takes a whole line, the headers stay as sort buttons.
+test('on a phone the queue is a list of cards with the request on its own line', () => {
+  const start = css.indexOf('@media (max-width: 700px) {')
+  assert.ok(start >= 0, 'the phone layout of the queue is there')
+  const phone = css.slice(start, css.indexOf('\n}', start))
+  assert.match(phone, /\.op-table--queue \.ui-dt__table\s*\{[^}]*min-width:\s*0/)
+  assert.match(phone, /\.op-table--queue \.ui-dt__row\s*\{[^}]*display:\s*flex;[^}]*flex-wrap:\s*wrap/)
+  assert.match(phone, /\[data-col='request'\]\s*\{[^}]*flex-basis:\s*100%/)
+  assert.doesNotMatch(phone, /thead[^{]*\{[^}]*display:\s*none/, 'the sort buttons stay reachable')
+})
+
+// Seen at 844x390 (a phone on its side): a fixed head and foot left 200 px of case between them. There the whole case scrolls as one
+// page and the actions stay pinned at the bottom.
+test('on a short screen the case scrolls as one page, with its actions pinned at the bottom', () => {
+  const start = css.indexOf('@media (max-width: 1100px) and (max-height: 500px) {')
+  assert.ok(start >= 0, 'the short-screen layout is there')
+  const short = css.slice(start, css.indexOf('\n}', start))
+  assert.match(short, /\.op-ticket__body[^{]*\{[^}]*overflow:\s*visible/)
+  assert.match(short, /\.op-ticket__foot\s*\{[^}]*position:\s*sticky;[^}]*bottom:\s*0/)
+})

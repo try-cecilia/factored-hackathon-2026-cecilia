@@ -34,6 +34,16 @@ describe('DataTable, the row whose detail is open', () => {
   })
 })
 
+describe('DataTable, the cells', () => {
+  it('name their column, so a narrow layout can place each one (the queue is drawn as cards on a phone)', () => {
+    const two: Column<Row>[] = [...columns, { id: 'size', header: 'Size', cell: (r) => r.name.length }]
+    const { container } = renderWithI18n(<DataTable rows={rows} columns={two} getRowId={(r) => r.id} caption="Cases" />)
+    const cells = [...container.querySelectorAll('tbody tr:first-child > *')]
+    expect(cells.map((cell) => cell.getAttribute('data-col'))).toEqual(['name', 'size'])
+    expect(cells[0].tagName).toBe('TH')
+  })
+})
+
 describe('StatusIndicator', () => {
   it('draws the danger tone with its label, so color is never the only signal', () => {
     const { container } = renderWithI18n(<StatusIndicator tone="danger">Rechazado</StatusIndicator>)
