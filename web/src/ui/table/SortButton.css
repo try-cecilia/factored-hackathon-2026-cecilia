@@ -13,3 +13,7 @@
 .ui-sort[data-sort] .ui-sort__arrow { opacity: 1; color: var(--color-ink-app); }
 .ui-sort[data-sort]:hover { background: transparent; }
 .ui-sort:focus-visible, .ui-sort[data-state='focus'] { outline: none; box-shadow: var(--ring-focus); }
+/* Touch: a 44px target; the header row grows with it. */
+@media (pointer: coarse) {
+  .ui-sort { height: 44px; }
+}

@@ -26,7 +26,9 @@ export const Route = createRootRoute({
   head: () => ({
     meta: [
       { charSet: 'utf-8' },
-      { name: 'viewport', content: 'width=device-width, initial-scale=1' },
+      // viewport-fit=cover hands the notch and home-indicator areas to the page, which pads them with env(safe-area-inset-*);
+      // resizes-content makes Android shrink the layout (and 100dvh) under the keyboard, so the composer stays above it.
+      { name: 'viewport', content: 'width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content' },
       { title: 'Cecilai' },
       { name: 'color-scheme', content: 'light' },
     ],

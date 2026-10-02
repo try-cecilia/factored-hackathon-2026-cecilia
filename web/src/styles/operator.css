@@ -26,9 +26,13 @@
 .op-eyebrow { color: var(--color-ink-70); font-size: var(--text-compact-xs); font-weight: var(--font-weight-semibold); letter-spacing: 0.08em; text-transform: uppercase; }
 
 /* Estructura: barra lateral y contenido */
-.op-shell { display: grid; grid-template-columns: 220px minmax(0, 1fr); height: 100dvh; overflow: hidden; }
-.op-side { height: 100dvh; min-height: 0; }
-.op-main { min-width: 0; min-height: 0; overflow: auto; }
+/* The safe-area insets are 0 on a desktop; on a phone with a notch they keep the console clear of it and of the home indicator. */
+.op-shell {
+  display: grid; grid-template-columns: 220px minmax(0, 1fr); height: 100dvh; overflow: hidden;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+}
+.op-side { height: 100%; min-height: 0; padding-bottom: env(safe-area-inset-bottom); }
+.op-main { min-width: 0; min-height: 0; padding-bottom: env(safe-area-inset-bottom); overflow: auto; }
 .op-main:focus { outline: none; }
 .op-topbar, .op-scrim { display: none; }
 .op-side__foot { display: flex; flex-direction: column; gap: 6px; }
@@ -304,7 +308,10 @@ textarea.op-input:focus { box-shadow: 0 0 0 2px var(--color-cecil-blue); }
 .op-notice p { flex: 1 1 180px; line-height: 150%; }
 
 /* Ingreso */
-.op-login { display: grid; place-items: center; padding: 24px; background: var(--color-sky-100); }
+.op-login {
+  display: grid; place-items: center; padding: max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
+  background: var(--color-sky-100);
+}
 .op-login__card {
   display: flex; flex-direction: column; gap: 6px; width: min(100%, 440px); padding: 32px; border-radius: var(--radius-app); background: var(--color-paper);
   box-shadow: 0 1px 1px #0F0A1414, 0 24px 50px -24px #0F0A148C;
@@ -339,7 +346,10 @@ textarea.op-input:focus { box-shadow: 0 0 0 2px var(--color-cecil-blue); }
   .op-topbar { display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 12px; background: var(--color-fill-subtle); }
   .op-topbar__brand { font-size: var(--text-compact-md); font-weight: var(--font-weight-bold); letter-spacing: -0.02em; }
   .op-topbar__brand span { color: var(--color-ink-70); font-weight: var(--font-weight-normal); letter-spacing: 0; }
-  .op-side { position: fixed; z-index: 30; top: 0; bottom: 0; left: 0; width: 240px; background: var(--color-paper); box-shadow: 0 24px 50px -12px #0F0A148C; transform: translateX(-105%); visibility: hidden; }
+  .op-side {
+    position: fixed; z-index: 30; top: 0; bottom: 0; left: 0; width: min(280px, 86vw); height: auto; padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom) env(safe-area-inset-left);
+    background: var(--color-paper); box-shadow: 0 24px 50px -12px #0F0A148C; transform: translateX(-105%); visibility: hidden;
+  }
   .op-shell[data-nav='open'] .op-side { transform: none; visibility: visible; }
   .op-scrim { display: block; position: fixed; z-index: 20; inset: 0; border: 0; background: #00000040; cursor: default; }
   .op-side .ui-sidebar { width: 100%; }
@@ -349,11 +359,77 @@ textarea.op-input:focus { box-shadow: 0 0 0 2px var(--color-cecil-blue); }
   .op-search { width: 100%; order: 3; }
   .op-search kbd { display: none; }
   .op-table { overflow-x: auto; }
-  .op-table .ui-dt__table { min-width: 760px; }
+  .op-table .ui-dt__table { min-width: 720px; }
   .op-table .ui-dt__pager { position: sticky; left: 0; }
   .op-detail { margin: 0; border-radius: 0; }
   .op-login__card { padding: 24px; }
   .op-login h1 { font-size: var(--text-3xl); }
+  /* The status tabs wrap rather than scroll sideways: a tab half hidden in a scrolling strip stays half hidden when it takes the focus
+     (Chromium does not scroll a partly visible element into view on Tab). */
+  .op-seg { flex-wrap: wrap; max-width: 100%; height: auto; }
+  .op-seg a { flex: none; }
+}
+
+/* Por debajo de 1024 px, las tablas densas fuera de la cola (Monitoreo, el detalle de una traza) toman el ancho de su contenido y, si
+   no entran, se desplazan dentro de su propia caja: nunca empujan .op-main ni la página, y ninguna etiqueta pisa la de al lado. */
+@media (max-width: 1023px) {
+  .op-panel .ui-dt, .op-detail .ui-dt { overflow-x: auto; overscroll-behavior-x: contain; }
+  .op-panel .ui-dt__table, .op-detail .ui-dt__table { width: max-content; min-width: 100%; table-layout: auto; }
+}
+
+/* Teléfono: la cola es una lista de tarjetas. La primera línea dice prioridad, caso, país e idioma y edad; la segunda, el pedido
+   entero (dos renglones); la tercera, estado, cola y operador. Los encabezados quedan arriba como una tira de botones para ordenar. */
+@media (max-width: 700px) {
+  .op-table--queue .ui-dt__table { display: block; min-width: 0; }
+  .op-table--queue colgroup { display: none; }
+  .op-table--queue thead, .op-table--queue tbody { display: block; }
+  /* The sort buttons wrap onto a second line instead of scrolling, so every one is in full view when it has the focus. */
+  .op-table--queue thead tr { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 2px 10px; }
+  .op-table--queue .ui-dt__table thead th { display: block; flex: none; height: auto; padding: 0; }
+  .op-table--queue .ui-dt__table thead .ui-sort { margin-inline: 0; background: var(--color-fill-subtle); }
+  .op-table--queue .ui-dt__table thead .ui-sort[data-sort] { background: var(--color-fill-muted); }
+  .op-table--queue tbody { display: grid; gap: 8px; }
+  .op-table--queue .ui-dt__row {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 12px 14px; border-radius: var(--radius-xl); background: var(--color-fill-subtle);
+  }
+  .op-table--queue .ui-dt__row:hover { background: var(--color-fill-muted); }
+  .op-table--queue .ui-dt__row[data-selected] { background: var(--color-row-selected); }
+  .op-table--queue .ui-dt__row--action:focus-visible { box-shadow: inset 0 0 0 2px var(--color-cecil-blue); }
+  .op-table--queue .ui-dt__table tbody .ui-dt__row > * { display: block; height: auto; padding: 0; border-radius: 0; background: transparent; box-shadow: none; }
+  .op-table--queue [data-col='priority'] { order: 1; }
+  .op-table--queue [data-col='ticket'] { order: 2; }
+  .op-table--queue [data-col='locale'] { order: 3; margin-left: auto; }
+  .op-table--queue [data-col='age'] { order: 4; }
+  .op-table--queue .ui-dt__table [data-col='request'] {
+    order: 5; flex-basis: 100%; display: -webkit-box; overflow: hidden; font-size: var(--text-compact-md); font-weight: var(--font-weight-medium); line-height: 18px;
+    white-space: normal; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  }
+  .op-table--queue [data-col='status'] { order: 6; }
+  .op-table--queue .ui-dt__table [data-col='queue'] { order: 7; flex: 0 1 auto; min-width: 0; }
+  .op-table--queue .ui-dt__table [data-col='operator'] { order: 8; flex: 0 1 auto; min-width: 0; margin-left: auto; }
+}
+
+/* A phone on its side: too short for a fixed head and foot around a scrolling middle. The whole case scrolls as one page, and its
+   actions stay at the bottom of the screen. */
+@media (max-width: 1023px) and (max-height: 500px) {
+  .op-split { height: auto; min-height: 100%; }
+  .op-list, .op-detail, .op-ticket__body { overflow: visible; }
+  .op-detail { min-height: auto; }
+  .op-ticket, .op-ticket__body { flex: none; min-height: auto; }
+  /* fill-subtle is a translucent tint: laid over paper it reads the same as the panel and hides what scrolls beneath it. */
+  .op-ticket__foot { position: sticky; bottom: 0; z-index: 1; background: linear-gradient(var(--color-fill-subtle), var(--color-fill-subtle)), var(--color-paper); }
+}
+
+/* Pantallas táctiles: los controles de la consola son blancos de 44px. */
+@media (pointer: coarse) {
+  .op-search, .op-select, .op-toggle { height: 44px; }
+  .op-seg { min-height: 48px; }
+  .op-seg a { height: 44px; }
+  .op-input, .op-key-form .op-input, .op-form .op-input { height: 44px; }
+  textarea.op-input { height: auto; min-height: 64px; }
+  .op-back a { display: inline-flex; align-items: center; min-height: 44px; }
+  .op-fold--note .op-fold__head { min-height: 44px; }
+  .op-login__brand { min-height: 44px; }
 }
 
 @media (prefers-reduced-motion: no-preference) {

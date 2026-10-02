@@ -4,7 +4,7 @@
 .chat__scroll { flex: 1 1 0; min-height: 0; padding: 8px 20px 32px; overflow-y: auto; }
 .chat__scroll:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--color-cecil-blue); }
 .chat__inner { display: flex; flex-direction: column; gap: 20px; width: 100%; max-width: 720px; margin-inline: auto; }
-.chat__foot { display: grid; gap: 8px; width: 100%; max-width: 760px; margin-inline: auto; padding: 0 20px 16px; }
+.chat__foot { display: grid; gap: 8px; width: 100%; max-width: 760px; margin-inline: auto; padding: 0 20px calc(16px + env(safe-area-inset-bottom)); }
 .chat__notices { display: grid; justify-items: center; gap: 6px; }
 .chat__notices:empty { display: none; }
 
@@ -44,4 +44,17 @@
 @media (max-width: 759px) {
   .chat__scroll { padding-inline: 12px; }
   .chat__foot { padding-inline: 12px; }
+  .chat__empty { padding-top: 3vh; }
+  .chat__empty img { width: 88px; height: 88px; }
+}
+/* Short phone and tablet screens (on its side, or with the keyboard up; from 1024px a short window is a desktop and keeps everything): the foot keeps only the field, so the conversation keeps its room. */
+@media (max-width: 1023px) and (max-height: 500px) {
+  .chat__foot { gap: 4px; padding-bottom: calc(8px + env(safe-area-inset-bottom)); }
+  .composer-foot { display: none; }
+}
+/* Touch: the send button is a 44px target and the field is as tall as it, so a thumb finds both. */
+@media (pointer: coarse) {
+  .composer { padding: 6px 6px 6px 16px; }
+  .composer textarea { padding-block: 12px; }
+  .composer .ui-btn { width: 44px; height: 44px; }
 }

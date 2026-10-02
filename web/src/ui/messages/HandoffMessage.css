@@ -11,3 +11,7 @@
 }
 .ui-handoff__link:hover { text-decoration: underline; }
 .ui-handoff__link:focus-visible { outline: none; box-shadow: var(--ring-focus); }
+/* Touch: "Ver caso" is a 44px target; the padding is taken back by the margin so the card keeps its size. */
+@media (pointer: coarse) {
+  .ui-handoff__link { min-height: 44px; margin: -8px -8px -8px 0; padding: 0 8px; }
+}

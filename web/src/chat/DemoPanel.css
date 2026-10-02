@@ -34,4 +34,6 @@
 /* Narrow, the panel slides over the page on paper: its cards take the tonal fill instead of paper. */
 @media (max-width: 1179px) {
   .demo__card { background: var(--color-fill-subtle); }
+  /* The panel scrolls under its head, so the close button stays in reach however far down the reader went. */
+  .demo__head { position: sticky; top: 0; z-index: 1; margin: -16px -16px -8px; padding: 16px 16px 8px; background: var(--color-paper); }
 }

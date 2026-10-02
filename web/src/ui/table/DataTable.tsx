@@ -138,7 +138,7 @@ export function DataTable<Row>({
                   <tr key={rowIndex} className="ui-dt__row ui-dt__row--skeleton" aria-hidden="true">
                     {selectable && <td className="ui-dt__check" />}
                     {columns.map((column, columnIndex) => (
-                      <td key={column.id} className={column.align === 'end' ? 'ui-dt__cell ui-dt__cell--end' : 'ui-dt__cell'}>
+                      <td key={column.id} data-col={column.id} className={column.align === 'end' ? 'ui-dt__cell ui-dt__cell--end' : 'ui-dt__cell'}>
                         <Skeleton
                           width={column.skeletonWidth ?? SKELETON_WIDTHS[(rowIndex + columnIndex * 2) % SKELETON_WIDTHS.length]}
                           height={10}
@@ -252,7 +252,8 @@ function TableRowView<Row>({ row, index, id, columns, selected, active, hover, l
       {columns.map((column) => {
         const Cell = column.rowHeader ? 'th' : 'td'
         return (
-          <Cell key={column.id} scope={column.rowHeader ? 'row' : undefined} className={cellClass(column)}>
+          // `data-col` names the column, so a narrow layout can place each cell (operator.css draws the queue as cards on a phone).
+          <Cell key={column.id} scope={column.rowHeader ? 'row' : undefined} data-col={column.id} className={cellClass(column)}>
             {column.cell(row, index)}
           </Cell>
         )
