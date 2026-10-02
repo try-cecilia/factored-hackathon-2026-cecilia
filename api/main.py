@@ -132,6 +132,25 @@ class RateLimiter:
         with self._lock:
             self._hits[key].append(time.time())
 
+    def reserve(self, key: str) -> float | None:
+        """Takes one of this key's hits, checking and taking in one step, or returns None if none is left. What it returns is
+        the claim ticket for `release`. The check-then-record pair (`over`, `record`) lets concurrent callers all pass the check."""
+        now = time.time()
+        with self._lock:
+            q = self._prune(key, now)
+            if len(q) >= self.limit:
+                return None
+            q.append(now)
+            return now
+
+    def release(self, key: str, ticket: float) -> None:
+        """Gives back a hit taken by `reserve` (its attempt turned out not to be a failure)."""
+        with self._lock:
+            try:
+                self._hits[key].remove(ticket)
+            except ValueError:  # already aged out of the window, or never held
+                pass
+
     def retry_after(self, key: str) -> int:
         """Whole seconds until this key has a hit to spend again (at least 1)."""
         now = time.time()
@@ -229,21 +248,28 @@ def client_ip(request: Request) -> str:
 
 
 # Failed admin, metrics and operator credentials count per client address: past the limit even the right key is refused until
-# the window passes, so a key cannot be guessed at line speed.
+# the window passes, so a key cannot be guessed at line speed. The attempt is reserved before the key is compared (one hit of
+# the address's window, taken atomically) and given back only if the key was right, so concurrent guesses cannot all slip
+# past a check that nobody has paid for yet.
 operator_fail_limiter = RateLimiter(int(os.environ.get("OPERATOR_AUTH_FAILS_PER_MIN", "10")), 60, "auth_failures")
 
 
-def _refuse_if_guessing(request: Request, kind: str) -> str:
+def _reserve_attempt(request: Request, kind: str) -> tuple[str, float]:
     origin = client_ip(request)
-    if operator_fail_limiter.over(origin):
+    ticket = operator_fail_limiter.reserve(origin)
+    if ticket is None:
         metrics.default.rate_limited.labels("auth_failures").inc()
         default_audit_log.event(f"{kind}_auth_failed", origin=origin, reason="blocked")
         raise too_many(operator_fail_limiter, origin, "too many failed attempts")
-    return origin
+    return origin, ticket
+
+
+def _credential_accepted(origin: str, ticket: float) -> None:
+    operator_fail_limiter.release(origin, ticket)
 
 
 def _bad_credential(origin: str, kind: str, detail: str) -> HTTPException:
-    operator_fail_limiter.record(origin)
+    """The reserved hit stays taken: that is the failure being counted."""
     default_audit_log.event(f"{kind}_auth_failed", origin=origin, reason="invalid")
     return HTTPException(401, detail)
 
@@ -252,9 +278,10 @@ def require_admin(request: Request, x_admin_key: str | None = Header(default=Non
     expected = os.environ.get("ADMIN_API_KEY")
     if not expected:
         raise HTTPException(503, "admin endpoints disabled: ADMIN_API_KEY not configured")
-    origin = _refuse_if_guessing(request, "admin")
+    origin, ticket = _reserve_attempt(request, "admin")
     if not constant_time_equals(x_admin_key, expected):
         raise _bad_credential(origin, "admin", "invalid admin key")
+    _credential_accepted(origin, ticket)
 
 
 def require_metrics(request: Request, authorization: str | None = Header(default=None),
@@ -263,7 +290,7 @@ def require_metrics(request: Request, authorization: str | None = Header(default
     keys = [k for k in (os.environ.get("METRICS_TOKEN"), os.environ.get("ADMIN_API_KEY")) if k]
     if not keys:
         raise HTTPException(503, "metrics disabled: neither METRICS_TOKEN nor ADMIN_API_KEY is configured")
-    origin = _refuse_if_guessing(request, "metrics")
+    origin, ticket = _reserve_attempt(request, "metrics")
     scheme, _, bearer = (authorization or "").partition(" ")
     presented = [x_admin_key, bearer.strip() if scheme.lower() == "bearer" else None]
     ok = False
@@ -272,6 +299,7 @@ def require_metrics(request: Request, authorization: str | None = Header(default
             ok |= constant_time_equals(candidate, key)
     if not ok:
         raise _bad_credential(origin, "metrics", "invalid metrics credentials")
+    _credential_accepted(origin, ticket)
 
 
 OperatorDirectory.from_env()  # a bad OPERATOR_KEYS stops the service from starting, rather than failing at the first request
@@ -283,10 +311,11 @@ def require_operator(request: Request, x_operator_key: str | None = Header(defau
     directory = OperatorDirectory.from_env()
     if not directory.enabled:
         raise HTTPException(503, "operator endpoints disabled: OPERATOR_KEYS not configured")
-    origin = _refuse_if_guessing(request, "operator")
+    origin, ticket = _reserve_attempt(request, "operator")
     name = directory.authenticate(x_operator_key)
     if name is None:
         raise _bad_credential(origin, "operator", "invalid operator key")
+    _credential_accepted(origin, ticket)
     return name
 
 

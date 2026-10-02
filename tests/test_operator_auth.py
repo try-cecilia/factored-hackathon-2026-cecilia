@@ -129,3 +129,86 @@ def test_behind_the_bff_one_users_wrong_keys_do_not_lock_out_another_and_a_direc
         headers = {**direct, "X-Client-IP": f"3.3.3.{n}", **as_operator("wrong")}
         assert client.post(url, json={}, headers=headers).status_code == 401
     assert client.post(url, json={}, headers={**direct, "X-Client-IP": "3.3.3.99", **as_operator(ANA_KEY)}).status_code == 429
+
+
+# --- concurrent guesses: the attempt is reserved before the key is compared -------------------------------------------------
+
+import queue  # noqa: E402
+import threading  # noqa: E402
+from collections import Counter  # noqa: E402
+
+WAIT = 5  # seconds an event may take before a test gives up; no test here measures how long anything takes
+
+
+def _race(requests: int, send, hold) -> tuple[Counter, int]:
+    """`requests` calls at once, the first to reach the comparison held inside it (`hold` installs the gate and returns what to
+    release and how many reached the comparison). Returns the statuses and the number of comparisons made."""
+    entered, release, compared = threading.Event(), threading.Event(), []
+    hold(entered, release, compared)
+    statuses: queue.Queue = queue.Queue()
+    threads = [threading.Thread(target=lambda: statuses.put(send()), daemon=True) for _ in range(requests)]
+    seen: list[int] = []
+    try:
+        for t in threads:
+            t.start()
+        assert entered.wait(WAIT), "no request reached the comparison"
+        for _ in range(requests - 1):  # the refused ones answer while the first is held; one that was not refused is held too
+            try:
+                seen.append(statuses.get(timeout=2))
+            except queue.Empty:
+                break
+    finally:
+        release.set()
+    for t in threads:
+        t.join(WAIT)
+    while not statuses.empty():
+        seen.append(statuses.get_nowait())
+    return Counter(seen), len(compared)
+
+
+@pytest.mark.parametrize("kind", ["admin", "operator"])
+def test_with_one_failure_left_only_one_concurrent_guess_is_compared_and_the_rest_are_refused(kind, monkeypatch):
+    monkeypatch.setattr(main, "operator_fail_limiter", main.RateLimiter(10, 60))
+    for _ in range(9):
+        main.operator_fail_limiter.record("testclient")  # nine failures in the window: one place left
+    client = TestClient(main.app)
+    url, headers = ("/admin/human_queue", {"X-Admin-Key": "wrong"}) if kind == "admin" else ("/admin/operator/me", as_operator("wrong"))
+
+    def hold(entered, release, compared):
+        def gate(real):
+            def wrapper(*args):
+                compared.append(1)
+                entered.set()
+                assert release.wait(WAIT), "the held comparison was never released"
+                return real(*args)
+            return wrapper
+
+        if kind == "admin":
+            monkeypatch.setattr(main, "constant_time_equals", gate(main.constant_time_equals))
+        else:
+            monkeypatch.setattr(main.OperatorDirectory, "authenticate", gate(main.OperatorDirectory.authenticate))
+
+    statuses, compared = _race(5, lambda: client.get(url, headers=headers).status_code, hold)
+    assert compared == 1  # the single place left was taken before the comparison
+    assert statuses == {401: 1, 429: 4}
+
+
+def test_a_correct_key_gives_its_reserved_place_back(monkeypatch):
+    monkeypatch.setattr(main, "operator_fail_limiter", main.RateLimiter(2, 60))
+    client = TestClient(main.app)
+    for _ in range(5):  # only failures count: any number of right keys leaves the window as it was
+        assert client.get("/admin/human_queue", headers={"X-Admin-Key": ADMIN_KEY}).status_code == 200
+        assert client.get("/admin/operator/me", headers=as_operator(ANA_KEY)).status_code == 200
+    assert client.get("/admin/human_queue", headers={"X-Admin-Key": "wrong"}).status_code == 401
+    assert client.get("/admin/human_queue", headers={"X-Admin-Key": ADMIN_KEY}).status_code == 200  # one failure of two
+    assert client.get("/admin/human_queue", headers={"X-Admin-Key": "wrong"}).status_code == 401
+    assert client.get("/admin/human_queue", headers={"X-Admin-Key": ADMIN_KEY}).status_code == 429  # two of two: closed
+
+
+def test_the_limiter_reserves_atomically_and_gives_back_only_what_it_was_given():
+    limiter = main.RateLimiter(2, 60)
+    first, second = limiter.reserve("a"), limiter.reserve("a")
+    assert first is not None and second is not None and limiter.reserve("a") is None and limiter.reserve("b") is not None
+    limiter.release("a", first)
+    assert limiter.reserve("a") is not None and limiter.reserve("a") is None
+    limiter.release("c", 123.0)  # not held: ignored

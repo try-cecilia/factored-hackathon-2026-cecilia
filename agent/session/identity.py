@@ -11,7 +11,8 @@ prototype never need it, and it proves nothing outside this sandbox.
 
 Also enforced here, not in the conversation layer:
 - constant-time PIN comparison;
-- lockout after repeated failures per customer (brute-force defense);
+- lockout after repeated failures per customer (brute-force defense), where the attempt is reserved under the lock before the
+  PIN is checked, so concurrent logins cannot check more PINs than the limit allows;
 - unknown customers and Closed accounts can't open sessions.
 Fails closed: without DEMO_IDP_SECRET, no session can be issued at all.
 """
@@ -68,7 +69,8 @@ class CustomerRecord:
 class IdentityService:
     def __init__(self, store: SessionStore | None = None):
         self.store = default_store if store is None else store  # an empty store is falsy (__len__)
-        self._failures: dict[str, list[float]] = {}
+        self._failures: dict[str, list[float]] = {}  # per customer: when each failed attempt was resolved
+        self._inflight: dict[str, int] = {}  # per customer: attempts that hold a place and have not been resolved yet
         self._lock = threading.Lock()
 
     def _recent_failures(self, customer_id: str, now: float) -> list[float]:
@@ -82,20 +84,43 @@ class IdentityService:
         ).fetchone()
         return CustomerRecord(*row) if row else None
 
-    def login(self, customer_id: str, pin: str) -> Session:
+    def _reserve(self, customer_id: str) -> float:
+        """Takes one of the account's MAX_FAILURES places, or raises LockedOut. Checking and taking are one step under the
+        lock, so the places held by attempts still in the lookup count as failures: concurrent logins cannot pass the check
+        together. Only this account's counters are touched, and the lock is not held while the warehouse answers."""
         now = time.time()
         with self._lock:
-            if len(self._recent_failures(customer_id, now)) >= MAX_FAILURES:
+            if len(self._recent_failures(customer_id, now)) + self._inflight.get(customer_id, 0) >= MAX_FAILURES:
                 raise LockedOut("too many failed attempts; try again later")
-        expected = derive_test_pin(customer_id)
-        record = self._lookup(customer_id)
-        ok = constant_time_equals(expected, str(pin)) and record is not None and record.customer_status != "Closed"
-        if not ok:
-            with self._lock:
-                self._failures.setdefault(customer_id, []).append(now)
-            raise AuthError("invalid credentials")
+            self._inflight[customer_id] = self._inflight.get(customer_id, 0) + 1
+        return now
+
+    def _resolve(self, customer_id: str, failed_at: float | None, cleared: bool = False) -> None:
+        """Gives the reserved place back: as a recorded failure (`failed_at`), as a success that clears the account's
+        failures (`cleared`), or, with neither, as nothing (the attempt ended in an error that was not a guess)."""
         with self._lock:
-            self._failures.pop(customer_id, None)
+            held = self._inflight.get(customer_id, 1) - 1
+            if held > 0:
+                self._inflight[customer_id] = held
+            else:
+                self._inflight.pop(customer_id, None)
+            if failed_at is not None:
+                self._failures.setdefault(customer_id, []).append(failed_at)
+            elif cleared:
+                self._failures.pop(customer_id, None)
+
+    def login(self, customer_id: str, pin: str) -> Session:
+        reserved_at = self._reserve(customer_id)
+        outcome: tuple[float | None, bool] = (None, False)  # what to settle: an unexpected error settles as nothing
+        try:
+            expected = derive_test_pin(customer_id)
+            record = self._lookup(customer_id)
+            ok = constant_time_equals(expected, str(pin)) and record is not None and record.customer_status != "Closed"
+            outcome = (None, True) if ok else (reserved_at, False)
+        finally:
+            self._resolve(customer_id, *outcome)
+        if not ok:
+            raise AuthError("invalid credentials")
         return self.store.issue(customer_id, {"segment": record.segment, "country": record.country,
                                               "customer_status": record.customer_status})
 
