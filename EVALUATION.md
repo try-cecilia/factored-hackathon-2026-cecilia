@@ -180,39 +180,39 @@ For this component it fails if:
 
 ## 3. System evaluation: baseline vs proposed on the same workload
 
-> **Actualización (2026-09-29): la evaluación se volvió a medir después de la regla de revisión de rastreos.**
-> El flujo de operador agregó una regla: al confirmar un rastreo, un movimiento pendiente de más de 90 días, o con
-> fecha anterior a la apertura de su producto o al registro del cliente, no se abre solo, sino que lo aprueba una
-> persona. Los casos `trace_confirm` no miraban la antigüedad, así que la evaluación versionada describía un sistema que
-> ya no era el entregable.
+> **Update (2026-09-29): the evaluation was measured again after the trace review rule.**
+> The operator flow added a rule: when a trace is confirmed, a pending movement older than 90 days, or dated before its
+> product was opened or the customer registered, is not opened on its own; a person approves it. The `trace_confirm`
+> cases did not look at a movement's age, so the committed evaluation described a system that was no longer the
+> deliverable.
 >
-> - **Paso 0, el desfasaje medido:** el workload anterior (528 casos de test) contra el sistema nuevo, con el warehouse
->   completo, dio `trace_confirm` **12,5%** (3 de 24; antes 87,5%) y 24 de 336 escalaciones innecesarias (antes 6 de
->   336), con 0 inseguros. El sistema hacía lo correcto; la evaluación estaba desfasada.
-> - **Qué cambió:** plantilla `trace_review` nueva y `trace_confirm` sobre movimientos que no exigen revisión, decididos
->   por un oráculo con la política escrita (no por el código del sistema); el juez comprueba que el ticket nombre el
->   movimiento y el motivo. Los casos de rastreo se regeneraron con semilla propia: **las otras 19 plantillas son
->   idénticas** a las anteriores (456 casos por split). El split de test de rastreo **no es comparable uno a uno** con el
->   anterior.
-> - **Resultado offline (test, n = 548):** 0 inseguros, 0 escalaciones omitidas, traspasos completos; `trace_review`
->   24 de 24, y los mismos límites conocidos que antes.
-> - **El reporte en vivo (Sonnet 5 y Haiku 4.5) quedó desactualizado:** se midió antes de esta regla y no se puede
->   rehacer sin una clave de Anthropic. Sus cifras aparecen marcadas.
-> - **Nota posterior (fallos, `feat/heldout-failure-eval`):** el set reservado de fallos encontró excepciones sin manejar
->   (perfil, auditoría, trazas y cola de derivaciones) y un hueco del modo degradado en portugués. Se arreglaron en
->   `agent/core/orchestrator.py` (`ff02f58`), que está en la huella de las políticas, y por eso `make eval` y
->   `make eval-adversarial` se volvieron a correr con el warehouse completo (`--profile all`, fuente local, mismos
->   conteos que el reporte de calidad commiteado): **los 548 casos de test dieron el mismo resultado que antes, en
->   ambos modos** (cambian solo la fecha y las latencias); el workload regenerado con `make workload` es idéntico al commiteado.
-> - **Para que no vuelva a pasar:** cada reporte guarda una huella de los archivos que deciden (políticas, herramientas,
->   orquestador) y de los que el juez compara (las plantillas de `agent/core/render.py`), más errores, sesión, privacidad,
->   reintentos, prompt y el clasificador de la guarda; la lista completa y lo que queda fuera están en
->   `eval/fingerprint.py`. La huella cubre todo `agent/` salvo lo que la evaluación no importa (credenciales de la demo, entrenamiento del
->   clasificador), y también el juez (`eval/run_system_eval.py`, `eval/categories.py`), los modelos
->   simulados, la línea base, los casos de test y del set reservado con su resultado esperado y el warehouse de prueba:
->   cambiar cómo se juzga o qué se espera invalida los reportes igual que cambiar el sistema. El campo del reporte sigue
->   llamándose `policy_sha256` por compatibilidad, aunque ya no cubre solo las políticas. La compuerta del CI
->   (`eval/gate.py`) falla si esos archivos cambian sin volver a medir.
+> - **Step 0, the drift measured:** the previous workload (528 test cases) against the new system, with the full
+>   warehouse, gave `trace_confirm` **12.5%** (3 of 24; 87.5% before) and 24 of 336 unnecessary escalations (6 of 336
+>   before), with 0 unsafe. The system did the right thing; the evaluation was out of date.
+> - **What changed:** a new `trace_review` template, and `trace_confirm` only on movements that do not require review,
+>   decided by an oracle with the written policy (not by the system's code); the judge checks that the ticket names the
+>   movement and the reason. The trace cases were regenerated with their own seed: **the other 19 templates are
+>   identical** to the previous ones (456 cases per split). The trace part of the test split **is not comparable one to
+>   one** with the previous one.
+> - **Offline result (test, n = 548):** 0 unsafe, 0 missed escalations, complete handoffs; `trace_review` 24 of 24, and
+>   the same known limits as before.
+> - **The live report (Sonnet 5 and Haiku 4.5) was left out of date:** it had been measured before this rule and could
+>   not be redone without an Anthropic key. Its figures are marked.
+> - **Later note (failures, `feat/heldout-failure-eval`):** the reserved failure set found unhandled exceptions
+>   (profile, audit, traces and the handoff queue) and a gap in the degraded mode in Portuguese. They were fixed in
+>   `agent/core/orchestrator.py` (`ff02f58`), which is in the policy fingerprint, so `make eval` and
+>   `make eval-adversarial` were run again with the full warehouse (`--profile all`, local source, the same counts as
+>   the committed quality report): **the 548 test cases gave the same result as before, in both modes** (only the date
+>   and the latencies change); the workload regenerated with `make workload` is identical to the committed one.
+> - **So that it does not happen again:** every report keeps a fingerprint of the files that decide (policies, tools,
+>   orchestrator) and of those the judge compares (the templates in `agent/core/render.py`), plus errors, session,
+>   privacy, retries, prompt and the guard's classifier; the full list, and what is left out, are in
+>   `eval/fingerprint.py`. The fingerprint covers all of `agent/` except what the evaluation does not import (the demo's
+>   credentials, the classifier's training), and also the judge (`eval/run_system_eval.py`, `eval/categories.py`), the
+>   simulated models, the baseline, the test and reserved-set cases with their expected outcome, and the test warehouse:
+>   changing how a case is judged or what is expected invalidates the reports just as changing the system does. The
+>   report's field is still called `policy_sha256` for compatibility, although it no longer covers only the policies.
+>   The CI gate (`eval/gate.py`) fails if those files change without a new measurement.
 
 `make workload eval eval-adversarial` → `eval/reports/SYSTEM_EVAL*.md`.
 

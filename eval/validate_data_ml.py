@@ -1,16 +1,16 @@
-"""Validación de buenas prácticas de datos y ML: un comando, un reporte de evidencia.
+"""Data and ML good-practice validation: one command, one evidence report.
 
-Corre `tests/test_data_ml_validation.py` (una prueba por afirmación de los documentos; herméticas: warehouse de
-prueba, sin S3 ni claves) y da el resultado por criterio: PASS o FAIL, la evidencia que cada prueba registró y el
-comando que lo reproduce. Un criterio pasa solo si corrieron pruebas y todas pasaron: una prueba omitida o que no se
-pudo recolectar cuenta como FAIL.
+Runs `tests/test_data_ml_validation.py` (one test per claim in the documents; hermetic: the test warehouse, no S3 and
+no keys) and gives the result per criterion: PASS or FAIL, the evidence each test recorded and the command that
+reproduces it. A criterion passes only if tests ran and all of them passed: a skipped test, or one that could not be
+collected, counts as FAIL.
 
-    python -m eval.validate_data_ml                  # verifica y no escribe nada; avisa si la evidencia versionada quedó vieja
-    python -m eval.validate_data_ml --out-dir DIR    # además escribe data_ml_validation.{md,json} en DIR
-    make evidence                                    # lo mismo con DIR = docs/evidence: el paso explícito que versiona la evidencia
+    python -m eval.validate_data_ml                  # checks and writes nothing; warns if the versioned evidence is out of date
+    python -m eval.validate_data_ml --out-dir DIR    # also writes data_ml_validation.{md,json} in DIR
+    make evidence                                    # the same with DIR = docs/evidence: the explicit step that versions the evidence
 
-Sale con código 1 si algún criterio no pasa. Verificar (el gate, el CI) no toca archivos versionados: la fecha y el
-commit del reporte solo cambian cuando alguien regenera la evidencia a propósito.
+Exits with code 1 if any criterion fails. Checking (the gate, the CI) touches no versioned file: the report's date and
+commit change only when someone regenerates the evidence on purpose.
 """
 from __future__ import annotations
 
@@ -30,30 +30,30 @@ TESTS = "tests/test_data_ml_validation.py"
 EVIDENCE_DIR = ROOT / "docs" / "evidence"
 NAME = "data_ml_validation"
 
-# prefijo de las pruebas -> criterio, y el documento que hace la afirmación
+# test prefix -> criterion, and the document that makes the claim
 CRITERIA = [
-    ("contracts", "Contratos", "docs/data_quality.md (Pipeline, pasos 2-5), data/contracts.py"),
-    ("quality", "Calidad", "docs/data_quality.md (Pipeline paso 4, Findings)"),
-    ("lineage", "Linaje", "docs/data_quality.md (Pipeline paso 8), data/lineage.py"),
-    ("freshness", "Política de frescura", "docs/data_quality.md (Update and freshness policy)"),
-    ("learned", "Componente aprendido contra una línea base", "EVALUATION.md §2, eval/reports/intent_classifier.md"),
-    ("leakage", "Sin fuga de datos", "EVALUATION.md §2, eval/leakage.py, LIMITATIONS.md (Data and ML)"),
+    ("contracts", "Contracts", "docs/data_quality.md (Pipeline, steps 2-5), data/contracts.py"),
+    ("quality", "Quality", "docs/data_quality.md (Pipeline step 4, Findings)"),
+    ("lineage", "Lineage", "docs/data_quality.md (Pipeline step 8), data/lineage.py"),
+    ("freshness", "Freshness policy", "docs/data_quality.md (Update and freshness policy)"),
+    ("learned", "A learned component against a baseline", "EVALUATION.md §2, eval/reports/intent_classifier.md"),
+    ("leakage", "No data leakage", "EVALUATION.md §2, eval/leakage.py, LIMITATIONS.md (Data and ML)"),
 ]
 
-# Lo que estas pruebas no cierran y está declarado, para que el reporte no parezca más de lo que es.
+# What these tests do not settle and is declared, so the report does not look like more than it is.
 DECLARED = [
-    "Los textos de entrenamiento y de held-out los escribió el mismo equipo (LIMITATIONS.md, «No usable text»): la "
-    "diferencia con la línea base es real en este held-out, no una medida sobre clientes reales.",
-    "El orden cronológico (entrenamiento y línea base congelados antes de escribir el held-out) no se puede probar con "
-    "el historial de git, que empieza en una sola importación; lo que sí se prueba es que los archivos no cambiaron desde "
-    "que se midieron (hashes).",
-    "Los cortes de similitud (0.90 y 0.60) se fijaron mirando la distribución de todo el held-out, dev y test juntos; "
-    "una frase se dejó fuera (LIMITATIONS.md).",
-    "La decisión de no reentrenar el clasificador con ejemplos de rastreo se tomó viendo el split de test "
-    "(LIMITATIONS.md, «The action»).",
-    "Una similitud de caracteres no ve una paráfrasis con otras palabras (eval/leakage.py).",
-    "El reporte de calidad de la corrida completa (`data/reports/quality_report.json`) sale del bucket del organizador y "
-    "no se regenera aquí; estas pruebas comprueban que el documento lo cita bien, no que los datos sigan siendo esos.",
+    "The training and held-out texts were written by the same team (LIMITATIONS.md, \"No usable text\"): the "
+    "difference against the baseline is real on this held-out set, not a measurement on real customers.",
+    "The chronological order (training and baseline frozen before the held-out set was written) cannot be proven with "
+    "the git history, which starts with a single import; what is proven is that the files have not changed since they "
+    "were measured (hashes).",
+    "The similarity cut-offs (0.90 and 0.60) were set by looking at the distribution of the whole held-out, dev and test "
+    "sets together; one phrase was left out (LIMITATIONS.md).",
+    "The decision not to retrain the classifier with trace examples was made after seeing the test split "
+    "(LIMITATIONS.md, \"The action\").",
+    "A character similarity does not see a paraphrase in other words (eval/leakage.py).",
+    "The quality report of the full run (`data/reports/quality_report.json`) comes from the organizer's bucket and is not "
+    "regenerated here; these tests check that the document cites it correctly, not that the data are still those.",
 ]
 
 
@@ -75,7 +75,7 @@ def parse(xml_path: Path) -> list[dict]:
         if problem is not None:
             status, detail = "FAIL", (problem.get("message") or problem.text or "").strip().splitlines()[0][:300]
         elif case.find("skipped") is not None:
-            status, detail = "FAIL", "omitida: un chequeo que no corre no cuenta como aprobado"
+            status, detail = "FAIL", "skipped: a check that does not run does not count as passed"
         evidence = next((p.get("value") for p in case.iter("property") if p.get("name") == "evidence"), "")
         out.append({"test": case.get("name"), "status": status, "evidence": evidence, "detail": detail})
     return out
@@ -102,25 +102,25 @@ def to_markdown(rows: list[dict], generated_at: str, code: str, pytest_line: str
     detail = []
     for r in rows:
         lines = "\n".join(f"| {_title(t['test'], r['id'])} | {t['status']} | {t['evidence'] or t['detail']} |" for t in r["tests"])
-        detail.append(f"### {r['criterion']}: {r['status']}\n\nAfirma: {r['source']}.\n\n| Prueba | Resultado | Evidencia |\n|---|---|---|\n"
-                      f"{lines or '| (ninguna prueba corrió) | FAIL | |'}")
+        detail.append(f"### {r['criterion']}: {r['status']}\n\nClaimed in: {r['source']}.\n\n| Test | Result | Evidence |\n|---|---|---|\n"
+                      f"{lines or '| (no test ran) | FAIL | |'}")
     declared = "\n".join(f"- {d}" for d in DECLARED)
-    return f"""# Validación de buenas prácticas de datos y ML (auto-generado)
+    return f"""# Data and ML good-practice validation (generated)
 
-Generado por `make evidence` (`python -m eval.validate_data_ml --out-dir docs/evidence`) el {generated_at} sobre el código `{code}`.
-Rúbrica: «Buena práctica de datos y ML: contratos, calidad, linaje, política de frescura, y al menos un componente aprendido
-contra una línea base, sin fuga de datos». Resultado global: **{verdict}**. {pytest_line}
+Generated by `make evidence` (`python -m eval.validate_data_ml --out-dir docs/evidence`) at {generated_at} on code `{code}`.
+Rubric: "Data and ML good practice: contracts, quality, lineage, a freshness policy, and at least one learned component
+against a baseline, without data leakage". Overall result: **{verdict}**. {pytest_line}
 
-Cada fila es una prueba de `{TESTS}`: hermética (warehouse de prueba de `tests/fixtures`, sin S3 ni claves), y falla si la
-frase del documento que cita deja de ser cierta. Las cifras de la evidencia salen de la propia prueba, no se escriben a mano.
+Each row is a test in `{TESTS}`: hermetic (the test warehouse in `tests/fixtures`, no S3 and no keys), and it fails if the
+sentence of the document it cites stops being true. The evidence figures come from the test itself, not written by hand.
 
-| Criterio | Resultado | Pruebas | Comando |
+| Criterion | Result | Tests | Command |
 |---|---|---|---|
 {summary}
 
 {(chr(10) * 2).join(detail)}
 
-## Lo que esto no cierra (declarado)
+## What this does not settle (declared)
 
 {declared}
 """
@@ -134,21 +134,21 @@ def shape(rows: list[dict]) -> list[tuple[str, str, str]]:
 def stale_evidence(rows: list[dict], committed: Path = EVIDENCE_DIR / f"{NAME}.json") -> str | None:
     """Why the versioned evidence no longer describes these tests, or None when it does."""
     if not committed.exists():
-        return f"{committed.relative_to(ROOT)} no existe"
+        return f"{committed.relative_to(ROOT)} does not exist"
     try:
         before = shape(json.loads(committed.read_text(encoding="utf-8"))["criteria"])
     except (ValueError, KeyError, TypeError):
-        return f"{committed.relative_to(ROOT)} no se puede leer"
+        return f"{committed.relative_to(ROOT)} cannot be read"
     now = shape(rows)
     if before == now:
         return None
     changed = sorted({t for t in set(before) ^ set(now)})
-    return f"{committed.relative_to(ROOT)} no coincide con las pruebas de hoy ({len(changed)} diferencia(s), p. ej. {changed[0][1]})"
+    return f"{committed.relative_to(ROOT)} does not match today's tests ({len(changed)} difference(s), e.g. {changed[0][1]})"
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--out-dir", type=Path, help=f"escribe {NAME}.md y {NAME}.json aquí (sin esto no se escribe nada)")
+    ap.add_argument("--out-dir", type=Path, help=f"write {NAME}.md and {NAME}.json here (without it nothing is written)")
     args = ap.parse_args(argv)
     with tempfile.TemporaryDirectory() as tmp:
         xml_path = Path(tmp) / "junit.xml"
@@ -156,7 +156,7 @@ def main(argv: list[str] | None = None) -> int:
         cases = parse(xml_path)
     rows = summarize(cases)
     lines = [l for l in proc.stdout.strip().splitlines() if l.strip()]
-    pytest_line = f"pytest: {lines[-1].strip('= ')}." if lines else "pytest no produjo salida."
+    pytest_line = f"pytest: {lines[-1].strip('= ')}." if lines else "pytest gave no output."
     for r in rows:
         print(f"{r['status']}  {r['criterion']}  ({sum(t['status'] == 'PASS' for t in r['tests'])}/{len(r['tests'])})")
     failed = [r for r in rows if r["status"] != "PASS"]
@@ -169,9 +169,9 @@ def main(argv: list[str] | None = None) -> int:
         (args.out_dir / f"{NAME}.json").write_text(
             json.dumps({"generated_at": generated_at, "code_version": _git_sha(), "pytest": pytest_line, "criteria": rows},
                        indent=2, ensure_ascii=False), encoding="utf-8")
-        print(f"evidencia: {args.out_dir / (NAME + '.md')}")
+        print(f"evidence: {args.out_dir / (NAME + '.md')}")
     elif (why := stale_evidence(rows)):
-        print(f"aviso: {why}; `make evidence` la regenera")
+        print(f"warning: {why}; `make evidence` regenerates it")
     return 1 if failed or proc.returncode != 0 else 0
 
 

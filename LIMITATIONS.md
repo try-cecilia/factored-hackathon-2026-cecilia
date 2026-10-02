@@ -147,20 +147,26 @@ service, and as our own roadmap.
 - The identity service is a **test IdP**: an HMAC PIN, no MFA, no device
   binding. Production plugs in the bank's IdP and keeps the rest (only tokens
   reach `/chat`).
-- **Identidad de operadores.** Los operadores se autentican con claves con nombre (`OPERATOR_KEYS`); el
-  nombre en el registro sale de la clave, no de lo que envíe el operador, y leer (clave de admin) está
-  separado de actuar (clave de operador). Sigue sin haber MFA, las claves viven en variables de entorno
-  y se rotan a mano, y el límite de intentos fallidos está en memoria y se reinicia con el proceso. El
-  camino a producción es SSO corporativo (OIDC) con los roles del banco.
-- **Consola web de operador.** Las claves las guarda el servidor de la web en memoria (cookie `httpOnly` +
-  `SameSite=Strict` con un identificador opaco): un reinicio o una segunda réplica cierra las sesiones, y una clave
-  filtrada sigue valiendo hasta rotarla. Cada persona teclea sus claves en un formulario nativo que las envía una vez al BFF (nunca pasan por el
-  JavaScript de la página ni vuelven al navegador), así que dependen de que el canal sea TLS. Sin `CLIENT_IP_HEADER=X-Client-IP` detrás del BFF, el límite de intentos fallidos cuenta por la IP del
-  BFF. La cola se lee entera (las 200 entradas más nuevas del archivo y, sin importar su antigüedad, todos los casos abiertos o tomados que sigan en el archivo, es decir, hasta que los alcance la retención de 90 días; un caso ya decidido y viejo sale de la lista), se filtra, ordena y pagina en el navegador (25 por página) y se refresca por sondeo cada 30 s, sin
-  notificaciones. Tomar, aprobar, rechazar y devolver actúan con un clic, sin diálogo de confirmación, como en el diseño aprobado. El motivo que escribe la persona solo se guarda al rechazar (es lo que la API registra). El diseño muestra una insignia "Demo · synthetic data" que la consola no dibuja: la API no informa si corre en modo demo. La web tiene pocos tests (`make web-test`: el formulario de ingreso, el plazo de la sesión, y pruebas HTTP contra el build de
-  producción de CSRF, redirecciones y rotación de sesión, y tests de DOM del panel del caso —sus cuatro estados, el 409 y la marca de evidencia— y de la tabla; el CI los corre con `pnpm test:all`): el resto se verificó con `typecheck`, `build` y un
-  recorrido en navegador (`docs/demo/operador-kit-*.png`, en español y portugués, con datos sintéticos de `ops.seed_operator_demo`); con el modelo
-  de clientes y un banco real quedaría por probar la carga y la accesibilidad con lector de pantalla.
+- **Operator identity.** Operators sign in with named keys (`OPERATOR_KEYS`); the name in the record comes from the
+  key, not from what the operator sends, and reading (admin key) is separate from acting (operator key). There is still
+  no MFA, the keys live in environment variables and are rotated by hand, and the failed-attempt limit is kept in memory
+  and resets with the process. The path to production is corporate SSO (OIDC) with the bank's roles.
+- **Operator web console.** The web server keeps the keys in memory (an `httpOnly` + `SameSite=Strict` cookie with an
+  opaque identifier): a restart or a second replica ends the sessions, and a leaked key stays valid until it is rotated.
+  Each person types their keys into a native form that sends them once to the BFF (they never go through the page's
+  JavaScript or back to the browser), so they depend on the channel being TLS. Without `CLIENT_IP_HEADER=X-Client-IP`
+  behind the BFF, the failed-attempt limit counts by the BFF's address. The queue is read whole (the 200 newest entries
+  of the file and, whatever their age, every open or claimed case still in the file, that is, until the 90-day retention
+  reaches it; an old case already decided drops off the list), then filtered, sorted and paginated in the browser (25 per
+  page) and refreshed by polling every 30 s, with no notifications. Claim, approve, reject and return act with one click,
+  without a confirmation dialog, as in the approved design. The reason the person writes is stored only on reject (it is
+  what the API records). The design shows a "Demo · synthetic data" badge that the console does not draw: the API does
+  not say whether it runs in demo mode. The web's tests (`make web-test`; the CI runs them with `pnpm test:all`) cover
+  the sign-in form, the session's deadline, HTTP tests against the production build (CSRF, redirects and session
+  rotation) and DOM tests of the case panel (its four states, the 409 and the evidence mark) and of the table; the rest
+  was checked with `typecheck`, `build` and a walk-through in a browser (`docs/demo/operador-kit-*.png`, in Spanish and
+  Portuguese, with synthetic data from `ops.seed_operator_demo`). Load and screen-reader accessibility, with the bank's
+  customer model and real data, remain to be tested.
 - `/demo/customers` publishes test PINs for a few sandbox accounts, like any
   sandbox's test login. It exists only with `DEMO_MODE=1` (a 404 otherwise, as does `/admin/demo_pin`).
 - `DEMO_MODE=1` turns on the jury sandbox: scenarios with those test PINs, a
@@ -266,6 +272,11 @@ service, and as our own roadmap.
 - **Web UI: the Portuguese was written by the team, not reviewed by a native speaker**, and the interface has only Spanish
   and Portuguese (the assistant's replies come from the API in the customer's language). The customer screens (home,
   sign in, chat) use the kit and i18n; the operator console (`web/src/routes/-operator/`) uses it too.
+- **A movements list shows each movement's type as the data has it.** In both languages a listed movement reads
+  "Transfer", "Payment" or "Deposit" (the list's heading, the pending-movement line and the statuses are translated; the
+  line of each listed movement in `agent/core/render.py` is not), and amounts have one format for every country
+  (6,409.61). Found on 2026-10-02 and left as it is for this submission: the fix is one line in the agent, and the
+  evidence was measured on the code as it stands.
 
 ## Operations
 
@@ -405,8 +416,9 @@ service, and as our own roadmap.
   USD 0.0026 per turn; in the 40 three-request turns it declared all three reads and the code ran two and named the
   third. Report: [`docs/evidence/compound_probe_anthropic.md`](docs/evidence/compound_probe_anthropic.md). What this
   does not show: a recovery rate after a half answer (the model never gave one, so there was no opportunity; it is
-  tested offline with a controlled history), the p95 against the previous prompt, the behavior on the deployed demo
-  (to be checked there in both languages), and a readability review of three sections on desktop and mobile. **The cap stays at 2.** The run with the cap at 3 (set inside the probe
+  tested offline with a controlled history), the p95 against the previous prompt, a rate on the deployed demo
+  (it was checked there once per language on 2026-10-02, commit `9d90ea2`: one two-request phrase on a sandbox account
+  answered both reads, in Spanish and in Portuguese), and a readability review of three sections on desktop and mobile. **The cap stays at 2.** The run with the cap at 3 (set inside the probe
   only) met the numeric thresholds with Sonnet 5: all three reads declared and answered in 40 of 40 turns [91-100%], every case 10 of 10 in
   both languages, p95 2.3 s (2.6 s at cap 2), USD 0.0029 per turn
   ([`docs/evidence/compound_probe_anthropic_cap3.md`](docs/evidence/compound_probe_anthropic_cap3.md)); it is not applied because the
