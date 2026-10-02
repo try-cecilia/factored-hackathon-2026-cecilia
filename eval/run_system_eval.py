@@ -531,6 +531,8 @@ def _windows(text: str, size: int = 6) -> set:
 # finding by itself (`text_outside_the_templates`). The data it reconstructs from: the turn's verified facts, the customer's product catalog
 # and movements in the warehouse, the trace requests and the tickets the run produced, and the turn's trace id. The orchestrator does not
 # expose the template key or its parameters (TurnResult has the category and the rule, not the message), so this is done from the outside.
+# A reply may be several of those blocks in a fixed order (the answer to the reads that ran, the question that completes the one that could
+# not, the note of what the turn left unattended): each block is matched on its own, all in one language, and anything between them is free text.
 _LANGS = ("es", "pt")
 _FIXED = ("reauth", "escalate", "escalate_security", "abstain", "clarify_generic", "clarify_dates", "clarify_currency", "trace_cancelled")
 
@@ -571,64 +573,126 @@ def _notice_lines(customer_id: str, tickets: dict) -> set[str]:
 
 
 def _candidates(case: Case, r, traces: dict):
-    """(key, the exact texts) the system could send for this result, cheapest first. Lazy: the warehouse is read only when needed."""
+    """(key, {exact text: (key, language)}) the system could send for this result, cheapest first. Lazy: the warehouse is read only when needed."""
     from agent.core import render
 
-    yield "fixed", {render.MSG[k][lang]: k for k in _FIXED for lang in _LANGS}
-    yield "escalate_unverified", {render.MSG["escalate_unverified"][lang].format(code=r.trace_id[:8]): "escalate_unverified" for lang in _LANGS}
+    yield "fixed", {render.MSG[k][lang]: (k, lang) for k in _FIXED for lang in _LANGS}
+    yield "escalate_unverified", {render.MSG["escalate_unverified"][lang].format(code=r.trace_id[:8]): ("escalate_unverified", lang) for lang in _LANGS}
+    # What `Orchestrator._repeated` says: the notice, with the date of the facts it would have shown again.
+    as_ofs = {None} | {f["result"].get("as_of") for f in r.verified_facts if isinstance(f.get("result"), dict)}
+    yield "repeat", {render.repeat_notice(a, lang): ("repeat", lang) for a in as_ofs for lang in _LANGS}
     catalog = _catalog(case.customer_id)
-    texts: dict[str, str] = {}
+    texts: dict[str, tuple[str, str]] = {}
     for lang in _LANGS:
-        texts[render.clarify(["product_id"], catalog, lang)] = "clarify_product"
+        texts[render.clarify(["product_id"], catalog, lang)] = ("clarify_product", lang)
         for c in (catalog, None):  # the degraded mode and the baseline render without the catalog's labels
             try:
-                texts[render.render_answer(r.verified_facts, lang, c)] = "answer"
+                texts[render.render_answer(r.verified_facts, lang, c)] = ("answer", lang)
             except Exception:  # noqa: BLE001 - facts of a shape the renderer does not know are not its output
                 pass
     if not r.verified_facts:
-        texts = {t: k for t, k in texts.items() if k != "answer"}
+        texts = {t: k for t, k in texts.items() if k[0] != "answer"}
     yield "catalog", texts
     moves = _movements(case.customer_id)
     mine = [t for t in traces.values() if t.get("customer_id") == case.customer_id]
     texts = {}
     for lang in _LANGS:
         for m in moves.values():
-            texts[render.MSG["trace_propose"][lang].format(mov=render.movement(m, lang))] = "trace_propose"
+            texts[render.MSG["trace_propose"][lang].format(mov=render.movement(m, lang))] = ("trace_propose", lang)
         for t in mine:
             if m := moves.get(t["transaction_id"]):
                 for key in ("trace_opened", "trace_already_open"):
-                    texts[render.MSG[key][lang].format(tid=t["trace_id"], mov=render.movement(m, lang), sla=t["sla_business_days"])] = key
+                    texts[render.MSG[key][lang].format(tid=t["trace_id"], mov=render.movement(m, lang), sla=t["sla_business_days"])] = (key, lang)
     yield "trace", texts
-    yield "trace_choose", {lang: moves for lang in _LANGS}  # structural, see reply_template
+    yield "trace_choose", moves  # structural, see reply_template
 
 
-def _is_trace_choose(text: str, moves: dict[str, dict]) -> bool:
+def _is_trace_choose(text: str, moves: dict[str, dict], lang: str) -> bool:
     """render.MSG["trace_choose"] with its options: "1) <movement>; 2) <movement>", each a real movement of the customer, numbered from 1."""
     from agent.core import render
 
-    for lang in _LANGS:
-        head, _, tail = render.MSG["trace_choose"][lang].partition("{opts}")
-        if text.startswith(head) and text.endswith(tail) and (opts := text[len(head):len(text) - len(tail)]):
-            shown = {render.movement(m, lang) for m in moves.values()}
-            parts = opts.split("; ")
-            if all(part.startswith(f"{i}) ") and part[len(f"{i}) "):] in shown for i, part in enumerate(parts, start=1)):
-                return True
+    head, _, tail = render.MSG["trace_choose"][lang].partition("{opts}")
+    if text.startswith(head) and text.endswith(tail) and (opts := text[len(head):len(text) - len(tail)]):
+        shown = {render.movement(m, lang) for m in moves.values()}
+        parts = opts.split("; ")
+        return all(part.startswith(f"{i}) ") and part[len(f"{i}) "):] in shown for i, part in enumerate(parts, start=1))
     return False
+
+
+def _unattended_words(lang: str) -> set[str]:
+    """What `render.read_part` can name a read left unattended: a fixed word, or a movements noun with "pendientes". A closed vocabulary."""
+    from agent.core import render
+
+    nouns = {*render.KIND_PLURAL[lang].values(), render.RANGE[lang][3].lower()}
+    return {*render.READ_PART[lang].values(), *nouns, *(f"{n} {render.PENDING_WORD[lang]}" for n in nouns)}
+
+
+def _without_unattended_note(text: str, lang: str) -> str | None:
+    """`text` without the closing note of what the turn left unattended (`render.unattended_notice`: a blank line and the template, its parts
+    the read names, each once, joined by ", "), or None if it does not end in exactly that. The note carries no figure: what is checked is that
+    every word in it is one `render.read_part` writes."""
+    from agent.core import render
+
+    head, _, tail = render.READ_MSG["unattended"][lang].partition("{parts}")
+    at = text.rfind("\n\n" + head)
+    if at < 0 or not text.endswith(tail) or at + 2 + len(head) > len(text) - len(tail):
+        return None
+    parts = text[at + 2 + len(head):len(text) - len(tail)].split(", ")
+    return text[:at] if len(set(parts)) == len(parts) and set(parts) <= _unattended_words(lang) else None
+
+
+_CARRY_A_NOTE = ("answer", "clarify", "trace_propose", "trace_choose", "trace_already_open", "repeat")  # the replies `with_unattended` closes
 
 
 def reply_template(case: Case, r, tickets: dict, traces: dict | None = None) -> str | None:
     """The template key that produced this reply (a `render.MSG` key, or "answer" for verified facts rendered), or None if the text is not
     exactly one the system could have sent at this turn. Notices of what a person did with the customer's case come first, one per line, only
-    if each is one the run's tickets and their desk state produce."""
+    if each is one the run's tickets and their desk state produce. A reply of several blocks is every block's key joined by "+"
+    ("answer+clarify_currency", "answer+unattended"): the answer to the reads that ran, then the question for the one that could not, then the
+    note of what was left unattended. Every block must be exact, in the same language: text anywhere else, or inside a block, is None."""
     text = r.response_text
     head, sep, tail = text.partition("\n\n")
     if sep and set(head.split("\n")) <= _notice_lines(case.customer_id, tickets):
         text = tail
-    for key, texts in _candidates(case, r, traces or {}):
-        if key == "trace_choose":
-            return "trace_choose" if _is_trace_choose(text, next(iter(texts.values()))) else None
-        if text in texts:
-            return texts[text]
+    seen: list[tuple[str, dict]] = []
+    pending = _candidates(case, r, traces or {})
+
+    def groups():  # the candidates are built once, however many ways the text is read
+        i = 0
+        while i < len(seen) or (more := next(pending, None)) is not None:
+            if i == len(seen):
+                seen.append(more)
+            yield seen[i]
+            i += 1
+
+    def one(block: str, lang: str | None = None) -> str | None:
+        """The key of a block that is exactly one template (in `lang`, if given)."""
+        for key, texts in groups():
+            if key == "trace_choose":
+                if any(_is_trace_choose(block, texts, lg) for lg in ([lang] if lang else _LANGS)):
+                    return "trace_choose"
+            elif (found := texts.get(block)) and lang in (None, found[1]):
+                return found[0]
+        return None
+
+    def blocks(body: str, lang: str) -> str | None:
+        """One template, or the answer to the facts of the turn followed by the question that completes what was asked."""
+        if key := one(body, lang):
+            return key
+        if r.verified_facts:
+            for key, texts in groups():
+                for question, (qkey, qlang) in ({} if key == "trace_choose" else texts).items():  # a movement list is not a template
+                    if qkey.startswith("clarify") and qlang == lang and body.endswith("\n\n" + question) and one(body[:-len(question) - 2], lang) == "answer":
+                        return f"answer+{qkey}"
+        return None
+
+    if key := one(text):
+        return key
+    for lang in _LANGS:
+        if key := blocks(text, lang):
+            return key
+        if (body := _without_unattended_note(text, lang)) is not None and (key := blocks(body, lang)) and key.startswith(_CARRY_A_NOTE):
+            return f"{key}+unattended"
     return None
 
 

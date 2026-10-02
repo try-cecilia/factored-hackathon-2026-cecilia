@@ -172,6 +172,7 @@ eval-failures-live: ## el set reservado con modelos en vivo, sobre el warehouse 
 	$(PY) -m eval.heldout --build-warehouse $(HELDOUT_DB)
 	DUCKDB_PATH=$(HELDOUT_DB) $(PY) -m eval.run_system_eval --cases eval/heldout/cases_failures.jsonl --system proposed --llm live --repeats 3 --models $(EVAL_MODELS)
 	DUCKDB_PATH=$(HELDOUT_DB) $(PY) -m eval.run_system_eval --cases eval/heldout/cases_failures_2.jsonl --system proposed --llm live --repeats 3 --models $(EVAL_MODELS)
+	DUCKDB_PATH=$(HELDOUT_DB) $(PY) -m eval.run_system_eval --cases eval/heldout/cases_failures_3.jsonl --system proposed --llm live --repeats 3 --models $(EVAL_MODELS)
 
 eval-live-sample: ## la muestra chica con Groq (ids en eval/reports/live_sample_selection.json; necesita GROQ_API_KEY; ritmo de 20 s por caso)
 	run=$${RUN_ID:-$$(date -u +%Y%m%dT%H%M%SZ)}; \

@@ -78,6 +78,7 @@ def test_the_real_fingerprint_covers_the_judge_the_simulated_models_and_the_gold
     assert {"eval/run_system_eval.py", "eval/categories.py", "eval/failure_eval.py", "eval/heldout.py", "eval/workload.py",
             "eval/stats.py", "eval/baseline_bot.py", "eval/fake_llm.py",
             "eval/workload/cases_test.jsonl", "eval/heldout/cases_failures.jsonl", "eval/heldout/cases_failures_2.jsonl",
+            "eval/heldout/cases_failures_3.jsonl",
             "tests/fixtures/raw/customers.csv"} <= names
     assert not any(n.startswith("eval/reports/") or n in ("eval/gate.py", "eval/tracking.py") for n in names)
 

@@ -21,7 +21,7 @@ def test_the_committed_selection_is_what_the_selector_produces():
 
 def test_the_selection_takes_two_model_calling_cases_per_category_and_language_and_one_generated_case_per_type():
     selection = live_sample.select()
-    reserved = {c.case_id: c for p in (heldout.OUT, heldout.OUT2) for c in load(p)}
+    reserved = {c.case_id: c for p in heldout.FILES for c in load(p)}
     chosen = [reserved[i] for i in selection["reserved"]]
     for category in heldout.CATEGORIES:
         for lang in ("es", "pt"):
