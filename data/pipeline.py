@@ -127,6 +127,23 @@ def _git_sha() -> str:
         return os.environ.get("GIT_SHA", "unknown")
 
 
+def _host(con) -> dict:
+    """What the load ran on, so a timing in `_ingestion_log` can be read: without it a seconds figure is a number with no machine."""
+    import platform
+
+    host = {"platform": platform.platform(), "machine": platform.machine(), "cpu_count": os.cpu_count(), "python": platform.python_version(),
+            "duckdb": duckdb.__version__,
+            "duckdb_threads": int(con.execute("SELECT current_setting('threads')").fetchone()[0]),
+            "duckdb_memory_limit": str(con.execute("SELECT current_setting('memory_limit')").fetchone()[0])}
+    try:  # psutil is not a dependency: total memory is recorded only where it happens to be installed
+        import psutil
+
+        host["memory_gb"] = round(psutil.virtual_memory().total / 2**30, 1)
+    except ImportError:
+        pass
+    return host
+
+
 def ensure_meta_tables(con) -> None:
     con.execute("""CREATE TABLE IF NOT EXISTS _ingestion_log (
         run_id VARCHAR, table_name VARCHAR, mode VARCHAR, source_root VARCHAR, n_files INTEGER, n_bytes BIGINT,
@@ -255,7 +272,7 @@ def load_table(con, spec: TableSpec, cfg: RunConfig, run_id: str, source, sample
     files, mode = _resolve_files(con, spec, cfg, source)
     raw, typed, clean = f"raw_{spec.name}", f"typed_{spec.name}", f"clean_{spec.name}"
     params = {"since": cfg.since, "until": cfg.until, "only_date": cfg.only_date, "lookback_days": cfg.lookback_days,
-              "sample_customers": cfg.sample_customers, "sample_mode": sample_mode}
+              "sample_customers": cfg.sample_customers, "sample_mode": sample_mode, "host": _host(con)}
     root = str(Path(cfg.raw_dir).resolve()) + "/"
 
     if not files:

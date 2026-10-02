@@ -25,6 +25,7 @@ import { useTimeParts } from './clock'
 import type { CaseRow } from './ConversationProvider'
 import {
   caseCategoryKey,
+  caseStatusText,
   chosenOption,
   classifyReply,
   deliveryDetailKey,
@@ -245,15 +246,6 @@ function AssistantView({ entry, entries, index, cases, time, active, sending, on
 }
 
 type Translate = ReturnType<typeof useT>
-
-function caseStatusText(t: Translate, row: CaseRow | undefined): string {
-  if (!row || row.state.state === 'loading') return t('cases.loading')
-  if (row.state.state === 'error') return t('cases.unavailable')
-  if (row.state.state === 'not_found') return t('cases.notFound')
-  const key = row.state.status
-  return t(`cases.status.${key in STATUS ? (key as keyof typeof STATUS) : 'unknown'}`)
-}
-const STATUS = { open: 1, claimed: 1, approved: 1, rejected: 1, handed_back: 1, stale: 1, resolved: 1 }
 
 /** DEMO_MODE only: what the API says about how this reply was made. The demo texts come in Spanish and English. */
 function whyRows(why: Why, t: Translate, locale: 'es' | 'pt'): ExplanationRow[] {

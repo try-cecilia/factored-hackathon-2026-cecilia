@@ -1,4 +1,4 @@
-import { act, screen, within } from '@testing-library/react'
+import { act, cleanup, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactElement, ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -94,6 +94,14 @@ describe('AppShell', () => {
     expect(within(nav).getByRole('button', { name: /Casos/ })).toBeTruthy()
     await user.click(screen.getByRole('button', { name: 'Expandir la barra lateral' }))
     expect(screen.queryByRole('button', { name: 'Expandir la barra lateral' })).toBeNull()
+  })
+
+  it('the bar carries "copy conversation" for the customer, with no sandbox, and it waits for a conversation', async () => {
+    await draw()
+    expect((screen.getByRole('button', { name: 'Copiar conversación' }) as HTMLButtonElement).disabled).toBe(true)
+    cleanup()
+    await draw({ history: withCase })
+    expect((screen.getByRole('button', { name: 'Copiar conversación' }) as HTMLButtonElement).disabled).toBe(false)
   })
 
   it('the language switcher is in the bar, in both languages', async () => {
@@ -196,6 +204,48 @@ describe('AppShell', () => {
       expect(inside(demo)).toBe(true)
     })
 
+    it('the demo drawer gives the focus back to the Demo button on Escape and on a click on the scrim', async () => {
+      phone(false, true)
+      const user = userEvent.setup()
+      const { container } = await draw({ scenarios })
+      const toggle = await screen.findByRole('button', { name: 'Demo' })
+      await user.click(toggle)
+      const demo = container.querySelector('#shell-demo') as HTMLElement
+      expect(demo.hasAttribute('inert')).toBe(false)
+      await user.keyboard('{Escape}')
+      expect(demo.hasAttribute('inert')).toBe(true)
+      expect(document.activeElement).toBe(toggle)
+
+      await user.click(toggle)
+      expect(demo.contains(document.activeElement)).toBe(true)
+      await user.click(container.querySelector('.shell__scrim--demo') as HTMLElement)
+      expect(demo.hasAttribute('inert')).toBe(true)
+      expect(document.activeElement).toBe(toggle)
+    })
+
+    it('the demo drawer covers the bar, so it offers "copy conversation" itself, and says how it went beside the button', async () => {
+      phone(true)
+      const user = userEvent.setup()
+      const { container } = await draw({ history: withCase, scenarios })
+      await user.click(await screen.findByRole('button', { name: 'Demo' }))
+      const demo = container.querySelector('#shell-demo') as HTMLElement
+      await screen.findByRole('complementary', { name: 'Ayudas de demostración' })
+      expect((container.querySelector('.shell__bar') as HTMLElement).closest('[inert]')).not.toBeNull()
+      expect(demo.closest('[inert]')).toBeNull()
+      await user.click(within(demo).getByRole('button', { name: 'Copiar conversación' }))
+      const copied = await navigator.clipboard.readText()
+      expect(copied).toContain('Tú: Me clonaron la tarjeta')
+      expect(within(demo).getAllByText('Conversación copiada').length).toBeGreaterThan(0)
+      expect(within(demo).getByRole('status').textContent).toBe('Conversación copiada')
+    })
+
+    it('a wide panel is beside the page, not over the bar: no second button in it', async () => {
+      phone(false)
+      const { container } = await draw({ history: withCase, scenarios })
+      await screen.findByRole('complementary', { name: 'Ayudas de demostración' })
+      expect(within(container.querySelector('#shell-demo') as HTMLElement).queryByRole('button', { name: 'Copiar conversación' })).toBeNull()
+    })
+
     it('with the panel closed nothing is inert', async () => {
       phone(true)
       const { container } = await draw({ scenarios })
@@ -236,6 +286,7 @@ describe('AppShell', () => {
       await user.click(screen.getByRole('button', { name: 'Abrir el menú' }))
       await user.click(container.querySelector('.shell__scrim') as HTMLElement)
       expect((container.querySelector('#shell-side') as HTMLElement).hasAttribute('inert')).toBe(true)
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Abrir el menú' }))
     })
   })
 })

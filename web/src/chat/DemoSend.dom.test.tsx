@@ -618,6 +618,23 @@ describe('a scenario of the demo panel sends its first message through the chat'
       await waitFor(() => expect(drawer.hasAttribute('inert')).toBe(true))
       await waitFor(() => expect(document.activeElement).toBe(input()))
     })
+    it('the input keeps the focus even when the drawer hands it back late: the frame that focuses the input comes before the drawer\'s own close', async () => {
+      // In a browser the frame and React's passive effects have no fixed order. Here the frame runs at once, so the input has the
+      // focus before the drawer closes: its close must not take the focus away to the button that opened it.
+      vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => { callback(0); return 0 })
+      const user = userEvent.setup()
+      const { container } = await draw()
+      const demo = await screen.findByRole('button', { name: 'Demo' })
+      await user.click(demo)
+      const drawer = container.querySelector('#shell-demo') as HTMLElement
+
+      await load(user, 'Dos turnos')
+
+      await waitFor(() => expect(drawer.hasAttribute('inert')).toBe(true))
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)) })
+      expect(document.activeElement).toBe(input())
+      expect(document.activeElement).not.toBe(demo)
+    })
     it('reopening the drawer with a scenario in course puts the focus on its card, not on the top of the panel', async () => {
       const user = userEvent.setup()
       const { container } = await draw()

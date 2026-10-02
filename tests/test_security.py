@@ -32,6 +32,16 @@ def test_every_answer_carries_the_security_headers(client):
         assert h["content-security-policy"] == "default-src 'none'; frame-ancestors 'none'", path
 
 
+def test_a_method_a_route_does_not_list_is_a_405_that_names_the_allowed_ones(client):
+    """V14.5.1: only the methods in use. The routing refuses the rest before any handler or credential check runs."""
+    cases = [("PATCH", "/health", "GET"), ("DELETE", "/livez", "GET"), ("PUT", "/chat", "POST"), ("POST", "/admin/human_queue", "GET")]
+    for method, path, allowed in cases:
+        r = client.request(method, path)
+        assert r.status_code == 405, (method, path)
+        assert allowed in r.headers["allow"], (method, path)
+    assert client.request("PATCH", "/auth/session").status_code == 405
+
+
 def test_the_page_may_run_only_its_own_script_by_hash(client):
     r = client.get("/")
     csp = r.headers["content-security-policy"]

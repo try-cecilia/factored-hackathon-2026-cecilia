@@ -78,7 +78,7 @@ describe('reading the case again with the real router', () => {
   it('the data must be the case asked for and not older than the version on screen', async () => {
     const read = vi.fn<() => Promise<Result<Ticket>>>().mockResolvedValue({ ok: true, data: ticket(ID, 'open', 4, released) })
     const { router } = mount(read)
-    await screen.findByText('Rastrear el pago.')
+    await screen.findByText('“Rastrear el pago.”')
     expect(await readAgain(router, '/cola/$ticketId', ID, 4)).toBe(true)
     expect(await readAgain(router, '/cola/$ticketId', ID, 3)).toBe(true)
     expect(await readAgain(router, '/cola/$ticketId', ID, 5)).toBe(false) // the server is behind what the operator already saw
@@ -123,7 +123,7 @@ describe('when the layout of the console fails while the case is read again', ()
   it('a failing parent makes the reload fail even though the child match kept its old data', async () => {
     const whoAmI = vi.fn<() => Promise<void>>().mockResolvedValueOnce().mockRejectedValueOnce(new Error('fetch failed'))
     const { router } = mountWithLayout(vi.fn().mockResolvedValue(moved), whoAmI)
-    await screen.findByText('Rastrear el pago.')
+    await screen.findByText('“Rastrear el pago.”')
     expect(await readAgain(router, '/_operator/cola/$ticketId', ID, 4)).toBe(false)
     expect(router.state.matches.map((m) => m.status)).toContain('error')
   })

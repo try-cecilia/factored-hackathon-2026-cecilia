@@ -35,3 +35,5 @@ web/.tanstack/
 
 # Makefile outputs of the demo and full profiles; only quality_report.json is the tracked, canonical report
 data/reports/quality_report_*.json
+
+data/lake/

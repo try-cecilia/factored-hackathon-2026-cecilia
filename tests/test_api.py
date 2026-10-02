@@ -91,6 +91,26 @@ def test_the_daily_model_budget_is_reported_to_operators_only(client, monkeypatc
     assert body == {"limit_usd": 5.0, "spent_today_usd": 1.25, "exhausted": False}
 
 
+@pytest.mark.parametrize("bad", ["CLI\x00FIX0001", "CLI-FIX0001\x00", "CLI FIX0001", "CLI-FIX0001\n", "\tCLI-FIX0001", "CLI-FIX000\u0661", "CLI-FIX0001'--", "CLI/FIX0001"])
+def test_a_customer_id_outside_the_allowed_characters_is_refused_before_any_lookup(client, bad, monkeypatch):
+    """V5.1.3: positive validation. A NUL, a control character, a space or a quote is a 422 from the schema: the login limiter,
+    the lockout counter and the warehouse never see it."""
+    monkeypatch.setattr(identity.default_identity, "login", lambda *a, **k: pytest.fail("login reached with an invalid customer id"))
+    r = client.post("/auth/session", json={"customer_id": bad, "pin": "123456"})
+    assert r.status_code == 422, repr(bad)
+    assert "customer_id" in json.dumps(r.json()["detail"])
+
+
+def test_a_pin_is_six_ascii_digits_not_digits_of_another_script(client):
+    for pin in ("\u0661\u0662\u0663\u0664\u0665\u0666", "12345\u0666", "12345 ", "１２３４５６"):
+        assert client.post("/auth/session", json={"customer_id": "CLI-FIX0001", "pin": pin}).status_code == 422, repr(pin)
+
+
+def test_the_shipped_customer_ids_still_log_in(client):
+    for cid in ("CLI-FIX0001", "CLI-FIX0004"):
+        assert login(client, cid=cid).status_code == 200
+
+
 def test_customer_id_alone_is_not_enough(client):
     assert client.post("/auth/session", json={"customer_id": "CLI-FIX0001"}).status_code == 422
     assert login(client, pin="000000" if derive_test_pin("CLI-FIX0001") != "000000" else "111111").status_code == 401
@@ -173,6 +193,24 @@ def test_the_session_can_be_read_back_without_extending_it(client):
     assert body["segment"] and body["country"] and body["customer_status"]
     assert 0 < body["expires_in"] <= 900
     assert s["token"] not in json.dumps(body)
+
+
+def test_a_session_ends_at_its_ttl_from_issue_however_often_it_is_used(monkeypatch):
+    """Absolute lifetime, not an idle timeout: using a session never moves its end (V3.3.1, V3.3.2)."""
+    from types import SimpleNamespace
+
+    from agent.session import auth
+
+    now = [1_000.0]
+    monkeypatch.setattr(auth, "time", SimpleNamespace(time=lambda: now[0]))
+    store = auth.SessionStore(ttl_seconds=900)
+    session = store.issue("CLI-FIX0001")
+    for _ in range(5):  # busy: one use a minute, never idle for more than 60 s
+        now[0] += 60
+        assert store.validate(session.token).expires_at == session.expires_at == 1_900.0
+    now[0] = 1_901.0  # 901 s after issue, 60 s after the last use
+    with pytest.raises(auth.ExpiredSession):
+        store.validate(session.token)
 
 
 @pytest.mark.parametrize("case", ["missing", "garbage", "revoked", "expired"])

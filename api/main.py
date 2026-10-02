@@ -150,8 +150,10 @@ chat_ip_limiter = RateLimiter(int(os.environ.get("CHAT_IP_RATE_PER_MIN", "120"))
 
 
 class SessionRequest(BaseModel):
-    customer_id: str = Field(min_length=3, max_length=32)
-    pin: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
+    # An allow list, not just a length: no NUL, control character, space or quote ever reaches the lookup or the lockout counter.
+    # ASCII only, and so is the PIN's pattern below: `\d` would also match other scripts' digits.
+    customer_id: str = Field(min_length=3, max_length=32, pattern=r"^[A-Za-z0-9._-]+$")
+    pin: str = Field(min_length=6, max_length=6, pattern=r"^[0-9]{6}$")
 
 
 class SessionResponse(BaseModel):
@@ -485,7 +487,9 @@ def human_queue(limit: int = 20) -> list[dict]:
 
 
 class DeskAction(BaseModel):
-    expected_version: int | None = None  # the version the operator saw; a newer one refuses the decision
+    # the version the operator saw; a newer one refuses the decision. A version counts a ticket's events, so it is a whole number
+    # from 0 up: anything else is a malformed request (422), not a stale one (409).
+    expected_version: int | None = Field(default=None, strict=True, ge=0, le=1_000_000)
     reason: str | None = Field(default=None, max_length=300)  # reject: a note for the other operators, never the customer
     message: str | None = Field(default=None, max_length=500)  # resolve: what the customer reads (one line, card numbers masked)
 

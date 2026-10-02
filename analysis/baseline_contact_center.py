@@ -23,6 +23,7 @@ import duckdb
 OUT_JSON = Path("docs/evidence/baseline_metrics.json")
 OUT_MD = Path("docs/evidence/baseline_metrics.md")
 TEXT_CHANNELS = ("Web Chat", "WhatsApp", "App", "Email", "Web")
+GOLD = "gold_contact_demand"
 
 
 def rows(con, sql):
@@ -31,12 +32,34 @@ def rows(con, sql):
     return [dict(zip(cols, r)) for r in cur.fetchall()]
 
 
+def gold_contacts(con) -> dict:
+    """The figures that are sums over `gold_contact_demand` (data/gold.py), read from the mart and not from the raw contacts.
+
+    The rest of `compute` needs columns the mart does not carry (segment, hour of day, the survey join, distinct customers) and
+    still reads silver. tests/test_baseline_gold.py holds these to the same numbers the contacts table gives."""
+    have = {r[0] for r in con.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'main'").fetchall()}
+    if GOLD not in have:
+        raise SystemExit(f"{GOLD} is not in the warehouse: build it first with `make gold` (python -m data.gold)")
+    txn = "reason_category = 'Transaccional'"
+    return {
+        "contact_reasons": rows(con, f"""SELECT reason_category, sum(n_contacts)::BIGINT AS contacts, round(100.0 * sum(n_contacts) / sum(sum(n_contacts)) OVER (), 1) AS pct
+                                         FROM {GOLD} GROUP BY 1 ORDER BY 2 DESC"""),
+        "channels": rows(con, f"""SELECT channel, sum(n_contacts)::BIGINT AS contacts, round(100.0 * sum(n_contacts) / sum(sum(n_contacts)) OVER (), 1) AS pct
+                                  FROM {GOLD} WHERE {txn} GROUP BY 1 ORDER BY 2 DESC"""),
+        # no text-channel contact is 0 %, as in silver; no transactional contact at all stays undefined (NULL)
+        "text_channel_pct": con.execute(f"SELECT round(100.0 * coalesce(sum(n_contacts) FILTER (WHERE channel IN {TEXT_CHANNELS}), 0) / sum(n_contacts), 1) FROM {GOLD} WHERE {txn}").fetchone()[0],
+        "by_country": rows(con, f"""SELECT country, sum(n_contacts)::BIGINT AS contacts, round(100.0 * sum(n_contacts) / sum(sum(n_contacts)) OVER (), 1) AS pct
+                                    FROM {GOLD} WHERE {txn} AND country IS NOT NULL GROUP BY 1 ORDER BY 2 DESC"""),
+        "monthly_contacts_median": con.execute(f"""SELECT median(n) FROM (SELECT sum(n_contacts) AS n FROM {GOLD}
+            WHERE {txn} AND month >= DATE '2023-07-01' AND month < DATE '2026-06-01' GROUP BY month)""").fetchone()[0],
+    }
+
+
 def compute(con) -> dict:
+    g = gold_contacts(con)
     out: dict = {"generated_at": datetime.now(timezone.utc).isoformat(), "source": "warehouse tables (synthetic dataset v1.0.0)"}
 
-    out["contact_reasons"] = rows(con, """
-        SELECT reason_category, count(*) AS contacts, round(100.0 * count(*) / sum(count(*)) OVER (), 1) AS pct
-        FROM call_center_interactions GROUP BY 1 ORDER BY 2 DESC""")
+    out["contact_reasons"] = g["contact_reasons"]
 
     out["operations_by_reason"] = rows(con, """
         SELECT reason_category,
@@ -63,17 +86,16 @@ def compute(con) -> dict:
 
     txn = "reason_category = 'Transaccional'"
     out["transaccional"] = {
-        "channels": rows(con, f"SELECT channel, count(*) AS contacts, round(100.0 * count(*) / sum(count(*)) OVER (), 1) AS pct FROM call_center_interactions WHERE {txn} GROUP BY 1 ORDER BY 2 DESC"),
-        "text_channel_pct": con.execute(f"SELECT round(100 * avg(CASE WHEN channel IN {TEXT_CHANNELS} THEN 1 ELSE 0 END), 1) FROM call_center_interactions WHERE {txn}").fetchone()[0],
-        "by_country": rows(con, f"SELECT cu.country, count(*) AS contacts, round(100.0 * count(*) / sum(count(*)) OVER (), 1) AS pct FROM call_center_interactions c JOIN customers cu USING (customer_id) WHERE {txn} GROUP BY 1 ORDER BY 2 DESC"),
+        "channels": g["channels"],
+        "text_channel_pct": g["text_channel_pct"],
+        "by_country": g["by_country"],
         "by_segment": rows(con, f"""SELECT cu.segment, count(*) AS contacts, round(100.0 * count(*) / sum(count(*)) OVER (), 1) AS pct,
                                           round(100 * avg(was_resolved::INT), 1) AS fcr_pct, round(avg(wait_time_seconds), 0) AS wait_s
                                    FROM call_center_interactions c JOIN customers cu USING (customer_id) WHERE {txn} GROUP BY 1 ORDER BY 2 DESC"""),
         "by_day_of_week": rows(con, f"SELECT dayname(interaction_date) AS day, dayofweek(interaction_date) AS dow, count(*) AS contacts FROM call_center_interactions WHERE {txn} GROUP BY 1, 2 ORDER BY 2"),
         "hour_share_min_max_pct": con.execute(f"""SELECT round(100 * min(s), 2), round(100 * max(s), 2) FROM (
             SELECT count(*) / sum(count(*)) OVER () AS s FROM call_center_interactions WHERE {txn} GROUP BY hour(interaction_date))""").fetchone(),
-        "monthly_contacts_median": con.execute(f"""SELECT median(n) FROM (SELECT count(*) n FROM call_center_interactions
-            WHERE {txn} AND interaction_date >= DATE '2023-07-01' AND interaction_date < DATE '2026-06-01' GROUP BY date_trunc('month', interaction_date))""").fetchone()[0],
+        "monthly_contacts_median": g["monthly_contacts_median"],
         "unique_customers": con.execute(f"SELECT count(DISTINCT customer_id) FROM call_center_interactions WHERE {txn}").fetchone()[0],
     }
     t = next(r for r in out["operations_by_reason"] if r["reason_category"] == "Transaccional")

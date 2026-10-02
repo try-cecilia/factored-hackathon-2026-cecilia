@@ -7,6 +7,7 @@ import { nextStepText, questionTexts, reasonText } from '../routes/-operator/not
 import { Button, IconButton } from '../ui'
 import { priorityOf } from '../ui/table/priority'
 import type { Entry, UserEntry } from './conversation'
+import { CopyConversation, CopyNotice, type ConversationCopy } from './CopyConversation'
 import { newMessageKey } from './key'
 import type { DemoFault, DemoScenario, DemoTicket, DemoTrace } from './types'
 import './DemoPanel.css'
@@ -38,7 +39,7 @@ function known<T extends string>(list: readonly T[], value: string): value is T 
 // so), so an unrelated message does not move the scenario. Each reply says which message it answers (`to`), because a retry's
 // reply comes late, after other messages.
 
-export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations, open, ended, send, onSend, retry, overlay, onSessionChanged, onClose }: {
+export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations, open, ended, send, onSend, retry, overlay, copy, onSessionChanged, onClose }: {
   scenarios: DemoScenario[]
   sessionRef: string
   entries: Entry[]
@@ -56,6 +57,8 @@ export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations
   retry: (id: number) => void
   /** The panel is a drawer over the page: choosing a scenario closes it, so the input is in reach. */
   overlay: boolean
+  /** "Copy conversation" of the bar: the drawer covers the bar and makes it inert, so the drawer offers it too. */
+  copy: ConversationCopy
   onSessionChanged: () => Promise<void>
   onClose: () => void
 }) {
@@ -215,6 +218,12 @@ export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations
         <h2 id="demo-title">{t('demo.title')}</h2>
         <IconButton className="demo__close" variant="ghost" size="sm" label={t('common.close')} icon={<svg viewBox="0 0 20 20" width={14} height={14} aria-hidden="true" focusable="false"><path d="M5 5l10 10M15 5L5 15" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" /></svg>} onClick={onClose} />
       </div>
+      {overlay && (
+        <div className="demo__copy">
+          <CopyConversation copy={copy} />
+          <CopyNotice state={copy.state} className="demo__muted" />
+        </div>
+      )}
       <p className="demo__lead">{t('demo.lead')}</p>
 
       <section aria-label={t('demo.scenarios.title')}>
