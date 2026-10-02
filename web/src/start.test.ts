@@ -12,3 +12,8 @@ test('the start instance registers the CSRF middleware for server functions', as
   const { requestMiddleware } = await startInstance.getOptions()
   assert.ok(requestMiddleware?.some((middleware) => csrfSymbol in middleware), 'no CSRF middleware in requestMiddleware')
 })
+
+test('the start instance registers the middleware that makes an unexpected error generic', async () => {
+  const { functionMiddleware } = await startInstance.getOptions()
+  assert.equal(functionMiddleware?.length, 1)
+})
