@@ -407,7 +407,8 @@ textarea.op-input:focus { box-shadow: 0 0 0 2px var(--color-cecil-blue); }
   .op-list, .op-detail, .op-ticket__body { overflow: visible; }
   .op-detail { min-height: auto; }
   .op-ticket, .op-ticket__body { flex: none; min-height: auto; }
-  .op-ticket__foot { position: sticky; bottom: 0; z-index: 1; background: var(--color-fill-subtle); }
+  /* fill-subtle is a translucent tint: laid over paper it reads the same as the panel and hides what scrolls beneath it. */
+  .op-ticket__foot { position: sticky; bottom: 0; z-index: 1; background: linear-gradient(var(--color-fill-subtle), var(--color-fill-subtle)), var(--color-paper); }
 }
 
 /* Pantallas táctiles: los controles de la consola son blancos de 44px. */
