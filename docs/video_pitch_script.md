@@ -6,8 +6,8 @@ app with `python -m ops.record_demo <URL> demo.webm <repo URL>` (about 2 minutes
 come from `eval/reports/SYSTEM_EVAL.md`, `SYSTEM_EVAL_ADVERSARIAL.md` and `SYSTEM_EVAL_LIVE.md` (2026-10-02); if a
 report is regenerated, copy them again from it, never from memory.
 
-1. **Hook (20 s).** "A third of this bank's contacts are filed as transactional: account and payment questions.
-   Agents already resolve 91% of them on the first contact, yet customers rate the service under 3 out of 5, and
+1. **Hook (20 s).** "More than a third of this bank's contacts are filed as transactional: account and payment questions.
+   Agents already resolve 91.5% of them on the first contact, yet customers rate the service under 3 out of 5, and
    every one of those calls starts with two minutes in a queue. We built the assistant that answers them in
    seconds, that only says what it can verify, that acts once and only on the customer's yes, and that hands over
    to a person, with the evidence, when it should not act." (Do not say the wait causes the score: the data's wait is
