@@ -52,15 +52,18 @@ export const login = createServerFn({ method: 'POST' })
 
 // Leaving is the person's decision: the cookie goes even when the API could not be asked to revoke the session (a 500, no answer, a
 // dropped connection), and the answer says whether it did, so the page can tell the truth. The one exception is a login of this same
-// browser that finished while this waited: its Set-Cookie may already be in the browser, and a deletion after it would orphan that session.
+// browser that finished WHILE this waited: its Set-Cookie may already be in the browser, and a deletion after it would orphan that
+// session. A token replaced before this request began is not that case: the request carried it, so the browser still holds it (the
+// login's answer never arrived), and it is the cookie to remove.
 export const logout = createServerFn({ method: 'POST' }).handler(async (): Promise<LogoutResult> => {
   const token = getSessionToken()
   if (!token) return { revoked: true }
+  const replacedBefore = wasReplaced(token)
   const revoked = await agentApi('/auth/session', { method: 'DELETE', token, timeoutMs: LOGOUT_TIMEOUT_MS }).then(
     () => true,
     () => false,
   )
-  if (!wasReplaced(token)) clearSessionToken()
+  if (replacedBefore || !wasReplaced(token)) clearSessionToken()
   return { revoked }
 })
 

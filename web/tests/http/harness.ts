@@ -5,7 +5,7 @@ import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { pathToFileURL } from 'node:url'
 import { join } from 'node:path'
-import { rpcRequest, type RpcInit } from './rpc.ts'
+import { rpcRequest, within, type RpcInit } from './rpc.ts'
 
 export const ADMIN = 'admin-key-0123456789-abcdefgh'
 export const ANA = 'ana-key-0123456789-abcdefghij'
@@ -47,7 +47,7 @@ export async function startConsole() {
         const gate = contextGate
         contextGate = null
         gate.onReach()
-        status = await gate.released
+        status = await within(gate.released, 'a held context read was never released by the test').catch(() => 599)
       }
       return status === 200 ? reply(200, context.body) : reply(status, { detail: 'invalid admin key' })
     }
@@ -55,7 +55,7 @@ export async function startConsole() {
       const gate = pending
       pending = null
       gate.onReach()
-      const status = await gate.released
+      const status = await within(gate.released, 'a held queue read was never released by the test').catch(() => 599)
       return status === 200 ? reply(200, []) : reply(status, { detail: 'held response' })
     }
     // A decision on a ticket: the operator's own key, a POST. The desk state it answers is the minimum the console reads back.
@@ -86,7 +86,7 @@ export async function startConsole() {
     const released = new Promise<number>((done) => (release = (status = 200) => done(status)))
     const arrived = new Promise<void>((done) => (reached = done))
     pending = { onReach: reached, released }
-    return { reached: arrived, release }
+    return { reached: within(arrived, 'the API never got the request the test is holding'), release }
   }
   const holdContext = (): Gate => {
     let release!: (status?: number) => void
@@ -94,7 +94,7 @@ export async function startConsole() {
     const released = new Promise<number>((done) => (release = (status = 200) => done(status)))
     const arrived = new Promise<void>((done) => (reached = done))
     contextGate = { onReach: reached, released }
-    return { reached: arrived, release }
+    return { reached: within(arrived, 'the API never got the request the test is holding'), release }
   }
   const rpc = (name: string, init?: RpcInit & { base?: string }) => built.default.fetch(rpcRequest(init?.base ?? ORIGIN, name, init))
   return {

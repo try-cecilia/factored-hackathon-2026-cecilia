@@ -6,7 +6,7 @@ import { createServer, type IncomingMessage, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { pathToFileURL } from 'node:url'
 import { join } from 'node:path'
-import { rpcRequest, type RpcInit } from './rpc.ts'
+import { rpcRequest, within, type RpcInit } from './rpc.ts'
 
 export const ORIGIN = 'http://app.test'
 export const TOKEN = 'tok-secret-0123456789abcdef'
@@ -45,7 +45,7 @@ export async function startCustomerApp(fake: FakeApi) {
     if (held >= 0) {
       const [gate] = holds.splice(held, 1)
       gate.onReach()
-      const answer = await gate.released
+      const answer = await within(gate.released, 'a held request was never released by the test').catch(() => ({ status: 599, body: { detail: 'never released' } }))
       return reply(answer.status, answer.body)
     }
     if (raw?.match(req)) {
@@ -101,7 +101,7 @@ export async function startCustomerApp(fake: FakeApi) {
     const released = new Promise<{ status: number; body: unknown }>((done) => (release = (status = 200, body: unknown = { detail: 'held response' }) => done({ status, body })))
     const arrived = new Promise<void>((done) => (reached = done))
     holds.push({ match, onReach: reached, released })
-    return { reached: arrived, release }
+    return { reached: within(arrived, 'the API never got the request the test is holding'), release }
   }
   return {
     get, fetch, rpc, signIn, seen, hold,

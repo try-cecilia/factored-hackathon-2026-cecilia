@@ -56,9 +56,13 @@ describe('signing out of the customer session', () => {
 
   test('a login that replaced the cookie meanwhile keeps its cookie: the sign-out that was waiting on the API does not delete it', async () => {
     for (const order of ['logout first', 'logout last'] as const) {
-      app.nextTokens(`tok-new-${order.replace(' ', '-')}-0123456789`)
-      const stale = withCookie(TOKEN)
-      const slow = app.hold((req) => req.method === 'DELETE' && req.headers['x-session-token'] === TOKEN)
+      const old = `tok-old-${order.replace(' ', '-')}-0123456789`
+      const fresh = `tok-new-${order.replace(' ', '-')}-0123456789`
+      app.nextTokens(old)
+      await app.signIn()
+      app.nextTokens(fresh)
+      const stale = withCookie(old)
+      const slow = app.hold((req) => req.method === 'DELETE' && req.headers['x-session-token'] === old)
       const signingOut = app.rpc('logout', { headers: stale }) // waits inside the API
       await slow.reached
       const replaced = await app.signIn(undefined, undefined, stale) // another tab signs in again over the same cookie
@@ -66,13 +70,32 @@ describe('signing out of the customer session', () => {
       const out = await signingOut
 
       const jar = cookieJar(SESSION)
-      jar.apply(new Response(null, { headers: { 'Set-Cookie': `cecilai_session=${TOKEN}; Path=/` } }))
+      jar.apply(new Response(null, { headers: { 'Set-Cookie': `cecilai_session=${old}; Path=/` } }))
       const responses = order === 'logout first' ? [out, replaced] : [replaced, out]
       for (const response of responses) jar.apply(response)
       const kept = jar.session()
-      assert.ok(kept && !kept.endsWith(TOKEN), `${order}: the browser keeps the new session, has ${kept}`)
+      assert.equal(kept, `cecilai_session=${fresh}`, `${order}: the browser keeps the new session`)
       assert.ok(await opensChat(jar.header()), `${order}: and it opens the chat`)
       assert.deepEqual((await rpcOutcome(out)).result, { revoked: false }, order)
     }
   })
+
+  // The other way round: the API issued a new token, but its answer never reached the browser (the connection dropped), so the browser
+  // still holds the old cookie. Nothing replaced it there, so signing out must still remove it, whatever the DELETE does.
+  for (const mode of ['error', 'ok'] as const) {
+    test(`a login whose response was lost does not stop the sign-out from removing the cookie the browser still holds (DELETE ${mode})`, async () => {
+      const old = `tok-lost-old-${mode}-0123456789`
+      app.nextTokens(old, `tok-lost-new-${mode}-0123456789`)
+      const jar = cookieJar(SESSION)
+      jar.apply(await app.signIn())
+      assert.equal(jar.session(), `cecilai_session=${old}`)
+      await app.signIn(undefined, undefined, { Cookie: jar.header() }) // the answer is dropped on the way: never applied to the jar
+      app.setDelete(mode)
+      const out = await app.rpc('logout', { headers: { Cookie: jar.header() } })
+      assert.ok(clearsTheCookie(out), `no deletion in: ${out.headers.getSetCookie().join(' | ')}`)
+      jar.apply(out)
+      assert.equal(jar.session(), null)
+      assert.equal(await opensChat(`cecilai_session=${old}`), mode === 'ok' ? false : true, 'the old token is revoked only when the API says so')
+    })
+  }
 })

@@ -48,3 +48,10 @@ export async function rpcOutcome(response: Response) {
     error: error.t === 25 ? String(fromCrossJSON((error as unknown as { s: { message: SerovalNode } }).s.message, { plugins: [] })) : undefined,
   }
 }
+
+/** A gate a test waits on, with a limit: a change that stops calling the API fails the test with `label` instead of hanging it. */
+export function within<T>(promise: Promise<T>, label: string, ms = 10_000): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>
+  const limit = new Promise<never>((_, fail) => { timer = setTimeout(() => fail(new Error(`timed out after ${ms} ms: ${label}`)), ms) })
+  return Promise.race([promise, limit]).finally(() => clearTimeout(timer))
+}

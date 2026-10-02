@@ -22,7 +22,7 @@ export const setSessionToken = (token: string, maxAge: number) => {
   setCookie(name, token, { ...options, maxAge })
 }
 
-/** Whether a login of the same browser has replaced this token since: the cookie it held is no longer the one to delete. */
+/** Whether a login of the same browser has replaced this token (its answer may or may not have reached the browser: see `logout`). */
 export const wasReplaced = (token: string) => replaced.has(token)
 
 export const clearSessionToken = () => {
