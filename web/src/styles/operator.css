@@ -369,6 +369,13 @@ textarea.op-input:focus { box-shadow: 0 0 0 2px var(--color-cecil-blue); }
   .op-seg a { flex: none; }
 }
 
+/* Por debajo de 1024 px, las tablas densas fuera de la cola (Monitoreo, el detalle de una traza) toman el ancho de su contenido y, si
+   no entran, se desplazan dentro de su propia caja: nunca empujan .op-main ni la página, y ninguna etiqueta pisa la de al lado. */
+@media (max-width: 1023px) {
+  .op-panel .ui-dt, .op-detail .ui-dt { overflow-x: auto; overscroll-behavior-x: contain; }
+  .op-panel .ui-dt__table, .op-detail .ui-dt__table { width: max-content; min-width: 100%; table-layout: auto; }
+}
+
 /* Teléfono: la cola es una lista de tarjetas. La primera línea dice prioridad, caso, país e idioma y edad; la segunda, el pedido
    entero (dos renglones); la tercera, estado, cola y operador. Los encabezados quedan arriba como una tira de botones para ordenar. */
 @media (max-width: 700px) {
