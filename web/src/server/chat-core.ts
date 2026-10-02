@@ -28,7 +28,10 @@ export function parseSend(input: unknown): { message: string; key: string } {
   return { message: trimmed, key }
 }
 
-export type ChatSession = { token: string | undefined; clear: () => void }
+// The session is only the token the request carried. A read that finds it rejected says so and leaves the cookie alone: it may be a
+// late answer about an old token, and a deletion arriving after a newer login's Set-Cookie would take that login's cookie (as the
+// operator's console avoids, operator-session.ts). The next login overwrites the cookie; an explicit sign-out removes it.
+export type ChatSession = { token: string | undefined }
 
 export function parseReply(body: unknown): Reply | null {
   if (typeof body !== 'object' || body === null) return null
@@ -57,20 +60,14 @@ export async function sendChat(session: ChatSession, transport: ChatTransport, m
   inFlight.add(token)
   try {
     const response = await transport.post(token, message, key)
-    if (response.status === 401) {
-      session.clear()
-      return { ok: false, failure: 'session_expired' }
-    }
+    if (response.status === 401) return { ok: false, failure: 'session_expired' }
     if (response.status === 409) return { ok: false, failure: 'already_processed' }
     if (response.status === 429) return { ok: false, failure: 'rate_limited' }
     if (response.status >= 500) return { ok: false, failure: 'unavailable' }
     if (response.status < 200 || response.status >= 300) return { ok: false, failure: 'unexpected' }
     const body = await response.json().catch(() => null)
     // REAUTH_REQUIRED is not a chat answer: the API says the session is gone.
-    if ((body as { disposition?: unknown } | null)?.disposition === 'REAUTH_REQUIRED') {
-      session.clear()
-      return { ok: false, failure: 'session_expired' }
-    }
+    if ((body as { disposition?: unknown } | null)?.disposition === 'REAUTH_REQUIRED') return { ok: false, failure: 'session_expired' }
     const reply = parseReply(body)
     return reply ? { ok: true, reply } : { ok: false, failure: 'unexpected' }
   } catch (error) {

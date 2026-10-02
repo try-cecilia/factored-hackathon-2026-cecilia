@@ -66,7 +66,8 @@ export const getSession = createServerFn({ method: 'GET' }).handler(async (): Pr
     }
   } catch (error) {
     if (!(error instanceof AgentApiError && error.status === 401)) throw error
-    clearSessionToken()
+    // A rejected token is no session. The cookie is left alone: this may be a late answer about a token a newer login has already
+    // replaced (chat-core.ts); the next login overwrites it, and an explicit sign-out removes it.
     return null
   }
 })

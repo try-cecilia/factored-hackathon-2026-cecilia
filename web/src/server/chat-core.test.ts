@@ -16,13 +16,12 @@ const reply = {
 }
 
 function setup(status: number, body: unknown) {
-  const cleared: string[] = []
-  const session: ChatSession = { token: 'tok-1', clear: () => cleared.push('cleared') }
+  const session: ChatSession = { token: 'tok-1' }
   const transport: ChatTransport = {
     post: async () => ({ status, json: async () => body }),
     failureOf: () => null,
   }
-  return { session, transport, cleared }
+  return { session, transport }
 }
 
 test('a plain answer reaches the customer', async () => {
@@ -31,22 +30,22 @@ test('a plain answer reaches the customer', async () => {
   assert.ok(result.ok && result.reply.response_text === 'Hola')
 })
 
-test('a 401 from the API ends the session like REAUTH_REQUIRED does: cookie cleared, back to sign in', async () => {
-  const { session, transport, cleared } = setup(401, { detail: 'invalid or expired session' })
+// The session has no way to clear the cookie: a late answer about an old token must not take the cookie of a newer login (F8).
+// The cookie is overwritten by the next login or removed by an explicit sign-out, never by a read.
+test('a 401 from the API means the session is over, like REAUTH_REQUIRED does: back to sign in, the cookie left alone', async () => {
+  const { session, transport } = setup(401, { detail: 'invalid or expired session' })
   assert.deepEqual(await sendChat(session, transport, 'hola', KEY), { ok: false, failure: 'session_expired' })
-  assert.equal(cleared.length, 1)
+  assert.deepEqual(Object.keys(session), ['token'])
 })
 
-test('REAUTH_REQUIRED clears the cookie and asks to sign in again', async () => {
-  const { session, transport, cleared } = setup(200, { ...reply, disposition: 'REAUTH_REQUIRED' })
+test('REAUTH_REQUIRED asks to sign in again, the cookie left alone', async () => {
+  const { session, transport } = setup(200, { ...reply, disposition: 'REAUTH_REQUIRED' })
   assert.deepEqual(await sendChat(session, transport, 'hola', KEY), { ok: false, failure: 'session_expired' })
-  assert.equal(cleared.length, 1)
 })
 
 test('no cookie means the session is over, and nothing is sent', async () => {
   const { transport } = setup(200, reply)
-  const cleared: string[] = []
-  const result = await sendChat({ token: undefined, clear: () => cleared.push('x') }, transport, 'hola', KEY)
+  const result = await sendChat({ token: undefined }, transport, 'hola', KEY)
   assert.deepEqual(result, { ok: false, failure: 'session_expired' })
 })
 
@@ -71,7 +70,7 @@ test('the key goes to the API with the message', async () => {
     },
     failureOf: () => null,
   }
-  await sendChat({ token: 'tok-1', clear: () => {} }, transport, 'hola', KEY)
+  await sendChat({ token: 'tok-1' }, transport, 'hola', KEY)
   assert.deepEqual(seen, [`hola|${KEY}`])
 })
 
@@ -86,7 +85,7 @@ test('a retry after a connection that dropped sends the same key, and gets the r
     },
     failureOf: () => ({ ok: false, failure: 'unavailable' }),
   }
-  const session: ChatSession = { token: 'tok-1', clear: () => {} }
+  const session: ChatSession = { token: 'tok-1' }
   assert.deepEqual(await sendChat(session, transport, 'hola', KEY), { ok: false, failure: 'unavailable' })
   const again = await sendChat(session, transport, 'hola', KEY)
   assert.ok(again.ok)
