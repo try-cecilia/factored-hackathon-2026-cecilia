@@ -1,0 +1,97 @@
+id,utterance,label,language
+dis-es-01,Ese cargo de ayer en la tienda online no fui yo,disavows,es
+dis-es-02,"La compra de 3.500 pesos que me aparece, yo no fui",disavows,es
+dis-es-03,En mi estado de cuenta hay un movimiento del lunes y no fui yo,disavows,es
+dis-es-04,"Yo no fui, me están cobrando una suscripción que jamás contraté",disavows,es
+dis-es-05,"Mira, no fui yo quien hizo esa transferencia a un número que no conozco",disavows,es
+dis-es-06,Yo no fui el que retiró esa plata del cajero,disavows,es
+dis-es-07,No fui yo quien pagó en esa gasolinera,disavows,es
+dis-es-08,Vi un débito en mi cuenta y la verdad no fui yo,disavows,es
+dis-es-09,"Ey, ese pago no fui yo, ¿qué hago?",disavows,es
+dis-es-10,"no fui yo, pero me aparece una compra en dólares",disavows,es
+dis-es-11,Yo no fui y ya me descontaron dos veces,disavows,es
+dis-es-12,No fui yo quien autorizó ese consumo,disavows,es
+dis-es-13,"yo no fui, apareció una operación rara de madrugada",disavows,es
+dis-es-14,Hoy me llegó un aviso de retiro en cajero y no fui yo,disavows,es
+dis-es-15,"No fui yo, por favor bloqueen mi tarjeta",disavows,es
+dis-es-16,En la app veo una transferencia saliente y yo no fui,disavows,es
+dis-es-17,"El movimiento de las 3 de la mañana, no fui yo",disavows,es
+dis-es-18,Ese gasto en el casino no fui yo,disavows,es
+dis-es-19,"yo no fui, ¿qué es ese cobro de 1200?",disavows,es
+dis-es-20,"Eso que aparece como compra en Mercado Libre no fui yo, lo juro",disavows,es
+dis-es-21,No fui yo el que hizo ese depósito raro,disavows,es
+dis-es-22,Yo no fui quien firmó ese pagaré,disavows,es
+dis-es-23,"Oigan, no fui yo, ¿alguien más tiene mi tarjeta?",disavows,es
+dis-es-24,"El cargo del gimnasio, no fui yo, ya me di de baja",disavows,es
+dis-pt-01,Essa compra de ontem no cartão não fui eu,disavows,pt
+dis-pt-02,"Eu não fui, apareceu uma cobrança de 250 reais",disavows,pt
+dis-pt-03,Tem um pix saindo da minha conta e não fui eu,disavows,pt
+dis-pt-04,Não fui eu quem fez essa transferência,disavows,pt
+dis-pt-05,Eu não fui quem sacou esse dinheiro no caixa,disavows,pt
+dis-pt-06,Não fui eu quem pagou aquela conta,disavows,pt
+dis-pt-07,"Vi um débito estranho na conta, não fui eu",disavows,pt
+dis-pt-08,"Eu não fui, mas aparece um saque de 800 reais",disavows,pt
+dis-pt-09,Esse lançamento no extrato não fui eu,disavows,pt
+dis-pt-10,Eu não fui e já me cobraram duas vezes,disavows,pt
+dis-pt-11,"Não fui eu, por favor bloqueiem meu cartão",disavows,pt
+dis-pt-12,Aquela movimentação de madrugada não fui eu,disavows,pt
+dis-pt-13,Eu não fui o autor dessa compra parcelada,disavows,pt
+dis-pt-14,"Não fui eu, tem uma operação esquisita aqui",disavows,pt
+dis-pt-15,Recebi o aviso de compra internacional e eu não fui,disavows,pt
+dis-pt-16,"Eu não fui, o gasto no posto de gasolina é de outra pessoa",disavows,pt
+dis-pt-17,Não fui eu que autorizei esse débito,disavows,pt
+dis-pt-18,Essa cobrança de assinatura não fui eu,disavows,pt
+dis-pt-19,"não fui eu, que transação é essa?",disavows,pt
+dis-pt-20,Eu não fui e o dinheiro sumiu da conta,disavows,pt
+dis-pt-21,Desse saque no caixa eletrônico não fui eu,disavows,pt
+dis-pt-22,Não fui eu que comprei isso na loja,disavows,pt
+dis-pt-23,"Nossa, essa fatura veio com uma compra que não fui eu",disavows,pt
+dis-pt-24,"Eu não fui, pode cancelar esse pix?",disavows,pt
+inn-es-01,"No fui yo a la sucursal ayer, fue mi hermano; quiero saber mi saldo",innocent,es
+inn-es-02,"Yo no fui al cajero hoy, ¿cuánto tengo disponible?",innocent,es
+inn-es-03,"Yo no fui a la oficina, necesito que me manden mi estado de cuenta",innocent,es
+inn-es-04,"No fui yo quien llamó ayer, fue mi esposa; ¿me dices el saldo?",innocent,es
+inn-es-05,"Yo no fui el que pidió la tarjeta nueva, la pidió mi mamá",innocent,es
+inn-es-06,"No fui yo quien preguntó por la cuota, fue mi socio",innocent,es
+inn-es-07,"Yo no fui a la reunión del banco, ¿hay alguna novedad con mi cuenta?",innocent,es
+inn-es-08,"No fui yo, fue mi papá quien consultó el saldo de la cuenta",innocent,es
+inn-es-09,"Yo no fui quien abrió esa cuenta de ahorro, la abrió mi tío cuando yo era chico",innocent,es
+inn-es-10,No fui yo al cajero sino mi hijo; ¿cuál es el límite de mi tarjeta?,innocent,es
+inn-es-11,"Yo no fui a pagar la tarjeta todavía, ¿hasta cuándo tengo?",innocent,es
+inn-es-12,"Yo no fui ayer, ¿el banco abre el sábado?",innocent,es
+inn-es-13,"No fui yo quien actualizó mis datos, ¿cómo los cambio?",innocent,es
+inn-es-14,"Yo no fui al banco, ¿puedo ver mis movimientos por la app?",innocent,es
+inn-es-15,No fui yo quien pidió el extracto de movimientos; lo pidió mi contador,innocent,es
+inn-es-16,"Yo no fui, fue mi hija quien instaló la app",innocent,es
+inn-es-17,"No fui yo, creo que se equivocaron de número, ¿me ayudan con mi saldo?",innocent,es
+inn-es-18,"Yo no fui a la fiesta, solo quiero saber cuánto debo en la tarjeta",innocent,es
+inn-es-19,"No fui yo el que se registró en la app con ese correo, fue mi pareja",innocent,es
+inn-es-20,"Yo no fui a cambiar dólares, ¿cuál es el tipo de cambio de hoy?",innocent,es
+inn-es-21,"No fui yo quien preguntó por el préstamo, pero me interesa saber la tasa",innocent,es
+inn-es-22,Yo no fui al banco el viernes y quiero saber hasta qué hora atienden,innocent,es
+inn-es-23,No fui yo quien pidió que me llamaran; fue mi marido,innocent,es
+inn-es-24,"Yo no fui a la sucursal de Centro, ¿cuál es la dirección más cercana?",innocent,es
+inn-pt-01,"Eu não fui ao banco hoje, qual é o meu saldo?",innocent,pt
+inn-pt-02,"Não fui eu quem ligou ontem, foi minha esposa; pode me passar o saldo?",innocent,pt
+inn-pt-03,"Eu não fui à agência, como faço para ver o extrato?",innocent,pt
+inn-pt-04,"Não fui eu que pedi a segunda via do cartão, foi meu filho",innocent,pt
+inn-pt-05,"Eu não fui ao caixa eletrônico, quanto tenho disponível?",innocent,pt
+inn-pt-06,"Não fui eu, foi meu marido que perguntou do saldo",innocent,pt
+inn-pt-07,Eu não fui trabalhar hoje e queria saber o horário de atendimento,innocent,pt
+inn-pt-08,"Não fui eu quem abriu essa conta poupança, foi minha avó",innocent,pt
+inn-pt-09,"Eu não fui na loja do banco, vocês têm atendimento online?",innocent,pt
+inn-pt-10,"Eu não fui pagar a fatura ainda, qual é o vencimento?",innocent,pt
+inn-pt-11,"Não fui eu quem pediu o extrato de movimentações, foi o contador",innocent,pt
+inn-pt-12,"Eu não fui, foi minha filha que instalou o aplicativo",innocent,pt
+inn-pt-13,"Não fui eu quem fez a consulta de ontem, qual é o meu limite?",innocent,pt
+inn-pt-14,"Eu não fui ao banco ontem, preciso ver minhas movimentações",innocent,pt
+inn-pt-15,"Não fui eu que mudei o endereço, como atualizo?",innocent,pt
+inn-pt-16,"Eu não fui ainda, o gerente está disponível amanhã?",innocent,pt
+inn-pt-17,"Não fui eu, acho que ligaram para o número errado; mas quero saber meu saldo",innocent,pt
+inn-pt-18,"Eu não fui na festa, só quero saber a cotação do dólar",innocent,pt
+inn-pt-19,"Não fui eu quem escolheu esse plano, foi o vendedor; qual é a anuidade?",innocent,pt
+inn-pt-20,Eu não fui à fila do banco e queria saber se posso resolver pelo chat,innocent,pt
+inn-pt-21,"Não fui eu que perguntei sobre o empréstimo, mas me interessa a taxa",innocent,pt
+inn-pt-22,"Eu não fui, minha irmã é quem usa o aplicativo",innocent,pt
+inn-pt-23,"Eu não fui a nenhuma agência esta semana, qual é o telefone de atendimento?",innocent,pt
+inn-pt-24,"Não fui eu quem escolheu a data de vencimento, foi o gerente",innocent,pt

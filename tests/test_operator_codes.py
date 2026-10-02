@@ -80,7 +80,7 @@ def test_the_evidence_notes_are_questions_with_a_code_too(monkeypatch):
     unsafe, _ = router.pre_llm("me robaron la tarjeta, es un fraude", "Active")
     ticket = filed(unsafe)
     assert ticket["open_question_codes"][-1] == {"code": "evidence_failed", "params": {"error_type": "RuntimeError"}}
-    assert ticket["open_questions"][-1] == "Could not gather recent activity automatically: db down"
+    assert ticket["open_questions"][-1] == "Could not gather recent activity automatically: RuntimeError"
 
 
 def test_the_parameters_carry_nothing_the_ticket_did_not_already_hold():
