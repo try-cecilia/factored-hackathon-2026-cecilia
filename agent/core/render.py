@@ -168,6 +168,77 @@ def _date_scope(result: dict, lang: str) -> str:
     return since.format(a=fmt_date(a)) if a else until.format(b=fmt_date(b)) if b else ""
 
 
+# --- what a turn says around its reads (nothing here comes from the model) -----------------------------------------------
+
+READ_MSG = {
+    "repeat": {"es": "Esa consulta ya te la respondí arriba y los datos no cambiaron. {as_of} Si pediste otra cosa, dime cuál: puedo mostrarte "
+                     "movimientos (también solo transferencias, pagos o depósitos, o solo los pendientes), saldos, estado de pago o tipo de cambio.",
+               "pt": "Essa consulta eu já respondi acima e os dados não mudaram. {as_of} Se você pediu outra coisa, me diga qual: posso mostrar "
+                     "movimentações (também só transferências, pagamentos ou depósitos, ou só as pendentes), saldos, situação de pagamento ou câmbio."},
+    "unattended": {"es": "Tu mensaje tenía más consultas de las que atiendo a la vez. Quedó sin atender: {parts}. Pídemelo en otro mensaje.",
+                   "pt": "Sua mensagem tinha mais consultas do que atendo de uma vez. Ficou sem atender: {parts}. Peça em outra mensagem."},
+}
+# A type in the plural and a count read as "Transferencias (5 más recientes)": no ordinal in front, so no gender to agree.
+KIND_PLURAL = {"es": {"Deposit": "depósitos", "Withdrawal": "retiros", "Transfer": "transferencias", "Payment": "pagos", "Purchase": "compras",
+                      "Adjustment": "ajustes"},
+               "pt": {"Deposit": "depósitos", "Withdrawal": "saques", "Transfer": "transferências", "Payment": "pagamentos", "Purchase": "compras",
+                      "Adjustment": "ajustes"}}
+PENDING_WORD = {"es": "pendientes", "pt": "pendentes"}  # the same for both genders
+STATUS_WORD = {"es": "estado", "pt": "situação"}
+MOST_RECENT = {"es": ("más reciente", "{n} más recientes"), "pt": ("mais recente", "{n} mais recentes")}
+READ_PART = {"es": {"get_account_summary": "saldos", "get_payment_status": "estado de pago", "get_exchange_rate": "tipo de cambio",
+                    "request_trace": "rastreo de un movimiento", "other": "otra consulta"},
+             "pt": {"get_account_summary": "saldos", "get_payment_status": "situação de pagamento", "get_exchange_rate": "câmbio",
+                    "request_trace": "rastreamento de uma movimentação", "other": "outra consulta"}}
+
+
+def _narrowing(filters: dict, shown: int, lang: str) -> tuple[str, list[str]]:
+    """What a movements list is about when the customer narrowed it by type or status: its noun ("Transferencias",
+    "Movimientos pendientes") and the notes that go in parentheses ("5 más recientes", the status). ("", []) when it
+    was not narrowed. The type and the status are checked values (enums), so every word here is a fixed one."""
+    kind, status = filters.get("transaction_type"), filters.get("status")
+    if not kind and not status:
+        return "", []
+    noun = KIND_PLURAL[lang].get(kind, kind).capitalize() if kind else RANGE[lang][3]
+    notes = []
+    if status == "Pending":
+        noun += " " + PENDING_WORD[lang]
+    elif status:
+        notes.append(f"{STATUS_WORD[lang]}: {STATUS[lang].get(status, status)}")
+    if kind and shown:
+        notes.append(MOST_RECENT[lang][shown > 1].format(n=shown))
+    return noun, notes
+
+
+def _list_label(res: dict, product: str, lang: str) -> str:
+    """The heading of a movements list: its product, the type and status it was narrowed to, and the dates it covers."""
+    scope = _date_scope(res, lang)
+    noun, notes = _narrowing(res.get("filters") or {}, len(res.get("items") or []), lang)
+    if not noun:
+        return f"{product or RANGE[lang][3]} ({scope})" if scope else product
+    notes += [scope] if scope else []
+    head = f"{noun} ({', '.join(notes)})" if notes else noun
+    return f"{head} · {product}" if product else head
+
+
+def read_part(tool: str, args: dict, lang: str) -> str:
+    """A read named for the customer, in a fixed word: what a turn left unattended ("transferencias", "estado de pago")."""
+    if tool == "list_transactions":
+        kind, status = args.get("transaction_type"), args.get("status")
+        noun = KIND_PLURAL[lang].get(kind, "") or RANGE[lang][3].lower()
+        return f"{noun} {PENDING_WORD[lang]}" if status == "Pending" else noun
+    return READ_PART[lang].get(tool, READ_PART[lang]["other"])
+
+
+def repeat_notice(as_of: Any, lang: str) -> str:
+    """What the customer reads when the answer would be the one they just got: it says so, and what else can be asked."""
+    return " ".join(READ_MSG["repeat"][lang].format(as_of=as_of_line(as_of, lang)).split())
+
+
+def unattended_notice(parts: list[str], lang: str) -> str:
+    return READ_MSG["unattended"][lang].format(parts=", ".join(dict.fromkeys(parts)))
+
+
 def render_answer(results: list[dict], lang: str, catalog: list[dict] | None = None) -> str:
     """Verified facts as text. Every product-specific answer is headed by its product (two cards never blur
     together), and a filtered transaction list says which dates it covers."""
@@ -177,9 +248,8 @@ def render_answer(results: list[dict], lang: str, catalog: list[dict] | None = N
         res = r["result"]
         body = render_result(r["tool"], res, lang)
         label = labels.get(res.get("product_id") or (res.get("filters") or {}).get("product_id"), "")
-        scope = _date_scope(res, lang) if r["tool"] == "list_transactions" else ""
-        if scope:
-            label = f"{label or RANGE[lang][3]} ({scope})"
+        if r["tool"] == "list_transactions":
+            label = _list_label(res, label, lang)
         parts.append(f"{label}:\n{body}" if label else body)
     as_of = next((r["result"].get("as_of") for r in results if isinstance(r.get("result"), dict) and r["result"].get("as_of")), None)
     return "\n".join(p for p in parts + [as_of_line(as_of, lang)] if p)

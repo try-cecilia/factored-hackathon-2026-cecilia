@@ -17,7 +17,7 @@ A numeric grounding check then compared the model's figures against the tool res
 
 The model only understands the request and chooses tools. The system never gives it a customer record, and the model never writes to the customer.
 
-1. **One model call per turn.** It returns tool calls: up to two, run in parallel. Tool results never go back to the model.
+1. **One model call per turn.** It declares the reads the customer asked for as tool calls, and the code runs at most two of them, one after the other, naming in a template the ones it did not run (a trace request, wherever it is declared, takes the turn alone). "In parallel" means several calls in one model response, which not every provider offers; the code does not read what the model did not declare. Tool results never go back to the model.
 2. **Every reply is rendered in code**, from verified tool results or fixed ES/PT templates (`agent/core/render.py`). The model's prose is discarded. No figure and no claimed action can come from it, so the grounding verifier had nothing left to check and was removed. The one text not written by the code is a person's: when an operator resolves a case, their message reaches the customer as written (on one line, card numbers masked), inside a fixed frame that says an agent wrote it ("Mensaje del agente: «...»").
 3. **What the model sees:**
    - the customer's words, masked by `agent/llm/privacy.py` after normalizing Unicode dashes, fullwidth and invisible characters (so `PRD–FIX0006`, an id glued to a word, or `5000–000–004` are caught like their plain forms):
@@ -49,7 +49,7 @@ Gains:
 
 Costs:
 - **Replies are templated.** They read more like a bank statement than a conversation. For a banking channel that is usually a feature, and the templates exist in Spanish and Portuguese.
-- **No chained lookups.** The model cannot read one result to decide the next lookup. This workflow does not need it: every question maps to one or two independent lookups.
+- **No chained lookups.** The model cannot read one result to decide the next lookup. This workflow does not need it: every question maps to one or two independent lookups. Two in one message depend on the model declaring both: measured on Claude Sonnet 5 (80 of 80 two-request turns covered) and shown to be a limit on the fallback, GPT-OSS on Groq, which offers no parallel tool use (`docs/evidence/compound_probe_anthropic.md`, `compound_probe_groq.md`; LIMITATIONS.md).
 - **The customer's own words still reach the provider**, masked. That is unavoidable for a language model; production would also pick a provider or deployment under the bank's data-processing terms.
 
 ## Alternatives considered

@@ -385,3 +385,40 @@ service, and as our own roadmap.
   that needs a push channel (websockets) through the API, the web server and
   the hosting. Both are next steps; the resolution message is the one update a
   customer gets today.
+- A message with several requests is answered by the reads the model declares, of which the code runs at most two per
+  turn ([ADR-001](docs/decisions/ADR-001-model-interprets-code-speaks.md)). Which reads the model declares is its
+  judgment (prompt 3.2.1, rules 9 to 11, with examples in Spanish and Portuguese). What the code guarantees is what
+  happens next: the reads that run are rendered under their own heading, a clarification for one read does not discard
+  the others (one question per turn; the rest are named and kept in the model's history), the reads it did not run are
+  named in a template ("Quedó sin atender: ..."), a trace request takes the turn alone wherever it is declared, and a
+  read whose reply would be identical to the one just sent gets a notice instead, without losing the note about what
+  was left unattended (alternating: asked a third time in a row, the data is shown again, also when the model comes back
+  after an outage). Without the model, a compound request is handed to a person, as any request the degraded mode does
+  not read; it does not read movements, so it cannot answer "my pending movements" even when the classifier recognizes
+  the intent.
+  **What was measured, and on which model.** A live probe (`ops/probe_compound_requests.py`, criteria written beforehand in
+  [`docs/preregistration.md`](docs/preregistration.md) section 4) sent 16 phrasings (8 families, Spanish and Portuguese),
+  10 times each, on a synthetic warehouse, one attempt and no fallback. With **Claude Sonnet 5** (the model of the demo),
+  commit `ef0802e`, prompt 3.2.1, cap 2: both reads covered in 80 of 80 two-request turns [95-100%], every case 10 of 10
+  in each language, the two real conversations and their Portuguese equivalents included; the 20 simple controls
+  answered as asked [84-100%]; 0 unsafe outcomes, 0 records sent to the model, 0 traces opened; p50 1.8 s, p95 3.0 s,
+  USD 0.0026 per turn; in the 40 three-request turns it declared all three reads and the code ran two and named the
+  third. Report: [`docs/evidence/compound_probe_anthropic.md`](docs/evidence/compound_probe_anthropic.md). What this
+  does not show: a recovery rate after a half answer (the model never gave one, so there was no opportunity; it is
+  tested offline with a controlled history), the p95 against the previous prompt, the behavior on the deployed demo
+  (to be checked there in both languages), and a readability review of three sections on desktop and mobile. **The cap stays at 2.** The run with the cap at 3 (set inside the probe
+  only) met the numeric thresholds with Sonnet 5: all three reads declared and answered in 40 of 40 turns [91-100%], every case 10 of 10 in
+  both languages, p95 2.3 s (2.6 s at cap 2), USD 0.0029 per turn
+  ([`docs/evidence/compound_probe_anthropic_cap3.md`](docs/evidence/compound_probe_anthropic_cap3.md)); it is not applied because the
+  readability review was not done and only the main model qualifies, so a shorter reply with the third read named as unattended is the
+  product decision for now (on the fallback, 16 answered turns, 0 declared more than one read:
+  [`compound_probe_groq_cap3.md`](docs/evidence/compound_probe_groq_cap3.md)).
+  **The fallback is a documented limit.** Groq's documentation lists `openai/gpt-oss-120b` and `gpt-oss-20b` without
+  parallel tool use (`parallel_tool_calls` exists but does not add the support). The same probe on `openai/gpt-oss-120b`
+  is **partial**: the account's rate limit refused 167 of the 220 turns, and in the 53 that were answered the model
+  declared exactly one read in every two- and three-request turn (22 of 22), so the two-request cases were covered 0 of
+  15 times [0-20%] while the 4 simple controls were answered correctly; in the 5 sequences that were whole, the follow-up
+  ("te pedí dos cosas") did read what had been left out, 5 of 5, which is a sample and not a rate; the cost is unknown for 13
+  of the 53 turns (no usage from the provider). Too few turns for a rate, enough to say the limit is real. Report: [`docs/evidence/compound_probe_groq.md`](docs/evidence/compound_probe_groq.md). So when the fallback
+  serves the turn, a request for two things may be answered with only one of them, and the customer should ask for them
+  in separate messages. The code does not complete what the model did not declare (no keywords, no second model call).

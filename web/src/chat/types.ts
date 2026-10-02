@@ -29,6 +29,8 @@ export type Reply = {
   latency_ms: number
   /** Limited mode: the model was unavailable and the code answered alone. */
   degraded?: boolean
+  /** What the numbered options of a clarification are: a product (answered by name) or a pending movement (answered by number). */
+  choice?: 'product' | 'movement'
   why?: Why
 }
 

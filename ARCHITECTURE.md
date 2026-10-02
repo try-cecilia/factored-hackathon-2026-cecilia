@@ -45,7 +45,7 @@ operator's message when they resolve a case, shown as the agent's.
      currency and status;
    - a history in which our replies are figure-free summaries.
 
-   It returns up to two tool calls. Tool schemas have **no customer_id**.
+   It declares the reads asked for as tool calls and the code runs at most two of them (measured on the deployed model, a documented limit on the fallback: LIMITATIONS.md). Tool schemas have **no customer_id**.
    Any prose it writes is discarded.
 4. **Act** (`agent/tools/account_tools.py`). This is plain SQL over DuckDB.
    Every tool does four things:

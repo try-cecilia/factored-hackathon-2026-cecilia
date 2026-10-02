@@ -24,6 +24,7 @@ a half-done action.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -31,7 +32,7 @@ import threading
 import time
 import uuid
 from collections import OrderedDict
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from typing import Any, Callable
 
 from agent.core import render
@@ -71,7 +72,12 @@ MODEL_VIEW = {
     "trace_proposed": "[Se le propuso al cliente abrir un pedido de rastreo; se espera su respuesta]",
     "trace_opened": "[Se abrió el pedido de rastreo que el cliente confirmó]",
     "trace_cancelled": "[El cliente no quiso abrir el pedido de rastreo; no se abrió nada]",
+    "unattended": "[Quedaron sin atender, por el límite de consultas de un turno: {calls}]",
+    "repeated": "[Se le dijo al cliente que esa consulta ya estaba respondida arriba y se le pidió que dijera qué otra cosa necesitaba]",
 }
+# What a read's arguments say about the request, kept in the history the model gets (no records: filters the customer asked for).
+VIEW_ARGS = ("transaction_type", "status", "limit", "start_date", "end_date", "on_date", "source_currency", "target_currency")
+READ_ANSWERS = ("verified_tool_results", "degraded:deterministic_balance")  # the rules whose reply is a read: two in a row are never the same
 
 MAX_TOOL_CALLS_PER_TURN = 2
 TOOL_RETRY = RetryPolicy(max_attempts=2, base_s=0.05, cap_s=0.25)  # every tool here is a read: repeating one is harmless
@@ -104,6 +110,8 @@ class TurnResult:
     latency_ms: float = 0.0
     model_view: str | None = None  # what the model's history keeps of this reply: no figures, no identifiers
     model_input: str | None = None  # the customer's words as the model received them (masked); None if it received nothing
+    choice: str | None = None  # what the numbered options of a CLARIFY are: "product" (a name) or "movement" (a number); None if it has none
+    read_digest: str | None = None  # a digest of this reply when it is a read, kept to never send the same one twice in a row (not traced)
 
     @property
     def degraded(self) -> bool:
@@ -120,6 +128,7 @@ class _Conversation:
     pending_clarification: bool = False
     pending_action: dict | None = None  # a trace proposed on the last turn, kept in code: never sent to the model
     pending_choice: list[dict] | None = None  # the pending movements listed on the last turn, to pick one by number
+    last_answer: str | None = None  # a digest of the last reply when it was a read, to never send the same one twice in a row
     cases: dict[str, str] = field(default_factory=dict)  # legacy notices, retained when loading older conversations
     transcript: list[dict] = field(default_factory=list)  # what the customer saw, as rendered: card numbers masked, no model data
     case_index: list[dict] = field(default_factory=list)  # the session's handoffs (ticket_id, category, at), not bounded by the transcript
@@ -215,7 +224,7 @@ class ConversationStore:
         conv.transcript.append({"role": "user", "text": mask_card_numbers(text), "at": now})
         conv.transcript.append({"role": "assistant", "text": result.response_text, "at": now, "trace_id": result.trace_id,
                                 "disposition": result.disposition, "category": result.category, "language": result.language,
-                                "ticket_id": result.ticket_id, "degraded": result.degraded})
+                                "ticket_id": result.ticket_id, "degraded": result.degraded, "choice": result.choice})
         del conv.transcript[:-MAX_TRANSCRIPT]
         if result.disposition == "ESCALATE" and result.ticket_id and all(c["ticket_id"] != result.ticket_id for c in conv.case_index):
             conv.case_index.append({"ticket_id": result.ticket_id, "category": result.category, "at": now})
@@ -275,7 +284,9 @@ def resolve_product_ref(value: Any, catalog: list[dict]) -> str:
     return v
 
 
-def sanitize_args(tool: str, raw: dict, catalog: list[dict]) -> tuple[dict, list[str]]:
+def sanitize_args(tool: str, raw: dict, catalog: list[dict], require: bool = True) -> tuple[dict, list[str]]:
+    """The arguments the tool takes, each checked (enums, integers, the product resolved to one of the customer's). With `require`
+    False the required ones may be missing: the values that are there are kept, for a read that is described and not run."""
     schema = _SCHEMAS[tool]
     props, required = schema["properties"], schema.get("required", [])
     dropped = [k for k in raw if k not in props]
@@ -302,7 +313,7 @@ def sanitize_args(tool: str, raw: dict, catalog: list[dict]) -> tuple[dict, list
         if len(credit) == 1:  # unambiguous: fill the slot instead of asking
             args["product_id"] = credit[0]["product_id"]
     missing = [k for k in required if k not in args]
-    if missing:
+    if missing and require:
         raise MissingSlot(f"{tool} needs {missing}", missing_slots=missing)
     return args, dropped
 
@@ -337,9 +348,16 @@ def with_aliases(catalog: list[dict]) -> list[dict]:
     return [{**p, "alias": f"P{i}"} for i, p in enumerate(catalog, start=1)]
 
 
+def _call_view(tool: str, args: dict, alias: dict[str, str], ref: str = "") -> str:
+    """One read as the model's history keeps it: the tool, the product's alias (or `ref`, the product as the model named it
+    when it could not be resolved) and the filters asked for."""
+    shown = [alias.get(args.get("product_id"), "") or ref, *(f"{k}={args[k]}" for k in VIEW_ARGS if args.get(k) not in (None, ""))]
+    return f"{tool}({', '.join(x for x in shown if x)})"
+
+
 def _answered_view(facts: list[dict], catalog: list[dict]) -> str:
     alias = {p["product_id"]: p["alias"] for p in catalog}
-    used = ", ".join(f"{f['tool']}({alias.get((f.get('args') or {}).get('product_id'), '')})" for f in facts)
+    used = ", ".join(_call_view(f["tool"], f.get("args") or {}, alias) for f in facts)
     return MODEL_VIEW["answered"].format(used=used)
 
 
@@ -395,7 +413,7 @@ class Orchestrator:
                 self._record_failed("conversation_save", trace_id, exc)
         result.latency_ms = (time.perf_counter() - start) * 1000
         try:
-            default_trace_log.write({**trace, **{k: v for k, v in asdict(result).items() if k not in ("verified_facts",)},
+            default_trace_log.write({**trace, **{k: v for k, v in asdict(result).items() if k not in ("verified_facts", "read_digest")},
                                      "verified_tools": [f["tool"] for f in result.verified_facts]})
         except Exception as exc:  # noqa: BLE001 - a record that cannot be written must not take the customer's answer with it
             self._record_failed("trace_write", trace_id, exc)
@@ -522,7 +540,26 @@ class Orchestrator:
         return {"ticket_id": ticket_id, "status": state["status"], "message": text}
 
     # -- helpers --
+    @staticmethod
+    def _repeated(result: TurnResult) -> TurnResult:
+        """The read's reply is the one the customer was just sent: say so, and what else they can ask, instead of sending it again.
+        What was read is still verified and still on the record; only the text changes."""
+        as_of = next((f["result"].get("as_of") for f in result.verified_facts if isinstance(f.get("result"), dict)), None)
+        prefix = "degraded:" if result.degraded else ""
+        return replace(result, disposition=Disposition.CLARIFY.value, category="repeated_request", policy_rule=f"{prefix}repeat_guard",
+                       response_text=render.repeat_notice(as_of, result.language), model_view=MODEL_VIEW["repeated"], read_digest=None)
+
+    def _no_repeat(self, conv: _Conversation, result: TurnResult) -> TurnResult:
+        """A read's reply that is identical to the one just sent becomes a notice. Applied to the resolved reads alone, before
+        anything that is said around them (what was left unattended), so those notes are never swallowed by it. The reply that
+        follows a notice may show the data again: it is no longer the last one sent."""
+        if result.policy_rule not in READ_ANSWERS:
+            return result
+        digest = hashlib.sha256(result.response_text.encode("utf-8")).hexdigest()[:16]
+        return self._repeated(result) if digest == conv.last_answer else replace(result, read_digest=digest)
+
     def _finish(self, conv, model_text, ticket_text, result: TurnResult) -> TurnResult:
+        conv.last_answer = result.read_digest
         conv.pending_clarification = result.disposition == Disposition.CLARIFY.value
         self.conversations.append(conv, "user", model_text)
         self.conversations.append(conv, "assistant", result.model_view or result.response_text)
@@ -565,7 +602,8 @@ class Orchestrator:
             conv.pending_choice = items  # a plain "la segunda" is resolved in code next turn
             opts = "; ".join(f"{i}) {render.movement(m, lang)}" for i, m in enumerate(items, start=1))
             return done(TurnResult(trace_id, decision.disposition.value, render.MSG["trace_choose"][lang].format(opts=opts), lang,
-                                   decision.category, decision.rule, None, [], actions, **meta, model_view=MODEL_VIEW["trace_choose"]))
+                                   decision.category, decision.rule, None, [], actions, **meta, model_view=MODEL_VIEW["trace_choose"],
+                                   choice="movement"))
         m = items[0]
         if decision.rule == "action:trace_already_open":
             opened = m["open_trace"]
@@ -755,7 +793,7 @@ class Orchestrator:
         except LLMUnavailable as exc:
             trace["llm_steps"].append({"step": 0, "outcome": "unavailable", "attempts": exc.attempts})
             degraded = self._degraded(reading, text, session, catalog, lang, trace_id, trace, llm_meta())
-            return done(degraded) if degraded is not None else escalate(router.llm_unavailable(exc.attempts), [], [])
+            return done(self._no_repeat(conv, degraded)) if degraded is not None else escalate(router.llm_unavailable(exc.attempts), [], [])
         llm_calls, model_input = 1, model_text
         usage = resp.usage
         provider, model = resp.provider, resp.model
@@ -767,19 +805,33 @@ class Orchestrator:
                                    "usage": asdict(resp.usage), "attempts": resp.attempts, "n_tool_calls": len(resp.tool_calls)})
 
         self.experiments.shadow(trace_id, session.ref, messages, prompts.TOOL_SCHEMAS, resp, model_route)  # background, logged only
-        calls = resp.tool_calls[:MAX_TOOL_CALLS_PER_TURN]
-        if not calls:  # nothing to look up: abstain or ask, always with a fixed template
+        # The model declares every read the customer asked for; the code runs at most MAX_TOOL_CALLS_PER_TURN of them and says,
+        # by template, which it did not (and keeps them in the model's history so the next turn can finish). The same read twice
+        # in a response is one read. A trace request is looked for in all of them, not only in the first ones: it takes the turn alone.
+        declared = list({(c["name"], c["arguments"]): c for c in resp.tool_calls}.values())
+        if not declared:  # nothing to look up: abstain or ask, always with a fixed template
             decision = router.no_tool_answer(reading, text)
             reply = render.MSG["abstain" if decision.disposition == Disposition.ABSTAIN else "clarify_generic"][lang]
             return done(TurnResult(trace_id, decision.disposition.value, reply, lang, decision.category, decision.rule,
                                    None, [], [], **llm_meta()))
 
-        if any(c["name"] == "request_trace" for c in calls):  # a proposed action takes the turn on its own
-            calls = [next(c for c in calls if c["name"] == "request_trace")]
+        trace_call = next((c for c in declared if c["name"] == "request_trace"), None)
+        calls = [trace_call] if trace_call is not None else declared[:MAX_TOOL_CALLS_PER_TURN]
+        left: list[dict] = [c for c in declared if not any(c is k for k in calls)]  # declared and not run; later also the clarifications put off
+
+        def with_unattended(result: TurnResult) -> TurnResult:
+            """The reads the turn left aside, said by a template after the reply and kept in the model's history."""
+            parts, views = self._unattended(left, catalog, lang)
+            if not parts:
+                return result
+            trace["unattended_calls"] = [c["name"] for c in left]
+            return replace(result, response_text=f"{result.response_text}\n\n{render.unattended_notice(parts, lang)}",
+                           model_view=f"{result.model_view or result.response_text} {MODEL_VIEW['unattended'].format(calls=', '.join(views))}")
 
         # Act: sanitized arguments, identity from the session, ownership checked in the tool.
         facts: list[dict] = []
         actions: list[dict] = []
+        clarify: tuple[Decision, list[str]] | None = None  # the first read that needs one more answer from the customer; the others still run
         for call in calls:
             name = call["name"]
             deadline = current_deadline.get()
@@ -793,7 +845,7 @@ class Orchestrator:
                 raw_args = {}
             raw_args.pop("customer_id", None)  # identity always comes from the session
             action = {"tool": name, "raw_args": raw_args}
-            result, error = None, None
+            result, error, failed_with = None, None, None
             try:
                 if name not in TOOL_FUNCTIONS:
                     raise ToolError(f"unknown tool {name}")
@@ -805,10 +857,9 @@ class Orchestrator:
                 result = {"not_applicable": True, "reason": str(exc), **exc.payload}
             except ToolError as exc:
                 error = exc
-            except Exception as exc:  # noqa: BLE001 - unexpected tool/DB failure -> bounded, safe fallback
-                error = ToolError(f"unexpected failure in {name}: {type(exc).__name__}: {exc}")
-            action.update({"success": error is None, "error_type": type(error).__name__ if error else None,
-                           "error": str(error) if error else None})
+            except Exception as exc:  # noqa: BLE001 - unexpected tool/DB failure -> bounded, safe fallback; only the type is kept, never the message
+                error, failed_with = ToolError(f"unexpected failure in {name}: {type(exc).__name__}"), type(exc).__name__
+            action.update({"success": error is None, "error_type": failed_with or (type(error).__name__ if error else None)})
             actions.append(action)
             if out_of_time():  # a slow lookup finished after the budget: its result is not used, a person answers
                 trace["rule"] = "turn_timeout"
@@ -818,21 +869,73 @@ class Orchestrator:
             if decision is not None:
                 trace["rule"] = decision.rule
                 if decision.disposition == Disposition.CLARIFY:
-                    missing = decision.missing_slots or getattr(error, "missing_slots", [])
-                    reply = render.clarify(missing, catalog, lang)
-                    return done(TurnResult(trace_id, Disposition.CLARIFY.value, reply, lang, decision.category, decision.rule,
-                                           None, facts, actions, **llm_meta(), model_view=_clarify_view(missing, catalog, reply)))
+                    if clarify is None:
+                        clarify = (decision, decision.missing_slots or getattr(error, "missing_slots", []))
+                    else:
+                        left.append(call)  # one question per turn: this read is named as unattended, with its filters in the history
+                    continue
                 return escalate(decision, actions, facts)
             if name == "request_trace":
-                return self._trace_step(result, conv, lang, trace_id, actions, done, escalate, llm_meta())
+                return self._trace_step(result, conv, lang, trace_id, actions, lambda res: done(with_unattended(res)), escalate, llm_meta())
             facts.append({"tool": name, "args": action["args"], "result": result})
+
+        if clarify is not None:  # what was answered is said first, then the question for the rest
+            decision, missing = clarify
+            reply = render.clarify(missing, catalog, lang)
+            answered = render.render_answer(facts, lang, catalog) if facts else ""
+            view = _clarify_view(missing, catalog, reply)
+            return done(with_unattended(TurnResult(
+                trace_id, Disposition.CLARIFY.value, f"{answered}\n\n{reply}" if answered else reply, lang, decision.category,
+                decision.rule, None, facts, actions, **llm_meta(), model_view=f"{_answered_view(facts, catalog)} {view}" if facts else view,
+                choice="product" if "product_id" in missing and catalog else None)))
 
         # Verify + reply: rendered from the verified results only.
         with stage("render"):
             answer = render.render_answer(facts, lang, catalog)
-        return done(TurnResult(trace_id, Disposition.AUTO_RESOLVE.value, answer, lang,
-                               "resolved", "verified_tool_results", None, facts, actions, **llm_meta(),
-                               model_view=_answered_view(facts, catalog)))
+        reply = self._no_repeat(conv, TurnResult(trace_id, Disposition.AUTO_RESOLVE.value, answer, lang, "resolved", "verified_tool_results",
+                                                 None, facts, actions, **llm_meta(), model_view=_answered_view(facts, catalog)))
+        return done(with_unattended(reply))
+
+    @staticmethod
+    def _unattended(left: list[dict], catalog: list[dict], lang: str) -> tuple[list[str], list[str]]:
+        """For each read the model declared and the turn did not answer: its name for the customer and its line in the model's
+        history. The arguments are sanitized as a set without requiring the mandatory ones (a read that needed a clarification keeps
+        everything that was valid, such as both currencies of an exchange rate); if one value does not pass, each of the others is
+        tried alone. A product the model named is kept only if it is a type or alias of this customer's catalog."""
+        alias = {p["product_id"]: p["alias"] for p in catalog}
+        vocabulary = {*alias.values(), *(p["product_type"] for p in catalog)}
+        parts, views = [], []
+        for call in left:
+            name = call["name"]
+            if name not in TOOL_FUNCTIONS:
+                continue
+            try:
+                raw = json.loads(call["arguments"] or "{}")
+            except json.JSONDecodeError:
+                raw = {}
+            raw = raw if isinstance(raw, dict) else {}
+            wanted = {k: raw[k] for k in (*VIEW_ARGS, "product_id") if k in raw}
+            try:  # the whole set at once; the required ones may be missing, as in a read that was not complete
+                args = sanitize_args(name, wanted, catalog, require=False)[0]
+            except Exception:  # noqa: BLE001 - one value does not pass: keep each of the others that does
+                args = {}
+                for key, value in wanted.items():
+                    try:
+                        args.update(sanitize_args(name, {key: value}, catalog, require=False)[0])
+                    except Exception:  # noqa: BLE001 - left out of what the history keeps
+                        pass
+            for key in ("start_date", "end_date", "on_date"):  # the tools' own rule for a date, so the history never offers one they reject
+                if key in args:
+                    try:
+                        if not isinstance(args[key], str):
+                            raise InvalidArgument(f"{key} must be text")
+                        args[key] = account_tools.parse_date(args[key], key).isoformat()
+                    except InvalidArgument:
+                        args.pop(key)
+            ref = str(raw.get("product_id")) if str(raw.get("product_id")) in vocabulary else ""
+            parts.append(render.read_part(name, args, lang))
+            views.append(_call_view(name, args, alias, ref))
+        return parts, views
 
 
 default_orchestrator = Orchestrator()

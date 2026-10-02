@@ -105,7 +105,7 @@ class BaselineBot:
         except ToolError as exc:
             result, error = None, exc
         except Exception as exc:  # noqa: BLE001 - same bounded fallback as the proposed system
-            result, error = None, ToolError(f"unexpected failure in {tool}: {type(exc).__name__}: {exc}")
+            result, error = None, ToolError(f"unexpected failure in {tool}: {type(exc).__name__}")
         action = {"tool": tool, "args": args, "success": error is None, "error_type": type(error).__name__ if error else None}
         decision = after_tool(error)
         if decision is not None:

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { loadHistory, parseHistory, type HistoryTransport } from './history-core.ts'
 import type { ChatSession } from './chat-core.ts'
+import { classifyReply } from '../chat/conversation.ts'
 
 const turnsList = [
   { role: 'user', text: 'Me clonaron la tarjeta', at: 1_760_000_000.5 },
@@ -61,4 +62,15 @@ test('an API that is down or answers nonsense is "unavailable"', async () => {
   assert.deepEqual(await loadHistory(setup(200, 'nope').session, setup(200, 'nope').transport), { ok: false, failure: 'unavailable' })
   const throwing: HistoryTransport = { get: async () => { throw new Error('down') } }
   assert.deepEqual(await loadHistory({ token: 't', clear: () => {} }, throwing), { ok: false, failure: 'unavailable' })
+})
+
+test('a saved turn keeps the kind of its options, and one saved before it existed is still read as before', async () => {
+  const movement = 'Tienes varios movimientos pendientes: 1) transferencia de 640.00 USD (Cuenta Corriente ···0015); 2) pago de 250.00 USD (Tarjeta Crédito ···0016). ¿Cuál quieres rastrear? Responde con su número.'
+  const saved = (extra: object) => ({ role: 'assistant', text: movement, at: 1, trace_id: 'abc12345', disposition: 'CLARIFY', category: 'missing_or_invalid_argument', language: 'es', ...extra })
+  const kept = parseHistory({ turns: [saved({ choice: 'movement' }), saved({}), saved({ choice: null })], cases: [] })
+  assert.equal(kept?.turns.length, 3)
+  const replies = kept!.turns.map((t) => (t.role === 'assistant' ? t.reply : null))
+  assert.deepEqual(replies.map((r) => r?.choice), ['movement', undefined, undefined])
+  // the screen reads the two without it by the sentence that introduces the options, so the number is what it sends
+  for (const reply of replies) assert.equal(classifyReply(reply!).kind === 'clarify' && (classifyReply(reply!) as { options: { kind: string } }).options.kind, 'movement')
 })

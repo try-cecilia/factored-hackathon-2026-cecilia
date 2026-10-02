@@ -39,8 +39,7 @@ class ToolCallRecord:
     finished_at: float | None = None
     success: bool | None = None
     result_summary: Any = None
-    error: str | None = None
-    error_type: str | None = None
+    error_type: str | None = None  # what failed, by type: the message of an exception can carry ids, paths and what the customer wrote
 
     @property
     def duration_ms(self) -> float | None:
@@ -93,7 +92,7 @@ class AuditLog:
         record.success = success
         record.result_summary = result_summary
         if error is not None:
-            record.error, record.error_type = str(error), type(error).__name__
+            record.error_type = type(error).__name__
         self._sink.write({**asdict(record), "duration_ms": record.duration_ms})
         seconds = None if record.duration_ms is None else record.duration_ms / 1000
         _observe(lambda: metrics.default.observe_tool_call(record.tool_name, seconds, record.trace_id))

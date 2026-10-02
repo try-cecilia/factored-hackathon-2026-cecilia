@@ -66,7 +66,7 @@ class TraceService:
                 self.open(customer_id, transaction_id, product_id, session_ref)
                 return self.find(customer_id, transaction_id)
             except OSError as exc:
-                raise TraceServiceUnavailable(str(exc)) from exc
+                raise TraceServiceUnavailable(type(exc).__name__) from exc
 
         return retry_call(attempt, policy=TRACE_RETRY, idempotency_key=self.trace_id(customer_id, transaction_id),
                           deadline=deadline, sleep=sleep, attempts_log=attempts_log)

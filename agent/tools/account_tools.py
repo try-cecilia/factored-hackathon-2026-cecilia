@@ -31,6 +31,7 @@ CREDIT_PRODUCT_TYPES = {"Tarjeta Crédito", "Préstamo Personal", "Préstamo Hip
 CURRENCIES = {"MXN", "COP", "ARS", "USD"}
 MAX_TRANSACTIONS = 50
 MAX_FX_FALLBACK_DAYS = 7
+TRANSACTION_TYPES = ("Deposit", "Withdrawal", "Transfer", "Payment", "Purchase", "Adjustment")  # data/contracts.py: type_enum
 TRACEABLE_TYPES = ("Transfer", "Payment", "Deposit")  # what operations can follow; a pending card purchase just posts
 MAX_TRACE_CANDIDATES = 5
 MAX_BEHAVIOR_HISTORY = 5000  # the customer's latest rows, read to describe their recent movements; the data averages about 30
@@ -102,7 +103,8 @@ def _owned_product(customer_id: str, product_id: str) -> dict:
     return rows[0]
 
 
-def _parse_date(value: Optional[str], name: str) -> Optional[date]:
+def parse_date(value: Optional[str], name: str) -> Optional[date]:
+    """The one rule for a date argument (YYYY-MM-DD, or a timestamp's first ten characters); the orchestrator reuses it."""
     if value in (None, ""):
         return None
     try:
@@ -179,12 +181,15 @@ def list_transactions(
     end_date: Optional[str] = None,
     status: Optional[str] = None,
     limit: int = 10,
+    transaction_type: Optional[str] = None,
 ) -> dict:
     def _run():
         _check_freshness()
         if product_id:
             _owned_product(customer_id, product_id)
-        start, end = _parse_date(start_date, "start_date"), _parse_date(end_date, "end_date")
+        if transaction_type and transaction_type not in TRANSACTION_TYPES:
+            raise InvalidArgument(f"transaction_type must be one of {list(TRANSACTION_TYPES)}", missing_slots=["transaction_type"])
+        start, end = parse_date(start_date, "start_date"), parse_date(end_date, "end_date")
         if start and end and start > end:
             raise InvalidArgument("start_date is after end_date", missing_slots=["start_date", "end_date"])
         n = max(1, min(int(limit or 10), MAX_TRANSACTIONS))
@@ -197,16 +202,20 @@ def list_transactions(
             clauses.append("process_date <= ?"); params.append(end)
         if status:
             clauses.append("transaction_status = ?"); params.append(status)
+        if transaction_type:
+            clauses.append("transaction_type = ?"); params.append(transaction_type)
         items = _rows(
             f"""SELECT transaction_id, transaction_date, product_id, transaction_type, amount, currency,
                        channel, merchant_name, transaction_status, is_fraud, fraud_score
                 FROM transactions WHERE {' AND '.join(clauses)}
                 ORDER BY transaction_date DESC LIMIT ?""", params + [n])
         return {"items": items, "as_of": data_as_of(), "limit": n,
-                "filters": {"product_id": product_id, "start_date": start, "end_date": end, "status": status}}
+                "filters": {"product_id": product_id, "start_date": start, "end_date": end, "status": status,
+                            "transaction_type": transaction_type}}
 
     return _audited("list_transactions", customer_id,
-                    {"product_id": product_id, "start_date": start_date, "end_date": end_date, "status": status, "limit": limit}, _run)
+                    {"product_id": product_id, "start_date": start_date, "end_date": end_date, "status": status, "limit": limit,
+                     "transaction_type": transaction_type}, _run)
 
 
 def get_payment_status(customer_id: str, product_id: str) -> dict:
@@ -240,7 +249,7 @@ def get_exchange_rate(customer_id: str, source_currency: str, target_currency: s
         bad = [n for n, v in (("source_currency", src), ("target_currency", tgt)) if v not in CURRENCIES]
         if bad or src == tgt:
             raise InvalidArgument(f"currencies must be two different values of {sorted(CURRENCIES)}", missing_slots=bad or ["target_currency"])
-        requested = _parse_date(on_date, "on_date") or data_as_of()
+        requested = parse_date(on_date, "on_date") or data_as_of()
         oldest = requested - timedelta(days=MAX_FX_FALLBACK_DAYS)
 
         def lookup(a, b):
@@ -290,7 +299,7 @@ def request_trace(customer_id: str, product_id: Optional[str] = None, amount: An
     def _run():
         if product_id:
             _owned_product(customer_id, product_id)
-        day = _parse_date(on_date, "on_date")
+        day = parse_date(on_date, "on_date")
         clauses = ["t.customer_id = ?", "t.transaction_status = 'Pending'", f"t.transaction_type IN ({', '.join('?' * len(TRACEABLE_TYPES))})"]
         params: list = [customer_id, *TRACEABLE_TYPES]
         if product_id:

@@ -27,7 +27,14 @@ export type Options = {
   kind: 'movement' | 'product'
 }
 
-export function parseOptions(text: string): Options | null {
+/**
+ * The numbered options inside a clarification, or null when the text has none. What the options are (`kind`) is what the API says
+ * (`choice` on the reply): the words before the options can be anything, such as an answered list of pending movements ahead of
+ * a question about which product. A reply without it (an older API, a turn saved before it existed) is read as before, but only
+ * on the sentence that introduces the options, which is our own template ("Tienes varios movimientos pendientes:"), never on
+ * what was answered ahead of it.
+ */
+export function parseOptions(text: string, kind?: Options['kind']): Options | null {
   const first = /(?:^|\s)1\)\s/.exec(text)
   if (!first) return null
   const lead = text.slice(0, first.index).trim()
@@ -39,7 +46,7 @@ export function parseOptions(text: string): Options | null {
   const tail = cut ? lastPart.slice(cut.index + 1).trim() : ''
   const options = parts.map((part, i) => (i === 0 ? part : part.replace(/^\d+\)\s*/, '')).trim()).filter(Boolean)
   if (options.length < 2) return null
-  return { lead, options, tail, kind: /pendient|pendent/i.test(lead) ? 'movement' : 'product' }
+  return { lead, options, tail, kind: kind ?? (/pendient|pendent/i.test(lead.split('\n').at(-1) ?? '') ? 'movement' : 'product') }
 }
 
 // What choosing option n sends as the customer's next message.

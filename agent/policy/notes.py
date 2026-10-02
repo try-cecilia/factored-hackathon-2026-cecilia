@@ -6,8 +6,9 @@ the catalog here, so the two cannot drift: one line per code, `{name}` marks a p
 
 Parameters are what the text needs and nothing of the customer's: a category, a product count, a review reason, a field name,
 the type of error a lookup raised. Never the request, an id, an amount, a card number or the message of an exception: that
-message can carry internal ids and is in English whatever the operator reads. It goes only into the English text, through `raw`
-(the `{detail}` of a catalog line), and never into the parameters.
+message can carry internal ids and is in English whatever the operator reads. The English text takes through `raw` (the
+`{detail}` of a catalog line) only what our own code wrote (the message of a DataUnavailable) or the type of an unexpected
+error, never what a library or the database said, and the parameters never take it.
 
 To add a text: one line in the catalog of its kind (REASONS, QUESTIONS; the next steps are `escalation.NEXT_STEP`, keyed by
 category), and its Spanish and Portuguese in `web/src/i18n/dict/{es,pt}/operator.ts` under `codes`, plus the key in

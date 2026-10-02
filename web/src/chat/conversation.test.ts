@@ -137,3 +137,13 @@ test('the session countdown shows nothing until two minutes are left, then the m
   assert.equal(sessionNotice(0), 0)
   assert.equal(sessionNotice(-5), 0)
 })
+
+test('the options of a clarification are what the API says they are, whatever the answered part before them mentions', () => {
+  const text = 'Movimientos pendientes:\n- 16/01/2024: transferencia 640.00 USD (pendiente)\n\n¿Sobre cuál de tus productos? 1) Cuenta Ahorro ···0001 (USD); 2) Cuenta Ahorro ···0002 (USD)'
+  const product = classifyReply(reply({ disposition: 'CLARIFY', category: 'missing_or_invalid_argument', response_text: text, choice: 'product' }))
+  assert.equal(product.kind, 'clarify')
+  assert.equal(product.kind === 'clarify' && product.options?.kind, 'product')
+  const movement = classifyReply(reply({ disposition: 'CLARIFY', category: 'missing_or_invalid_argument', choice: 'movement',
+    response_text: 'Tienes varios movimientos pendientes: 1) a (X ···1); 2) b (Y ···2). ¿Cuál quieres rastrear? Responde con su número.' }))
+  assert.equal(movement.kind === 'clarify' && movement.options?.kind, 'movement')
+})

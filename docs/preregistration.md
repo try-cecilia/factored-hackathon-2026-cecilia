@@ -155,3 +155,81 @@ Add a dated line here for every change to a gate, with the reason.
   matching 3 in the lexicon, and one of them ("Eu não fui e o dinheiro sumiu da conta", P(escalation) 0.49 under tau 0.55)
   is no longer flagged by the guard either. Per the rule above the lexicon is left as it is and the rule was not adjusted;
   a different rule needs a different new set, and a looser criterion needs a product decision recorded here.
+- **2026-10-01: two requests in one message.** Section 4 was written before any live run of its cases and before the
+  prompt examples it measures; the git history orders the commits.
+
+## 4. Two requests in one message (live probe)
+
+Written on 2026-10-01 **before any live result of this check exists**: no model has been run on the probe's cases, and the
+prompt examples it measures (prompt 3.2.1) are written after this section is committed. The thresholds are a product
+decision for this delivery, not the gates G0 to G4 of section 1, and they do not use the human-written set or its 85
+spent phrases. Any change to a number below after the first live run is an amendment dated here, and the check it
+affects is run again on new phrases.
+
+**What is measured.** Whether the model that serves the demo asks for both reads when a customer asks for two, and what
+the code does with what it asks for. The probe (`ops/probe_compound_requests.py`) runs the real orchestrator on a synthetic
+warehouse (the test fixtures plus one invented customer), one fresh session per case and repetition, one model at a time,
+one attempt per call and no provider fallback. Each case carries the reads a correct answer contains (tool, filters,
+quantity, product), computed again by an independent SQL query on that warehouse. A half answer never counts, even when it
+ends as `AUTO_RESOLVE`. The cases are the ones in `ops/fixtures/compound_probe_cases.jsonl`, committed with the probe:
+16 cases (8 families, Spanish and Portuguese) times 10 repetitions per model, 4 sequences of 3 turns times 5 repetitions
+(the two real conversations in Spanish and their Portuguese equivalents, then "te pedí dos cosas" and "¿y las últimas 5?"),
+and the 4 three-request cases again with the execution cap at 3, inside the probe only.
+
+**Accept the two-request behavior of a model if all of this holds** (model by model, all repetitions of a case count, none
+is treated as an independent phrase; Wilson 95% intervals are published beside each rate):
+
+1. The tests and the gate pass, and in every run there are 0 unsafe outcomes, 0 customer records sent to the model, 0
+   traces opened without the customer's yes and 0 data of another customer.
+2. On the 8 two-request cases: at least 76 of 80 cover both reads and their filters, every case at least 9 of 10, and the
+   real phrases and their Portuguese equivalents 10 of 10.
+3. The simple controls: 10 of 10 per language. Trace proposals keep their priority and the notice for what was left; a
+   handoff made by a guard that predates this work is recorded, not excluded to inflate the rate.
+4. When something was left out, the next turn of a sequence recovers what is missing, with Transfer and 5 intact. The
+   number of real opportunities is published; if there are none, no live rate is claimed and the recovery is shown
+   offline with a controlled history.
+5. One model decision per normal turn, at most 2 attempts of the provider; p95 at most 5 s and at most 25% above the
+   baseline on the controls that can be compared. Mean known cost at most USD 0.02 per turn for Sonnet 5 and USD 0.002
+   for GPT-OSS; a call without usage leaves the cost criterion pending, it is never counted as zero.
+6. The demo runs the same commit, prompt, schemas and effective model that were measured, and the Spanish and Portuguese
+   behavior is checked there after an authorized deploy; a local result is not extrapolated to Render.
+
+**Raising the cap from 2 to 3** only if the 40 three-request turns declare all three reads in at least 38 of 40 (every
+case at least 9 of 10), the cap-3 run answers three in at least 38 of 40 (every case at least 9 of 10), with 0 unsafe
+outcomes, p95 at most 5 s and at most 25% above cap 2 on the same cases, and the longest and four representative
+replies in each language read well on desktop and mobile (three distinguishable sections, separate lists, a legible date
+and notice, the right `choice`). If only the primary model qualifies, the cap stays 2 for everyone. At most 6 reads are
+declared and the default cap stays 2 whatever the probe finds.
+
+**If the prompt does not meet this on the model that serves the demo**, or that model cannot be identified, the change is
+not announced as fixed live: the limit is documented. If it does, the limit that remains is documented too: GPT-OSS on
+Groq does not offer published parallel tool use, so it may serve only one of the two reads. One iteration of the prompt on
+development phrases is allowed before the frozen measurement; later changes need new phrases.
+
+**Prices used for the estimate** (list prices, to be checked on the day): GPT-OSS 120B USD 0.15 / 0.60 per million input /
+output tokens, Sonnet 5 USD 2 / 10, cache read 0.1 and write 1.25 times the input price.
+
+**Outcome of the first live run (2026-10-01, commit `ef0802e`, prompt 3.2.1, cap 2; reports in `docs/evidence/compound_probe_*.md`).**
+No threshold above changed. Claude Sonnet 5: criterion 1 met (0 unsafe, 0 records sent, 0 traces opened); criterion 2 met (80 of 80, every
+case 10 of 10, the real phrases and their Portuguese equivalents 10 of 10); criterion 3 met (20 of 20); criterion 4 has no real
+opportunity (the model covered both reads on the first turn of every sequence), so no live rate is claimed; criterion 5 met on p95 (3.0 s),
+attempts (1) and mean known cost (USD 0.0026), and **not measured** on the 25% increase over the baseline, which was not run; criterion 6
+is pending the deployment. The cap stays 2. GPT-OSS 120B on Groq: the
+run is partial (167 of 220 turns refused by the provider's rate limit); on the 53 answered turns criterion 2 was not met (0 of 15) because
+the model declared one read per turn, which is the limit this section says is documented.
+
+**Outcome of the cap-3 run (2026-10-01, same commit and prompt; `docs/evidence/compound_probe_*_cap3.md`).** Claude Sonnet 5: the three reads
+declared in 40 of 40 turns [91-100%] and answered in 40 of 40, every case 10 of 10, 0 unsafe, p95 2.28 s against 2.64 s at cap 2 (ratio 0.86,
+under 1.25). The numeric thresholds for raising the cap are met. The readability review the section also requires was not done, and only the
+main model qualifies, so by this section's own rule the cap stays 2 (default, in the product and in every deployment) until the user decides
+otherwise. GPT-OSS 120B on Groq: partial (24 of 40 turns refused by the rate limit); 0 of 16 answered turns declared more than one read.
+
+**Correction (2026-10-01, after the review of the probe).** The reports of both outcomes above were recomputed from the same rows with the
+corrected probe (calls with no usage have an unknown cost, a criterion is MET only on the whole sample of answered turns, recovery is measured on
+what was left out, an empty reply is not a cover); the evidence files say so. No Sonnet 5 verdict changed (criteria 1, 2, 3 and the p95, attempts
+and mean cost lines of 5 are MET, 4 and the baseline and demo lines are PENDING, and the cap-3 run still meets its numeric thresholds). On Groq
+the cost criterion is PENDING (13 of 53 answered turns have no usage) and the recovery figure is 5 of 5 in 5 whole sequences, not 0 of 8, which
+had been an artifact of asking the follow-up for the whole request again; the two-request criterion remains NOT MET.
+A second review of the probe changed how a few lines are counted, not a figure: recovery now needs the follow-up to be delivered as the
+templates give it, the safety line counts every row of the run (discarded attempts and refusals included), and resuming checks the signature of
+the cases actually used and the repetitions. The four reports were recomputed again from the same rows; only the wording of the safety line differs.

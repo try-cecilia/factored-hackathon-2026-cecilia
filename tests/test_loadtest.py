@@ -43,3 +43,16 @@ def test_every_answered_request_had_the_outcome_its_scenario_expects_and_handoff
             assert int(row["ok"]) > 0
             expected_tickets = row["ok"] if title.endswith("handoff") else "0"
             assert row["tickets_written"] == expected_tickets, (title, row)
+
+
+def test_only_the_exact_repeat_notice_stands_in_for_a_resolved_read():
+    from ops.loadtest import outcome_ok
+
+    resolved = ("AUTO_RESOLVE", "resolved", False)
+    assert outcome_ok(resolved, resolved)
+    assert outcome_ok(("CLARIFY", "repeated_request", False), resolved)  # a read asked twice in a row
+    assert not outcome_ok(("AUTO_RESOLVE", "repeated_request", False), resolved)  # the wrong disposition
+    assert not outcome_ok(("CLARIFY", "repeated_request", True), resolved)  # with a ticket: it never files one
+    assert not outcome_ok(("ESCALATE", "repeated_request", False), resolved)
+    handoff = ("ESCALATE", "llm_unavailable", True)
+    assert not outcome_ok(("CLARIFY", "repeated_request", False), handoff)  # only a resolved read can be repeated
