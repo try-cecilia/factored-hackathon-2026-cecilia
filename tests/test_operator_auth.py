@@ -212,3 +212,35 @@ def test_the_limiter_reserves_atomically_and_gives_back_only_what_it_was_given()
     limiter.release("a", first)
     assert limiter.reserve("a") is not None and limiter.reserve("a") is None
     limiter.release("c", 123.0)  # not held: ignored
+
+
+@pytest.mark.parametrize("kind", ["admin", "metrics", "operator"])
+def test_an_internal_error_in_the_verifier_gives_the_reserved_place_back(kind, monkeypatch):
+    """A wrong credential is the failure the limit counts; an error of ours while comparing is not."""
+    from starlette.requests import Request
+
+    monkeypatch.setenv("METRICS_TOKEN", "metrics-token-0123456789-abcdefgh")
+    limiter = main.RateLimiter(1, 60)
+    monkeypatch.setattr(main, "operator_fail_limiter", limiter)
+    request = Request({"type": "http", "headers": [], "client": ("203.0.113.9", 1234)})
+    calls = {
+        "admin": lambda: main.require_admin(request, ADMIN_KEY),
+        "metrics": lambda: main.require_metrics(request, None, ADMIN_KEY),
+        "operator": lambda: main.require_operator(request, ANA_KEY),
+    }
+
+    def broken(*args):
+        raise RuntimeError("a bug of ours, not a guess")
+
+    with monkeypatch.context() as broken_verifier:
+        broken_verifier.setattr(main, "constant_time_equals", broken)
+        broken_verifier.setattr(main.OperatorDirectory, "authenticate", broken)
+        with pytest.raises(RuntimeError):
+            calls[kind]()
+    assert not limiter.over("203.0.113.9")  # nothing was counted
+    wrong = {"admin": lambda: main.require_admin(request, "wrong"),
+             "metrics": lambda: main.require_metrics(request, None, "wrong"),
+             "operator": lambda: main.require_operator(request, "wrong")}
+    with pytest.raises(main.HTTPException) as err:
+        wrong[kind]()
+    assert err.value.status_code == 401 and limiter.over("203.0.113.9")

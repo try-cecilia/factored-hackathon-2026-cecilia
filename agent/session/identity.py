@@ -84,20 +84,23 @@ class IdentityService:
         ).fetchone()
         return CustomerRecord(*row) if row else None
 
-    def _reserve(self, customer_id: str) -> float:
+    def _reserve(self, customer_id: str) -> tuple[float, list[float]]:
         """Takes one of the account's MAX_FAILURES places, or raises LockedOut. Checking and taking are one step under the
         lock, so the places held by attempts still in the lookup count as failures: concurrent logins cannot pass the check
-        together. Only this account's counters are touched, and the lock is not held while the warehouse answers."""
+        together. Only this account's counters are touched, and the lock is not held while the warehouse answers.
+        Returns when the attempt began and the failures recorded by then: a success clears those and no others."""
         now = time.time()
         with self._lock:
-            if len(self._recent_failures(customer_id, now)) + self._inflight.get(customer_id, 0) >= MAX_FAILURES:
+            before = self._recent_failures(customer_id, now)
+            if len(before) + self._inflight.get(customer_id, 0) >= MAX_FAILURES:
                 raise LockedOut("too many failed attempts; try again later")
             self._inflight[customer_id] = self._inflight.get(customer_id, 0) + 1
-        return now
+            return now, list(before)
 
-    def _resolve(self, customer_id: str, failed_at: float | None, cleared: bool = False) -> None:
-        """Gives the reserved place back: as a recorded failure (`failed_at`), as a success that clears the account's
-        failures (`cleared`), or, with neither, as nothing (the attempt ended in an error that was not a guess)."""
+    def _resolve(self, customer_id: str, failed_at: float | None, clears: list[float] | None = None) -> None:
+        """Gives the reserved place back: as a recorded failure (`failed_at`), as a success that clears `clears` (the failures
+        that were recorded when it began, never those of attempts that ran beside it), or, with neither, as nothing (the
+        attempt ended in an error that was not a guess)."""
         with self._lock:
             held = self._inflight.get(customer_id, 1) - 1
             if held > 0:
@@ -106,17 +109,24 @@ class IdentityService:
                 self._inflight.pop(customer_id, None)
             if failed_at is not None:
                 self._failures.setdefault(customer_id, []).append(failed_at)
-            elif cleared:
-                self._failures.pop(customer_id, None)
+            elif clears is not None:
+                left = list(self._failures.get(customer_id, []))
+                for stamp in clears:
+                    if stamp in left:
+                        left.remove(stamp)
+                if left:
+                    self._failures[customer_id] = left
+                else:
+                    self._failures.pop(customer_id, None)
 
     def login(self, customer_id: str, pin: str) -> Session:
-        reserved_at = self._reserve(customer_id)
-        outcome: tuple[float | None, bool] = (None, False)  # what to settle: an unexpected error settles as nothing
+        reserved_at, before = self._reserve(customer_id)
+        outcome: tuple[float | None, list[float] | None] = (None, None)  # what to settle: an unexpected error settles as nothing
         try:
             expected = derive_test_pin(customer_id)
             record = self._lookup(customer_id)
             ok = constant_time_equals(expected, str(pin)) and record is not None and record.customer_status != "Closed"
-            outcome = (None, True) if ok else (reserved_at, False)
+            outcome = (None, before) if ok else (reserved_at, None)
         finally:
             self._resolve(customer_id, *outcome)
         if not ok:

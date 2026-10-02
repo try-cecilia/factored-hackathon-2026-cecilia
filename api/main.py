@@ -264,8 +264,19 @@ def _reserve_attempt(request: Request, kind: str) -> tuple[str, float]:
     return origin, ticket
 
 
-def _credential_accepted(origin: str, ticket: float) -> None:
+def _verified(origin: str, ticket: float, kind: str, detail: str, check):
+    """Runs the comparison (`check`, which returns something truthy for a right credential) for a reserved attempt. A wrong
+    credential keeps the hit taken and answers 401: that is the failure the limit counts. A right one gives the hit back, and
+    so does an error of ours inside the comparison, which then propagates: only a guess is held against the address."""
+    try:
+        result = check()
+    except BaseException:
+        operator_fail_limiter.release(origin, ticket)
+        raise
+    if not result:
+        raise _bad_credential(origin, kind, detail)
     operator_fail_limiter.release(origin, ticket)
+    return result
 
 
 def _bad_credential(origin: str, kind: str, detail: str) -> HTTPException:
@@ -279,9 +290,7 @@ def require_admin(request: Request, x_admin_key: str | None = Header(default=Non
     if not expected:
         raise HTTPException(503, "admin endpoints disabled: ADMIN_API_KEY not configured")
     origin, ticket = _reserve_attempt(request, "admin")
-    if not constant_time_equals(x_admin_key, expected):
-        raise _bad_credential(origin, "admin", "invalid admin key")
-    _credential_accepted(origin, ticket)
+    _verified(origin, ticket, "admin", "invalid admin key", lambda: constant_time_equals(x_admin_key, expected))
 
 
 def require_metrics(request: Request, authorization: str | None = Header(default=None),
@@ -293,13 +302,15 @@ def require_metrics(request: Request, authorization: str | None = Header(default
     origin, ticket = _reserve_attempt(request, "metrics")
     scheme, _, bearer = (authorization or "").partition(" ")
     presented = [x_admin_key, bearer.strip() if scheme.lower() == "bearer" else None]
-    ok = False
-    for candidate in presented:
-        for key in keys:  # every pair is compared, with no early exit
-            ok |= constant_time_equals(candidate, key)
-    if not ok:
-        raise _bad_credential(origin, "metrics", "invalid metrics credentials")
-    _credential_accepted(origin, ticket)
+
+    def compare() -> bool:
+        ok = False
+        for candidate in presented:
+            for key in keys:  # every pair is compared, with no early exit
+                ok |= constant_time_equals(candidate, key)
+        return ok
+
+    _verified(origin, ticket, "metrics", "invalid metrics credentials", compare)
 
 
 OperatorDirectory.from_env()  # a bad OPERATOR_KEYS stops the service from starting, rather than failing at the first request
@@ -312,11 +323,7 @@ def require_operator(request: Request, x_operator_key: str | None = Header(defau
     if not directory.enabled:
         raise HTTPException(503, "operator endpoints disabled: OPERATOR_KEYS not configured")
     origin, ticket = _reserve_attempt(request, "operator")
-    name = directory.authenticate(x_operator_key)
-    if name is None:
-        raise _bad_credential(origin, "operator", "invalid operator key")
-    _credential_accepted(origin, ticket)
-    return name
+    return _verified(origin, ticket, "operator", "invalid operator key", lambda: directory.authenticate(x_operator_key))
 
 
 @app.get("/")

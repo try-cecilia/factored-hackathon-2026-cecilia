@@ -133,3 +133,76 @@ def test_a_success_clears_the_failures_and_leaves_nothing_reserved():
     assert svc.login(CUSTOMER, derive_test_pin(CUSTOMER)).customer_id == CUSTOMER
     assert svc._failures.get(CUSTOMER) is None
     assert svc._inflight.get(CUSTOMER) is None  # nothing left reserved
+
+
+def _held_login(svc, monkeypatch, name: str, pin: str):
+    """Starts a login of `name` that is held inside the lookup until released; any other login passes through it."""
+    entered, release, outcome = threading.Event(), threading.Event(), queue.Queue()
+    real = svc._lookup
+
+    def lookup(customer_id):
+        if threading.current_thread().name == name:
+            entered.set()
+            assert release.wait(WAIT), "the held lookup was never released"
+        return real(customer_id)
+
+    monkeypatch.setattr(svc, "_lookup", lookup)
+
+    def run():
+        try:
+            outcome.put(svc.login(CUSTOMER, pin))
+        except Exception as exc:  # noqa: BLE001
+            outcome.put(exc)
+
+    worker = threading.Thread(target=run, name=name, daemon=True)
+    worker.start()
+    assert entered.wait(WAIT), "the login never reached the lookup"
+    return worker, release, outcome
+
+
+def test_a_success_does_not_erase_the_failures_of_attempts_that_ran_beside_it(monkeypatch):
+    """The correct PIN is held in the lookup; four wrong ones finish meanwhile; the success then resolves. Those four failures
+    were not before it, so they stay, and the account is one place from locked."""
+    svc = service()
+    worker, release, outcome = _held_login(svc, monkeypatch, "successful-login", derive_test_pin(CUSTOMER))
+    try:
+        for _ in range(MAX_FAILURES - 1):
+            with pytest.raises(AuthError):
+                svc.login(CUSTOMER, wrong_pin(CUSTOMER))
+    finally:
+        release.set()
+        worker.join(WAIT)
+    assert not isinstance(outcome.get(timeout=WAIT), Exception)
+    assert len(svc._failures[CUSTOMER]) == MAX_FAILURES - 1
+    assert not svc._inflight
+
+
+def test_a_success_that_resolves_before_a_failure_that_began_earlier_keeps_that_failure(monkeypatch):
+    """The other order: the wrong PIN is held; the correct one starts after it and finishes first; the wrong one resolves last."""
+    svc = service()
+    svc._failures[CUSTOMER] = [time.time()] * 2  # before both: the success clears these
+    worker, release, outcome = _held_login(svc, monkeypatch, "slow-failure", wrong_pin(CUSTOMER))
+    try:
+        assert svc.login(CUSTOMER, derive_test_pin(CUSTOMER)).customer_id == CUSTOMER
+        assert CUSTOMER not in svc._failures or svc._failures[CUSTOMER] == []  # the two earlier failures are gone
+    finally:
+        release.set()
+        worker.join(WAIT)
+    assert isinstance(outcome.get(timeout=WAIT), AuthError)
+    assert len(svc._failures[CUSTOMER]) == 1  # and the slow failure, resolved after the success, counts
+    assert not svc._inflight
+
+
+def test_a_success_clears_what_was_recorded_before_it_began_and_five_failures_still_lock(monkeypatch):
+    svc = service()
+    for _ in range(MAX_FAILURES - 1):
+        with pytest.raises(AuthError):
+            svc.login(CUSTOMER, wrong_pin(CUSTOMER))
+    assert svc.login(CUSTOMER, derive_test_pin(CUSTOMER)).customer_id == CUSTOMER
+    assert svc._failures.get(CUSTOMER) in (None, [])
+    for _ in range(MAX_FAILURES):
+        with pytest.raises(AuthError) as err:
+            svc.login(CUSTOMER, wrong_pin(CUSTOMER))
+        assert not isinstance(err.value, LockedOut)
+    with pytest.raises(LockedOut):
+        svc.login(CUSTOMER, derive_test_pin(CUSTOMER))
