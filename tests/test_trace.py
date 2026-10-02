@@ -14,9 +14,11 @@ import pytest
 
 from agent.core.orchestrator import Orchestrator
 from agent.policy import router
-from agent.session.auth import SessionStore
+from agent.session.auth import SessionStore, session_ref
 from agent.tools import traces
-from eval.fake_llm import FakeLLMClient, tool_call_response
+from eval.fake_llm import FakeLLMClient, text_response, tool_call_response
+
+ASK = {"es": "hice una transferencia que todavía no llega", "pt": "fiz uma transferência que ainda não chegou"}
 
 
 @pytest.fixture(autouse=True)
@@ -37,28 +39,35 @@ def make(*responses, customer="CLI-FIX0004"):
     return orch, tok, fake
 
 
-def test_a_pending_transfer_is_proposed_and_traced_only_after_the_customer_says_yes():
+def proposal(orch, tok) -> dict | None:
+    """The trace proposal the conversation keeps in code for the next turn, if any."""
+    return orch.conversations.get(session_ref(tok)).pending_action
+
+
+@pytest.mark.parametrize("lang,yes,sla", [("es", "sí", "2 días hábiles"), ("pt", "sim", "2 dias úteis")])
+def test_a_pending_transfer_is_proposed_and_traced_only_after_the_customer_says_yes(lang, yes, sla):
     orch, tok, fake = make(tool_call_response("request_trace", {}))
-    r1 = orch.handle_message(tok, "hice una transferencia que todavía no llega")
+    r1 = orch.handle_message(tok, ASK[lang])
     assert (r1.disposition, r1.category, r1.policy_rule) == ("CLARIFY", "confirm_action", "action:trace_proposed")
     assert "40.00 USD" in r1.response_text and "15/01/2024" in r1.response_text and "···0010" in r1.response_text
     assert stored() == []  # nothing is opened before the customer confirms
     assert "40" not in (r1.model_view or "")  # the model's history keeps no figures
 
-    r2 = orch.handle_message(tok, "sí")
-    assert (r2.disposition, r2.policy_rule, r2.llm_calls) == ("AUTO_RESOLVE", "action:trace_opened", 0)
+    r2 = orch.handle_message(tok, yes)
+    assert (r2.disposition, r2.policy_rule, r2.llm_calls, r2.language) == ("AUTO_RESOLVE", "action:trace_opened", 0, lang)
     [trace] = stored()
     assert trace["transaction_id"] == "TXN-FIX0006" and trace["trace_id"] in r2.response_text
-    assert "2 días hábiles" in r2.response_text and r2.verified_facts[0]["tool"] == "request_trace"
+    assert sla in r2.response_text and r2.verified_facts[0]["tool"] == "request_trace"
     assert fake.call_count == 1  # the confirmation never reached the model
 
 
-def test_a_plain_no_opens_nothing():
+@pytest.mark.parametrize("lang,no", [("es", "no"), ("es", "no, gracias"), ("pt", "não")])
+def test_a_plain_no_opens_nothing(lang, no):
     orch, tok, _ = make(tool_call_response("request_trace", {}))
-    orch.handle_message(tok, "hice una transferencia que todavía no llega")
-    r = orch.handle_message(tok, "no, gracias")
+    orch.handle_message(tok, ASK[lang])
+    r = orch.handle_message(tok, no)
     assert (r.disposition, r.category, r.policy_rule) == ("ABSTAIN", "action_cancelled", "action:trace_cancelled")
-    assert stored() == []
+    assert stored() == [] and proposal(orch, tok) is None
 
 
 def test_anything_but_a_plain_answer_drops_the_proposal_and_goes_through_the_usual_checks():
@@ -67,6 +76,32 @@ def test_anything_but_a_plain_answer_drops_the_proposal_and_goes_through_the_usu
     assert orch.handle_message(tok, "no, me clonaron la tarjeta").disposition == "ESCALATE"  # the safety lexicon ran
     assert orch.handle_message(tok, "sí").policy_rule != "action:trace_opened"  # the proposal lapsed
     assert stored() == []
+
+
+@pytest.mark.parametrize("lang,answer", [
+    ("es", "SÍÍÍ"), ("es", "👍"), ("es", "sí pero no"), ("es", "no, sí, bueno, dale... no sé"),
+    ("es", "Claro que no me lo vas a rastrear, ¿no?"), ("es", "Si fuera vos lo rastrearía"),
+    ("pt", "SIIIM"), ("pt", "👍"), ("pt", "sim mas não"), ("pt", "não, sim, bom, tá bom... não sei"),
+    ("pt", "Claro que você não vai rastrear, né?"), ("pt", "Se fosse você eu rastrearia"),
+])
+def test_an_answer_that_is_not_a_plain_yes_opens_nothing_and_a_later_yes_does_not_revive_the_proposal(lang, answer):
+    """Answers the red team gave to a fresh, valid proposal, looking for a trace opened without a clear yes
+    (docs/red_team_guia.md). None is a plain yes: nothing is opened, the proposal lapses and the message goes on as a
+    new one, and a plain yes on a later turn finds nothing to confirm. The controls, a plain yes, sim and no on the
+    same proposal, are the tests above."""
+    orch, tok, fake = make(tool_call_response("request_trace", {}), text_response("¿En qué más te ayudo?"),
+                           text_response("¿En qué más te ayudo?"))
+    assert stored() == [] and proposal(orch, tok) is None
+    assert orch.handle_message(tok, ASK[lang]).policy_rule == "action:trace_proposed"
+    assert proposal(orch, tok)["transaction_id"] == "TXN-FIX0006"
+
+    r = orch.handle_message(tok, answer)
+    assert r.policy_rule not in ("action:trace_opened", "action:trace_cancelled")
+    assert stored() == [] and proposal(orch, tok) is None
+
+    later = orch.handle_message(tok, "sim" if lang == "pt" else "sí")
+    assert later.policy_rule != "action:trace_opened"
+    assert stored() == [] and proposal(orch, tok) is None
 
 
 def test_asking_again_returns_the_same_trace_instead_of_a_new_one():
