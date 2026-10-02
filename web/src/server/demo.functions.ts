@@ -9,7 +9,12 @@ import { getSessionToken, setSessionToken } from './session-cookie'
 
 type ApiScenario = DemoScenario & { test_pin: string }
 
+// DEMO_MODE=0 given to the web too (the compose passes the API's): the sandbox is off, so every function here does nothing and asks
+// the API for nothing, however it is called (a server function is a public URL; the panel being hidden stops no one).
+const demoOff = () => process.env.DEMO_MODE === '0'
+
 async function scenarios(): Promise<ApiScenario[] | null> {
+  if (demoOff()) return null
   try {
     return await agentApi<ApiScenario[]>('/demo/scenarios')
   } catch {
@@ -17,12 +22,19 @@ async function scenarios(): Promise<ApiScenario[] | null> {
   }
 }
 
+/** Whether the API still lists this account as a public sandbox one: checked when a scenario starts, so a list that has changed since the scenarios were read is not signed in with. */
+async function isPublicAccount(customerId: string): Promise<boolean> {
+  try {
+    return (await agentApi<{ customer_id: string }[]>('/demo/customers')).some((c) => c.customer_id === customerId)
+  } catch {
+    return false
+  }
+}
+
 export type DemoKit = { enabled: false } | { enabled: true; scenarios: DemoScenario[] }
 
 export const getDemoKit = createServerFn({ method: 'GET' }).handler(
   async (): Promise<DemoKit> => {
-    // DEMO_MODE=0 given to the web too (the compose passes the API's): the sandbox is off, so there is nothing to ask.
-    if (process.env.DEMO_MODE === '0') return { enabled: false }
     const all = await scenarios()
     if (!all) return { enabled: false }
     // The sandbox PINs stay on the server: starting a scenario signs in there.
@@ -40,7 +52,7 @@ export const startScenario = createServerFn({ method: 'POST' })
   .validator(parseScenarioId)
   .handler(async ({ data }): Promise<{ ok: true; scenario: DemoScenario } | { ok: false }> => {
     const found = (await scenarios())?.find((s) => s.id === data.id)
-    if (!found) return { ok: false }
+    if (!found || !(await isPublicAccount(found.customer_id))) return { ok: false }
     try {
       const previous = getSessionToken()
       if (previous) await agentFetch('/auth/session', { method: 'DELETE', token: previous }).catch(() => undefined)
@@ -69,7 +81,7 @@ export const applyDemoFault = createServerFn({ method: 'POST' })
   .validator(parseFault)
   .handler(async ({ data }): Promise<{ ok: boolean }> => {
     const token = getSessionToken()
-    if (!token) return { ok: false }
+    if (demoOff() || !token) return { ok: false }
     try {
       await agentApi('/demo/fault', { method: 'POST', body: { session_token: token, fault: data.fault } })
       return { ok: true }
@@ -90,7 +102,7 @@ function textCode(value: unknown): NonNullable<DemoTicket['reason_code']> | null
 
 export const getDemoTickets = createServerFn({ method: 'GET' }).handler(async (): Promise<DemoTicket[]> => {
   const token = getSessionToken()
-  if (!token) return []
+  if (demoOff() || !token) return []
   try {
     const tickets = await agentApi<Record<string, unknown>[]>('/demo/tickets', { method: 'POST', body: { session_token: token } })
     return tickets.map((t) => ({
@@ -114,7 +126,7 @@ export const getDemoTickets = createServerFn({ method: 'GET' }).handler(async ()
 
 export const getDemoTraces = createServerFn({ method: 'GET' }).handler(async (): Promise<DemoTrace[]> => {
   const token = getSessionToken()
-  if (!token) return []
+  if (demoOff() || !token) return []
   try {
     return parseTraces(await agentApi<unknown>('/demo/traces', { method: 'POST', body: { session_token: token } }))
   } catch {

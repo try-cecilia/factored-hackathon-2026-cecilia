@@ -22,6 +22,8 @@ function clientIp() {
 }
 
 export async function agentFetch(path: string, { method = 'GET', body, token, timeoutMs = 5_000, headers: extra }: RequestOptions = {}) {
+  // DEMO_MODE=0 given to the web: its demo functions do nothing, so none reaches the API's sandbox, whoever calls it.
+  if (process.env.DEMO_MODE === '0' && path.startsWith('/demo/')) throw new AgentApiError(404)
   const headers = new Headers({ Accept: 'application/json', ...extra })
   const ip = clientIp()
   if (ip) headers.set('X-Client-IP', ip)

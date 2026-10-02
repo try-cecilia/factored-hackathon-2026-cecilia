@@ -502,9 +502,8 @@ def case_status(ticket_id: str, x_session_token: str | None = Header(default=Non
 
 @app.get("/demo/customers", dependencies=[Depends(demo.require_demo)])
 def demo_customers() -> list[dict]:
-    ids = [c.strip() for c in os.environ.get("DEMO_PUBLIC_CUSTOMERS", "").split(",") if c.strip()]
     try:
-        return [{"customer_id": c, "test_pin": derive_test_pin(c)} for c in ids]
+        return [{"customer_id": c, "test_pin": derive_test_pin(c)} for c in demo.public_customer_ids()]
     except IdentityUnavailable:
         return []
 

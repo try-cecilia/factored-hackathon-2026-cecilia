@@ -168,7 +168,9 @@ service, and as our own roadmap.
   Portuguese, with synthetic data from `ops.seed_operator_demo`). Load and screen-reader accessibility, with the bank's
   customer model and real data, remain to be tested.
 - `/demo/customers` publishes test PINs for a few sandbox accounts, like any
-  sandbox's test login. It exists only with `DEMO_MODE=1` (a 404 otherwise, as does `/admin/demo_pin`).
+  sandbox's test login. It exists only with `DEMO_MODE=1` (a 404 otherwise, as does `/admin/demo_pin`). The guided
+  scenarios and the sandbox reset use the same list (`DEMO_PUBLIC_CUSTOMERS`): a scenario for an account that is not on it
+  is not offered, and with the list empty nothing is. The container fills it with the demo roles' customers.
 - `DEMO_MODE=1` turns on the jury sandbox: scenarios with those test PINs, a
   "Why?" that shows policy rules and what the model received, the session's
   own tickets, and buttons that expire the session or take the model down for

@@ -217,7 +217,9 @@ then serves on `$PORT`.
 - Without `ADMIN_API_KEY`, `/admin/*` returns 503; without `OPERATOR_KEYS`, acting on a ticket does; without `METRICS_TOKEN` and
   `ADMIN_API_KEY`, `/metrics` does.
 - The sandbox's test credentials (`DEMO_PUBLIC_CUSTOMERS`, `/demo/*`, `/admin/demo_pin`) exist only with `DEMO_MODE=1`; the
-  entrypoint picks the sandbox customers only then.
+  entrypoint picks the sandbox customers only then. `DEMO_PUBLIC_CUSTOMERS` is the one list of public accounts: the login list,
+  the guided scenarios and the trace reset read it, and a scenario whose customer is not on it is not offered (unset, none is). Outside
+  the container, with `DEMO_MODE=1`, set it yourself: `DEMO_PUBLIC_CUSTOMERS="$(python -m ops.demo_customers)"`.
 - A retention loop runs beside the API (`python -m ops.retention --loop`, every `RETENTION_INTERVAL_HOURS`, 24 by default,
   0 = off): see "Data retention".
 - The app runs as a non-root user. The container starts as root only so the
