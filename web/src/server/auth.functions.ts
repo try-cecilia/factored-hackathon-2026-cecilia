@@ -1,6 +1,6 @@
 import { createServerFn } from '@tanstack/react-start'
 import { AgentApiError, agentApi } from './agent-api'
-import { clearSessionToken, getSessionToken, setSessionToken } from './session-cookie'
+import { clearSessionToken, getSessionToken, setSessionToken, wasReplaced } from './session-cookie'
 import { PublicError } from './rpc-guard'
 
 export type Credentials = { customer_id: string; pin: string }
@@ -18,6 +18,12 @@ export type Session = {
 export type DemoCustomer = { customer_id: string; test_pin: string }
 
 export type LoginResult = { ok: true } | { ok: false; status: number }
+
+/** `revoked` is whether the API confirmed that it ended the session. The browser has let go of it either way. */
+export type LogoutResult = { revoked: boolean }
+
+// The API may be slow or down when the person leaves; the answer, and so the cookie's removal, waits at most this long for it.
+const LOGOUT_TIMEOUT_MS = 3_000
 
 function parseCredentials(input: unknown): Credentials {
   const { customer_id, pin } = (input ?? {}) as Record<string, unknown>
@@ -44,10 +50,18 @@ export const login = createServerFn({ method: 'POST' })
     }
   })
 
-export const logout = createServerFn({ method: 'POST' }).handler(async () => {
+// Leaving is the person's decision: the cookie goes even when the API could not be asked to revoke the session (a 500, no answer, a
+// dropped connection), and the answer says whether it did, so the page can tell the truth. The one exception is a login of this same
+// browser that finished while this waited: its Set-Cookie may already be in the browser, and a deletion after it would orphan that session.
+export const logout = createServerFn({ method: 'POST' }).handler(async (): Promise<LogoutResult> => {
   const token = getSessionToken()
-  if (token) await agentApi('/auth/session', { method: 'DELETE', token })
-  clearSessionToken()
+  if (!token) return { revoked: true }
+  const revoked = await agentApi('/auth/session', { method: 'DELETE', token, timeoutMs: LOGOUT_TIMEOUT_MS }).then(
+    () => true,
+    () => false,
+  )
+  if (!wasReplaced(token)) clearSessionToken()
+  return { revoked }
 })
 
 export const getSession = createServerFn({ method: 'GET' }).handler(async (): Promise<Session | null> => {

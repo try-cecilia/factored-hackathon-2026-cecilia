@@ -25,10 +25,12 @@ type Props = {
   /** Where to go after signing in, when the person was sent here from a page. */
   target?: string
   expired?: boolean
+  /** The person just signed out and the API did not confirm it ended the session: the browser let go of it, the server may keep it until it expires. */
+  unconfirmed?: boolean
   signIn: (credentials: { customer_id: string; pin: string }) => Promise<LoginResult>
 }
 
-export function LoginForm({ demoCustomers, target, expired, signIn }: Props) {
+export function LoginForm({ demoCustomers, target, expired, unconfirmed, signIn }: Props) {
   const router = useRouter()
   const t = useT()
   const [customerId, setCustomerId] = useState('')
@@ -70,6 +72,7 @@ export function LoginForm({ demoCustomers, target, expired, signIn }: Props) {
         <h1>{t('login.title')}</h1>
         <p className="pub__lead">{t('login.lead')}</p>
         {expired && <p className="pub__notice" role="status">{t('login.expired')}</p>}
+        {unconfirmed && <p className="pub__notice" role="status">{t('login.signOutUnconfirmed')}</p>}
         <form className="auth-form" onSubmit={onSubmit}>
           <label>
             {t('login.customerId')}

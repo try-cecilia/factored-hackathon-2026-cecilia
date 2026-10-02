@@ -121,11 +121,20 @@ describe('AppShell', () => {
   })
 
   it('signing out closes the session and goes to the sign-in page', async () => {
-    logout.mockResolvedValue(undefined)
+    logout.mockResolvedValue({ revoked: true })
     await draw()
     await userEvent.setup().click(screen.getByRole('button', { name: 'Salir' }))
     expect(logout).toHaveBeenCalledOnce()
     expect(navigate).toHaveBeenCalledWith({ to: '/login' })
+  })
+
+  // The browser has let go of the session either way; what the API did about it is told on the page it lands on, because this one is gone.
+  it('a sign-out whose revocation the API did not confirm still leaves, and the sign-in page says it was not confirmed', async () => {
+    logout.mockResolvedValue({ revoked: false })
+    await draw()
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Salir' }))
+    expect(navigate).toHaveBeenCalledWith({ to: '/login', search: { motivo: 'unconfirmed' } })
+    expect(screen.queryByRole('alert')).toBeNull()
   })
 
   it('a sign-out that fails is told, not swallowed', async () => {
