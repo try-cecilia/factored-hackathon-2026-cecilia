@@ -106,7 +106,8 @@ describe('CopyConversation', () => {
     vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValue(new DOMException('denied', 'NotAllowedError'))
 
     await user.click(button(/Copiar conversación/))
-    expect(status()).toBe('No se pudo copiar')
+    // The refusal arrives when the clipboard's promise settles, after the click has returned: wait for the notice.
+    await vi.waitFor(() => expect(status()).toBe('No se pudo copiar'))
     expect(screen.getAllByText('No se pudo copiar')).toHaveLength(2)
     expect(screen.queryByText('Conversación copiada')).toBeNull()
     await act(() => vi.advanceTimersByTimeAsync(2600))
@@ -137,6 +138,6 @@ describe('CopyConversation', () => {
     await draw(talked, 'pt')
     vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValue(new Error('denied'))
     await user.click(button(/Copiar conversa/))
-    expect(status()).toBe('Não foi possível copiar')
+    await vi.waitFor(() => expect(status()).toBe('Não foi possível copiar'))
   })
 })
