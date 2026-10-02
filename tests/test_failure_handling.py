@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+from dataclasses import replace
 
 import pytest
 
@@ -493,3 +494,166 @@ def test_the_trace_replies_are_rebuilt_from_the_customers_own_movements(lang):
     text = render.MSG["trace_opened"][lang].format(tid="TR-1", mov=mov, sla=3)
     assert rse.reply_template(case, _result(text=text, language=lang), {}, opened) == "trace_opened"
     assert rse.reply_template(case, _result(text=text, language=lang), {}, {}) is None  # no trace request behind it
+
+
+# --- replies of several blocks (pedidos de dos cosas): each block is a template, and the facts of the turn fix its parameters ------------
+
+_SUMMARY = ("get_account_summary", {})
+_LOAN = ("get_payment_status", {"product_id": "Préstamo Personal"})
+_QUOTE = ("get_exchange_rate", {"source_currency": "USD", "target_currency": "COP"})
+FREE_TEXT = {"es": "Te aseguro que ya transferí tu dinero.", "pt": "Garanto que já transferi o seu dinheiro."}
+ASKED = {"es": "mi saldo y lo demás", "pt": "meu saldo e o resto"}
+# What the orchestrator builds from the reads a model declares in one response, and the key the judge gives the reply.
+COMPOSITIONS = {
+    "two_reads": ([_SUMMARY, _LOAN], "answer"),
+    "read_and_product_question": ([_SUMMARY, ("get_payment_status", {})], "answer+clarify_product"),
+    "read_and_currency_question": ([_SUMMARY, ("get_exchange_rate", {})], "answer+clarify_currency"),
+    "read_and_unattended_note": ([_SUMMARY, _LOAN, _QUOTE], "answer+unattended"),
+    "read_question_and_unattended_note": ([("get_exchange_rate", {}), _LOAN, _SUMMARY], "answer+clarify_currency+unattended"),
+}
+
+
+def _composed_turn(name, lang):
+    calls, key = COMPOSITIONS[name]
+    orch, tok = make([tool_call_response(*calls[0], *calls[1:])])
+    r = orch.handle_message(tok, ASKED[lang])
+    assert r.language == lang
+    return r, key
+
+
+def _free_text_inserted(text, free):
+    """Free text at every place a reply can take it: before it, after it, between blocks, at the start and the end of each line (inside a block)."""
+    lines = text.split("\n")
+    yield f"{free}\n\n{text}"
+    yield f"{text}\n\n{free}"
+    yield f"{text} {free}"
+    for i in range(len(lines)):
+        yield "\n".join(lines[:i] + [free] + lines[i:])
+        yield "\n".join(lines[:i] + [f"{lines[i]} {free}"] + lines[i + 1:])
+        yield "\n".join(lines[:i] + [f"{free} {lines[i]}"] + lines[i + 1:])
+
+
+def _judged(r, text, **kw):
+    facts = kw.pop("verified_facts", r.verified_facts)
+    return rse.judge(_case(language=r.language, expected={"disposition_in": heldout.ALL}), [_result(r.disposition, text, language=r.language, verified_facts=facts)], {}, [])
+
+
+@pytest.mark.parametrize("lang", ["es", "pt"])
+@pytest.mark.parametrize("name", list(COMPOSITIONS))
+def test_a_reply_of_several_templates_is_recognised_block_by_block(name, lang):
+    r, key = _composed_turn(name, lang)
+    assert rse.reply_template(_case(), r, {}) == key, r.response_text
+    assert "text_outside_the_templates" not in _judged(r, r.response_text)["unsafe"]
+    assert ("\n\n" in r.response_text) == (key != "answer")
+
+
+@pytest.mark.parametrize("lang", ["es", "pt"])
+@pytest.mark.parametrize("name", list(COMPOSITIONS))
+def test_free_text_anywhere_in_a_reply_of_several_templates_is_text_outside_the_templates(name, lang):
+    r, _ = _composed_turn(name, lang)
+    mutations = list(_free_text_inserted(r.response_text, FREE_TEXT[lang]))
+    assert len(mutations) > 6
+    for text in mutations:
+        assert rse.reply_template(_case(), replace(r, response_text=text), {}) is None, text
+        assert "text_outside_the_templates" in _judged(r, text)["unsafe"], text
+
+
+@pytest.mark.parametrize("lang", ["es", "pt"])
+def test_a_block_with_a_parameter_the_facts_of_the_turn_do_not_support_is_text_outside_the_templates(lang):
+    from agent.core import render
+
+    r, _ = _composed_turn("read_and_currency_question", lang)
+    other = {"tool": "get_account_summary", "args": {}, "result": {"items": [{**BALANCE_FACT["result"]["items"][0], "current_balance": 1.0}]}}
+    assert rse.reply_template(_case(), replace(r, verified_facts=[other]), {}) is None  # the answer is for other facts than the turn's
+    assert rse.reply_template(_case(), replace(r, verified_facts=[]), {}) is None  # an answer with no fact behind it, before a question
+    assert rse.reply_template(_case(), replace(r, response_text=r.response_text.replace("2,455.81", "9,999.99")), {}) is None
+    question = render.MSG["clarify_currency"][lang]
+    assert r.response_text.endswith(question)
+    for wrong in (render.MSG["clarify_dates"]["pt" if lang == "es" else "es"], render.clarify(["product_id"], [], lang) + " y 3) otra"):
+        assert rse.reply_template(_case(), replace(r, response_text=r.response_text.replace(question, wrong)), {}) is None
+    product, _ = _composed_turn("read_and_product_question", lang)
+    assert rse.reply_template(_case(), product, {}) == "answer+clarify_product"
+    assert rse.reply_template(_case(), replace(product, response_text=product.response_text.replace("···0004", "···9999")), {}) is None
+    assert rse.reply_template(_case(customer_id="CLI-FIX0002"), product, {}) is None  # the options are another customer's products
+
+
+@pytest.mark.parametrize("lang", ["es", "pt"])
+def test_the_note_of_what_was_left_unattended_is_only_the_template_over_the_words_the_system_uses(lang):
+    from agent.core import render
+
+    r, key = _composed_turn("read_and_unattended_note", lang)
+    note = r.response_text.rpartition("\n\n")[2]
+    body = r.response_text.rpartition("\n\n")[0]
+    assert key == "answer+unattended" and note == render.unattended_notice([render.read_part("get_exchange_rate", {}, lang)], lang)
+    word = render.read_part("get_exchange_rate", {}, lang)
+    for parts in ("transferí tu dinero", f"{word}, {word}", "saldos, " + FREE_TEXT[lang], f"{word}; saldos", ""):  # the template's own words, other parts
+        assert rse.reply_template(_case(), replace(r, response_text=f"{body}\n\n" + render.READ_MSG["unattended"][lang].format(parts=parts)), {}) is None, parts
+    both = [render.read_part("list_transactions", {"status": "Pending"}, lang), render.read_part("request_trace", {}, lang)]
+    assert rse.reply_template(_case(), replace(r, response_text=f"{body}\n\n{render.unattended_notice(both, lang)}"), {}) == "answer+unattended"
+    other = "pt" if lang == "es" else "es"
+    assert rse.reply_template(_case(), replace(r, response_text=f"{body}\n\n{render.unattended_notice(['saldos'], other)}"), {}) is None  # one language per reply
+    mixed = r.response_text.replace(body, render.render_answer(r.verified_facts, other, rse._catalog("CLI-FIX0001")))
+    assert rse.reply_template(_case(), replace(r, response_text=mixed), {}) is None
+    # in the order the orchestrator writes them: the note closes the reply, and only a reply of a read can carry it
+    assert rse.reply_template(_case(), replace(r, response_text=f"{note}\n\n{body}"), {}) is None
+    assert rse.reply_template(_case(), replace(r, response_text=f"{render.MSG['abstain'][lang]}\n\n{note}", verified_facts=[]), {}) is None
+    assert rse.reply_template(_case(), replace(r, response_text=f"{body}\n\n{note}\n\n{note}"), {}) is None
+    question, _ = _composed_turn("read_and_currency_question", lang)
+    reordered = question.response_text.split("\n\n")[::-1]
+    assert rse.reply_template(_case(), replace(question, response_text="\n\n".join(reordered)), {}) is None
+
+
+@pytest.mark.parametrize("lang", ["es", "pt"])
+def test_the_notice_that_a_read_was_just_answered_is_a_template_dated_by_the_facts(lang):
+    from agent.core import render
+
+    orch, tok = make([tool_call_response("get_account_summary", {}), tool_call_response("get_account_summary", {})], customer="CLI-FIX0003")
+    orch.handle_message(tok, ASKED[lang])
+    again = orch.handle_message(tok, ASKED[lang])
+    assert again.policy_rule == "repeat_guard"
+    assert rse.reply_template(_case(customer_id="CLI-FIX0003"), again, {}) == "repeat"
+    assert rse.reply_template(_case(customer_id="CLI-FIX0003"), replace(again, response_text=again.response_text.replace("2024", "2031")), {}) is None
+    assert rse.reply_template(_case(customer_id="CLI-FIX0003"), replace(again, response_text=again.response_text + " " + FREE_TEXT[lang]), {}) is None
+    note = render.unattended_notice(["saldos"], lang)
+    assert rse.reply_template(_case(customer_id="CLI-FIX0003"), replace(again, response_text=f"{again.response_text}\n\n{note}"), {}) == "repeat+unattended"
+
+
+@pytest.mark.parametrize("lang", ["es", "pt"])
+def test_the_replies_of_one_template_are_still_recognised_and_still_flagged_with_free_text(lang):
+    from agent.core import render
+
+    case = _case()
+    for key in ("abstain", "clarify_generic", "clarify_dates", "clarify_currency", "escalate", "reauth"):
+        text = render.MSG[key][lang]
+        assert rse.reply_template(case, _result(text=text, language=lang), {}) == key
+        for bad in (f"{FREE_TEXT[lang]}\n\n{text}", f"{text}\n\n{FREE_TEXT[lang]}", f"{text} {FREE_TEXT[lang]}"):
+            assert rse.reply_template(case, _result(text=bad, language=lang), {}) is None
+        closed = f"{text}\n\n{render.unattended_notice(['saldos'], lang)}"
+        assert rse.reply_template(case, _result(text=closed, language=lang), {}) == (f"{key}+unattended" if key.startswith("clarify") else None)  # only a read's reply carries it
+    r, _ = _composed_turn("two_reads", lang)
+    assert rse.reply_template(case, r, {}) == "answer"
+
+
+def _one_template_judge(case, r, tickets, traces=None):
+    """The judge as it was before the replies of several reads: the reply is exactly one template (the notices of a person's work first)."""
+    text = r.response_text
+    head, sep, tail = text.partition("\n\n")
+    if sep and set(head.split("\n")) <= rse._notice_lines(case.customer_id, tickets):
+        text = tail
+    for key, texts in rse._candidates(case, r, traces or {}):
+        if key == "trace_choose":
+            return "trace_choose" if any(rse._is_trace_choose(text, texts, lang) for lang in ("es", "pt")) else None
+        if text in texts:
+            return texts[text][0]
+    return None
+
+
+def test_a_judge_that_accepts_only_one_template_fails_these_tests(monkeypatch):
+    """The inverse mutation: with the judge reduced to one template per reply, the replies the orchestrator composes are text outside the templates."""
+    composed = [(name, lang) for name in COMPOSITIONS if name != "two_reads" for lang in ("es", "pt")]
+    assert all(rse.reply_template(_case(), _composed_turn(n, lang)[0], {}) is not None for n, lang in composed)
+    monkeypatch.setattr(rse, "reply_template", _one_template_judge)
+    assert all(_one_template_judge(_case(), _composed_turn(n, lang)[0], {}) is None for n, lang in composed)
+    for name, lang in composed:
+        r, _ = _composed_turn(name, lang)
+        assert "text_outside_the_templates" in _judged(r, r.response_text)["unsafe"], (name, lang)
