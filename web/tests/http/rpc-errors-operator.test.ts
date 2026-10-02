@@ -2,7 +2,7 @@
 // explain, never a parser's message; a failure of the console's own handler is a generic error; a validator's message stays.
 import assert from 'node:assert/strict'
 import { after, before, describe, test } from 'node:test'
-import { ADMIN, SAME_ORIGIN, sessionCookie, startConsole } from './harness.ts'
+import { ADMIN, ANA, SAME_ORIGIN, sessionCookie, startConsole } from './harness.ts'
 import { rpcOutcome } from './rpc.ts'
 
 const CANARY = 'CANARY-internal-body-9f3a'
@@ -24,6 +24,28 @@ describe('an unexpected failure of a console read reaches the browser as a plain
       assert.doesNotMatch(answer.text, LEAKS)
       assert.deepEqual(answer.result, { ok: false, status: 502 })
     } finally { app.answerNormally() }
+  })
+
+  test('a 5xx with valid JSON that carries a detail keeps its status and loses the detail', async () => {
+    for (const status of [500, 502, 503]) {
+      app.answerRaw('/admin/tickets/', status, JSON.stringify({ detail: `${CANARY} at /srv/api/desk.py line 12` }))
+      try {
+        const answer = await rpcOutcome(await app.rpc('loadTicket', { method: 'GET', data: { ticket_id: 'TKT-0001-ABCD' }, headers: { Cookie: operator } }))
+        assert.doesNotMatch(answer.text, /CANARY|desk\.py/)
+        assert.deepEqual(answer.result, { ok: false, status })
+      } finally { app.answerNormally() }
+    }
+  })
+
+  test('the details the console needs stay public: a 400 and a 409 on a decision keep the API\'s message', async () => {
+    const operatorKeys = sessionCookie(await app.send('/operador/sesion', { fields: { admin_key: ADMIN, operator_key: ANA }, headers: SAME_ORIGIN }))!
+    for (const [status, detail] of [[400, 'a reason is required'], [409, 'the ticket changed: version 3']] as const) {
+      app.answerRaw('/admin/tickets/', status, JSON.stringify({ detail }))
+      try {
+        const answer = await rpcOutcome(await app.rpc('actOnTicket', { data: { ticket_id: 'TKT-0001-ABCD', action: 'claim' }, headers: { Cookie: operatorKeys } }))
+        assert.deepEqual(answer.result, { ok: false, status, message: detail })
+      } finally { app.answerNormally() }
+    }
   })
 
   test('queue read: the queue is JSON but not a list, so the console\'s own mapping throws', async () => {
