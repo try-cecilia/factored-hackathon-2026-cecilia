@@ -1,4 +1,4 @@
-import { act, cleanup, screen, within } from '@testing-library/react'
+import { act, cleanup, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactElement, ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -125,7 +125,8 @@ describe('AppShell', () => {
     await draw()
     await userEvent.setup().click(screen.getByRole('button', { name: 'Salir' }))
     expect(logout).toHaveBeenCalledOnce()
-    expect(navigate).toHaveBeenCalledWith({ to: '/login' })
+    // The shell navigates once `logout()` has settled, after the click has returned.
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: '/login' }))
   })
 
   it('a sign-out that fails is told, not swallowed', async () => {
@@ -235,8 +236,9 @@ describe('AppShell', () => {
       await user.click(within(demo).getByRole('button', { name: 'Copiar conversación' }))
       const copied = await navigator.clipboard.readText()
       expect(copied).toContain('Tú: Me clonaron la tarjeta')
+      // The result arrives when the clipboard's promise settles, after the click has returned: wait for the notice.
+      await waitFor(() => expect(within(demo).getByRole('status').textContent).toBe('Conversación copiada'))
       expect(within(demo).getAllByText('Conversación copiada').length).toBeGreaterThan(0)
-      expect(within(demo).getByRole('status').textContent).toBe('Conversación copiada')
     })
 
     it('a wide panel is beside the page, not over the bar: no second button in it', async () => {

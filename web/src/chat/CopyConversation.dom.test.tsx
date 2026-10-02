@@ -51,6 +51,8 @@ async function draw(history: HistoryResult, locale: 'es' | 'pt' = 'es', ended = 
 const button = (name: RegExp) => screen.getByRole('button', { name }) as HTMLButtonElement
 const status = () => screen.getByRole('status').textContent
 
+// Auto-advance also releases React Testing Library's async-wrapper timers used by user-event.
+// vi.waitFor advances fake timers itself; it does not need shouldAdvanceTime for retries or its timeout.
 beforeEach(() => vi.useFakeTimers({ shouldAdvanceTime: true }))
 afterEach(() => {
   vi.useRealTimers()
@@ -83,7 +85,8 @@ describe('CopyConversation', () => {
     ])
     expect(copied.join('\n')).not.toMatch(/trace-9f8e7d6c|AUTO_RESOLVE|ESCALATE/)
 
-    expect(status()).toBe('Conversación copiada')
+    // The result arrives when the clipboard's promise settles, after the click has returned: wait for the notice.
+    await vi.waitFor(() => expect(status()).toBe('Conversación copiada'))
     expect(screen.getAllByText('Conversación copiada')).toHaveLength(2) // the one for the screen reader and the one for the eye
     expect(screen.getByTestId('chat-notices').textContent).toBe('Conversación copiada') // the eye reads it by the chat, not over it
     await act(() => vi.advanceTimersByTimeAsync(2600))
@@ -130,7 +133,7 @@ describe('CopyConversation', () => {
     expect(copied[0]).toMatch(/^Conversa com a Cecilia · \d\d\/\d\d\/2026$/)
     expect(copied[1]).toMatch(/^\[\d\d:\d\d\] Você: Mis últimos movimientos$/)
     expect(copied[2]).toMatch(/^\[\d\d:\d\d\] Cecilia: Estos son/)
-    expect(status()).toBe('Conversa copiada')
+    await vi.waitFor(() => expect(status()).toBe('Conversa copiada'))
   })
 
   it('in Portuguese a refusal is told in Portuguese', async () => {
