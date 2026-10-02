@@ -73,9 +73,12 @@ describe('claimed', () => {
     expect(screen.queryByLabelText(/Mensaje para el cliente/)).toBeNull()
     await user.click(button(/Aprobar rastreo/)!)
     expect(act).toHaveBeenLastCalledWith('approve', { expectedVersion: 2, reason: undefined })
+    // The panel clears the reason once the action has answered and holds its buttons until it has read the case again: wait for the next one.
+    await waitFor(() => expect(disabled(button(/^Rechazar/))).toBe(false))
     await user.type(screen.getByLabelText(/Motivo del rechazo/), '  duplicado ')
     await user.click(button(/^Rechazar/)!)
     expect(act).toHaveBeenLastCalledWith('reject', { expectedVersion: 2, reason: 'duplicado' })
+    await waitFor(() => expect(disabled(button(/Devolver a la asistente/))).toBe(false))
     await user.click(button(/Devolver a la asistente/)!)
     expect(act).toHaveBeenLastCalledWith('release', { expectedVersion: 2, reason: undefined })
   })
@@ -97,6 +100,8 @@ describe('claimed', () => {
     expect(act).toHaveBeenLastCalledWith('resolve', { expectedVersion: 1, message: 'Listo.' })
     expect(await screen.findByText('Caso resuelto.')).toBeTruthy()
     expect(box.value).toBe('')
+    // The notice comes before the case is read again, which is when the buttons are free.
+    await waitFor(() => expect(disabled(button(/Devolver a la asistente/))).toBe(false))
     await user.click(button(/Devolver a la asistente/)!)
     expect(act).toHaveBeenLastCalledWith('release', { expectedVersion: 1 })
   })
@@ -177,7 +182,8 @@ describe('version conflict (409)', () => {
     setup(ticket('open'), undefined, { act })
     await userEvent.setup().click(button(/Tomar caso/)!)
     expect((await screen.findByRole('alert')).textContent).toMatch(/servicio no está disponible/)
-    expect(disabled(button(/Tomar caso/))).toBe(false)
+    // The notice comes before the case is read again, which is when the button is free.
+    await waitFor(() => expect(disabled(button(/Tomar caso/))).toBe(false))
   })
 })
 
