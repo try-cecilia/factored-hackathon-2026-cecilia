@@ -38,7 +38,7 @@ test('on a phone the queue is a list of cards with the request on its own line',
 // Seen at 844x390 (a phone on its side): a fixed head and foot left 200 px of case between them. There the whole case scrolls as one
 // page and the actions stay pinned at the bottom.
 test('on a short screen the case scrolls as one page, with its actions pinned at the bottom', () => {
-  const start = css.indexOf('@media (max-width: 1100px) and (max-height: 500px) {')
+  const start = css.indexOf('@media (max-width: 1023px) and (max-height: 500px) {')
   assert.ok(start >= 0, 'the short-screen layout is there')
   const short = css.slice(start, css.indexOf('\n}', start))
   assert.match(short, /\.op-ticket__body[^{]*\{[^}]*overflow:\s*visible/)

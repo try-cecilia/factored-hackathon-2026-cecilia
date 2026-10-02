@@ -53,7 +53,7 @@
   .pub__main h1 { font-size: var(--text-3xl); line-height: 36px; }
 }
 /* A phone on its side: the mascot gives its room to the form. */
-@media (max-height: 500px) {
+@media (max-width: 1023px) and (max-height: 500px) {
   .pub__mascot { width: 56px; height: 56px; }
   .pub__main { justify-content: flex-start; }
 }

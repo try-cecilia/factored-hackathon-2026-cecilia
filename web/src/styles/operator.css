@@ -402,7 +402,7 @@ textarea.op-input:focus { box-shadow: 0 0 0 2px var(--color-cecil-blue); }
 
 /* A phone on its side: too short for a fixed head and foot around a scrolling middle. The whole case scrolls as one page, and its
    actions stay at the bottom of the screen. */
-@media (max-width: 1100px) and (max-height: 500px) {
+@media (max-width: 1023px) and (max-height: 500px) {
   .op-split { height: auto; min-height: 100%; }
   .op-list, .op-detail, .op-ticket__body { overflow: visible; }
   .op-detail { min-height: auto; }
