@@ -32,6 +32,12 @@ a { color: inherit; }
 .skip:focus { top: 12px; }
 .icon { flex-shrink: 0; }
 
+/* Touch screens: iOS zooms into any field with text under 16px when it takes the focus, and never zooms back out. Every field
+   is 16px there, whatever its component draws on a desktop; the one !important here, so no component rule can undercut it. */
+@media (pointer: coarse) {
+  input:not([type='checkbox'], [type='radio'], [type='hidden']), textarea, select { font-size: max(16px, 1em) !important; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
 }
