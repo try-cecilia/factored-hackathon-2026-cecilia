@@ -45,11 +45,15 @@ service" the brief asks for: a customer number alone does not prove identity.
   session is issued (fails closed). An unknown customer, or one whose account is closed, cannot open a session.
 - *Security:* constant-time comparison; the `POST /auth/session` endpoint also limits attempts per source.
 - *Lookup and logout:* `GET /auth/session` with the `X-Session-Token` header returns `customer_id`, `session_ref`, the
-  attributes and the remaining time, without extending the session (401 if it is not alive). `DELETE /auth/session` revokes it and
-  always answers 204, even if the token does not exist or is already revoked.
+  attributes and the remaining time, without extending the session (401 if it is not alive). `DELETE /auth/session` revokes it first, then clears the conversation's history as a separate step, and
+  answers 204 even if the token does not exist or is already revoked. If the revocation itself fails the answer is an error, never a 204;
+  if only the history clean-up fails, the session is still revoked, the failure is counted by type (`/admin/capacity`, `failures`) and the answer is 204.
 - *Web frontend:* a BFF keeps the token in an httpOnly cookie and the browser never sees it. It sends the user's IP in
-  `X-Client-IP`; with `CLIENT_IP_HEADER=X-Client-IP` the attempt limit is per user. This is only safe if nothing but
-  the BFF can reach the API (private service); otherwise anyone can choose their own IP.
+  `X-Client-IP` together with `X-BFF-Secret`, the value of `BFF_CLIENT_IP_SECRET` that the web and the API share; the API
+  believes the forwarded address only on a call that carries it (compared in constant time), so the attempt limit is per user
+  even when the API is public. Any other caller is told apart by `CLIENT_IP_HEADER` (the edge's header) or its own address.
+  Without the secret the forwarded address is ignored. `CLIENT_IP_HEADER=X-Client-IP` still works on a private API that
+  only the BFF reaches, but on a public one anyone could choose their own IP.
 - *Data:* only the token circulates downstream; tickets and logs carry `session_ref`, a one-way hash.
 
 **Substitution point.** The check inside `IdentityService.login` (`derive_test_pin`). What stays the same: whoever
@@ -90,8 +94,8 @@ monitoring and traces. How the keys are configured:
 | Where | What is configured |
 |---|---|
 | API | `ADMIN_API_KEY` (reads: queue, tickets, monitoring, traces) and `OPERATOR_KEYS=ana=…,beto=…` (acts: claim, approve, reject, hand back). Each operator key is 24 characters or longer. |
-| Web (server) | `AGENT_API_URL`, **`WEB_PUBLIC_ORIGIN`** (required in production) and `TRUSTED_CLIENT_IP_HEADER` if there is a proxy. **The keys do not go in the web's environment**: each person types their own at `/operador/login`. |
-| API, behind the BFF | `CLIENT_IP_HEADER=X-Client-IP`, same as for customer login. Without it, the failed-attempt limit (`OPERATOR_AUTH_FAILS_PER_MIN`) counts by the BFF's IP and ten mistyped keys lock out every operator. This is only safe if nothing but the BFF reaches the API. |
+| Web (server) | `AGENT_API_URL`, **`WEB_PUBLIC_ORIGIN`** (required in production) and `TRUSTED_CLIENT_IP_HEADER` if there is a proxy, and `BFF_CLIENT_IP_SECRET` (the same value as the API's). **The keys do not go in the web's environment**: each person types their own at `/operador/login`. |
+| API and web, behind the BFF | `BFF_CLIENT_IP_SECRET`, the same value on both, as for customer login (the web forwards the user's address, the API believes it only with the secret). Without it, the failed-attempt limit (`OPERATOR_AUTH_FAILS_PER_MIN`) counts by the BFF's IP and ten mistyped keys lock out every operator. A private API that only the BFF reaches may use `CLIENT_IP_HEADER=X-Client-IP` instead. |
 
 - *Reading and acting kept separate, as in the API.* Sign-in asks for the read key and, optionally, the operator key. With
   only the read key the session is **read-only**: it sees everything and cannot act; the console offers to add the

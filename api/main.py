@@ -3,9 +3,11 @@
 - /auth/session exchanges customer_id + test PIN for a short-lived token
   (agent/session/identity.py); /chat only ever accepts that token. GET
   /auth/session with X-Session-Token reads the session back without extending
-  it; DELETE revokes it (always 204). A web BFF holds the token and calls these.
-- Behind that BFF, CLIENT_IP_HEADER=X-Client-IP makes per-IP limits use the end
-  user's address, safe only when nothing but the BFF can reach the API.
+  it; DELETE revokes it (204 even for an unknown token). A web BFF holds the token and calls these.
+- Per-IP limits use the end user's address. The BFF forwards it in X-Client-IP with the secret it shares with
+  the API (BFF_CLIENT_IP_SECRET, header X-BFF-Secret): only a call with that secret is believed. Anyone else is told
+  apart by CLIENT_IP_HEADER (the edge's header) or the peer address. CLIENT_IP_HEADER=X-Client-IP still works on a
+  private API that only the BFF reaches.
 - /admin/* require X-Admin-Key == ADMIN_API_KEY and are disabled (503) when
   no key is configured — they expose tickets, audit and traces, which carry
   customer data. Acting on a ticket takes an operator key instead, and /metrics
@@ -25,7 +27,9 @@
 """
 from __future__ import annotations
 
+import ipaddress
 import json
+import logging
 import math
 import os
 import threading
@@ -60,6 +64,8 @@ from api.human_queue import listing as human_queue_listing
 from api.observability import ObservabilityMiddleware, RouteTemplates, readiness
 from api.security import SecurityHeadersMiddleware, configure_cors, constant_time_equals
 from ops.drift import recent_rows, report as drift_report, save_baseline as save_drift_baseline
+
+logger = logging.getLogger("cecilai.api")
 
 serialize_policy_writers()  # the ticket queue and the desk append under the same lock as the retention purge (agent/filelock.py)
 
@@ -125,6 +131,25 @@ class RateLimiter:
     def record(self, key: str) -> None:
         with self._lock:
             self._hits[key].append(time.time())
+
+    def reserve(self, key: str) -> float | None:
+        """Takes one of this key's hits, checking and taking in one step, or returns None if none is left. What it returns is
+        the claim ticket for `release`. The check-then-record pair (`over`, `record`) lets concurrent callers all pass the check."""
+        now = time.time()
+        with self._lock:
+            q = self._prune(key, now)
+            if len(q) >= self.limit:
+                return None
+            q.append(now)
+            return now
+
+    def release(self, key: str, ticket: float) -> None:
+        """Gives back a hit taken by `reserve` (its attempt turned out not to be a failure)."""
+        with self._lock:
+            try:
+                self._hits[key].remove(ticket)
+            except ValueError:  # already aged out of the window, or never held
+                pass
 
     def retry_after(self, key: str) -> int:
         """Whole seconds until this key has a hit to spend again (at least 1)."""
@@ -192,31 +217,70 @@ class ChatResponse(BaseModel):
     why: dict | None = None  # DEMO_MODE only: the rule, what the model received and chose, what the code verified
 
 
+BFF_SECRET_HEADER = "X-BFF-Secret"
+MIN_BFF_SECRET_LENGTH = 16  # a shorter value is no credential: the forwarded address is then not believed
+
+
+def _forwarded_by_the_bff(request: Request) -> str | None:
+    """The end user's address as the web service (the BFF) forwards it in X-Client-IP, or None. Believed only when the call
+    carries the secret both services share (BFF_CLIENT_IP_SECRET, compared in constant time): X-Client-IP alone is the
+    caller's own words on a public API. Without the secret configured, this is always None."""
+    secret = os.environ.get("BFF_CLIENT_IP_SECRET", "")
+    if len(secret) < MIN_BFF_SECRET_LENGTH or not constant_time_equals(request.headers.get(BFF_SECRET_HEADER), secret):
+        return None
+    forwarded = (request.headers.get("X-Client-IP") or "").strip()
+    try:
+        return str(ipaddress.ip_address(forwarded))
+    except ValueError:
+        return None  # not an address: the key of a limiter bucket must be one
+
+
 def client_ip(request: Request) -> str:
-    """The caller's address, for per-client limits. Behind Render the peer is one of its internal proxies and the
-    real address comes in CF-Connecting-IP, set by its Cloudflare edge, which no client can forge (measured
-    2026-09-27; Render sends no X-Forwarded-For). Anywhere else that header is the client's own words, so it is
-    read only when CLIENT_IP_HEADER names it."""
+    """The caller's address, for per-client limits. A call from the web BFF carries the browser's address in X-Client-IP
+    and the shared secret that vouches for it (_forwarded_by_the_bff). Any other caller is told apart by its own address:
+    behind Render the peer is one of its internal proxies and the real address comes in CF-Connecting-IP, set by its
+    Cloudflare edge, which no client can forge (measured 2026-09-27; Render sends no X-Forwarded-For). Anywhere else that
+    header is the client's own words, so it is read only when CLIENT_IP_HEADER names it."""
+    if forwarded := _forwarded_by_the_bff(request):
+        return forwarded
     header = os.environ.get("CLIENT_IP_HEADER")
     return (header and request.headers.get(header)) or (request.client.host if request.client else "unknown")
 
 
 # Failed admin, metrics and operator credentials count per client address: past the limit even the right key is refused until
-# the window passes, so a key cannot be guessed at line speed.
+# the window passes, so a key cannot be guessed at line speed. The attempt is reserved before the key is compared (one hit of
+# the address's window, taken atomically) and given back only if the key was right, so concurrent guesses cannot all slip
+# past a check that nobody has paid for yet.
 operator_fail_limiter = RateLimiter(int(os.environ.get("OPERATOR_AUTH_FAILS_PER_MIN", "10")), 60, "auth_failures")
 
 
-def _refuse_if_guessing(request: Request, kind: str) -> str:
+def _reserve_attempt(request: Request, kind: str) -> tuple[str, float]:
     origin = client_ip(request)
-    if operator_fail_limiter.over(origin):
+    ticket = operator_fail_limiter.reserve(origin)
+    if ticket is None:
         metrics.default.rate_limited.labels("auth_failures").inc()
         default_audit_log.event(f"{kind}_auth_failed", origin=origin, reason="blocked")
         raise too_many(operator_fail_limiter, origin, "too many failed attempts")
-    return origin
+    return origin, ticket
+
+
+def _verified(origin: str, ticket: float, kind: str, detail: str, check):
+    """Runs the comparison (`check`, which returns something truthy for a right credential) for a reserved attempt. A wrong
+    credential keeps the hit taken and answers 401: that is the failure the limit counts. A right one gives the hit back, and
+    so does an error of ours inside the comparison, which then propagates: only a guess is held against the address."""
+    try:
+        result = check()
+    except BaseException:
+        operator_fail_limiter.release(origin, ticket)
+        raise
+    if not result:
+        raise _bad_credential(origin, kind, detail)
+    operator_fail_limiter.release(origin, ticket)
+    return result
 
 
 def _bad_credential(origin: str, kind: str, detail: str) -> HTTPException:
-    operator_fail_limiter.record(origin)
+    """The reserved hit stays taken: that is the failure being counted."""
     default_audit_log.event(f"{kind}_auth_failed", origin=origin, reason="invalid")
     return HTTPException(401, detail)
 
@@ -225,9 +289,8 @@ def require_admin(request: Request, x_admin_key: str | None = Header(default=Non
     expected = os.environ.get("ADMIN_API_KEY")
     if not expected:
         raise HTTPException(503, "admin endpoints disabled: ADMIN_API_KEY not configured")
-    origin = _refuse_if_guessing(request, "admin")
-    if not constant_time_equals(x_admin_key, expected):
-        raise _bad_credential(origin, "admin", "invalid admin key")
+    origin, ticket = _reserve_attempt(request, "admin")
+    _verified(origin, ticket, "admin", "invalid admin key", lambda: constant_time_equals(x_admin_key, expected))
 
 
 def require_metrics(request: Request, authorization: str | None = Header(default=None),
@@ -236,15 +299,18 @@ def require_metrics(request: Request, authorization: str | None = Header(default
     keys = [k for k in (os.environ.get("METRICS_TOKEN"), os.environ.get("ADMIN_API_KEY")) if k]
     if not keys:
         raise HTTPException(503, "metrics disabled: neither METRICS_TOKEN nor ADMIN_API_KEY is configured")
-    origin = _refuse_if_guessing(request, "metrics")
+    origin, ticket = _reserve_attempt(request, "metrics")
     scheme, _, bearer = (authorization or "").partition(" ")
     presented = [x_admin_key, bearer.strip() if scheme.lower() == "bearer" else None]
-    ok = False
-    for candidate in presented:
-        for key in keys:  # every pair is compared, with no early exit
-            ok |= constant_time_equals(candidate, key)
-    if not ok:
-        raise _bad_credential(origin, "metrics", "invalid metrics credentials")
+
+    def compare() -> bool:
+        ok = False
+        for candidate in presented:
+            for key in keys:  # every pair is compared, with no early exit
+                ok |= constant_time_equals(candidate, key)
+        return ok
+
+    _verified(origin, ticket, "metrics", "invalid metrics credentials", compare)
 
 
 OperatorDirectory.from_env()  # a bad OPERATOR_KEYS stops the service from starting, rather than failing at the first request
@@ -256,11 +322,8 @@ def require_operator(request: Request, x_operator_key: str | None = Header(defau
     directory = OperatorDirectory.from_env()
     if not directory.enabled:
         raise HTTPException(503, "operator endpoints disabled: OPERATOR_KEYS not configured")
-    origin = _refuse_if_guessing(request, "operator")
-    name = directory.authenticate(x_operator_key)
-    if name is None:
-        raise _bad_credential(origin, "operator", "invalid operator key")
-    return name
+    origin, ticket = _reserve_attempt(request, "operator")
+    return _verified(origin, ticket, "operator", "invalid operator key", lambda: directory.authenticate(x_operator_key))
 
 
 @app.get("/")
@@ -336,10 +399,16 @@ def read_session(x_session_token: str | None = Header(default=None)) -> SessionI
 
 @app.delete("/auth/session", status_code=204)
 def end_session(x_session_token: str | None = Header(default=None)) -> Response:
-    """Logout. Always 204, so an unknown or already revoked token is not an error."""
+    """Logout. 204 for an unknown or already revoked token too. The revocation comes first and is the only step whose failure
+    is the caller's (an error, never a 204 over a live session); wiping the history is a separate task whose failure is
+    counted by type and does not undo the logout."""
     if x_session_token:
-        default_orchestrator.conversations.clear_transcript(session_ref(x_session_token))
         default_store.revoke(x_session_token)
+        try:
+            default_orchestrator.conversations.clear_transcript(session_ref(x_session_token))
+        except Exception as exc:  # noqa: BLE001 - the session is already over; nothing of the error reaches the client or the log
+            observability.count_failure(f"logout_transcript_clear:{type(exc).__name__}")
+            logger.warning("logout: the history could not be cleared (%s)", type(exc).__name__)
     return Response(status_code=204)
 
 
@@ -469,9 +538,8 @@ def case_status(ticket_id: str, x_session_token: str | None = Header(default=Non
 
 @app.get("/demo/customers", dependencies=[Depends(demo.require_demo)])
 def demo_customers() -> list[dict]:
-    ids = [c.strip() for c in os.environ.get("DEMO_PUBLIC_CUSTOMERS", "").split(",") if c.strip()]
     try:
-        return [{"customer_id": c, "test_pin": derive_test_pin(c)} for c in ids]
+        return [{"customer_id": c, "test_pin": derive_test_pin(c)} for c in demo.public_customer_ids()]
     except IdentityUnavailable:
         return []
 

@@ -59,6 +59,7 @@ services:
       - EXPOSE_API_DOCS
       - SECURITY_HSTS
       - CLIENT_IP_HEADER
+      - BFF_CLIENT_IP_SECRET
       - DEMO_PUBLIC_CUSTOMERS
       - SESSION_TTL_SECONDS
       - CHAT_RATE_PER_MIN
@@ -134,6 +135,7 @@ services:
       # a setting that is not passed here.
       - WEB_PUBLIC_ORIGIN=${WEB_PUBLIC_ORIGIN:-http://127.0.0.1:${WEB_PORT:-3000},http://localhost:${WEB_PORT:-3000}}
       - TRUSTED_CLIENT_IP_HEADER
+      - BFF_CLIENT_IP_SECRET
       - OPERATOR_IDLE_SECONDS
       - UI_GALLERY
       # The API's own switch: with 0 the web never asks it for the demo kit.

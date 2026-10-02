@@ -160,8 +160,8 @@ service, and as our own roadmap.
 - **Operator web console.** The web server keeps the keys in memory (an `httpOnly` + `SameSite=Strict` cookie with an
   opaque identifier): a restart or a second replica ends the sessions, and a leaked key stays valid until it is rotated.
   Each person types their keys into a native form that sends them once to the BFF (they never go through the page's
-  JavaScript or back to the browser), so they depend on the channel being TLS. Without `CLIENT_IP_HEADER=X-Client-IP`
-  behind the BFF, the failed-attempt limit counts by the BFF's address. The queue is read whole (the 200 newest entries
+  JavaScript or back to the browser), so they depend on the channel being TLS. Without `BFF_CLIENT_IP_SECRET`
+  on the web and the API (or `CLIENT_IP_HEADER=X-Client-IP` on a private API), the failed-attempt limit counts by the BFF's address. The queue is read whole (the 200 newest entries
   of the file and, whatever their age, every open or claimed case still in the file, that is, until the 90-day retention
   reaches it; an old case already decided drops off the list), then filtered, sorted and paginated in the browser (25 per
   page) and refreshed by polling every 30 s, with no notifications. Claim, approve, reject and return act with one click,
@@ -174,7 +174,9 @@ service, and as our own roadmap.
   Portuguese, with synthetic data from `ops.seed_operator_demo`). Load and screen-reader accessibility, with the bank's
   customer model and real data, remain to be tested.
 - `/demo/customers` publishes test PINs for a few sandbox accounts, like any
-  sandbox's test login. It exists only with `DEMO_MODE=1` (a 404 otherwise, as does `/admin/demo_pin`).
+  sandbox's test login. It exists only with `DEMO_MODE=1` (a 404 otherwise, as does `/admin/demo_pin`). The guided
+  scenarios and the sandbox reset use the same list (`DEMO_PUBLIC_CUSTOMERS`): a scenario for an account that is not on it
+  is not offered, and with the list empty nothing is. The container fills it with the demo roles' customers.
 - `DEMO_MODE=1` turns on the jury sandbox: scenarios with those test PINs, a
   "Why?" that shows policy rules and what the model received, the session's
   own tickets, and buttons that expire the session or take the model down for

@@ -2,6 +2,15 @@
 # persistent disk for the warehouse, tickets and traces. Values marked `sync: false` are asked for when the
 # Blueprint is created (Render ignores them on later syncs). Put a spend limit on the model key at the provider;
 # LLM_DAILY_BUDGET_USD is a second, in-process cap. Steps and checks: docs/operations.md.
+# One value for the two services: the secret the web sends with the end user's address and the API checks before it believes
+# that address (api/main.py, client_ip). Render generates it once and both services read the same one; it is never in this
+# file. (`sync: false` is not supported inside a group, and a `generateValue` on each service would give two different values.)
+envVarGroups:
+  - name: bff-client-ip
+    envVars:
+      - key: BFF_CLIENT_IP_SECRET
+        generateValue: true
+
 services:
   - type: web
     name: x-payments-agent
@@ -17,6 +26,7 @@ services:
       mountPath: /app/data/warehouse
       sizeGB: 1
     envVars:
+      - fromGroup: bff-client-ip
       - key: DEMO_MODE
         value: "1"
       # Sessions and conversations live on the disk, so a restart or a deploy keeps a customer's case in flight.
@@ -34,7 +44,9 @@ services:
         value: "1"
       - key: RETENTION_INTERVAL_HOURS  # the container purges expired records daily (docs/operations.md, "Data retention")
         value: "24"
-      # The real client address on Render: set by its Cloudflare edge, unforgeable; Render sends no X-Forwarded-For.
+      # The real client address on Render: set by its Cloudflare edge, unforgeable; Render sends no X-Forwarded-For. For a call
+      # from the web, that edge shows the web service, so the web forwards the user's address in X-Client-IP with the shared
+      # BFF_CLIENT_IP_SECRET, which is the only way this API believes an X-Client-IP (never set CLIENT_IP_HEADER to it: this API is public).
       - key: CLIENT_IP_HEADER
         value: CF-Connecting-IP
       - key: LOGIN_RATE_PER_MIN
@@ -76,8 +88,9 @@ services:
   # The web the jury uses (web/, TanStack Start served by web/serve.mjs): the customer chat and the operator console. It
   # calls the API above at its public URL. Neither URL is a secret. WEB_PUBLIC_ORIGIN must be exactly the address the
   # browser sees: the operator forms refuse posts from any other origin, and an https origin gives Secure cookies.
-  # Behind the API's edge every web user arrives from this service's address, so the API's per-client limits (logins,
-  # failed keys) count the web's users together; a private API behind the web would count them one by one.
+  # The API's edge sees every web user arrive from this service's address, so the web forwards each user's address in
+  # X-Client-IP with BFF_CLIENT_IP_SECRET (the group below, shared with the API) and the API's per-client limits (logins,
+  # failed keys) count the users one by one. Without that secret on both services they count them together.
   - type: web
     name: cecil-ai
     runtime: docker
@@ -88,6 +101,7 @@ services:
     healthCheckPath: /_healthz
     autoDeployTrigger: "off"  # deploy by hand, like the API
     envVars:
+      - fromGroup: bff-client-ip
       - key: AGENT_API_URL
         value: https://x-payments-agent.onrender.com
       - key: WEB_PUBLIC_ORIGIN

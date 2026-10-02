@@ -22,9 +22,15 @@ function clientIp() {
 }
 
 export async function agentFetch(path: string, { method = 'GET', body, token, timeoutMs = 5_000, headers: extra }: RequestOptions = {}) {
+  // DEMO_MODE=0 given to the web: its demo functions do nothing, so none reaches the API's sandbox, whoever calls it.
+  if (process.env.DEMO_MODE === '0' && path.startsWith('/demo/')) throw new AgentApiError(404)
   const headers = new Headers({ Accept: 'application/json', ...extra })
   const ip = clientIp()
   if (ip) headers.set('X-Client-IP', ip)
+  // The API believes a forwarded address only with the secret both services share (api/main.py, client_ip). Set here, after
+  // `extra`, so nothing the caller passes can replace it; without the secret configured the address is sent as before.
+  const shared = process.env.BFF_CLIENT_IP_SECRET
+  if (ip && shared) headers.set('X-BFF-Secret', shared)
   if (token) headers.set('X-Session-Token', token)
   if (body !== undefined) headers.set('Content-Type', 'application/json')
 

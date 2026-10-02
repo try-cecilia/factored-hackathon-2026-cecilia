@@ -76,6 +76,7 @@ def test_if_the_date_of_the_data_cannot_be_read_only_the_trace_scenario_goes(mon
         roles = demo_customers.roles()
         assert "pending" not in roles and {"multi", "arrears", "no_dpd", "abroad", "suspended"} <= set(roles)
         assert demo_customers.pick() == ["CLI-FIX0001", "CLI-FIX0002", "CLI-FIX0005"]
+        monkeypatch.setenv("DEMO_PUBLIC_CUSTOMERS", ",".join(demo_customers.pick()))  # as the entrypoint does
         reply = TestClient(main.app).get("/demo/scenarios")
         assert reply.status_code == 200
         ids = {s["id"] for s in reply.json()}
@@ -92,6 +93,7 @@ def client(monkeypatch, tmp_path):
     monkeypatch.setattr(main, "login_limiter", main.RateLimiter(100, 60))
     monkeypatch.setattr(main, "chat_limiter", main.RateLimiter(100, 60))
     monkeypatch.setenv("DEMO_MODE", "1")
+    monkeypatch.setenv("DEMO_PUBLIC_CUSTOMERS", ",".join(demo_customers.pick()))  # what ops/entrypoint.sh sets in the sandbox
     return TestClient(main.app)
 
 
@@ -131,6 +133,49 @@ def test_guided_scenarios_cover_every_path_with_customers_that_can_sign_in(clien
         assert client.post("/auth/session", json={"customer_id": s["customer_id"], "pin": s["test_pin"]}).status_code == 200
     attack = next(s for s in scenarios if s["id"] == "attack_foreign_product")
     assert attack["customer_id"] == "CLI-FIX0001" and "PRD-FIX0006" in attack["turns"][0]  # someone else's product
+
+
+def test_the_scenarios_publish_nothing_while_the_public_list_is_not_configured(client, monkeypatch):
+    """The canonical list of public sandbox accounts is DEMO_PUBLIC_CUSTOMERS; without it nothing is offered (fail closed)."""
+    from api import demo
+
+    demo._scenarios.cache_clear()
+    for unset in ("", " , "):
+        monkeypatch.setenv("DEMO_PUBLIC_CUSTOMERS", unset)
+        assert client.get("/demo/scenarios").json() == []
+        assert client.get("/demo/customers").json() == []
+    monkeypatch.delenv("DEMO_PUBLIC_CUSTOMERS")
+    assert client.get("/demo/scenarios").json() == []
+
+
+def test_no_scenario_uses_an_account_outside_the_public_list_and_the_list_is_read_on_every_call(client, monkeypatch):
+    monkeypatch.setenv("DEMO_PUBLIC_CUSTOMERS", " CLI-FIX0002 ,CLI-FIX0002")
+    shown = client.get("/demo/scenarios").json()
+    assert {s["id"] for s in shown} == {"normal_fx", "human_missing_data"}  # the roles CLI-FIX0002 fills, and no one else's
+    assert {s["customer_id"] for s in shown} == {"CLI-FIX0002"}
+    assert {s["test_pin"] for s in shown} == {derive_test_pin("CLI-FIX0002")}
+    assert [c["customer_id"] for c in client.get("/demo/customers").json()] == ["CLI-FIX0002"]  # the same list, parsed once
+    monkeypatch.setenv("DEMO_PUBLIC_CUSTOMERS", "CLI-FIX0005")  # a cached scenario list must not keep the permission it had
+    again = client.get("/demo/scenarios").json()
+    assert {s["customer_id"] for s in again} == {"CLI-FIX0005"} and {s["id"] for s in again} == {"human_compliance"}
+    assert all(s["test_pin"] == derive_test_pin(s["customer_id"]) for s in again)
+
+
+def test_a_reset_is_for_a_public_account_only(client, monkeypatch):
+    from agent.tools.traces import default_traces
+
+    default_traces.open("CLI-FIX0004", "TXN-FIX0006", "PRD-FIX0010", "an-earlier-jury-run")
+    token = login(client, "CLI-FIX0004")
+    monkeypatch.setenv("DEMO_PUBLIC_CUSTOMERS", "CLI-FIX0001")  # CLI-FIX0004 is not one of the sandbox's public accounts
+    refused = client.post("/demo/fault", json={"session_token": token, "fault": "clear_traces"})
+    assert refused.status_code == 403
+    assert default_traces.find("CLI-FIX0004", "TXN-FIX0006")  # nothing was deleted
+    monkeypatch.setenv("DEMO_PUBLIC_CUSTOMERS", "CLI-FIX0004")
+    assert client.post("/demo/fault", json={"session_token": token, "fault": "clear_traces"}).json() == {"traces_cleared": 1}
+    # the faults that touch only the caller's own session need no list
+    monkeypatch.setenv("DEMO_PUBLIC_CUSTOMERS", "CLI-FIX0001")
+    assert client.post("/demo/fault", json={"session_token": token, "fault": "llm_outage"}).json() == {"llm": "down"}
+    client.post("/demo/fault", json={"session_token": token, "fault": "llm_restore"})
 
 
 def tool(name, args):

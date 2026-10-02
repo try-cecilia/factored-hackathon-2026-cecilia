@@ -5,7 +5,8 @@ is a 404 and /chat carries no "why". Everything acts on the caller's own
 session: the bank view lists the tickets that session filed, and a fault
 (expired session, language model down) affects that session alone. The
 scenario customers are sandbox accounts whose test PINs the demo publishes,
-as /demo/customers does.
+as /demo/customers does, and only those: the one list of public accounts is DEMO_PUBLIC_CUSTOMERS
+(`public_customer_ids`). The login list, the scenarios and the reset all read it on every call; unset, nothing is offered.
 """
 from __future__ import annotations
 
@@ -37,6 +38,13 @@ MAX_FLAGGED_SESSIONS = 10_000
 
 def enabled() -> bool:
     return os.environ.get("DEMO_MODE") == "1"
+
+
+def public_customer_ids() -> list[str]:
+    """The sandbox accounts whose test credentials the demo may publish or use, in the order configured: the single canonical
+    list (DEMO_PUBLIC_CUSTOMERS, which ops/entrypoint.sh fills with the demo roles in the sandbox). Read on each call, so
+    nothing cached outlives a change; empty or unset means no public account at all."""
+    return list(dict.fromkeys(c.strip() for c in os.environ.get("DEMO_PUBLIC_CUSTOMERS", "").split(",") if c.strip()))
 
 
 def require_demo() -> None:
@@ -85,6 +93,8 @@ def fault(req: FaultIn) -> dict:
     session = _live_session(req.session_token)
     ref = session_ref(req.session_token)
     if req.fault == "clear_traces":
+        if session.customer_id not in public_customer_ids():  # it forgets a customer's records, shared by every session of theirs
+            raise HTTPException(403, "not a public sandbox account")
         return {"traces_cleared": default_traces.clear(session.customer_id)}
     if req.fault == "expire_session":
         default_store.expire(req.session_token)
@@ -263,8 +273,9 @@ def _scenarios() -> tuple[dict, ...]:
 
 @router.get("/scenarios")
 def scenarios() -> list[dict]:
-    try:
-        return [{**s, "test_pin": derive_test_pin(s["customer_id"])} for s in _scenarios()]
+    public = set(public_customer_ids())
+    try:  # filtered before any credential is derived: a scenario for an account that is not public is never shown
+        return [{**s, "test_pin": derive_test_pin(s["customer_id"])} for s in _scenarios() if s["customer_id"] in public]
     except IdentityUnavailable:
         return []
 
