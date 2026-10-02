@@ -278,3 +278,55 @@ def test_logout_does_not_report_success_when_the_revocation_itself_failed(client
     assert cleared == []  # and its history is not wiped while the customer can still use it
     monkeypatch.undo()
     assert default_store.validate(token).customer_id == "CLI-FIX0001"
+
+
+BFF_SECRET = "bff-secret-0123456789-abcdefgh"
+
+
+def _first_hits(client, limiter_calls):
+    """The statuses of one login per entry: (headers) -> response."""
+    body = {"customer_id": "CLI-FIX0004", "pin": derive_test_pin("CLI-FIX0004")}
+    return [client.post("/auth/session", json=body, headers=h).status_code for h in limiter_calls]
+
+
+def test_the_address_the_bff_forwards_counts_only_with_its_service_credential(client, monkeypatch):
+    """Render's edge shows the web service as the client, so the BFF sends the browser's address in X-Client-IP. The API
+    believes it only when the call carries the secret the two services share (BFF_CLIENT_IP_SECRET)."""
+    monkeypatch.setenv("BFF_CLIENT_IP_SECRET", BFF_SECRET)
+    monkeypatch.setenv("CLIENT_IP_HEADER", "CF-Connecting-IP")
+    monkeypatch.setattr(main, "login_limiter", main.RateLimiter(1, 60))
+    from_bff = lambda ip: {"X-Client-IP": ip, "X-BFF-Secret": BFF_SECRET, "CF-Connecting-IP": "10.9.9.9"}  # noqa: E731
+    # every call arrives from the web service's own edge address; the forwarded one tells the users apart
+    assert _first_hits(client, [from_bff("1.1.1.1"), from_bff("2.2.2.2"), from_bff("1.1.1.1")]) == [200, 200, 429]
+
+
+def test_a_direct_caller_cannot_pick_its_bucket_with_x_client_ip(client, monkeypatch):
+    monkeypatch.setenv("BFF_CLIENT_IP_SECRET", BFF_SECRET)
+    monkeypatch.setenv("CLIENT_IP_HEADER", "CF-Connecting-IP")
+    monkeypatch.setattr(main, "login_limiter", main.RateLimiter(1, 60))
+    edge = {"CF-Connecting-IP": "9.9.9.9"}
+    spoofed = [{**edge, "X-Client-IP": f"1.1.1.{n}"} for n in range(3)]  # no secret
+    wrong = [{**edge, "X-Client-IP": f"2.2.2.{n}", "X-BFF-Secret": "wrong-" + BFF_SECRET} for n in range(3)]
+    assert _first_hits(client, spoofed) == [200, 429, 429]  # one bucket: the edge's address
+    monkeypatch.setattr(main, "login_limiter", main.RateLimiter(1, 60))
+    assert _first_hits(client, wrong) == [200, 429, 429]
+    monkeypatch.setattr(main, "login_limiter", main.RateLimiter(1, 60))
+    other_edge = {"CF-Connecting-IP": "8.8.8.8", "X-Client-IP": "1.1.1.0"}
+    assert _first_hits(client, [edge, other_edge, edge]) == [200, 200, 429]  # direct callers keep their edge's address
+
+
+def test_without_the_shared_secret_configured_nothing_changes(client, monkeypatch):
+    monkeypatch.delenv("BFF_CLIENT_IP_SECRET", raising=False)
+    monkeypatch.setattr(main, "login_limiter", main.RateLimiter(1, 60))
+    sent = lambda ip: {"X-Client-IP": ip, "X-BFF-Secret": BFF_SECRET}  # noqa: E731
+    assert _first_hits(client, [sent("1.1.1.1"), sent("2.2.2.2")]) == [200, 429]
+    monkeypatch.setenv("BFF_CLIENT_IP_SECRET", "short")  # too short to be a credential: as if absent
+    monkeypatch.setattr(main, "login_limiter", main.RateLimiter(1, 60))
+    assert _first_hits(client, [{"X-Client-IP": "1.1.1.1", "X-BFF-Secret": "short"}, {"X-Client-IP": "2.2.2.2", "X-BFF-Secret": "short"}]) == [200, 429]
+
+
+def test_a_forwarded_value_that_is_not_an_address_is_ignored(client, monkeypatch):
+    monkeypatch.setenv("BFF_CLIENT_IP_SECRET", BFF_SECRET)
+    monkeypatch.setattr(main, "login_limiter", main.RateLimiter(1, 60))
+    junk = lambda value: {"X-Client-IP": value, "X-BFF-Secret": BFF_SECRET}  # noqa: E731
+    assert _first_hits(client, [junk("not-an-ip"), junk("also-not")]) == [200, 429]  # both fall back to the peer's address

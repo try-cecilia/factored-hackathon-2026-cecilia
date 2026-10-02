@@ -18,7 +18,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 FIXTURE_INGEST = "--profile serving --source local --raw-dir /app/tests/fixtures/raw"
-SECRETS = ("DEMO_IDP_SECRET", "ADMIN_API_KEY", "METRICS_TOKEN", "GRAFANA_ADMIN_PASSWORD")
+SECRETS = ("DEMO_IDP_SECRET", "ADMIN_API_KEY", "METRICS_TOKEN", "GRAFANA_ADMIN_PASSWORD", "BFF_CLIENT_IP_SECRET")
 
 
 PORTS = ("API_PORT", "WEB_PORT", "PROMETHEUS_PORT", "GRAFANA_PORT", "OLLAMA_PORT")

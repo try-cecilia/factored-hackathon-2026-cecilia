@@ -4,8 +4,10 @@
   (agent/session/identity.py); /chat only ever accepts that token. GET
   /auth/session with X-Session-Token reads the session back without extending
   it; DELETE revokes it (204 even for an unknown token). A web BFF holds the token and calls these.
-- Behind that BFF, CLIENT_IP_HEADER=X-Client-IP makes per-IP limits use the end
-  user's address, safe only when nothing but the BFF can reach the API.
+- Per-IP limits use the end user's address. The BFF forwards it in X-Client-IP with the secret it shares with
+  the API (BFF_CLIENT_IP_SECRET, header X-BFF-Secret): only a call with that secret is believed. Anyone else is told
+  apart by CLIENT_IP_HEADER (the edge's header) or the peer address. CLIENT_IP_HEADER=X-Client-IP still works on a
+  private API that only the BFF reaches.
 - /admin/* require X-Admin-Key == ADMIN_API_KEY and are disabled (503) when
   no key is configured — they expose tickets, audit and traces, which carry
   customer data. Acting on a ticket takes an operator key instead, and /metrics
@@ -25,6 +27,7 @@
 """
 from __future__ import annotations
 
+import ipaddress
 import json
 import logging
 import math
@@ -195,11 +198,32 @@ class ChatResponse(BaseModel):
     why: dict | None = None  # DEMO_MODE only: the rule, what the model received and chose, what the code verified
 
 
+BFF_SECRET_HEADER = "X-BFF-Secret"
+MIN_BFF_SECRET_LENGTH = 16  # a shorter value is no credential: the forwarded address is then not believed
+
+
+def _forwarded_by_the_bff(request: Request) -> str | None:
+    """The end user's address as the web service (the BFF) forwards it in X-Client-IP, or None. Believed only when the call
+    carries the secret both services share (BFF_CLIENT_IP_SECRET, compared in constant time): X-Client-IP alone is the
+    caller's own words on a public API. Without the secret configured, this is always None."""
+    secret = os.environ.get("BFF_CLIENT_IP_SECRET", "")
+    if len(secret) < MIN_BFF_SECRET_LENGTH or not constant_time_equals(request.headers.get(BFF_SECRET_HEADER), secret):
+        return None
+    forwarded = (request.headers.get("X-Client-IP") or "").strip()
+    try:
+        return str(ipaddress.ip_address(forwarded))
+    except ValueError:
+        return None  # not an address: the key of a limiter bucket must be one
+
+
 def client_ip(request: Request) -> str:
-    """The caller's address, for per-client limits. Behind Render the peer is one of its internal proxies and the
-    real address comes in CF-Connecting-IP, set by its Cloudflare edge, which no client can forge (measured
-    2026-09-27; Render sends no X-Forwarded-For). Anywhere else that header is the client's own words, so it is
-    read only when CLIENT_IP_HEADER names it."""
+    """The caller's address, for per-client limits. A call from the web BFF carries the browser's address in X-Client-IP
+    and the shared secret that vouches for it (_forwarded_by_the_bff). Any other caller is told apart by its own address:
+    behind Render the peer is one of its internal proxies and the real address comes in CF-Connecting-IP, set by its
+    Cloudflare edge, which no client can forge (measured 2026-09-27; Render sends no X-Forwarded-For). Anywhere else that
+    header is the client's own words, so it is read only when CLIENT_IP_HEADER names it."""
+    if forwarded := _forwarded_by_the_bff(request):
+        return forwarded
     header = os.environ.get("CLIENT_IP_HEADER")
     return (header and request.headers.get(header)) or (request.client.host if request.client else "unknown")
 

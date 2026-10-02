@@ -109,3 +109,23 @@ def test_the_operator_key_identifies_its_owner_without_acting_and_the_admin_key_
     assert client.get("/admin/operator/me", headers=as_operator(BETO_KEY)).json() == {"operator": "beto"}
     assert client.get("/admin/operator/me", headers={"X-Admin-Key": ADMIN_KEY}).status_code == 401
     assert client.get("/admin/operator/me").status_code == 401
+
+
+def test_behind_the_bff_one_users_wrong_keys_do_not_lock_out_another_and_a_direct_caller_cannot_choose_a_bucket(monkeypatch):
+    shared = "bff-secret-0123456789-abcdefgh"
+    monkeypatch.setenv("BFF_CLIENT_IP_SECRET", shared)
+    monkeypatch.setenv("CLIENT_IP_HEADER", "CF-Connecting-IP")  # Render: every call from the web arrives from its one address
+    tid, client = ticket(), TestClient(main.app)
+    url = f"/admin/tickets/{tid}/claim"
+    web_edge = {"CF-Connecting-IP": "10.0.0.1"}  # the web service, as the API's edge sees it
+    via_bff = lambda ip: {**web_edge, "X-Client-IP": ip, "X-BFF-Secret": shared}  # noqa: E731
+    for _ in range(3):
+        assert client.post(url, json={}, headers={**via_bff("1.1.1.1"), **as_operator("wrong")}).status_code == 401
+    assert client.post(url, json={}, headers={**via_bff("1.1.1.1"), **as_operator(ANA_KEY)}).status_code == 429  # A is locked out
+    assert client.post(url, json={}, headers={**via_bff("2.2.2.2"), **as_operator(ANA_KEY)}).status_code == 200  # B is not
+    # Not through the BFF: a made-up X-Client-IP changes nothing, so a guesser cannot spread its attempts over fresh buckets.
+    direct = {"CF-Connecting-IP": "7.7.7.7"}
+    for n in range(3):
+        headers = {**direct, "X-Client-IP": f"3.3.3.{n}", **as_operator("wrong")}
+        assert client.post(url, json={}, headers=headers).status_code == 401
+    assert client.post(url, json={}, headers={**direct, "X-Client-IP": "3.3.3.99", **as_operator(ANA_KEY)}).status_code == 429

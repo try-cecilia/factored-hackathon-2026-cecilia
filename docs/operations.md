@@ -273,7 +273,15 @@ Two settings exist because of how Render works:
   set by its Cloudflare edge, which no client can forge (measured on a Render
   service, 2026-09-27). `CLIENT_IP_HEADER=CF-Connecting-IP` makes the per-client
   login limit use it. Leave it unset anywhere that header is not set by a
-  trusted edge, or any client could pick its own address.
+  trusted edge, or any client could pick its own address. For a call from the
+  web service that edge shows the web's own address, so the web forwards the
+  user's in `X-Client-IP` together with `BFF_CLIENT_IP_SECRET` (header
+  `X-BFF-Secret`), and the API believes an `X-Client-IP` only on a call that carries
+  that secret. The Blueprint puts the secret in the environment group
+  `bff-client-ip` (`generateValue`, so Render creates it and both services read the
+  same value; it is not in the repository). If you create the services by hand, set
+  the same value, 16 characters or more, on both (`openssl rand -base64 32`). Without it
+  on either side the web's users share one address, as before.
 - **The daily model budget.** `LLM_DAILY_BUDGET_USD` (UTC day). Past it, the
   assistant runs as if the model were down: plain balance questions are still
   answered from verified data, the rest goes to a person. It lives in memory,
@@ -508,8 +516,8 @@ concurrency, so a limit that is too tight or a flood shows up without reading lo
 The rate limiters, the model budgets, the circuit breakers and the concurrency gate live in memory of one process: they
 reset on restart and are not shared between replicas, so several replicas multiply every limit (a shared store such as
 Redis is the next step). The limiters are bounded (idle keys are swept, at most 100,000 kept). Behind the web BFF the
-address is the end user's only when `CLIENT_IP_HEADER` names the header the BFF sets; without it every user shares the
-BFF's address, which is why the per-address chat default is generous. The server has no timeout for reading request
+address is the end user's only when the call carries `BFF_CLIENT_IP_SECRET` (or `CLIENT_IP_HEADER` names the header the BFF
+sets on a private API); without it every user shares the BFF's address, which is why the per-address chat default is generous. The server has no timeout for reading request
 headers: a slow-headers client has to be stopped by the edge (Render's proxy does), and the body timeout above covers
 the rest.
 
@@ -522,8 +530,8 @@ the rest.
   `inflight_peak`, `waiting_peak` and `rejected.busy`. If the model is slow, look at the `llm` stage in recent traces
   before raising `MAX_CONCURRENT_CHATS` (keep it under the thread pool's 40); if the model is fine, add replicas.
 - **429s:** per session, customer or address. `rate_limiter_keys` in `/admin/capacity` shows how many keys each limiter
-  holds. Behind the BFF without `CLIENT_IP_HEADER`, every user is one address: set the header before lowering
-  `CHAT_IP_RATE_PER_MIN`.
+  holds. Behind the BFF without `BFF_CLIENT_IP_SECRET` (or a private API with `CLIENT_IP_HEADER=X-Client-IP`), every user is
+  one address: set it before lowering `CHAT_IP_RATE_PER_MIN`.
 - **Handoffs with `llm_unavailable`:** read the attempts in the trace: `circuit_open` (a provider failed twice in a row and
   is skipped for 30 s), `turn_budget_exhausted` (the model was too slow for the turn) or
   `session_budget_exhausted` / `daily_budget_exhausted` (a spend cap, see `/admin/llm_budget`).

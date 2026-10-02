@@ -154,8 +154,8 @@ service, and as our own roadmap.
 - **Operator web console.** The web server keeps the keys in memory (an `httpOnly` + `SameSite=Strict` cookie with an
   opaque identifier): a restart or a second replica ends the sessions, and a leaked key stays valid until it is rotated.
   Each person types their keys into a native form that sends them once to the BFF (they never go through the page's
-  JavaScript or back to the browser), so they depend on the channel being TLS. Without `CLIENT_IP_HEADER=X-Client-IP`
-  behind the BFF, the failed-attempt limit counts by the BFF's address. The queue is read whole (the 200 newest entries
+  JavaScript or back to the browser), so they depend on the channel being TLS. Without `BFF_CLIENT_IP_SECRET`
+  on the web and the API (or `CLIENT_IP_HEADER=X-Client-IP` on a private API), the failed-attempt limit counts by the BFF's address. The queue is read whole (the 200 newest entries
   of the file and, whatever their age, every open or claimed case still in the file, that is, until the 90-day retention
   reaches it; an old case already decided drops off the list), then filtered, sorted and paginated in the browser (25 per
   page) and refreshed by polling every 30 s, with no notifications. Claim, approve, reject and return act with one click,
