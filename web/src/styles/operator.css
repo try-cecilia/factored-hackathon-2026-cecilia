@@ -364,8 +364,9 @@ textarea.op-input:focus { box-shadow: 0 0 0 2px var(--color-cecil-blue); }
   .op-detail { margin: 0; border-radius: 0; }
   .op-login__card { padding: 24px; }
   .op-login h1 { font-size: var(--text-3xl); }
-  /* The status tabs keep one line and scroll sideways when the screen is narrower than them. */
-  .op-seg { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+  /* The status tabs wrap rather than scroll sideways: a tab half hidden in a scrolling strip stays half hidden when it takes the focus
+     (Chromium does not scroll a partly visible element into view on Tab). */
+  .op-seg { flex-wrap: wrap; max-width: 100%; height: auto; }
   .op-seg a { flex: none; }
 }
 
@@ -382,9 +383,10 @@ textarea.op-input:focus { box-shadow: 0 0 0 2px var(--color-cecil-blue); }
   .op-table--queue .ui-dt__table { display: block; min-width: 0; }
   .op-table--queue colgroup { display: none; }
   .op-table--queue thead, .op-table--queue tbody { display: block; }
-  .op-table--queue thead tr { display: flex; gap: 6px; padding: 2px 2px 10px; overflow-x: auto; scrollbar-width: none; }
+  /* The sort buttons wrap onto a second line instead of scrolling, so every one is in full view when it has the focus. */
+  .op-table--queue thead tr { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 2px 10px; }
   .op-table--queue .ui-dt__table thead th { display: block; flex: none; height: auto; padding: 0; }
-  .op-table--queue .ui-dt__table thead .ui-sort { height: 28px; margin-inline: 0; background: var(--color-fill-subtle); }
+  .op-table--queue .ui-dt__table thead .ui-sort { margin-inline: 0; background: var(--color-fill-subtle); }
   .op-table--queue .ui-dt__table thead .ui-sort[data-sort] { background: var(--color-fill-muted); }
   .op-table--queue tbody { display: grid; gap: 8px; }
   .op-table--queue .ui-dt__row {
@@ -420,13 +422,14 @@ textarea.op-input:focus { box-shadow: 0 0 0 2px var(--color-cecil-blue); }
 
 /* Pantallas táctiles: los controles de la consola son blancos de 44px. */
 @media (pointer: coarse) {
-  .op-search, .op-select, .op-toggle, .op-seg { height: 44px; }
-  .op-seg a { height: 40px; }
+  .op-search, .op-select, .op-toggle { height: 44px; }
+  .op-seg { min-height: 48px; }
+  .op-seg a { height: 44px; }
   .op-input, .op-key-form .op-input, .op-form .op-input { height: 44px; }
   textarea.op-input { height: auto; min-height: 64px; }
   .op-back a { display: inline-flex; align-items: center; min-height: 44px; }
-  .op-table--queue .ui-dt__table thead .ui-sort { height: 36px; }
   .op-fold--note .op-fold__head { min-height: 44px; }
+  .op-login__brand { min-height: 44px; }
 }
 
 @media (prefers-reduced-motion: no-preference) {
