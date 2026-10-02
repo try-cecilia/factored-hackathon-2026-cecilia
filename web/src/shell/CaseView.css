@@ -3,7 +3,7 @@
 .case { display: grid; align-content: start; gap: 20px; min-height: 100%; padding: 20px 20px 24px; color: var(--color-ink-app); font-size: var(--text-sm); line-height: 20px; }
 .case h3 { margin: 0 0 4px; font-size: var(--text-compact-md); font-weight: var(--font-weight-semibold); line-height: 18px; }
 .case p { margin: 0; }
-.case__head { display: flex; align-items: flex-start; gap: 12px; }
+.case__head { position: sticky; top: 0; z-index: 1; display: flex; align-items: flex-start; gap: 12px; margin: -20px -20px -8px; padding: 20px 20px 8px; background: var(--color-paper); }
 .case__heading { display: grid; flex: 1 1 0; gap: 2px; min-width: 0; }
 .case__eyebrow { color: var(--color-ink-70); font-size: var(--text-compact-sm); line-height: 16px; }
 .case__title { margin: 0; font-size: var(--text-xl); font-weight: var(--font-weight-bold); letter-spacing: -0.02em; line-height: 26px; }

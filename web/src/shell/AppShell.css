@@ -1,7 +1,8 @@
 /* The customer's window: sidebar, bar and page, and the demo panel apart. No strokes: panels are tonal fills, layers that float have a soft shadow. */
-.shell { display: flex; height: 100dvh; background: var(--color-paper); color: var(--color-ink-app); }
-.shell__side { display: flex; flex: none; height: 100%; }
-.shell__main { display: flex; flex: 1 1 0; flex-direction: column; min-width: 0; container: bar / inline-size; }
+.shell { display: flex; height: 100dvh; padding-top: env(safe-area-inset-top); background: var(--color-paper); color: var(--color-ink-app); }
+/* The safe-area insets are 0 on a desktop; on a phone with a notch they keep the content clear of it and of the home indicator. */
+.shell__side { display: flex; flex: none; height: 100%; padding-left: env(safe-area-inset-left); padding-bottom: env(safe-area-inset-bottom); }
+.shell__main { display: flex; flex: 1 1 0; flex-direction: column; min-width: 0; padding-right: env(safe-area-inset-right); container: bar / inline-size; }
 .shell__bar { display: flex; flex: none; align-items: center; gap: 12px; min-height: 56px; padding: 0 20px; }
 .shell__title { margin: 0; font-size: var(--text-compact-lg); font-weight: var(--font-weight-bold); letter-spacing: -0.02em; line-height: 20px; }
 .shell__trust {
@@ -33,7 +34,8 @@
 /* Narrow: the demo panel slides over the page from the right, on paper, with a soft shadow. */
 @media (max-width: 1179px) {
   .shell__demo, .shell__demo[inert] {
-    position: fixed; top: 0; right: 0; bottom: 0; z-index: 30; display: block; width: min(380px, 100vw); background: var(--color-paper);
+    position: fixed; top: 0; right: 0; bottom: 0; z-index: 30; display: block; width: min(380px, 100%); background: var(--color-paper);
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) 0;
     box-shadow: 0 1px 1px #0F0A1414, 0 24px 50px -24px #0F0A148C; transform: translateX(100%); visibility: hidden;
     transition: transform 0.18s ease, visibility 0s linear 0.18s;
   }
@@ -43,7 +45,8 @@
 
 /* The view of a case: always over the page from the right, on paper, with a soft shadow; on a phone it takes the whole screen. */
 .shell__case {
-  position: fixed; top: 0; right: 0; bottom: 0; z-index: 40; width: min(420px, 100vw); overflow-y: auto; background: var(--color-paper);
+  position: fixed; top: 0; right: 0; bottom: 0; z-index: 40; width: min(420px, 100%); overflow-y: auto; background: var(--color-paper);
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) 0;
   box-shadow: 0 1px 1px #0F0A1414, 0 24px 50px -24px #0F0A148C; transform: translateX(100%); visibility: hidden;
   transition: transform 0.18s ease, visibility 0s linear 0.18s;
 }
@@ -54,19 +57,31 @@
 /* Phone: the sidebar is a drawer, the bar carries the menu button, and the trust note leaves. */
 @media (max-width: 759px) {
   .shell__side {
-    position: fixed; top: 0; bottom: 0; left: 0; z-index: 30; width: min(288px, 86vw); box-shadow: 0 1px 1px #0F0A1414, 0 24px 50px -24px #0F0A148C;
+    position: fixed; top: 0; bottom: 0; left: 0; z-index: 30; width: min(288px, 86vw); padding-top: env(safe-area-inset-top); box-shadow: 0 1px 1px #0F0A1414, 0 24px 50px -24px #0F0A148C;
     background: var(--color-paper); transform: translateX(-100%); visibility: hidden; transition: transform 0.18s ease, visibility 0s linear 0.18s;
   }
   .shell[data-menu='open'] .shell__side { transform: none; visibility: visible; transition: transform 0.18s ease, visibility 0s; }
   .shell__side .ui-sidebar { width: 100%; }
-  .shell__close { position: absolute; top: 12px; right: 10px; z-index: 1; }
+  .shell__close { position: absolute; top: calc(12px + env(safe-area-inset-top)); right: 10px; z-index: 1; }
   .shell__menu { display: inline-flex; }
-  .shell__case { width: 100vw; box-shadow: none; }
+  .shell__case { width: 100%; padding-left: env(safe-area-inset-left); box-shadow: none; }
   .shell__trust { display: none; }
-  .shell__bar { gap: 8px; padding: 0 12px; }
+  .shell__bar { gap: 8px; padding: 0 12px 0 max(12px, env(safe-area-inset-left)); }
   /* The title stays for screen readers; on a phone the bar has room only for the controls. */
   .shell__title { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 }
 @media (prefers-reduced-motion: reduce) {
   .shell__side, .shell__demo, .shell__case { transition: none; }
+}
+
+/* Touch: the bar's controls are 44px targets. The smallest phones (320px) tighten the gaps and the language switcher so the
+   menu, copy, Demo and both languages still fit on one line. */
+@media (pointer: coarse) {
+  .shell__bar { min-height: 60px; }
+  .shell__copy .ui-btn { min-width: 44px; }
+}
+@media (pointer: coarse) and (max-width: 359px) {
+  .shell__bar, .shell__tools { gap: 4px; }
+  .shell__bar { padding-inline: max(8px, env(safe-area-inset-left)) 8px; }
+  .shell__bar .ui-lang__option { padding-inline: 6px; }
 }
