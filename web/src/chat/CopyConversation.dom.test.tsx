@@ -51,7 +51,8 @@ async function draw(history: HistoryResult, locale: 'es' | 'pt' = 'es', ended = 
 const button = (name: RegExp) => screen.getByRole('button', { name }) as HTMLButtonElement
 const status = () => screen.getByRole('status').textContent
 
-// `shouldAdvanceTime` is what lets `vi.waitFor` run its retries and its timeout; with the clock frozen the wait hangs.
+// Auto-advance also releases React Testing Library's async-wrapper timers used by user-event.
+// vi.waitFor advances fake timers itself; it does not need shouldAdvanceTime for retries or its timeout.
 beforeEach(() => vi.useFakeTimers({ shouldAdvanceTime: true }))
 afterEach(() => {
   vi.useRealTimers()
