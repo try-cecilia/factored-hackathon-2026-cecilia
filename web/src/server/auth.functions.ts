@@ -1,6 +1,7 @@
 import { createServerFn } from '@tanstack/react-start'
 import { AgentApiError, agentApi } from './agent-api'
 import { clearSessionToken, getSessionToken, setSessionToken } from './session-cookie'
+import { PublicError } from './rpc-guard'
 
 export type Credentials = { customer_id: string; pin: string }
 
@@ -18,12 +19,18 @@ export type DemoCustomer = { customer_id: string; test_pin: string }
 
 export type LoginResult = { ok: true } | { ok: false; status: number }
 
+/** `revoked` is whether the API confirmed that it ended the session. The browser has let go of it either way. */
+export type LogoutResult = { revoked: boolean }
+
+// The API may be slow or down when the person leaves; the answer, and so the cookie's removal, waits at most this long for it.
+const LOGOUT_TIMEOUT_MS = 3_000
+
 function parseCredentials(input: unknown): Credentials {
   const { customer_id, pin } = (input ?? {}) as Record<string, unknown>
   if (typeof customer_id !== 'string' || customer_id.length < 3 || customer_id.length > 32) {
-    throw new Error('customer_id must be 3-32 characters')
+    throw new PublicError('customer_id must be 3-32 characters')
   }
-  if (typeof pin !== 'string' || !/^\d{6}$/.test(pin)) throw new Error('pin must be 6 digits')
+  if (typeof pin !== 'string' || !/^\d{6}$/.test(pin)) throw new PublicError('pin must be 6 digits')
   return { customer_id, pin }
 }
 
@@ -43,10 +50,21 @@ export const login = createServerFn({ method: 'POST' })
     }
   })
 
-export const logout = createServerFn({ method: 'POST' }).handler(async () => {
+// Leaving is the person's decision, and it is about THIS browser: the cookie goes always, even when the API could not be asked to
+// revoke the session (a 500, no answer, a dropped connection), and whatever else happened while this waited. The answer says whether
+// the revocation was confirmed, so the page can tell the truth; when it was not, the token may stay valid in the API until it expires.
+// A login of another tab that finished meanwhile is closed in this browser too (the person signs in again, and its token also lives
+// until it expires): the server cannot tell it from one whose answer was lost, and that one must not keep the person signed in.
+// Only the passive reads leave the cookie alone (chat-core.ts): they are not the person's decision.
+export const logout = createServerFn({ method: 'POST' }).handler(async (): Promise<LogoutResult> => {
   const token = getSessionToken()
-  if (token) await agentApi('/auth/session', { method: 'DELETE', token })
+  if (!token) return { revoked: true }
+  const revoked = await agentApi('/auth/session', { method: 'DELETE', token, timeoutMs: LOGOUT_TIMEOUT_MS }).then(
+    () => true,
+    () => false,
+  )
   clearSessionToken()
+  return { revoked }
 })
 
 export const getSession = createServerFn({ method: 'GET' }).handler(async (): Promise<Session | null> => {
@@ -65,7 +83,8 @@ export const getSession = createServerFn({ method: 'GET' }).handler(async (): Pr
     }
   } catch (error) {
     if (!(error instanceof AgentApiError && error.status === 401)) throw error
-    clearSessionToken()
+    // A rejected token is no session. The cookie is left alone: this may be a late answer about a token a newer login has already
+    // replaced (chat-core.ts); the next login overwrites it, and an explicit sign-out removes it.
     return null
   }
 })

@@ -49,5 +49,9 @@ export async function agentFetch(path: string, { method = 'GET', body, token, ti
 export async function agentApi<T>(path: string, options?: RequestOptions): Promise<T> {
   const response = await agentFetch(path, options)
   if (!response.ok) throw new AgentApiError(response.status)
-  return (response.status === 204 ? undefined : await response.json()) as T
+  if (response.status === 204) return undefined as T
+  // An answer that is not JSON breaks the contract: a status, never the parser's message (it quotes the body).
+  return (await response.json().catch(() => {
+    throw new AgentApiError(502)
+  })) as T
 }

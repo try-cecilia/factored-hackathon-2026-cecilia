@@ -1,4 +1,5 @@
 import type { Disposition, Reply, SendResult, Why } from '../chat/types'
+import { PublicError } from './rpc-guard.ts'
 
 // The send path without the framework: what the API answered, and what that means for the customer. The server
 // function wires it to the session cookie and to agentFetch; tests wire it to fakes.
@@ -20,14 +21,17 @@ export const KEY_PATTERN = /^[A-Za-z0-9_-]{8,64}$/
 
 export function parseSend(input: unknown): { message: string; key: string } {
   const { message, key } = (input ?? {}) as Record<string, unknown>
-  if (typeof message !== 'string') throw new Error('message must be text')
+  if (typeof message !== 'string') throw new PublicError('message must be text')
   const trimmed = message.trim()
-  if (trimmed.length === 0 || trimmed.length > 1000) throw new Error('message must be 1-1000 characters')
-  if (typeof key !== 'string' || !KEY_PATTERN.test(key)) throw new Error('key must be 8-64 letters, digits, - or _')
+  if (trimmed.length === 0 || trimmed.length > 1000) throw new PublicError('message must be 1-1000 characters')
+  if (typeof key !== 'string' || !KEY_PATTERN.test(key)) throw new PublicError('key must be 8-64 letters, digits, - or _')
   return { message: trimmed, key }
 }
 
-export type ChatSession = { token: string | undefined; clear: () => void }
+// The session is only the token the request carried. A read that finds it rejected says so and leaves the cookie alone: it may be a
+// late answer about an old token, and a deletion arriving after a newer login's Set-Cookie would take that login's cookie (as the
+// operator's console avoids, operator-session.ts). The next login overwrites the cookie; an explicit sign-out removes it.
+export type ChatSession = { token: string | undefined }
 
 export function parseReply(body: unknown): Reply | null {
   if (typeof body !== 'object' || body === null) return null
@@ -56,20 +60,14 @@ export async function sendChat(session: ChatSession, transport: ChatTransport, m
   inFlight.add(token)
   try {
     const response = await transport.post(token, message, key)
-    if (response.status === 401) {
-      session.clear()
-      return { ok: false, failure: 'session_expired' }
-    }
+    if (response.status === 401) return { ok: false, failure: 'session_expired' }
     if (response.status === 409) return { ok: false, failure: 'already_processed' }
     if (response.status === 429) return { ok: false, failure: 'rate_limited' }
     if (response.status >= 500) return { ok: false, failure: 'unavailable' }
     if (response.status < 200 || response.status >= 300) return { ok: false, failure: 'unexpected' }
     const body = await response.json().catch(() => null)
     // REAUTH_REQUIRED is not a chat answer: the API says the session is gone.
-    if ((body as { disposition?: unknown } | null)?.disposition === 'REAUTH_REQUIRED') {
-      session.clear()
-      return { ok: false, failure: 'session_expired' }
-    }
+    if ((body as { disposition?: unknown } | null)?.disposition === 'REAUTH_REQUIRED') return { ok: false, failure: 'session_expired' }
     const reply = parseReply(body)
     return reply ? { ok: true, reply } : { ok: false, failure: 'unexpected' }
   } catch (error) {

@@ -15,10 +15,9 @@ const turnsList = [
 const cases = [{ ticket_id: '55d09c14-2235-4c3c-8967-ccac61db9c50', category: 'theft', at: 1_760_000_001 }]
 
 function setup(status: number, body: unknown) {
-  const cleared: string[] = []
-  const session: ChatSession = { token: 'tok-1', clear: () => cleared.push('cleared') }
+  const session: ChatSession = { token: 'tok-1' }
   const transport: HistoryTransport = { get: async () => ({ status, json: async () => body }) }
-  return { session, transport, cleared }
+  return { session, transport }
 }
 
 test('the turns come back in order, times in milliseconds, replies in the shape of a live reply', async () => {
@@ -49,19 +48,19 @@ test('a turn that does not fit the contract is left out and the rest still shows
   assert.deepEqual(parseHistory({ turns: [] }), { turns: [], cases: [] })
 })
 
-test('a 401 clears the cookie and says the session is over; no cookie sends nothing', async () => {
-  const { session, transport, cleared } = setup(401, {})
+test('a 401 says the session is over and leaves the cookie alone; no cookie sends nothing', async () => {
+  const { session, transport } = setup(401, {})
   assert.deepEqual(await loadHistory(session, transport), { ok: false, failure: 'session_expired' })
-  assert.equal(cleared.length, 1)
+  assert.deepEqual(Object.keys(session), ['token'])
   const none = setup(200, { turns: turnsList, cases: cases })
-  assert.deepEqual(await loadHistory({ token: undefined, clear: () => {} }, none.transport), { ok: false, failure: 'session_expired' })
+  assert.deepEqual(await loadHistory({ token: undefined }, none.transport), { ok: false, failure: 'session_expired' })
 })
 
 test('an API that is down or answers nonsense is "unavailable"', async () => {
   assert.deepEqual(await loadHistory(setup(503, {}).session, setup(503, {}).transport), { ok: false, failure: 'unavailable' })
   assert.deepEqual(await loadHistory(setup(200, 'nope').session, setup(200, 'nope').transport), { ok: false, failure: 'unavailable' })
   const throwing: HistoryTransport = { get: async () => { throw new Error('down') } }
-  assert.deepEqual(await loadHistory({ token: 't', clear: () => {} }, throwing), { ok: false, failure: 'unavailable' })
+  assert.deepEqual(await loadHistory({ token: 't' }, throwing), { ok: false, failure: 'unavailable' })
 })
 
 test('a saved turn keeps the kind of its options, and one saved before it existed is still read as before', async () => {

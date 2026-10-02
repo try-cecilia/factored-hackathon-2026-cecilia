@@ -6,14 +6,21 @@ import { getOperatorSession, invalidateOperatorSession, operatorSessionId } from
 // 0 = no BFF session; 403 = the session has no operator key (reading is allowed, acting is not).
 export type Result<T> = { ok: true; data: T } | { ok: false; status: number; message?: string }
 
+const PUBLIC_DETAIL = new Set([400, 409])
+
 async function call<T>(path: string, headers: Record<string, string>, method: 'GET' | 'POST', body?: unknown): Promise<Result<T>> {
   const response = await agentFetch(path, { method, body, headers }).catch(() => null)
   if (!response) return { ok: false, status: 503 }
   if (!response.ok) {
+    // The API's own words travel only for the answers the console shows to the operator: a 400 (what is wrong with the action) and a
+    // 409 (what changed under it). Of any other status, such as a 5xx, only the status leaves: its detail is a diagnosis for the server.
+    if (!PUBLIC_DETAIL.has(response.status)) return { ok: false, status: response.status }
     const failure = (await response.json().catch(() => null)) as { detail?: unknown } | null
     return { ok: false, status: response.status, message: typeof failure?.detail === 'string' ? failure.detail : undefined }
   }
-  return { ok: true, data: (await response.json()) as T }
+  // A 2xx that is not JSON breaks the contract: 502 for the console to explain, never the parser's message (it quotes the body).
+  const data = await response.json().then((body: T) => ({ body }), () => null)
+  return data ? { ok: true, data: data.body } : { ok: false, status: 502 }
 }
 
 /** A read with the session's admin key; `touch` is false for the automatic refresh. A rejected key ends that session on the server. */

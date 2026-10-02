@@ -108,8 +108,9 @@ export function AppShell({ session, kit, children }: { session: Session; kit: Pr
     setLoggingOut(true)
     setLogoutFailed(false)
     try {
-      await logout()
-      await navigate({ to: '/login' })
+      const { revoked } = await logout()
+      // The browser has let go of the session either way; when the API did not confirm it ended, the sign-in page says so.
+      await navigate(revoked ? { to: '/login' } : { to: '/login', search: { motivo: 'unconfirmed' } })
     } catch {
       setLogoutFailed(true)
     } finally {

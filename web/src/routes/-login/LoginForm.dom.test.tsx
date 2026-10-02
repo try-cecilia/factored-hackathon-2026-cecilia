@@ -12,12 +12,12 @@ import { LoginForm } from './LoginForm'
  * The real router, in memory. `/chat` is behind the session like the app's: with `hasSession` false it sends the browser back to
  * /login, which is what happens when the browser did not keep the cookie the sign-in set.
  */
-function mount(signIn: () => Promise<LoginResult>, { hasSession, locale = 'es', target }: { hasSession: boolean; locale?: Locale; target?: string }) {
+function mount(signIn: () => Promise<LoginResult>, { hasSession, locale = 'es', target, unconfirmed }: { hasSession: boolean; locale?: Locale; target?: string; unconfirmed?: boolean }) {
   const root = createRootRoute()
   const login = createRoute({
     getParentRoute: () => root,
     path: '/login',
-    component: () => <LoginForm demoCustomers={[]} target={target} signIn={signIn} />,
+    component: () => <LoginForm demoCustomers={[]} target={target} unconfirmed={unconfirmed} signIn={signIn} />,
   })
   const chat = createRoute({
     getParentRoute: () => root,
@@ -148,5 +148,25 @@ describe('the sign-in form when a field is wrong before anything is sent', () =>
     await user.type(screen.getByLabelText('PIN'), '123456')
     expect(field('pin').validity.valid).toBe(true)
     expect(field('pin').validationMessage).toBe('')
+  })
+})
+
+describe('the sign-in form after a sign-out the API did not confirm', () => {
+  it.each([['es', /No pudimos confirmar que la sesión se cerró en el servidor/], ['pt', /Não foi possível confirmar que a sessão foi encerrada no servidor/]] as const)(
+    'says so, in %s, without calling it an error',
+    async (locale, text) => {
+      mount(async () => ({ ok: true }), { hasSession: true, locale, unconfirmed: true })
+      const notice = await screen.findByRole('status')
+      expect(notice.textContent).toMatch(text)
+      // The lifetime of a session is configuration (SESSION_TTL_SECONDS): the notice promises no figure.
+      expect(notice.textContent).not.toMatch(/\d/)
+      expect(screen.queryByRole('alert')).toBeNull()
+    },
+  )
+
+  it('says nothing when the sign-out was confirmed', async () => {
+    mount(async () => ({ ok: true }), { hasSession: true })
+    await screen.findByLabelText(/^(Número de cliente)/)
+    expect(screen.queryByRole('status')).toBeNull()
   })
 })

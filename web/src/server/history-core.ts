@@ -43,10 +43,7 @@ export async function loadHistory(session: ChatSession, transport: HistoryTransp
   if (!token) return { ok: false, failure: 'session_expired' }
   try {
     const response = await transport.get(token)
-    if (response.status === 401) {
-      session.clear()
-      return { ok: false, failure: 'session_expired' }
-    }
+    if (response.status === 401) return { ok: false, failure: 'session_expired' }
     if (response.status < 200 || response.status >= 300) return { ok: false, failure: 'unavailable' }
     const history = parseHistory(await response.json().catch(() => null))
     return history ? { ok: true, ...history } : { ok: false, failure: 'unavailable' }

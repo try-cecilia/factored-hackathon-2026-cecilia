@@ -3,7 +3,8 @@ import type { CaseResult, HistoryResult, SendResult } from '../chat/types'
 import { AgentApiError, agentFetch } from './agent-api'
 import { parseSend, sendChat } from './chat-core'
 import { loadHistory } from './history-core'
-import { clearSessionToken, getSessionToken } from './session-cookie'
+import { PublicError } from './rpc-guard'
+import { getSessionToken } from './session-cookie'
 
 // The model call can take up to LLM_TOTAL_BUDGET_SECONDS (25 s by default) on the API side.
 const CHAT_TIMEOUT_MS = 35_000
@@ -12,7 +13,7 @@ export const sendMessage = createServerFn({ method: 'POST' })
   .validator(parseSend)
   .handler(({ data }): Promise<SendResult> =>
     sendChat(
-      { token: getSessionToken(), clear: clearSessionToken },
+      { token: getSessionToken() },
       {
         post: (token, message, key) =>
           agentFetch('/chat', {
@@ -31,7 +32,7 @@ export const sendMessage = createServerFn({ method: 'POST' })
 
 function parseTicketId(input: unknown): { ticket_id: string } {
   const { ticket_id } = (input ?? {}) as Record<string, unknown>
-  if (typeof ticket_id !== 'string' || !/^[A-Za-z0-9-]{8,64}$/.test(ticket_id)) throw new Error('invalid ticket id')
+  if (typeof ticket_id !== 'string' || !/^[A-Za-z0-9-]{8,64}$/.test(ticket_id)) throw new PublicError('invalid ticket id')
   return { ticket_id }
 }
 
@@ -42,10 +43,8 @@ export const getCase = createServerFn({ method: 'GET' })
     if (!token) return { ok: false, failure: 'session_expired' }
     try {
       const response = await agentFetch(`/case/${data.ticket_id}`, { token })
-      if (response.status === 401) {
-        clearSessionToken()
-        return { ok: false, failure: 'session_expired' }
-      }
+      // The cookie is left alone: this may be a late answer about a token a newer login has already replaced (chat-core.ts).
+      if (response.status === 401) return { ok: false, failure: 'session_expired' }
       if (response.status === 404) return { ok: false, failure: 'not_found' }
       if (!response.ok) return { ok: false, failure: 'unavailable' }
       const body = (await response.json().catch(() => null)) as Record<string, unknown> | null
@@ -67,7 +66,7 @@ export const getCase = createServerFn({ method: 'GET' })
 export const getHistory = createServerFn({ method: 'GET' }).handler(
   (): Promise<HistoryResult> =>
     loadHistory(
-      { token: getSessionToken(), clear: clearSessionToken },
+      { token: getSessionToken() },
       { get: (token) => agentFetch('/chat/history', { token }) },
     ),
 )
