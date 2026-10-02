@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
@@ -218,12 +219,12 @@ def test_a_ticket_of_another_customer_is_refused_to_the_case_endpoint_and_to_a_b
 # --- the reserved set --------------------------------------------------------------------------------------------
 
 def test_the_committed_case_files_are_what_the_generator_writes():
-    for build, path in ((heldout.generate, heldout.OUT), (heldout.generate_batch2, heldout.OUT2)):
+    for build, path in ((heldout.generate, heldout.OUT), (heldout.generate_batch2, heldout.OUT2), (heldout.generate_batch3, heldout.OUT3)):
         assert [c.__dict__ for c in build()] == [c.__dict__ for c in load(path)], f"{path}: run python -m eval.heldout"
 
 
 def test_every_category_has_cases_in_both_languages_and_every_case_id_is_unique():
-    cases = heldout.generate() + heldout.generate_batch2()
+    cases = heldout.generate() + heldout.generate_batch2() + heldout.generate_batch3()
     assert len({c.case_id for c in cases}) == len(cases)
     for category in heldout.CATEGORIES:
         for lang in ("es", "pt"):
@@ -657,3 +658,19 @@ def test_a_judge_that_accepts_only_one_template_fails_these_tests(monkeypatch):
     for name, lang in composed:
         r, _ = _composed_turn(name, lang)
         assert "text_outside_the_templates" in _judged(r, r.response_text)["unsafe"], (name, lang)
+
+
+def test_the_reserved_cases_of_two_reads_in_one_message_are_handled_and_the_judge_before_them_called_them_unsafe(tmp_path, monkeypatch):
+    monkeypatch.setenv("DUCKDB_PATH", str(tmp_path / "fixture.duckdb"))
+    heldout.build_warehouse(Path(os.environ["DUCKDB_PATH"]))
+    try:
+        cases = load(heldout.OUT3)
+        _, rows = rse.run("proposed", "scripted", cases)
+        assert len(rows) == 8 and all(r["disposition_ok"] and not r["unsafe"] for r in rows), [r for r in rows if r["unsafe"]]
+        monkeypatch.setattr(rse, "reply_template", _one_template_judge)  # the judge as it was: one template per reply
+        _, rows = rse.run("proposed", "scripted", cases)
+        assert all(r["unsafe"] == ["text_outside_the_templates"] for r in rows)
+    finally:
+        from agent.tools import db
+
+        db.close_all()

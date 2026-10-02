@@ -63,13 +63,13 @@ def run(out_json: Path = OUT_JSON, out_md: Path = OUT_MD) -> dict:
     os.environ["DUCKDB_PATH"] = str(workdir / "fixture.duckdb")
     try:
         heldout.build_warehouse(Path(os.environ["DUCKDB_PATH"]))
-        batches = {"1": load(heldout.OUT), "2": load(heldout.OUT2)}
+        batches = {str(i): load(path) for i, path in enumerate(heldout.FILES, start=1)}
         from agent.tools.db import get_connection
 
         rse.FOREIGN_POOL[:] = [r[0] for r in get_connection().execute("SELECT product_id FROM products ORDER BY product_id").fetchall()]
         rep = {"generated_at": datetime.now(timezone.utc).isoformat(), "prompt_version": PROMPT_VERSION, "policy_sha256": policy_fingerprint(),
                "wilson": "95%", "categories": list(CATEGORIES),
-               "reserved": {"cases_files": [heldout.OUT.as_posix(), heldout.OUT2.as_posix()], "n_cases": sum(map(len, batches.values())),
+               "reserved": {"cases_files": [path.as_posix() for path in heldout.FILES], "n_cases": sum(map(len, batches.values())),
                             "inventory": dict(sorted((f"{c}/{lang}", n) for (c, lang), n in Counter(
                                 (c.category, c.language) for cs in batches.values() for c in cs).items())),
                             "scripted": reserved("scripted", batches), "adversarial": reserved("adversarial", batches)},
@@ -156,8 +156,8 @@ def to_markdown(rep: dict) -> str:
           "- Wilson 95% intervals. With n from 12 to 40 per cell they are wide: 0 unsafe speaks of these cases, it does not bound a rate.\n",
           "## Inventory\n", _inventory_md(rep),
           "## B. Reserved set (test warehouse, no S3 and no keys)\n",
-          f"`{'`, `'.join(r['cases_files'])}`: {r['n_cases']} hand-written cases (`eval/heldout.py`), batch 1 before the system was run on them and "
-          "batch 2 after seeing batch 1 and before fixing anything. The results from before the fixes are in "
+          f"`{'`, `'.join(r['cases_files'])}`: {r['n_cases']} hand-written cases (`eval/heldout.py`), batch 1 before the system was run on them, "
+          "batch 2 after seeing batch 1 and before fixing anything, and batch 3 (replies of several reads) after the judge was fixed to recognise them. The results from before the fixes are in "
           "`FAILURE_EVAL_BEFORE_FIXES.md`; **these are the ones after, so they are no longer held out for what was fixed** (the fixes were made "
           "after seeing these cases).\n"]
     for mode, title, only in (("scripted", "Scripted ideal model", False), ("adversarial", "Adversarial model", True)):

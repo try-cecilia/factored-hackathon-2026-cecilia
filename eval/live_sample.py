@@ -35,7 +35,7 @@ SELECTION = REPORTS / "live_sample_selection.json"
 ROWS = REPORTS / "live_sample_groq_rows.jsonl"
 GENERATED_CASES = Path("eval/workload/cases_test.jsonl")
 MODEL = "groq:openai/gpt-oss-120b"
-PER_CELL = 2  # reserved cases per category and language
+PER_CELL = 2  # reserved cases per category and language; batch 3 comes after the others in file order, so it is never one of the first two
 RULE = ("reserved: in each category and language, the first %d cases in file order (batch 1, then batch 2) whose ideal-model script has "
         "a step that calls the model; generated: one case per case type (types in alphabetical order), languages alternating ES, PT, "
         "taking the first case of the type in file order in the wanted language, or in the other one if the type has none." % PER_CELL)
@@ -46,7 +46,7 @@ def _calls_the_model(case: Case) -> bool:
 
 
 def select(reserved: list[Case] | None = None, generated: list[Case] | None = None) -> dict:
-    reserved = reserved if reserved is not None else [c for path in (heldout.OUT, heldout.OUT2) for c in load(path)]
+    reserved = reserved if reserved is not None else [c for path in heldout.FILES for c in load(path)]
     generated = generated if generated is not None else load(GENERATED_CASES)
     picked_reserved: list[str] = []
     for category in CATEGORIES:
@@ -67,7 +67,7 @@ def write_selection(path: Path = SELECTION) -> dict:
 
 
 def cases_of(part: str, selection: dict) -> list[Case]:
-    pool = [c for p in (heldout.OUT, heldout.OUT2) for c in load(p)] if part == "reserved" else load(GENERATED_CASES)
+    pool = [c for p in heldout.FILES for c in load(p)] if part == "reserved" else load(GENERATED_CASES)
     by_id = {c.case_id: c for c in pool}
     return [by_id[i] for i in selection[part]]
 
