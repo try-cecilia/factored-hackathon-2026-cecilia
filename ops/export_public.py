@@ -51,6 +51,14 @@ SHAPES = {
     "twelve_digits": r"(?<!\d)\d{12}(?!\d)",
     "real_dataset_id": r"\b(?:CLI|PRD|TXN|SUC)-(?!FIX)(?![A-Z]*FIX)[0-9A-Z]{8,}\b",
 }
+# Ids the team made up for tests and docs: none is in the organizer's data (checked against the full warehouse on
+# 2026-10-02). Only these exact strings pass; any other id of that shape still stops the export.
+INVENTED_IDS = {"CLI-AB12CD34EF56", "PRD-AB12CD34EF56", "PRD-ZZ99ZZ99ZZ99", "PRD-00AB12CD"}
+
+
+def found(name: str, text: str) -> set[str]:
+    """What one shape finds in a blob; an invented id is not a real one."""
+    return {m.group(0)[:32] for m in re.finditer(SHAPES[name], text, re.M)} - (INVENTED_IDS if name == "real_dataset_id" else set())
 
 
 def git(*args: str, cwd: Path) -> str:
@@ -90,7 +98,7 @@ def main(src: Path, target: Path, redactions: Path) -> int:
                     hits.add((path, f"{size:,} bytes"))
                 continue
             text = git("cat-file", "-p", sha, cwd=target)
-            hits |= {(path, m.group(0)[:32]) for m in re.finditer(SHAPES[name], text, re.M)}
+            hits |= {(path, v) for v in found(name, text)}
         print(f"{name}: {len(hits)}" + "".join(f"\n    {p}: {v}" for p, v in sorted(hits)[:12]))
         real_ids = len(hits) if name == "real_dataset_id" else real_ids
     for sha, (path, _) in blobs.items():
