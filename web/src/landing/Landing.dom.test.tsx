@@ -2,7 +2,7 @@ import { cleanup, screen, within } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renderWithI18n } from '../test/render'
-import { figures as F, formatFigure } from './figures'
+import { figures as F, formatDate, formatFigure, offlineRunDate } from './figures'
 import { Landing } from './Landing'
 import { consoleEntry, demoEntry, sections, signInEntry } from './links'
 
@@ -137,10 +137,15 @@ describe('the landing', () => {
     expect(screen.getByText('1 · hasta 2 intentos por proveedor')).toBeTruthy()
     expect(screen.getByText(/Hasta 2 intentos por proveedor, con respaldo en otro\./)).toBeTruthy()
     // Offline latencies say which run they are.
-    expect(screen.getByText(/‡ Corrida local del 3 de octubre de 2026: las latencias dependen de la máquina\./)).toBeTruthy()
+    // The offline latencies and their day change with the machine (make sync-eval-latencies writes them into figures.ts).
+    expect(screen.getByText(new RegExp(`‡ Corrida local del ${formatDate(offlineRunDate.iso, 'es')}: las latencias dependen de la máquina\\.`))).toBeTruthy()
     const offline = screen.getAllByRole('table')[0]
     const latency = within(offline).getByRole('rowheader', { name: /^Latencia sin LLM/ }).closest('tr') as HTMLElement
-    expect(within(latency).getAllByRole('cell').map((td) => td.textContent)).toEqual(['2,4 / 9,0', '7,5 / 30,1', '5,5 / 18,5'])
+    expect(within(latency).getAllByRole('cell').map((td) => td.textContent)).toEqual([
+      `${es(F.keywordLatencyP50)} / ${es(F.keywordLatencyP95)}`,
+      `${es(F.idealLatencyP50)} / ${es(F.idealLatencyP95)}`,
+      `${es(F.adversarialLatencyP50)} / ${es(F.adversarialLatencyP95)}`,
+    ])
   })
 
   it('draws the evidence and the limits without links while there is no public repository', () => {
