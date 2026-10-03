@@ -666,7 +666,8 @@ on every pull request and every push to `main`, plus the classifier evaluation. 
     reaches the model, checked against values read straight from the warehouse;
   - card, account, ID and email numbers typed by the customer are masked
     before the model and in tickets;
-- one model call per turn, whose prose never reaches the customer;
+- one primary model response per turn (the client may retry it or fall back to another provider), whose prose never
+  reaches the customer;
 - every orchestrator disposition, multi-turn, prompt injection (including a
   foreign product reference caught before the model), LLM outage and degraded mode;
 - a handoff announced only after its ticket reads back (lost write, failed write),
