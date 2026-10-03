@@ -155,7 +155,7 @@ def test_the_landing_writer_never_touches_a_figure_outside_its_list(tmp_path):
                          "  keywordLatencyP50: json(2.4, 1, OFFLINE, [...KEYWORD, 'latency_ms_p50']),\n  keywordLatencyP50: json(2.4, 1, OFFLINE, [...KEYWORD, 'latency_ms_p50']),"),
      "2 lines start with 'keywordLatencyP50:'"),                                                                       # duplicated
     (lambda t: t.replace("[...KEYWORD, 'latency_ms_p95']", "[...IDEAL, 'latency_ms_p95']"), "expected system_eval › baseline › latency_ms_p95"),  # other system
-    (lambda t: t.replace("json(17.5, 1, OFFLINE, [...IDEAL, 'latency_ms_p95'])", "json(17.5, 1, OFFLINE, [...IDEAL, 'latency_ms_p50'])"), "expected system_eval › proposed (scripted) › latency_ms_p95"),  # other field
+    (lambda t: re.sub(r"(idealLatencyP95: json\([^\n]*?)'latency_ms_p95'", r"\1'latency_ms_p50'", t), "expected system_eval › proposed (scripted) › latency_ms_p95"),  # other field
     (lambda t: t.replace("adversarialLatencyP50: json(", "adversarialLatencyP50: fig("), "is not shaped as expected"),  # another binding
     (lambda t: re.sub(r"(offlineRunDate: Day = \{ iso: '[\d-]+', source: )OFFLINE", r"\g<1>LIVE", t), "cites LIVE, expected the report system_eval"),  # another report for the day
 ])
@@ -236,7 +236,8 @@ def test_a_crlf_landing_keeps_every_byte_but_the_value(tmp_path):
 def test_a_crlf_document_keeps_every_byte_but_the_cells(tmp_path):
     root = _docs(tmp_path)
     current = _crlf(root / "EVALUATION.md")
-    _set_value_bytes(root / "EVALUATION.md", NON_LLM.encode() + b" 2.4 / 8.5 ms", NON_LLM.encode() + b" 6.5 / 31.3 ms")
+    row = next(line for line in current.split(b"\r\n") if line.startswith(NON_LLM.encode()))
+    _set_value_bytes(root / "EVALUATION.md", row, OLD["EVALUATION.md"][1][1].encode())
     assert check_readme.latencies(root, write=True) == []
     assert (root / "EVALUATION.md").read_bytes() == current
 
