@@ -107,7 +107,7 @@ languages, 3 of each), three runs each, measured on 2026-10-03 on the code this 
 measured code changes and the docs do not say so)
 ([`eval/reports/SYSTEM_EVAL_LIVE.md`](eval/reports/SYSTEM_EVAL_LIVE.md)):
 
-> Live figures measured on other code: measured fingerprint `ad2212c4c416`; current fingerprint `3f30ddd16658` (formatting amounts by the customer's country and the language-detection fix for a Spanish "no" changed the measured code after the live run; the offline reports are regenerated on the current one).
+> Live figures measured on other code: measured fingerprint `ad2212c4c416`; current fingerprint `96cd6a70f173` (formatting amounts by the customer's country and the language-detection fix (a Spanish "no", and a tie keeping the conversation's language) changed the measured code after the live run; the offline reports are regenerated on the current one).
 
 | | Claude Sonnet 5 | Claude Haiku 4.5 |
 |---|---|---|
