@@ -3,6 +3,8 @@ session of the process, so what it decides can only come from the messages it is
 caller asked."""
 from __future__ import annotations
 
+import pytest
+
 from agent.core.orchestrator import Orchestrator
 from agent.session.auth import SessionStore
 from eval.keyword_llm import KeywordModel
@@ -58,3 +60,25 @@ def test_a_transfer_that_never_arrived_reaches_the_trace_and_says_why_it_goes_to
     orch, login = make()
     r = orch.handle_message(login(), "hice una transferencia y nunca llegó")  # CLI-FIX0001 has nothing pending
     assert (r.policy_rule, r.response_text) == ("action:trace_unmatched", render.MSG["trace_unmatched"]["es"])
+
+
+def test_a_kind_of_movement_named_alone_lists_that_kind_and_a_negation_still_asks_for_the_trace():
+    from eval.keyword_llm import _lookup
+
+    for text, kind in (("transferencias", "Transfer"), ("mis transferencias", "Transfer"), ("Transferências", "Transfer"),
+                       ("minhas transferências", "Transfer"), ("pagos", "Payment"), ("mis pagos", "Payment"), ("pagamentos", "Payment"),
+                       ("depósitos", "Deposit"), ("meus depósitos", "Deposit"), ("depositos", "Deposit")):
+        assert _lookup(text.lower()) == ("list_transactions", {"transaction_type": kind}), text
+    for text in ("hice una transferencia y no llegó", "hice una transferencia y nunca llegó", "mis transferencias no aparecen",
+                 "fiz uma transferência e não chegou", "minhas transferências não caíram", "el depósito no aparece", "o pagamento não caiu"):
+        assert _lookup(text.lower())[0] == "request_trace", text
+    assert _lookup("mis pagos están al día")[0] == "get_payment_status"  # late payments are the status, not the list
+
+
+@pytest.mark.parametrize("text,lang", [("transferencias", "es"), ("mis transferencias", "es"), ("minhas transferências", "pt")])
+def test_transfers_alone_answers_with_the_transfers_list(text, lang):
+    orch, login = make()
+    r = orch.handle_message(login(), text)
+    assert (r.disposition, r.language) == ("AUTO_RESOLVE", lang), r.response_text
+    [fact] = r.verified_facts
+    assert fact["tool"] == "list_transactions" and fact["args"]["transaction_type"] == "Transfer"

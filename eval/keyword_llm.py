@@ -11,9 +11,15 @@ from agent.llm.client import LLMResponse
 from eval.fake_llm import text_response, tool_call_response
 
 RULES: list[tuple[str, str, dict]] = [
-    # A movement that did not arrive: "no (le) llegó", "nunca llegó", "nunca chegou", or a transfer followed by a "no"/"não".
-    (r"rastre|rastrea|(no|nunca) (me |le )?lleg|(n[aã]o|nunca) (me |lhe )?chegou|transfer[eê]ncia.*\bn(o|[aã]o)\b|pendiente|pendente",
-     "request_trace", {}),
+    # A movement that did not arrive: "no (le) llegó", "nunca llegó", "nunca chegou", or a transfer, payment or deposit followed by
+    # a "no"/"não". First, so a negation still asks for the trace and not for the list of that kind.
+    (r"rastre|rastrea|(no|nunca) (me |le )?lleg|(n[aã]o|nunca) (me |lhe )?chegou"
+     r"|(transfer[eê]ncia|pago|pagamento|dep[oó]sito).*\bn(o|[aã]o)\b|pendiente|pendente", "request_trace", {}),
+    # One kind of movement, named in the plural ("transferencias", "mis pagos", "depósitos"): the list narrowed to it. Late
+    # payments ("pagos atrasados", "al día") are the payment status below.
+    (r"transfer[eê]ncias", "list_transactions", {"transaction_type": "Transfer"}),
+    (r"^(?!.*(atras|al d[ií]a|em dia)).*\b(pagos|pagamentos)\b", "list_transactions", {"transaction_type": "Payment"}),
+    (r"dep[oó]sitos", "list_transactions", {"transaction_type": "Deposit"}),
     (r"movimiento|transacc|movimenta", "list_transactions", {}),
     (r"d[oó]lar|cambio|c[aâ]mbio", "get_exchange_rate", {"source_currency": "USD", "target_currency": "MXN"}),
     (r"atras|al d[ií]a|em dia", "get_payment_status", {"product_id": "Tarjeta Crédito"}),
