@@ -274,13 +274,14 @@ function CustomerDemoBar({ kit, session, inert }: { kit: Promise<DemoKit>; sessi
   return <DemoBar view="customer" sessionRef={session.session_ref} expiresIn={session.expires_in} role={role} inert={inert} />
 }
 
-/** "Tu caso ya llegó al banco", for the newest case of the conversation while no person has decided it. */
+/** "Tu caso ya llegó al banco", for the newest case of the conversation while it is open (no person has decided it). */
 function DemoBridge({ kit, cases }: { kit: Promise<DemoKit>; cases: CaseRow[] }) {
   const resolved = use(kit)
   const newest = cases[0]
   if (!resolved.enabled || resolved.console !== true || !newest) return null
+  // Only once its state is read: a decided case must not flash the card while the read is on its way.
   const { state } = newest
-  if (state.state === 'not_found' || (state.state === 'ready' && !isOpenCase(state.status))) return null
+  if (state.state !== 'ready' || !isOpenCase(state.status)) return null
   return <BankBridgeCard ticketId={newest.ref.ticketId} />
 }
 

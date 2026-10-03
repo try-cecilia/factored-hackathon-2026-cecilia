@@ -43,12 +43,17 @@
   .demo-seg a { padding: 5px 10px; }
   .demo-bar__clock { gap: 8px; font-size: var(--text-compact-md); }
   .demo-bar__reenter { padding: 5px 8px; }
+  /* The countdown does not fit beside the switch: it takes a second row, under it. */
+  .demo-bar:not([data-clock='running']) { flex-wrap: wrap; height: auto; padding-block: 8px; row-gap: 8px; }
+  .demo-bar:not([data-clock='running']) .demo-bar__tools { width: 100%; justify-content: space-between; }
+  .demo-bar:not([data-clock='running']) .demo-bar__lead { order: 2; width: 100%; }
+  .demo-bar__clock { flex: 1; justify-content: space-between; }
 }
 
 /* The entry dialog. */
 .demo-dialog {
   width: min(560px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 0; border: 0; border-radius: 28px; overflow: auto;
-  background: var(--color-paper); color: var(--color-ink); box-shadow: 0 0 0 1px var(--color-glass), 0 40px 80px -30px #0F0A14B3;
+  background: var(--color-paper); color: var(--color-ink); text-align: left; box-shadow: 0 0 0 1px var(--color-glass), 0 40px 80px -30px #0F0A14B3;
 }
 .demo-dialog::backdrop { background: color-mix(in srgb, var(--color-ink) 45%, transparent); }
 .demo-dialog__form { display: flex; flex-direction: column; gap: 22px; padding: 36px; }
