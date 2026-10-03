@@ -82,6 +82,18 @@ def test_the_gate_fails_when_the_policies_changed_after_the_reports_were_made(mo
 def test_the_committed_reports_carry_the_current_policy_fingerprint():
     current = gate.policy_fingerprint()
     assert load("system_eval.json")["policy_sha256"] == current == load("system_eval_adversarial.json")["policy_sha256"]
+    assert load("ablation.json")["meta"]["policy_sha256"] == current
+
+
+def test_an_ablation_measured_on_other_code_fails_the_gate(tmp_path):
+    for name in ("system_eval.json", "system_eval_adversarial.json", "intent_classifier.json", "failure_eval.json", "system_eval_live.json"):
+        (tmp_path / name).write_text((REPORTS / name).read_text(encoding="utf-8"), encoding="utf-8")
+    stale = load("ablation.json")
+    stale["meta"]["policy_sha256"] = "e630f17e5901" + "0" * 52
+    (tmp_path / "ablation.json").write_text(json.dumps(stale), encoding="utf-8")
+    assert [f for f in gate.check(tmp_path) if f.startswith("ablation.json")] == [
+        f"ablation.json: medido con otras políticas (huella e630f17e5901, la actual es {gate.policy_fingerprint()[:12]}): "
+        "volver a correr `make eval-ablation`"]
 
 
 # --- floors per failure category ---------------------------------------------------------------------------------

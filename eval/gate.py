@@ -23,7 +23,8 @@ lo que faltaba, sobre los reportes de evaluación que se versionan en `eval/repo
    que una diferencia no pase en silencio. Si la huella del reporte en vivo no es la actual, README.md y EVALUATION.md
    tienen que decirlo en una línea con la frase «measured on other code» (`LIVE_STALE`) y las dos huellas abreviadas (12 caracteres); si coincide, esa
    línea no puede quedar. Quien cambia código medido elige: volver a correr `make eval-live`, o escribir que las cifras en
-   vivo son de otro código.
+   vivo son de otro código. La ablación (`ablation.json`, `make eval-ablation`) es offline y sin costo: su huella tiene que
+   ser la actual, como la de los otros reportes offline.
 
 Las evaluaciones del sistema leen el warehouse completo, así que no se vuelven a correr en CI (que solo tiene el de
 prueba): la compuerta juzga el reporte que quien cambia el código está obligado a regenerar (`make eval eval-adversarial`; el del set reservado,
@@ -130,11 +131,11 @@ def check_fresh(reports: dict[str, dict]) -> list[str]:
             for name, r in reports.items() if r.get("prompt_version") != PROMPT_VERSION]
 
 
-def check_policy_fresh(reports: dict[str, dict], current: str | None = None) -> list[str]:
+def check_policy_fresh(reports: dict[str, dict], current: str | None = None, command: str = "make eval eval-adversarial") -> list[str]:
     """Los reportes deben haberse medido con las políticas actuales (eval/fingerprint.py)."""
     current = current or policy_fingerprint()
     return [f"{name}: medido con otras políticas (huella {str(r.get('policy_sha256'))[:12]}, la actual es {current[:12]}): "
-            "volver a correr `make eval eval-adversarial`"
+            f"volver a correr `{command}`"
             for name, r in reports.items() if r.get("policy_sha256") != current]
 
 
@@ -177,11 +178,12 @@ def check_live(live: dict, current: str | None = None, docs: dict[str, str] | No
 def check(reports_dir: Path = REPORTS) -> list[str]:
     load = lambda name: json.loads((reports_dir / name).read_text(encoding="utf-8"))  # noqa: E731
     offline, adversarial, classifier = load("system_eval.json"), load("system_eval_adversarial.json"), load("intent_classifier.json")
-    failures, live = load("failure_eval.json"), load("system_eval_live.json")
+    failures, live, ablation = load("failure_eval.json"), load("system_eval_live.json"), load("ablation.json")
     fresh = {"system_eval.json": offline, "system_eval_adversarial.json": adversarial, "failure_eval.json": failures}
     return [*check_safety(offline, "offline"), *check_safety(adversarial, "adversarial"), *check_quality(offline, "offline"),
             *check_guard(classifier), *check_failure_categories(failures, offline, adversarial),
-            *check_fresh(fresh), *check_policy_fresh(fresh), *check_live(live)]
+            *check_fresh(fresh), *check_policy_fresh(fresh), *check_policy_fresh({"ablation.json": ablation["meta"]}, command="make eval-ablation"),
+            *check_live(live)]
 
 
 def main() -> int:
