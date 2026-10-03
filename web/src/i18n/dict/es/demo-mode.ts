@@ -81,5 +81,14 @@ export const demoMode = {
   },
   // Labels of the predefined results the API offers for each family of case (GET /demo/desk/tickets/{id}, resolve_results), by
   // code. A code with no label here is shown as it comes.
-  results: {} as Record<string, string>,
+  results: {
+    charge_confirmed: 'El cargo es una operación válida',
+    movement_settled: 'El movimiento ya figura completado',
+    trace_not_possible: 'No se puede rastrear por este canal',
+    needs_specialist: 'Necesita un área especializada',
+    info_checked: 'Los datos de la cuenta están en orden',
+    no_action_needed: 'No hace falta ninguna acción',
+    will_contact: 'El banco contactará al cliente',
+    call_the_bank: 'Comunicarse con la línea del banco',
+  } as Record<string, string>,
 }

@@ -20,6 +20,9 @@ const pages: Record<string, string[]> = {
   '/operador/monitoreo': ['routes/_operator.tsx', 'routes/_operator/operador.monitoreo.tsx'],
   '/operador/trazas/abc': ['routes/_operator.tsx', 'routes/_operator/operador.trazas.tsx', 'routes/_operator/operador.trazas.index.tsx', 'routes/_operator/operador.trazas.$traceId.tsx'],
   '/dev/ui': ['routes/dev.ui.tsx'],
+  '/demo/banco': ['routes/_demobanco.tsx', 'routes/_demobanco/demo.banco.tsx', 'routes/_demobanco/demo.banco.index.tsx'],
+  '/demo/banco/caso/T-1': ['routes/_demobanco.tsx', 'routes/_demobanco/demo.banco.tsx', 'routes/_demobanco/demo.banco.caso.$ticketId.tsx'],
+  '/demo/banco/rastreos': ['routes/_demobanco.tsx', 'routes/_demobanco/demo.banco_.rastreos.tsx'],
 }
 
 const read = (file: string) => readFileSync(file, 'utf8')
@@ -95,6 +98,8 @@ test('each page is in its own area, and the customer never loads the console, th
   assert.deepEqual(areasOf('/operador/trazas/abc'), ['operator', 'monitor'])
   assert.deepEqual(areasOf('/operadora'), ['customer'])
   assert.deepEqual(areasOf('/dev/ui'), ['gallery'])
+  assert.deepEqual(areasOf('/demo/banco/caso/abc'), ['demoBank'])
+  assert.deepEqual(areasOf('/demo/bancos'), ['customer'])
   const customer = new Set(areaNamespaces.customer)
   for (const namespace of ['operator', 'monitor', 'gallery', 'table'] as const) assert.ok(!customer.has(namespace), namespace)
 })

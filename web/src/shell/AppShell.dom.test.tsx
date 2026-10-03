@@ -8,6 +8,7 @@ import type { Session } from '../server/auth.functions'
 import type { DemoKit } from '../server/demo.functions'
 import { renderWithI18n } from '../test/render'
 import { AppShell } from './AppShell'
+import { useShell } from './ShellContext'
 
 const navigate = vi.hoisted(() => vi.fn())
 const logout = vi.hoisted(() => vi.fn())
@@ -46,13 +47,13 @@ function phone(matches: boolean, narrow = matches) {
   })) as unknown as typeof window.matchMedia
 }
 
-type Props = { history?: HistoryResult; scenarios?: typeof scenarios | null; kit?: Promise<DemoKit>; locale?: 'es' | 'pt' }
+type Props = { history?: HistoryResult; scenarios?: typeof scenarios | null; kit?: Promise<DemoKit>; locale?: 'es' | 'pt'; page?: ReactElement }
 
 function shell(props: Props = {}): ReactElement {
   const kit = props.kit ?? Promise.resolve<DemoKit>(props.scenarios ? { enabled: true, scenarios: props.scenarios } : { enabled: false })
   return (
     <ConversationProvider sessionRef="s1" initial={props.history ?? { ok: true, cases: [], turns: [] }}>
-      <AppShell session={session} kit={kit}><p>La página</p></AppShell>
+      <AppShell session={session} kit={kit}>{props.page ?? <p>La página</p>}</AppShell>
     </ConversationProvider>
   )
 }
@@ -299,5 +300,35 @@ describe('AppShell', () => {
       expect((container.querySelector('#shell-side') as HTMLElement).hasAttribute('inert')).toBe(true)
       expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Abrir el menú' }))
     })
+  })
+})
+
+describe('the one-click demo', () => {
+  const entries = [{ role: 'cuentas' as const, customer_id: 'CLI-FIX0001', language: 'es' }]
+  const console = (on: boolean | undefined) => Promise.resolve<DemoKit>({ enabled: true, scenarios, console: on, entries })
+
+  it('with the demo console on, the DEMO bar is over the window, on the customer\'s side', async () => {
+    await draw({ kit: console(true) })
+    const bar = screen.getByRole('region', { name: 'Modo demo' })
+    expect(within(bar).getByRole('link', { name: 'Cliente' }).getAttribute('aria-current')).toBe('page')
+    expect(within(bar).getByRole('link', { name: 'Banco' }).getAttribute('href')).toBe('/demo/banco')
+  })
+
+  it('fail-closed: a kit that does not say the console is on draws no bar and no card', async () => {
+    for (const kit of [console(undefined), console(false), Promise.resolve<DemoKit>({ enabled: false })]) {
+      const Page = () => <>{useShell().bridge}</>
+      await draw({ kit, history: withCase, page: <Page /> })
+      expect(screen.queryByRole('region', { name: 'Modo demo' })).toBeNull()
+      expect(screen.queryByRole('region', { name: 'Tu caso ya llegó al banco' })).toBeNull()
+      cleanup()
+    }
+  })
+
+  it('a case nobody has decided yet brings the card to the same case on the bank\'s side', async () => {
+    // The chat draws the card over its composer, from the shell's context.
+    const Page = () => <>{useShell().bridge}</>
+    await draw({ kit: console(true), history: withCase, page: <Page /> })
+    const card = await screen.findByRole('region', { name: 'Tu caso ya llegó al banco' })
+    expect(within(card).getByRole('link', { name: /Verlo del lado del banco/ }).getAttribute('href')).toBe('/demo/banco/caso/$ticketId')
   })
 })

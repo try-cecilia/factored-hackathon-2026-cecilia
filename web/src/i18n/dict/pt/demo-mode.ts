@@ -81,5 +81,14 @@ export const demoMode: Like<typeof source> = {
     },
     off: 'O console da demo não está disponível.',
   },
-  results: {},
+  results: {
+    charge_confirmed: 'A cobrança é uma operação válida',
+    movement_settled: 'A movimentação já consta como concluída',
+    trace_not_possible: 'Não é possível rastrear por este canal',
+    needs_specialist: 'Precisa de uma área especializada',
+    info_checked: 'Os dados da conta estão em ordem',
+    no_action_needed: 'Nenhuma ação é necessária',
+    will_contact: 'O banco vai entrar em contato',
+    call_the_bank: 'Falar com a central do banco',
+  },
 }

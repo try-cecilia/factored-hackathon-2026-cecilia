@@ -94,3 +94,9 @@
   font-size: var(--text-compact-md); font-weight: var(--font-weight-semibold); line-height: 16px; text-decoration: none;
 }
 .demo-bridge__action:focus-visible { outline: 2px solid var(--color-paper); outline-offset: 2px; }
+/* Across the chat's full width, the card is one row: what happened on the left, the way to the bank on the right. */
+@media (min-width: 1000px) {
+  .demo-bridge { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 24px; row-gap: 4px; align-items: center; }
+  .demo-bridge h2, .demo-bridge p { grid-column: 1; }
+  .demo-bridge__action { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+}
