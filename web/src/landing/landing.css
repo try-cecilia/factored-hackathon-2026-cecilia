@@ -458,7 +458,8 @@
   .land-projection__figures strong, .land-panel__figures strong, .land-metrics strong { font-size: 34px; line-height: 38px; }
   .land-queue__table td, .land-queue__table th { padding: 12px 0 12px 10px; font-size: var(--text-compact-md); }
   .land-queue__table tr > :last-child { padding-right: 12px; }
-  .land-queue__kind { width: 76px; }
+  /* The phone queue drops the family column, as the phone design does; the overdue wait stays red. */
+  .land-queue__kind, .land-queue__table thead th:first-child { display: none; }
   .land-queue__wait { width: 58px; }
   .land-queue__target { width: 34px; }
   .land-queue__columns { display: none; }
