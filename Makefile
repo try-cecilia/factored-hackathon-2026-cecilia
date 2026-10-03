@@ -162,7 +162,7 @@ eval-ablation:    ## what each group of safety controls buys: the same models wi
 check-readme:    ## the README's headline figures and the latencies EVALUATION.md and the slides cite, against the generated reports (fails on a mismatch)
 	$(PY) -m eval.check_readme
 
-sync-eval-latencies: ## copy the regenerated reports' latencies per case into EVALUATION.md and the slides (only those cells), then check
+sync-eval-latencies: ## copy the regenerated reports' latencies per case into EVALUATION.md, the slides and the landing's figures.ts (only those cells and values, plus the landing's offline day), then check
 	$(PY) -m eval.check_readme --write-latencies
 
 eval-failures:    ## calidad y fallos por categoría e idioma: set reservado en el warehouse de prueba (sin S3 ni claves) + filas del workload de test
