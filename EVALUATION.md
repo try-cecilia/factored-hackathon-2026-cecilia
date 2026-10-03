@@ -222,7 +222,10 @@ For this component it fails if:
 
 `make workload eval eval-adversarial` → `eval/reports/SYSTEM_EVAL*.md`. After a change to the measured code (`eval/fingerprint.py`), the
 whole regeneration is `make eval eval-adversarial eval-failures eval-ablation sync-eval-latencies`, then `make test gate check-readme`:
-the latencies per case change with the machine, and `sync-eval-latencies` copies them into this file and the slides.
+the latencies per case change with the machine, and `sync-eval-latencies` copies them into this file, the slides and the landing
+(`web/src/landing/figures.ts`: the offline latencies and the day of the offline run, nothing else), so the web's figures test keeps passing.
+The three round alike, and so does that test: the shortest decimal form of the report's number, rounded half up
+(`web/src/landing/rounding-cases.json` holds the cases both sides test).
 
 **Workload.**
 - `eval/workload.py` generates cases from the warehouse: 23 case types.
@@ -371,7 +374,7 @@ the latencies per case change with the machine, and `sync-eval-latencies` copies
 | Latency p50 / p95 per case (non-LLM, local) | 2.5 / 10.7 ms | 5.1 / 19.9 ms | 5.5 / 19.7 ms |
 
 The latencies were measured on the machine that regenerated the reports and are not comparable to the previous run's;
-`make sync-eval-latencies` copies them here, and `make check-readme` fails if they are left behind.
+`make sync-eval-latencies` copies them here and into the landing, and `make check-readme` fails if they are left behind.
 
 Reading it:
 - The baseline's gap comes from language and the action, not policy:

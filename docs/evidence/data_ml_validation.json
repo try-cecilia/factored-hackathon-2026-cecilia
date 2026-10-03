@@ -1,78 +1,78 @@
 {
-  "generated_at": "2026-09-29T15:44:26Z",
-  "code_version": "0d71649",
-  "pytest": "pytest: 43 passed in 9.69s.",
+  "generated_at": "2026-10-03T17:20:13Z",
+  "code_version": "be7537c9",
+  "pytest": "pytest: 43 passed in 22.70s.",
   "criteria": [
     {
       "id": "contracts",
-      "criterion": "Contratos",
-      "source": "docs/data_quality.md (Pipeline, pasos 2-5), data/contracts.py",
+      "criterion": "Contracts",
+      "source": "docs/data_quality.md (Pipeline, steps 2-5), data/contracts.py",
       "status": "PASS",
       "tests": [
         {
           "test": "test_contracts_every_table_has_types_key_row_model_and_they_agree",
           "status": "PASS",
-          "evidence": "9 tablas: tipos, clave, NOT NULL y modelo pydantic coherentes; contrato 2.1.0",
+          "evidence": "9 tables: types, key, NOT NULL and pydantic model agree; contract 2.1.0",
           "detail": ""
         },
         {
           "test": "test_contracts_the_served_tables_have_the_dictionary_types_and_keys",
           "status": "PASS",
-          "evidence": "95 columnas de 5 tablas servidas con el tipo del diccionario; sin claves repetidas",
+          "evidence": "95 columns of 5 served tables with the dictionary's type; no repeated keys",
           "detail": ""
         },
         {
           "test": "test_contracts_a_violating_row_is_quarantined_with_its_reason_and_appears_in_the_report",
           "status": "PASS",
-          "evidence": "2 de 5 filas del lote malo en _quarantine_transactions con motivo (rule:status_enum, cast:amount); checks de error fallidos en el reporte JSON y en _dq_results; las 3 válidas se cargaron",
+          "evidence": "2 of 5 rows of the bad batch in _quarantine_transactions with a reason (rule:status_enum, cast:amount); failed error checks in the JSON report and in _dq_results; the 3 valid ones were loaded",
           "detail": ""
         },
         {
           "test": "test_contracts_over_the_quarantine_threshold_the_load_stops_and_the_previous_state_stays",
           "status": "PASS",
-          "evidence": "lote con 40% en cuarentena (umbral 1%): PipelineError, tabla servida idéntica (mismo md5), carga 'failed' en _ingestion_log, `python -m data.pipeline` sale con error y el reporte dice status=failed",
+          "evidence": "a batch with 40% quarantined (threshold 1%): PipelineError, served table identical (same md5), load 'failed' in _ingestion_log, `python -m data.pipeline` exits with an error and the report says status=failed",
           "detail": ""
         },
         {
           "test": "test_contracts_a_missing_required_column_fails_the_load",
           "status": "PASS",
-          "evidence": "sin la columna obligatoria `amount` la carga falla ('missing required columns') y la tabla no cambia",
+          "evidence": "without the required column `amount` the load fails ('missing required columns') and the table does not change",
           "detail": ""
         },
         {
           "test": "test_contracts_a_value_that_would_be_rounded_to_fit_its_type_is_quarantined_not_stored_rounded",
           "status": "PASS",
-          "evidence": "amount='200000.005' en un CSV real: error type_cast:amount, fila en cuarentena y no se guarda como 200000.01; '54.500' se acepta",
+          "evidence": "amount='200000.005' in a real CSV: error type_cast:amount, the row is quarantined and not stored as 200000.01; '54.500' is accepted",
           "detail": ""
         },
         {
           "test": "test_contracts_valid_amounts_of_any_magnitude_are_stored_exactly_and_only_a_rounding_one_is_rejected",
           "status": "PASS",
-          "evidence": "523 importes válidos de 0.01 a 9999999999999.99 (incluido 8995304.28) cargados exactos; 200000.005 rechazado con cast:amount; una sola fila en cuarentena",
+          "evidence": "523 valid amounts from 0.01 to 9999999999999.99 (8995304.28 included) loaded exactly; 200000.005 rejected with cast:amount; a single row quarantined",
           "detail": ""
         },
         {
           "test": "test_contracts_the_fixture_warehouse_loads_without_a_single_cast_error",
           "status": "PASS",
-          "evidence": "la carga del fixture sin ningún type_cast ni fila en cuarentena (38 filas leídas)",
+          "evidence": "the fixture's load with no type_cast and no row quarantined (38 rows read)",
           "detail": ""
         },
         {
           "test": "test_contracts_a_truncated_file_cannot_replace_the_rows_it_cuts_off",
           "status": "PASS",
-          "evidence": "un archivo cortado a mitad de la última fila: con el umbral por defecto la carga se detiene; aun tolerando todo, sus 5 filas van a cuarentena (con su archivo de origen) y la tabla servida queda idéntica",
+          "evidence": "a file cut in the middle of its last row: with the default threshold the load stops; even tolerating everything, its 5 rows go to quarantine (with their source file) and the served table stays identical",
           "detail": ""
         },
         {
           "test": "test_contracts_the_documented_severities_are_the_ones_the_code_assigns",
           "status": "PASS",
-          "evidence": "tabla de severidades de docs/data_quality.md == severidades que asignan measure/pydantic_sample/quarantine; muestra pydantic = 1000",
+          "evidence": "severity table in docs/data_quality.md == the severities measure/pydantic_sample/quarantine assign; pydantic sample = 1000",
           "detail": ""
         },
         {
           "test": "test_contracts_each_documented_deviation_is_still_measured_as_a_warning",
           "status": "PASS",
-          "evidence": "2 desvíos del contrato: cada uno es una regla `warn` medida en cada carga y está en docs/data_quality.md",
+          "evidence": "2 contract deviations: each one is a `warn` rule measured on every load and listed in docs/data_quality.md",
           "detail": ""
         }
       ],
@@ -80,20 +80,20 @@
     },
     {
       "id": "quality",
-      "criterion": "Calidad",
-      "source": "docs/data_quality.md (Pipeline paso 4, Findings)",
+      "criterion": "Quality",
+      "source": "docs/data_quality.md (Pipeline step 4, Findings)",
       "status": "PASS",
       "tests": [
         {
           "test": "test_quality_every_check_is_persisted_and_the_report_counts_them",
           "status": "PASS",
-          "evidence": "161 checks de la corrida del fixture: los 161 en _dq_results y en el JSON; conteos del resumen recalculados",
+          "evidence": "161 checks of the fixture's run: all 161 in _dq_results and in the JSON; summary counts recomputed",
           "detail": ""
         },
         {
           "test": "test_quality_the_committed_full_run_report_is_the_one_the_doc_quotes",
           "status": "PASS",
-          "evidence": "quality_report.json (20260928T204248Z-31184c): 246 checks, 0 errores, 12 advertencias, 6,058,898 filas; 10 conteos del doc == los del reporte",
+          "evidence": "quality_report.json (20260929T145046Z-12c946): 294 checks, 0 errors, 16 warnings, 6,125,993 rows; 10 counts in the doc == the report's",
           "detail": ""
         }
       ],
@@ -101,86 +101,86 @@
     },
     {
       "id": "lineage",
-      "criterion": "Linaje",
-      "source": "docs/data_quality.md (Pipeline paso 8), data/lineage.py",
+      "criterion": "Lineage",
+      "source": "docs/data_quality.md (Pipeline step 8), data/lineage.py",
       "status": "PASS",
       "tests": [
         {
           "test": "test_lineage_every_served_row_traces_to_a_run_a_file_and_its_hash",
           "status": "PASS",
-          "evidence": "5 tablas servidas: fila -> run -> contrato/código -> archivo -> SHA-256 (recalculado del disco, 7 archivos); `python -m data.lineage --verify` sin problemas",
+          "evidence": "5 served tables: row -> run -> contract/code -> file -> SHA-256 (recomputed from disk, 7 files); `python -m data.lineage --verify` with no problems",
           "detail": ""
         },
         {
           "test": "test_lineage_a_broken_chain_is_detected",
           "status": "PASS",
-          "evidence": "se rompe la cadena de 5 maneras (fila sin run, run no exitoso, archivo sin hash, bytes cambiados, archivo borrado) y verify() lo dice; sin raw_dir, además, exige sha256 hex de 64, tamaño, URI, versión de contrato y de código, modo y horas no vacíos (10 casos negativos)",
+          "evidence": "the chain is broken in 5 ways (a row with no run, a failed run, a file with no hash, changed bytes, a deleted file) and verify() says so; without raw_dir it also requires a 64-character hex sha256, size, URI, contract and code versions, mode and times not empty (10 negative cases)",
           "detail": ""
         },
         {
           "test": "test_lineage_an_incomplete_record_fails_verification_even_without_the_raw_files[UPDATE _source_files SET sha256 = NULL WHERE table_name = 'customers'-malformed sha256]",
           "status": "PASS",
-          "evidence": "sha256 = NULL -> verify() sin raw_dir: customers: customers.csv in run 20260929T154420Z-5d067d has a missing or malformed sha256",
+          "evidence": "sha256 = NULL -> verify() without raw_dir: customers: customers.csv in run 20261003T171956Z-5c4c7d has a missing or malformed sha256",
           "detail": ""
         },
         {
           "test": "test_lineage_an_incomplete_record_fails_verification_even_without_the_raw_files[UPDATE _source_files SET sha256 = 'abc123' WHERE table_name = 'customers'-malformed sha256]",
           "status": "PASS",
-          "evidence": "sha256 = 'abc123' -> verify() sin raw_dir: customers: customers.csv in run 20260929T154420Z-f2ccfa has a missing or malformed sha256",
+          "evidence": "sha256 = 'abc123' -> verify() without raw_dir: customers: customers.csv in run 20261003T171956Z-152847 has a missing or malformed sha256",
           "detail": ""
         },
         {
           "test": "test_lineage_an_incomplete_record_fails_verification_even_without_the_raw_files[UPDATE _source_files SET sha256 = upper(sha256) WHERE table_name = 'customers'-malformed sha256]",
           "status": "PASS",
-          "evidence": "sha256 = upper(sha256) -> verify() sin raw_dir: customers: customers.csv in run 20260929T154420Z-a218cc has a missing or malformed sha256",
+          "evidence": "sha256 = upper(sha256) -> verify() without raw_dir: customers: customers.csv in run 20261003T171956Z-342de1 has a missing or malformed sha256",
           "detail": ""
         },
         {
           "test": "test_lineage_an_incomplete_record_fails_verification_even_without_the_raw_files[UPDATE _source_files SET n_bytes = NULL WHERE table_name = 'customers'-n_bytes]",
           "status": "PASS",
-          "evidence": "n_bytes = NULL -> verify() sin raw_dir: customers: customers.csv in run 20260929T154420Z-9755ff has a missing or malformed n_bytes",
+          "evidence": "n_bytes = NULL -> verify() without raw_dir: customers: customers.csv in run 20261003T171956Z-d46218 has a missing or malformed n_bytes",
           "detail": ""
         },
         {
           "test": "test_lineage_an_incomplete_record_fails_verification_even_without_the_raw_files[UPDATE _source_files SET source_uri = '' WHERE table_name = 'customers'-source_uri]",
           "status": "PASS",
-          "evidence": "source_uri = '' -> verify() sin raw_dir: customers: customers.csv in run 20260929T154421Z-0a0b6c has a missing or malformed source_uri",
+          "evidence": "source_uri = '' -> verify() without raw_dir: customers: customers.csv in run 20261003T171957Z-730849 has a missing or malformed source_uri",
           "detail": ""
         },
         {
           "test": "test_lineage_an_incomplete_record_fails_verification_even_without_the_raw_files[UPDATE _ingestion_log SET contract_version = NULL WHERE table_name = 'customers'-contract_version]",
           "status": "PASS",
-          "evidence": "contract_version = NULL -> verify() sin raw_dir: customers: run 20260929T154421Z-406244 does not record contract_version",
+          "evidence": "contract_version = NULL -> verify() without raw_dir: customers: run 20261003T171957Z-7f1ef5 does not record contract_version",
           "detail": ""
         },
         {
           "test": "test_lineage_an_incomplete_record_fails_verification_even_without_the_raw_files[UPDATE _ingestion_log SET contract_version = '  ' WHERE table_name = 'customers'-contract_version]",
           "status": "PASS",
-          "evidence": "contract_version = '  ' -> verify() sin raw_dir: customers: run 20260929T154421Z-4a7c79 does not record contract_version",
+          "evidence": "contract_version = '  ' -> verify() without raw_dir: customers: run 20261003T171957Z-9d8efa does not record contract_version",
           "detail": ""
         },
         {
           "test": "test_lineage_an_incomplete_record_fails_verification_even_without_the_raw_files[UPDATE _ingestion_log SET code_version = NULL WHERE table_name = 'customers'-code_version]",
           "status": "PASS",
-          "evidence": "code_version = NULL -> verify() sin raw_dir: customers: run 20260929T154421Z-a3152d does not record code_version",
+          "evidence": "code_version = NULL -> verify() without raw_dir: customers: run 20261003T171957Z-8a2358 does not record code_version",
           "detail": ""
         },
         {
           "test": "test_lineage_an_incomplete_record_fails_verification_even_without_the_raw_files[UPDATE _ingestion_log SET finished_at = NULL WHERE table_name = 'customers'-finished_at]",
           "status": "PASS",
-          "evidence": "finished_at = NULL -> verify() sin raw_dir: customers: run 20260929T154421Z-714f9a does not record finished_at",
+          "evidence": "finished_at = NULL -> verify() without raw_dir: customers: run 20261003T171958Z-08c8c7 does not record finished_at",
           "detail": ""
         },
         {
           "test": "test_lineage_an_incomplete_record_fails_verification_even_without_the_raw_files[UPDATE _ingestion_log SET mode = NULL WHERE table_name = 'customers'-mode]",
           "status": "PASS",
-          "evidence": "mode = NULL -> verify() sin raw_dir: customers: run 20260929T154422Z-264de6 does not record mode",
+          "evidence": "mode = NULL -> verify() without raw_dir: customers: run 20261003T171958Z-80eea9 does not record mode",
           "detail": ""
         },
         {
           "test": "test_lineage_a_corrected_partition_shows_which_file_and_hash_each_row_came_from",
           "status": "PASS",
-          "evidence": "tras una partición corregida, la fila corregida apunta al run y al hash de raw_late y las demás a los del primer run",
+          "evidence": "after a corrected partition, the corrected row points to the run and hash of raw_late and the others to those of the first run",
           "detail": ""
         }
       ],
@@ -188,32 +188,32 @@
     },
     {
       "id": "freshness",
-      "criterion": "Política de frescura",
+      "criterion": "Freshness policy",
       "source": "docs/data_quality.md (Update and freshness policy)",
       "status": "PASS",
       "tests": [
         {
           "test": "test_freshness_the_documented_defaults_and_the_as_of_date",
           "status": "PASS",
-          "evidence": "sin FRESHNESS_ENFORCE se sirve el dato de 2024 con as_of=2024-01-16; SLO por defecto 36 h; lookback 3 días",
+          "evidence": "without FRESHNESS_ENFORCE the 2024 data is served with as_of=2024-01-16; default SLO 36 h; lookback 3 days",
           "detail": ""
         },
         {
           "test": "test_freshness_stale_data_is_unavailable_on_the_gated_tools_and_only_on_them",
           "status": "PASS",
-          "evidence": "FRESHNESS_ENFORCE=1: saldo, movimientos y estado de pago -> DataUnavailable(as_of); perfil y tipo de cambio siguen",
+          "evidence": "FRESHNESS_ENFORCE=1: balance, movements and payment status -> DataUnavailable(as_of); profile and exchange rate keep working",
           "detail": ""
         },
         {
           "test": "test_freshness_the_limit_is_the_slo_in_hours_measured_from_the_data_date",
           "status": "PASS",
-          "evidence": "as_of 2024-01-16: hoy+1 día (24 h) sirve; hoy+2 (48 h) bloquea con SLO 36; con SLO 48 sirve; sin fecha bloquea",
+          "evidence": "as_of 2024-01-16: today+1 day (24 h) serves; today+2 (48 h) blocks with SLO 36; with SLO 48 it serves; with no date it blocks",
           "detail": ""
         },
         {
           "test": "test_freshness_a_stale_warehouse_ends_in_an_escalation_not_an_answer",
           "status": "PASS",
-          "evidence": "misma pregunta: sin política AUTO_RESOLVE con 'al 16/01/2024'; con dato vencido ESCALATE/data_unavailable con ticket y sin la cifra",
+          "evidence": "the same question: without the policy, AUTO_RESOLVE with 'al 16/01/2024'; with stale data, ESCALATE/data_unavailable with a ticket and without the figure",
           "detail": ""
         }
       ],
@@ -221,38 +221,38 @@
     },
     {
       "id": "learned",
-      "criterion": "Componente aprendido contra una línea base",
+      "criterion": "A learned component against a baseline",
       "source": "EVALUATION.md §2, eval/reports/intent_classifier.md",
       "status": "PASS",
       "tests": [
         {
           "test": "test_learned_beats_the_keyword_baseline_on_the_same_test_split_with_intervals",
           "status": "PASS",
-          "evidence": "test n=85: aprendido 84.7% [75.6–90.8] vs palabras clave 63.5% [52.9–73.0]; diferencia pareada +21.2 pts [+8.2, +34.1], McNemar p=0.002935; piso mayoritaria 17.6% [11.0–27.1]",
+          "evidence": "test n=85: learned 84.7% [75.6–90.8] vs keywords 63.5% [52.9–73.0]; paired difference +21.2 pts [+8.2, +34.1], McNemar p=0.002935; majority floor 17.6% [11.0–27.1]",
           "detail": ""
         },
         {
           "test": "test_learned_the_committed_report_is_what_the_code_and_data_produce",
           "status": "PASS",
-          "evidence": "build_report() sobre los CSV del repo reproduce las 1148 cifras del reporte JSON versionado y el texto completo del Markdown (solo se excluyen la hora de generación y la versión de sklearn); hashes de datos == los de los archivos",
+          "evidence": "build_report() over the repository's CSVs reproduces the 1157 figures of the versioned JSON report and the full text of the Markdown (only the generation time and the sklearn version are excluded); data hashes == the files'",
           "detail": ""
         },
         {
           "test": "test_learned_altering_any_published_metric_makes_the_comparison_fail",
           "status": "PASS",
-          "evidence": "cada una de las 1148 cifras del reporte (incluidos macro-F1 aprendido, exactitud PT y exactitud sin frases de plantilla), alterada de a una, hace que la comparación falle en exactamente esa ruta",
+          "evidence": "each of the report's 1157 figures (learned macro-F1, PT accuracy and accuracy without template phrases included), altered one at a time, makes the comparison fail at exactly that path",
           "detail": ""
         },
         {
           "test": "test_learned_the_deployed_model_is_the_one_that_was_selected_and_reported",
           "status": "PASS",
-          "evidence": "eval/models/intent_clf.joblib da las mismas probabilidades que el modelo reentrenado (356 frases, tol 1e-9); meta: char+word, τ=0.55, mismo hash de entrenamiento",
+          "evidence": "eval/models/intent_clf.joblib gives the same probabilities as the retrained model (356 phrases, tol 1e-9); meta: char+word, τ=0.55, same training hash",
           "detail": ""
         },
         {
           "test": "test_learned_the_paired_statistics_agree_with_a_hand_worked_case",
           "status": "PASS",
-          "evidence": "diferencia pareada y McNemar exacto comprobados a mano en un caso de 10 ítems (4 a favor, 1 en contra, p = 12/32); el bootstrap es reproducible con semilla",
+          "evidence": "paired difference and exact McNemar checked by hand on a 10-item case (4 for, 1 against, p = 12/32); the bootstrap is reproducible with a seed",
           "detail": ""
         }
       ],
@@ -260,56 +260,56 @@
     },
     {
       "id": "leakage",
-      "criterion": "Sin fuga de datos",
+      "criterion": "No data leakage",
       "source": "EVALUATION.md §2, eval/leakage.py, LIMITATIONS.md (Data and ML)",
       "status": "PASS",
       "tests": [
         {
           "test": "test_leakage_nothing_chosen_moves_when_the_test_split_changes",
           "status": "PASS",
-          "evidence": "con las etiquetas del test rotadas: variante (char+word), τ (0.55), F1 de dev y barrido idénticos y la exactitud de test cambia; rotando dev sí cambia la selección (control positivo)",
+          "evidence": "with the test labels rotated: variant (char+word), τ (0.55), dev F1 and sweep identical, and the test accuracy changes; rotating dev does change the selection (positive control)",
           "detail": ""
         },
         {
           "test": "test_leakage_near_duplicates_between_train_dev_and_test",
           "status": "PASS",
-          "evidence": "similitud máxima de trigramas de caracteres (excluye ≥ 0.9): {'dev↔train': 0.647, 'test↔train': 0.679, 'test↔dev': 0.826}; frases excluidas del puntaje: 1 de 174",
+          "evidence": "maximum character-trigram similarity (excludes ≥ 0.9): {'dev↔train': 0.647, 'test↔train': 0.679, 'test↔dev': 0.826}; phrases excluded from the score: 1 of 174",
           "detail": ""
         },
         {
           "test": "test_leakage_the_check_catches_a_copy_of_a_training_phrase_and_keeps_it_out_of_the_scores",
           "status": "PASS",
-          "evidence": "una copia de una frase de entrenamiento (otra capitalización, puntuación y espacios) se detecta y no entra al puntaje",
+          "evidence": "a copy of a training phrase (other capitalization, punctuation and spaces) is detected and does not enter the score",
           "detail": ""
         },
         {
           "test": "test_leakage_the_only_input_of_the_learned_component_is_the_customers_words",
           "status": "PASS",
-          "evidence": "features = texto del cliente: train() solo lee `utterance` e `intent`; reentrenar con columnas basura da las mismas probabilidades; ni el clasificador ni la guarda importan duckdb, herramientas ni el warehouse (sin info posterior al resultado)",
+          "evidence": "features = the customer's text: train() reads only `utterance` and `intent`; retraining with junk columns gives the same probabilities; neither the classifier nor the guard imports duckdb, tools or the warehouse (no information from after the outcome)",
           "detail": ""
         },
         {
           "test": "test_leakage_the_two_datasets_are_the_ones_frozen_before_measuring_and_the_workloads_do_not_share_cases",
           "status": "PASS",
-          "evidence": "hashes de entrenamiento y held-out == los del reporte y del modelo desplegado; workloads dev/test sin (plantilla, cliente) compartidos; similitud máxima de los turnos del workload con el entrenamiento: {'dev': 0.787, 'test': 0.787}",
+          "evidence": "training and held-out hashes == those of the report and of the deployed model; dev/test workloads share no (template, customer) pair; maximum similarity of the workload's turns to the training set: {'dev': 0.787, 'test': 0.787}",
           "detail": ""
         },
         {
           "test": "test_leakage_the_workload_generator_rejects_a_training_phrase_with_other_punctuation",
           "status": "PASS",
-          "evidence": "el generador de workloads rechaza un turno que es una frase de entrenamiento con otra capitalización o puntuación (antes solo comparaba strip().lower())",
+          "evidence": "the workload generator rejects a turn that is a training phrase with other capitalization or punctuation (before, it only compared strip().lower())",
           "detail": ""
         },
         {
           "test": "test_leakage_the_test_misses_were_reported_not_tuned_away",
           "status": "PASS",
-          "evidence": "1 escalación(es) omitida(s) en test, ['vou processar o banco']: siguen fuera del léxico y bajo τ=0.55; están declaradas en EVALUATION.md y LIMITATIONS.md",
+          "evidence": "1 missed escalation(s) in test, ['vou processar o banco']: still outside the lexicon and under τ=0.55; declared in EVALUATION.md and LIMITATIONS.md",
           "detail": ""
         },
         {
           "test": "test_leakage_evaluation_doc_section_2_quotes_the_committed_report",
           "status": "PASS",
-          "evidence": "26 cifras de EVALUATION.md §2 == eval/reports/intent_classifier.json; el titular coincide en README, slides_outline y LIMITATIONS",
+          "evidence": "26 figures in EVALUATION.md §2 == eval/reports/intent_classifier.json; the headline matches in README, slides_outline and LIMITATIONS",
           "detail": ""
         }
       ],

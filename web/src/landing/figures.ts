@@ -1,4 +1,5 @@
 import { htmlLang, type Locale } from '../i18n/locales.ts'
+import { roundHalfUp } from './rounding.ts'
 
 /**
  * Every measured figure the landing shows, bound to the one value it comes from; `figures.test.ts` reads each source and fails
@@ -237,7 +238,7 @@ const separators: Record<Locale, { decimal: string; group: string }> = {
 /** `value` with `digits` decimals in the notation of `locale`, grouping thousands always ("4.316", not "4316"). */
 export function formatNumber(value: number, digits: number, locale: Locale): string {
   const { decimal, group } = separators[locale]
-  const [whole, fraction] = Math.abs(value).toFixed(digits).split('.')
+  const [whole, fraction] = roundHalfUp(Math.abs(value), digits).split('.')
   const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, group)
   return `${value < 0 ? '−' : ''}${grouped}${fraction ? decimal + fraction : ''}`
 }
@@ -246,7 +247,7 @@ export function formatNumber(value: number, digits: number, locale: Locale): str
 export const formatFigure = (figure: Figure, locale: Locale): string => formatNumber(figure.value, figure.digits, locale)
 
 /** Millions with one decimal: 4,425,008 is "4,4". */
-export const formatMillions = (figure: Figure, locale: Locale): string => formatNumber(figure.value / 1e6, 1, locale)
+export const formatMillions = (figure: Figure, locale: Locale): string => formatNumber(Number(roundHalfUp(figure.value, 1, -6)), 1, locale)
 
 /** The day in figures, as a trace line under a number writes it: "02/10/2026". */
 export function formatShortDate(iso: string, locale: Locale): string {
