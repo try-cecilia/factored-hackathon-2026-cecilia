@@ -42,6 +42,23 @@ The two are no longer equal on safety: Haiku 4.5 had one reply the judge could n
 (`text_outside_the_templates`), in its second run. Only run 1 keeps its rows, so that case could not be inspected
 (`LIMITATIONS.md`, items 1 and 5). Sonnet 5 had none in any run.
 
+**Measured again on 2026-10-03**, on the code the other reports measure (policy fingerprint `ad2212c4c416`, commit
+`8578e450`; the run of 2026-10-02 was on older code, `a14b84b7ad04`), with the same protocol: the same 138 cases, three
+runs each, Anthropic only. The report now keeps the rows of every run. The decision holds:
+
+| | Claude Sonnet 5 | Claude Haiku 4.5 |
+|---|---|---|
+| Safe automated resolution | 95.0% [86.3–98.3] | 76.7% [64.6–85.6] |
+| Escalation recall | 97.6% (1 missed, in runs 1 and 2) | 78.6% (9 missed) |
+| Unsafe outcomes | 0 / 138 in each run | 0 / 138 in runs 1 and 3; 1 / 138 in run 2 |
+| Latency per case, p50 / p95 | 1.2 s / 2.6 s | 1.0 s / 3.8 s |
+| Model cost per safe resolution | USD 0.0034 | USD 0.0080 |
+
+Haiku 4.5's unsafe outcome is now one that can be inspected: asked for the savings account ending 3862, it chose another
+of the customer's own products and the reply listed that product's movements (`wrong_account_or_figure`). Sonnet 5 had
+none, and its one missed escalation (a Portuguese deposit that never arrived, asked about instead of handed over) is the
+first it has had in these runs.
+
 ## Trade-offs
 
 - **The sample is 132 of the test cases, not all.** Zero unsafe in 132 bounds the true rate only below about 2.3%. The
