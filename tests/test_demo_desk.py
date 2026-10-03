@@ -343,7 +343,8 @@ def test_a_ticket_is_looked_up_only_among_the_sessions_own(client, monkeypatch):
     ticket_id = theft_ticket(client, a)
     parsed = []
     real_loads = json.loads
-    monkeypatch.setattr(default_queue, "get", lambda *_: pytest.fail("looked up by id across the queue"))
+    # on the class: patching the instance would leave the bound method behind on undo, shadowing other tests' class patches
+    monkeypatch.setattr(type(default_queue), "get", lambda *_: pytest.fail("looked up by id across the queue"))
     monkeypatch.setattr(demo_desk.json, "loads", lambda s, *k, **kw: parsed.append(s) or real_loads(s, *k, **kw))
     for target in (ticket_id, str(uuid.uuid4())):
         parsed.clear()
