@@ -35,11 +35,13 @@ MESSAGE_MAX_CHARS = 500  # what the customer reads when a person resolves their 
 
 # The predefined results a person may resolve a case with, by family of case, in the order offered. Each has a template the
 # customer reads (render.RESOLVE_RESULT); a ticket's family comes from its category, never from anything the caller sends.
+# A result only says what a person found and what the customer can do next: none announces an action (a block, a dispute, a
+# trace), because resolving executes none. The one action, a trace, is opened by approving the ticket that carries it.
 RESULTS = {
-    "fraud": ("dispute_opened", "card_blocked", "charge_confirmed", "will_contact"),
-    "payments": ("trace_opened", "movement_settled", "will_contact"),
-    "specialist": ("referred", "will_contact", "no_action_needed"),
-    "general": ("info_confirmed", "will_contact", "no_action_needed"),
+    "fraud": ("charge_confirmed", "will_contact", "call_the_bank"),
+    "payments": ("movement_settled", "trace_not_possible", "will_contact", "call_the_bank"),
+    "specialist": ("needs_specialist", "will_contact", "call_the_bank"),
+    "general": ("info_checked", "no_action_needed", "will_contact", "call_the_bank"),
 }
 FAMILY = {"fraud": "fraud", "theft": "fraud", "account_takeover": "fraud", "classifier_escalation": "fraud",
           "trace_unmatched": "payments", "trace_unverified": "payments", "trace_review": "payments",

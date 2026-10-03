@@ -188,7 +188,7 @@ def test_claim_and_resolve_with_a_result_and_a_message_versions_and_conflicts(cl
     a = visitor()
     ticket_id = theft_ticket(client, a)
     detail = client.get(f"/demo/desk/tickets/{ticket_id}", headers=h(a)).json()
-    assert detail["resolve_results"] == ["dispute_opened", "card_blocked", "charge_confirmed", "will_contact"]
+    assert detail["resolve_results"] == ["charge_confirmed", "will_contact", "call_the_bank"]
     assert detail["desk"]["version"] == 0
 
     assert act(client, a, ticket_id, "claim", expected_version=1).status_code == 409  # a stale screen
@@ -197,23 +197,23 @@ def test_claim_and_resolve_with_a_result_and_a_message_versions_and_conflicts(cl
 
     assert act(client, a, ticket_id, "resolve", expected_version=1).status_code == 400  # no result
     assert act(client, a, ticket_id, "resolve", expected_version=1, message="listo").status_code == 400  # a message is not a result
-    wrong = act(client, a, ticket_id, "resolve", expected_version=1, result_code="trace_opened")  # another family's
+    wrong = act(client, a, ticket_id, "resolve", expected_version=1, result_code="trace_not_possible")  # another family's
     assert (wrong.status_code, wrong.json()) == (422, {"detail": "that result is not one of this case's"})
     assert act(client, a, ticket_id, "resolve", expected_version=1, result_code="no_such_result").status_code == 422
-    assert act(client, a, ticket_id, "resolve", expected_version=0, result_code="dispute_opened").status_code == 409
+    assert act(client, a, ticket_id, "resolve", expected_version=0, result_code="charge_confirmed").status_code == 409
 
-    done = act(client, a, ticket_id, "resolve", expected_version=1, result_code="dispute_opened",
+    done = act(client, a, ticket_id, "resolve", expected_version=1, result_code="charge_confirmed",
                message="  Gracias por avisarnos   enseguida.  ")
     assert done.status_code == 200
     state = done.json()
-    assert (state["status"], state["result"], state["message"]) == ("resolved", "dispute_opened", "Gracias por avisarnos enseguida.")
+    assert (state["status"], state["result"], state["message"]) == ("resolved", "charge_confirmed", "Gracias por avisarnos enseguida.")
     assert [e["operator"] for e in state["history"]] == ["demo", "demo"]  # the desk's audit: the actor is "demo"
     events = [json.loads(line) for line in open(os.environ["HUMAN_DESK_PATH"], encoding="utf-8")]
     assert {e["operator"] for e in events} == {"demo"}
 
-    again = act(client, a, ticket_id, "resolve", result_code="dispute_opened", message="Gracias por avisarnos enseguida.")
+    again = act(client, a, ticket_id, "resolve", result_code="charge_confirmed", message="Gracias por avisarnos enseguida.")
     assert again.status_code == 200 and again.json() == state  # a retry or a double click: the same outcome
-    assert act(client, a, ticket_id, "resolve", result_code="card_blocked").status_code == 409  # the customer already has the first
+    assert act(client, a, ticket_id, "resolve", result_code="call_the_bank").status_code == 409  # the customer already has the first
     assert act(client, a, ticket_id, "release").status_code == 409
 
 
@@ -248,7 +248,7 @@ def test_approving_a_trace_opens_it_once_with_the_tickets_session(client):
     assert traces_file() == []
 
     assert act(client, a, ticket_id, "claim", expected_version=0).status_code == 200
-    assert act(client, a, ticket_id, "resolve", result_code="trace_opened").status_code == 422  # it is decided, not resolved
+    assert act(client, a, ticket_id, "resolve", result_code="trace_not_possible").status_code == 422  # it is decided, not resolved
     first = act(client, a, ticket_id, "approve", expected_version=1)
     assert first.status_code == 200 and first.json()["status"] == "approved" and first.json()["trace_id"]
     again = act(client, a, ticket_id, "approve")
@@ -267,16 +267,16 @@ def test_the_visitor_reads_the_result_and_their_message_in_the_fixed_quote_and_n
     a, b = visitor(), visitor()
     ticket_id = theft_ticket(client, a)
     act(client, a, ticket_id, "claim")
-    act(client, a, ticket_id, "resolve", result_code="card_blocked", message="Ya está en camino «la nueva».")
+    act(client, a, ticket_id, "resolve", result_code="call_the_bank", message="Ya está en camino «la nueva».")
 
     assert "Novedad" not in say(client, b, "¿cuál es mi saldo?")["response_text"]  # B writes first: nothing of A's case
     assert client.get(f"/case/{ticket_id}", headers=h(b)).status_code == 404
     said = say(client, a, "¿cuál es mi saldo?")["response_text"]
-    assert said.startswith("Novedad de tu caso: un agente lo resolvió. " + render.RESOLVE_RESULT["card_blocked"]["es"]
+    assert said.startswith("Novedad de tu caso: un agente lo resolvió. " + render.RESOLVE_RESULT["call_the_bank"]["es"]
                            + ' Mensaje del agente: «Ya está en camino "la nueva".»')
     assert "Novedad" not in say(client, a, "¿cuál es mi saldo?")["response_text"]  # said once
     case = client.get(f"/case/{ticket_id}", headers=h(a)).json()
-    assert case["status"] == "resolved" and render.RESOLVE_RESULT["card_blocked"]["es"] in case["message"]
+    assert case["status"] == "resolved" and render.RESOLVE_RESULT["call_the_bank"]["es"] in case["message"]
 
 
 def test_a_result_alone_has_no_quote_and_a_portuguese_session_reads_it_in_portuguese(client):

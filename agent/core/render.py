@@ -60,26 +60,25 @@ MSG = {
     "case_stale": {"es": "Novedad de tu caso: al revisarlo, el movimiento ya no figura como pendiente, así que no hizo falta abrir un rastreo.",
                    "pt": "Novidade do seu caso: ao revisar, a movimentação já não consta como pendente, então não foi preciso abrir um rastreamento."},
 }
-# The predefined results of a resolution (agent/policy/desk.py RESULTS), as the customer reads them.
+# The predefined results of a resolution (agent/policy/desk.py RESULTS), as the customer reads them: what a person found and
+# what comes next, never an action done (resolving does none; tests/test_desk.py holds every text to that).
 RESOLVE_RESULT = {
-    "dispute_opened": {"es": "Revisamos el cargo y lo marcamos para disputa. Te contactaremos al número registrado.",
-                       "pt": "Analisamos a cobrança e a marcamos para contestação. Entraremos em contato pelo número cadastrado."},
-    "card_blocked": {"es": "Bloqueamos la tarjeta para proteger tu cuenta. Te contactaremos al número registrado para enviarte una nueva.",
-                     "pt": "Bloqueamos o cartão para proteger a sua conta. Entraremos em contato pelo número cadastrado para enviar um novo."},
     "charge_confirmed": {"es": "Revisamos el movimiento y corresponde a una operación válida de tu cuenta.",
                          "pt": "Analisamos a movimentação e ela corresponde a uma operação válida da sua conta."},
-    "trace_opened": {"es": "Pedimos a operaciones que rastree el movimiento. La respuesta quedará registrada en tu caso.",
-                     "pt": "Pedimos à equipe de operações que rastreie a movimentação. A resposta ficará registrada no seu caso."},
     "movement_settled": {"es": "Revisamos el movimiento y ya figura como completado.",
                          "pt": "Analisamos a movimentação e ela já consta como concluída."},
-    "referred": {"es": "Derivamos tu caso al área especializada del banco, que te contactará al número registrado.",
-                 "pt": "Encaminhamos o seu caso à área especializada do banco, que entrará em contato pelo número cadastrado."},
-    "info_confirmed": {"es": "Confirmamos la información en el sistema del banco y quedó registrada en tu caso.",
-                       "pt": "Confirmamos a informação no sistema do banco e ela ficou registrada no seu caso."},
-    "will_contact": {"es": "Revisamos tu caso. Te contactaremos al número registrado.",
-                     "pt": "Analisamos o seu caso. Entraremos em contato pelo número cadastrado."},
+    "trace_not_possible": {"es": "Revisamos el movimiento y no se puede rastrear por este canal. Te contactaremos al número registrado.",
+                           "pt": "Analisamos a movimentação e não é possível rastreá-la por este canal. Entraremos em contato pelo número cadastrado."},
+    "needs_specialist": {"es": "Revisamos tu caso y necesita un área especializada del banco. Te contactaremos al número registrado.",
+                         "pt": "Analisamos o seu caso e ele precisa de uma área especializada do banco. Entraremos em contato pelo número cadastrado."},
+    "info_checked": {"es": "Revisamos tu consulta en el sistema del banco y los datos de tu cuenta están en orden.",
+                     "pt": "Analisamos a sua consulta no sistema do banco e os dados da sua conta estão em ordem."},
     "no_action_needed": {"es": "Revisamos tu caso y no hace falta ninguna acción de tu parte.",
                          "pt": "Analisamos o seu caso e não é necessária nenhuma ação da sua parte."},
+    "will_contact": {"es": "Revisamos tu caso. Te contactaremos al número registrado.",
+                     "pt": "Analisamos o seu caso. Entraremos em contato pelo número cadastrado."},
+    "call_the_bank": {"es": "Revisamos tu caso. Para continuar, puedes comunicarte con la línea de atención del banco.",
+                      "pt": "Analisamos o seu caso. Para continuar, entre em contato com a central de atendimento do banco."},
 }
 TXN_TYPE = {"es": {"Transfer": "transferencia", "Payment": "operación de pago", "Deposit": "operación de depósito"},
             "pt": {"Transfer": "transferência", "Payment": "operação de pagamento", "Deposit": "operação de depósito"}}
