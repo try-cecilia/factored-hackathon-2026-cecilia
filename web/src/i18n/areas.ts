@@ -10,10 +10,12 @@ type Namespace = keyof Messages
  * use the very same dictionary. A new namespace goes in the list of every area whose screens use it: `areas.test.ts` follows the
  * imports of each area's routes and fails on a key outside them.
  */
-export type Area = 'customer' | 'operator' | 'monitor' | 'gallery'
+export type Area = 'landing' | 'customer' | 'operator' | 'monitor' | 'gallery'
 
 export const areaNamespaces: Record<Area, readonly Namespace[]> = {
-  customer: ['common', 'shell', 'home', 'login', 'loaders', 'sidebar', 'chat', 'cases', 'conversation', 'demo'],
+  // The public home alone: its long copy never travels with the customer's other pages.
+  landing: ['common', 'landing'],
+  customer: ['common', 'shell', 'login', 'loaders', 'sidebar', 'chat', 'cases', 'conversation', 'demo'],
   operator: ['common', 'loaders', 'sidebar', 'table', 'operator'],
   // Only the monitor and the traces, inside the console: the operator's own texts come with the operator area.
   monitor: ['monitor'],
@@ -23,6 +25,7 @@ export const areaNamespaces: Record<Area, readonly Namespace[]> = {
 
 /** The areas a page needs, from its path. */
 export function areasOf(pathname: string): Area[] {
+  if (pathname === '/') return ['landing']
   if (/^\/dev\/ui(\/|$)/.test(pathname)) return ['gallery']
   if (/^\/operador\/(monitoreo|trazas)(\/|$)/.test(pathname)) return ['operator', 'monitor']
   if (/^\/operador(\/|$)/.test(pathname)) return ['operator']
@@ -41,7 +44,7 @@ const sources: Record<Locale, Sources> = {
   es: {
     common: () => import('./dict/es/common.ts').then((m) => m.common),
     shell: () => import('./dict/es/shell.ts').then((m) => m.shell),
-    home: () => import('./dict/es/auth.ts').then((m) => m.home),
+    landing: () => import('./dict/es/landing.ts').then((m) => m.landing),
     login: () => import('./dict/es/auth.ts').then((m) => m.login),
     gallery: () => import('./dict/es/gallery.ts').then((m) => m.gallery),
     loaders: () => import('./dict/es/loaders.ts').then((m) => m.loaders),
@@ -57,7 +60,7 @@ const sources: Record<Locale, Sources> = {
   pt: {
     common: () => import('./dict/pt/common.ts').then((m) => m.common),
     shell: () => import('./dict/pt/shell.ts').then((m) => m.shell),
-    home: () => import('./dict/pt/auth.ts').then((m) => m.home),
+    landing: () => import('./dict/pt/landing.ts').then((m) => m.landing),
     login: () => import('./dict/pt/auth.ts').then((m) => m.login),
     gallery: () => import('./dict/pt/gallery.ts').then((m) => m.gallery),
     loaders: () => import('./dict/pt/loaders.ts').then((m) => m.loaders),
