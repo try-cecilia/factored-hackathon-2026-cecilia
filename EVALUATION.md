@@ -416,6 +416,7 @@ and country (MX/CO/AR) is reported per cell in `SYSTEM_EVAL.md`.
 [`eval/reports/SYSTEM_EVAL_LIVE.md`](eval/reports/SYSTEM_EVAL_LIVE.md). The sample is 3 cases of every case type in each
 language (23 types × 2 languages, `--limit 138`; the 132 of the earlier runs gives 2 per group since the trace-review type
 was added). Only Anthropic was configured, with no fallback to another provider. The table shows run 1, as the report does;
+Live report measured on other code: ad2212c4c416 -> 5c3e84f5dfa0.
 the ranges are across the three runs. The JSON keeps the per-case rows of every run, each with its run number and the
 model that answered, and each run's fingerprint, commit and times; `tests/test_live_report.py` recomputes every figure
 the report publishes from those rows, and `make gate` fails if a later change to the measured code is not declared
