@@ -131,14 +131,14 @@ export function AppShell({ session, kit, children }: { session: Session; kit: Pr
   const escalations = entries.filter((e) => e.role === 'assistant' && e.reply.disposition === 'ESCALATE').length
   const detail = [session.segment, session.country].filter(Boolean).join(' · ')
 
-  const bridge = <Suspense fallback={null}><DemoBridge kit={kit} cases={cases} /></Suspense>
+  const bridge = <Suspense fallback={null}><DemoBridge kit={kit} cases={cases} waiting={sending} /></Suspense>
 
   return (
     <ShellProvider value={{ showCase, copied: copy.state, bridge }}>
       <a className="skip" href="#main" inert={behind ? true : undefined}>{t('common.skipToContent')}</a>
       <div className="demo-frame">
       <Suspense fallback={null}>
-        <CustomerDemoBar kit={kit} session={session} inert={behind} />
+        <CustomerDemoBar kit={kit} session={session} over={over} holdBank={sending} inert={behind} />
       </Suspense>
       <div className="shell" data-menu={menuOpen ? 'open' : undefined} data-demo={demoOpen ? 'open' : undefined} data-case={caseOpen ? 'open' : undefined}>
         <div
@@ -267,22 +267,24 @@ export function AppShell({ session, kit, children }: { session: Session; kit: Pr
 }
 
 /** The DEMO bar of the one-click demo over the customer's window: only with the demo console on (DEMO_CONSOLE=1, getDemoKit). */
-function CustomerDemoBar({ kit, session, inert }: { kit: Promise<DemoKit>; session: Session; inert: boolean }) {
+// `over`: the end the chat already knows (the API said the session is gone, or its countdown reached 0), which the bar shows at once
+// instead of counting on from the first reading. `holdBank`: a message on its way, whose answer the chat must be mounted to receive.
+function CustomerDemoBar({ kit, session, over, holdBank, inert }: { kit: Promise<DemoKit>; session: Session; over: boolean; holdBank: boolean; inert: boolean }) {
   const resolved = use(kit)
   if (!resolved.enabled || resolved.console !== true) return null
   const role = demoEntries(resolved).find((e) => e.customer_id === session.customer_id)?.role ?? null
-  return <DemoBar view="customer" sessionRef={session.session_ref} expiresIn={session.expires_in} role={role} inert={inert} />
+  return <DemoBar view="customer" sessionRef={session.session_ref} expiresIn={over ? 0 : session.expires_in} role={role} holdBank={holdBank} inert={inert} />
 }
 
 /** "Tu caso ya llegó al banco", for the newest case of the conversation while it is open (no person has decided it). */
-function DemoBridge({ kit, cases }: { kit: Promise<DemoKit>; cases: CaseRow[] }) {
+function DemoBridge({ kit, cases, waiting }: { kit: Promise<DemoKit>; cases: CaseRow[]; waiting: boolean }) {
   const resolved = use(kit)
   const newest = cases[0]
   if (!resolved.enabled || resolved.console !== true || !newest) return null
   // Only once its state is read: a decided case must not flash the card while the read is on its way.
   const { state } = newest
   if (state.state !== 'ready' || !isOpenCase(state.status)) return null
-  return <BankBridgeCard ticketId={newest.ref.ticketId} />
+  return <BankBridgeCard ticketId={newest.ref.ticketId} waiting={waiting} />
 }
 
 function DemoToggle({ kit, open, onToggle }: { kit: Promise<DemoKit>; open: boolean; onToggle: () => void }) {

@@ -6,6 +6,7 @@ import { cookiePolicy } from './cookie-policy'
 import { parseTraces } from './demo-core'
 import { entriesOf, parseRole, SCENARIO_OF, type DemoEntry } from './demo-entry'
 import { demoConsoleOn } from './demo-gate'
+import { demoConsoleOnly } from './demo-console-only'
 import { createLimiter, perMinuteFromEnv } from './demo-limit'
 import { AgentApiError, agentApi, agentFetch, clientIp } from './agent-api'
 import { sameOriginOnly } from './same-origin'
@@ -96,18 +97,17 @@ export const startScenario = createServerFn({ method: 'POST' })
 
 const entryLimiter = createLimiter(() => perMinuteFromEnv(process.env.DEMO_ENTER_RATE_PER_MIN))
 
-export type EnterDemoResult = { ok: true; language: string } | { ok: false; reason: 'off' | 'limited' | 'failed'; retryAfter?: number }
+export type EnterDemoResult = { ok: true; language: string } | { ok: false; reason: 'limited' | 'failed'; retryAfter?: number }
 
 /**
  * The one-click entry: signs in as the role's test customer and leaves the session cookie, so the visitor lands in the chat with no
  * PIN typed. The console demo has no credential of its own: this same cookie is what the bank's side reads with (demo-desk.functions.ts).
- * Off (no API call at all) unless DEMO_CONSOLE=1; limited by address before anything reaches the API.
+ * An HTTP 404 (no API call at all) unless the demo console is on; limited by address before anything reaches the API.
  */
 export const enterDemo = createServerFn({ method: 'POST' })
-  .middleware([sameOriginOnly])
+  .middleware([demoConsoleOnly, sameOriginOnly])
   .validator(parseRole)
   .handler(async ({ data }): Promise<EnterDemoResult> => {
-    if (!demoConsoleOn()) return { ok: false, reason: 'off' }
     const allowed = entryLimiter.take(clientIp() ?? 'unknown')
     if (!allowed.ok) return { ok: false, reason: 'limited', retryAfter: allowed.retryAfter }
     const found = (await scenarios())?.find((s) => s.id === SCENARIO_OF[data.role])

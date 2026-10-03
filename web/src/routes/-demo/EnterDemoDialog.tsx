@@ -10,6 +10,7 @@ import './demo-mode.css'
 type Props = {
   open: boolean
   entries: DemoEntry[]
+  /** The visitor closed it without entering (the close button, Escape). An entry that worked goes to the chat instead. */
   onClose: () => void
 }
 
@@ -52,10 +53,10 @@ export function EnterDemoDialog({ open, entries, onClose }: Props) {
     setFailure(null)
     const result = await enterDemo({ data: { role: chosen } }).catch((): Failure => ({ ok: false, reason: 'failed' }))
     if (result.ok) {
-      // The session (and, for the customer who speaks Portuguese, the language) changed: every loader reads again.
+      // The session (and, for the customer who speaks Portuguese, the language) changed: every loader reads again. Entering is not
+      // closing: `onClose` is the visitor's cancel, and what it does (leaving the entry link) must not follow the way to the chat.
       await router.invalidate()
       await navigate({ to: '/chat' })
-      onClose()
     } else setFailure(result)
     setEntering(false)
   }

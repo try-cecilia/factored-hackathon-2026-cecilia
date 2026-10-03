@@ -21,7 +21,6 @@ export const demoMode: Like<typeof source> = {
     errors: {
       failed: 'Não foi possível entrar na demo. Tente de novo.',
       limited: 'Muitas tentativas seguidas. Tente de novo em {seconds} s.',
-      off: 'A demo não está disponível neste momento.',
     },
   },
   bar: {
@@ -31,6 +30,7 @@ export const demoMode: Like<typeof source> = {
     switch: 'Ver como',
     asCustomer: 'Cliente',
     asBank: 'Banco',
+    waiting: 'Aguardando a resposta da Cecilia',
     exit: 'Sair da demo',
     exiting: 'Saindo…',
     endsIn: 'A demo termina em {time}',
@@ -52,7 +52,7 @@ export const demoMode: Like<typeof source> = {
       traces: 'Rastreios · Banco demo · Cecilai',
     },
     brand: 'Banco',
-    nav: { label: 'Banco demo', cases: 'Seus casos', traces: 'Rastreios', menu: 'Abrir o menu', closeMenu: 'Fechar o menu' },
+    nav: { skip: 'Atalhos', label: 'Banco demo', cases: 'Seus casos', traces: 'Rastreios', menu: 'Abrir o menu', closeMenu: 'Fechar o menu' },
     note: 'Na demo não há monitoramento nem registros de outros visitantes.',
     queue: {
       title: 'Seus casos',
@@ -67,6 +67,7 @@ export const demoMode: Like<typeof source> = {
     },
     choose: { title: 'Nenhum caso aberto', body: 'Ao escolher um caso da lista, o detalhe aparece aqui.' },
     back: 'Seus casos',
+    takenByOther: 'Outra pessoa do banco assumiu este caso.',
     mine: 'Você assumiu',
     traces: {
       title: 'Rastreios',
@@ -79,7 +80,6 @@ export const demoMode: Like<typeof source> = {
       title: 'A demo terminou',
       body: 'A sessão de teste dura 15 minutos desde a entrada. Ao entrar de novo começa uma sessão nova, sem casos.',
     },
-    off: 'O console da demo não está disponível.',
   },
   results: {
     charge_confirmed: 'A cobrança é uma operação válida',

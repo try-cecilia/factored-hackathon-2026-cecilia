@@ -144,6 +144,7 @@ services:
       # The API's own switches: with 0 the web never asks it for the demo kit, nor for the demo's console.
       - DEMO_MODE=${DEMO_MODE:-0}
       - DEMO_CONSOLE=${DEMO_CONSOLE:-0}
+      - DEMO_ENTER_RATE_PER_MIN=${DEMO_ENTER_RATE_PER_MIN:-10}  # one-click demo entries per minute per address (web/.env.example)
     depends_on:
       api:
         condition: service_healthy

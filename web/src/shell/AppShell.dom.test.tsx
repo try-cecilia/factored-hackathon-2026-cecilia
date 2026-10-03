@@ -324,6 +324,13 @@ describe('the one-click demo', () => {
     }
   })
 
+  it('a session the chat already knows is over makes the bar say so and offer to enter again, whatever the first reading said', async () => {
+    await draw({ kit: console(true), history: { ok: false, failure: 'session_expired' } })
+    const bar = screen.getByRole('region', { name: 'Modo demo' })
+    await waitFor(() => expect(within(bar).getByRole('status').textContent).toBe('La demo terminó'))
+    expect(within(bar).getByRole('button', { name: 'Entrar otra vez' })).toBeTruthy()
+  })
+
   it('a case nobody has decided yet brings the card to the same case on the bank\'s side', async () => {
     // The chat draws the card over its composer, from the shell's context.
     const Page = () => <>{useShell().bridge}</>

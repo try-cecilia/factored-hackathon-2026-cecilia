@@ -118,3 +118,6 @@ services:
         value: "1"
       - key: DEMO_CONSOLE
         value: "1"
+      # One-click entries to the demo per minute per address (web/.env.example), as the API's LOGIN_RATE_PER_MIN: each entry is a login
+      - key: DEMO_ENTER_RATE_PER_MIN
+        value: "30"

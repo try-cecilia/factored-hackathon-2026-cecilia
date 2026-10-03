@@ -1,4 +1,4 @@
-import { useNavigate } from '@tanstack/react-router'
+import { useNavigate, useRouterState } from '@tanstack/react-router'
 import { useState } from 'react'
 import { useT } from '../../i18n/context'
 import type { DemoEntry } from '../../server/demo-entry'
@@ -25,11 +25,14 @@ export function EnterDemoButton({ entries, initiallyOpen = false, variant = 'out
   const t = useT()
   const navigate = useNavigate()
   const [open, setOpen] = useState(initiallyOpen)
+  // Read at the moment of closing, not when drawn: the dialog may close after the visitor has already left this page.
+  const onEntryLink = useRouterState({ select: (s) => s.location.pathname === '/' && (s.location.search as { demo?: string }).demo === 'entrar' })
   if (entries.length === 0) return null
   const close = () => {
     setOpen(false)
-    // The link that opened it is not kept in the address: going back does not open it again.
-    if (initiallyOpen) void navigate({ to: '/', search: {} as never, replace: true })
+    // Cancelled from the entry link: the link is not kept in the address, so going back does not open it again. Only while the
+    // visitor is still on it; anywhere else (the chat, after entering) the address is left alone.
+    if (onEntryLink) void navigate({ to: '/', search: {} as never, replace: true })
   }
   return (
     <>

@@ -4,7 +4,11 @@ import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DemoEntry } from '../../server/demo-entry'
 import { renderWithI18n } from '../../test/render'
+import { translator } from '../../i18n/translate'
+import { dictionaries } from '../../test/render'
 import { BankBridgeCard } from './BankBridgeCard'
+import { EnterDemoButton } from './EnterDemo'
+import { withKnownConflict } from './results'
 import { DemoBar } from './DemoBar'
 import { EnterDemoDialog } from './EnterDemoDialog'
 
@@ -12,7 +16,10 @@ const navigate = vi.hoisted(() => vi.fn(async () => {}))
 const invalidate = vi.hoisted(() => vi.fn(async () => {}))
 const logout = vi.hoisted(() => vi.fn())
 const enterDemo = vi.hoisted(() => vi.fn())
+// Where the visitor is, for the entry button's cancel: the entry link unless a test says otherwise.
+const location = vi.hoisted(() => ({ current: { pathname: '/', search: { demo: 'entrar' } as Record<string, string> } }))
 vi.mock('@tanstack/react-router', () => ({
+  useRouterState: ({ select }: { select: (state: { location: typeof location.current }) => unknown }) => select({ location: location.current }),
   Link: ({ to, params, children, ...rest }: { to: string; params?: Record<string, string>; children?: ReactNode }) => (
     <a href={params ? Object.entries(params).reduce((path, [key, value]) => path.replace(`$${key}`, value), to) : to} {...rest}>{children}</a>
   ),
@@ -29,6 +36,7 @@ const entries: DemoEntry[] = [
 ]
 
 beforeEach(() => {
+  location.current = { pathname: '/', search: { demo: 'entrar' } }
   navigate.mockClear()
   invalidate.mockClear()
   logout.mockReset().mockResolvedValue({ revoked: true })
@@ -99,6 +107,17 @@ describe('DemoBar', () => {
     expect(enterDemo).toHaveBeenCalledTimes(1)
   })
 
+  it('while a message is on its way, "Banco" waits: no link, and the reason is said', async () => {
+    renderWithI18n(<DemoBar view="customer" sessionRef="s1" expiresIn={900} role="cuentas" holdBank />)
+    const bank = screen.getByRole('link', { name: 'Banco' })
+    expect(bank.getAttribute('aria-disabled')).toBe('true')
+    expect(bank.getAttribute('href')).toBeNull()
+    expect(bank.getAttribute('title')).toBe('Esperando la respuesta de Cecilia')
+    await userEvent.setup().click(bank)
+    expect(navigate).not.toHaveBeenCalled()
+    expect(screen.getByRole('link', { name: 'Cliente' }).getAttribute('href')).toBe('/chat')
+  })
+
   it('speaks Portuguese', () => {
     renderWithI18n(<DemoBar view="customer" sessionRef="s1" expiresIn={900} role="portugues" />, 'pt')
     expect(screen.getByRole('button', { name: 'Sair da demo' })).toBeTruthy()
@@ -135,7 +154,8 @@ describe('EnterDemoDialog', () => {
     expect(enterDemo).toHaveBeenCalledWith({ data: { role: 'pendiente' } })
     await waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: '/chat' }))
     expect(invalidate).toHaveBeenCalled()
-    expect(onClose).toHaveBeenCalled()
+    // Entering is not cancelling: the close handler (which leaves the entry link) is not called on the way to the chat.
+    expect(onClose).not.toHaveBeenCalled()
     expect(screen.queryByRole('textbox')).toBeNull()
   })
 
@@ -162,14 +182,15 @@ describe('EnterDemoDialog', () => {
     expect(navigate).not.toHaveBeenCalled()
   })
 
-  it('a demo that is off, or an error on the way, is said with a fixed text', async () => {
-    enterDemo.mockResolvedValueOnce({ ok: false, reason: 'off' }).mockRejectedValueOnce(new Error('network'))
+  it('a demo that is off (an HTTP 404), or an error on the way, is said with a fixed text', async () => {
+    enterDemo.mockRejectedValueOnce(new Error('Not Found')).mockRejectedValueOnce(new Error('network'))
     renderWithI18n(<EnterDemoDialog open entries={entries} onClose={() => {}} />)
     const user = userEvent.setup()
-    await user.click(screen.getByRole('button', { name: 'Entrar a la demo' }))
-    expect((await screen.findByRole('alert')).textContent).toBe('La demo no está disponible en este momento.')
-    await user.click(screen.getByRole('button', { name: 'Entrar a la demo' }))
-    await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('No se pudo entrar a la demo. Intentar de nuevo.'))
+    for (let i = 0; i < 2; i++) {
+      await user.click(screen.getByRole('button', { name: 'Entrar a la demo' }))
+      await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('No se pudo entrar a la demo. Intentar de nuevo.'))
+    }
+    expect(navigate).not.toHaveBeenCalled()
   })
 
   it('the close button closes it', async () => {
@@ -186,7 +207,53 @@ describe('EnterDemoDialog', () => {
   })
 })
 
+describe('EnterDemoButton, reached through the entry link (/?demo=entrar)', () => {
+  const showModal = vi.fn(function (this: HTMLDialogElement) { this.setAttribute('open', '') })
+  beforeEach(() => void (HTMLDialogElement.prototype.showModal = showModal))
+  afterEach(() => void delete (HTMLDialogElement.prototype as Partial<HTMLDialogElement>).showModal)
+
+  it('entering lands in the chat and nothing sends the visitor back to the landing', async () => {
+    renderWithI18n(<EnterDemoButton entries={entries} initiallyOpen />)
+    await userEvent.setup().click(screen.getByRole('dialog').querySelector('button[type="submit"]') as HTMLButtonElement)
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: '/chat' }))
+    expect(navigate).toHaveBeenCalledTimes(1)
+    expect(navigate).not.toHaveBeenCalledWith(expect.objectContaining({ to: '/' }))
+  })
+
+  it('cancelling on the entry link leaves the link out of the address', async () => {
+    renderWithI18n(<EnterDemoButton entries={entries} initiallyOpen />)
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Cerrar' }))
+    expect(navigate).toHaveBeenCalledWith({ to: '/', search: {}, replace: true })
+  })
+
+  it('a close that comes when the visitor is no longer on the entry link does not move them', async () => {
+    location.current = { pathname: '/chat', search: {} }
+    renderWithI18n(<EnterDemoButton entries={entries} initiallyOpen />)
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Cerrar' }))
+    expect(navigate).not.toHaveBeenCalled()
+  })
+})
+
+describe('the known conflict of the demo', () => {
+  it('"another person took this case" is said in the page\'s language; a version conflict goes on as it came', () => {
+    const taken = { ok: false as const, status: 409, message: 'another person took this case' }
+    expect(withKnownConflict(translator(dictionaries.es), taken).message).toBe('Otra persona del banco tomó este caso.')
+    expect(withKnownConflict(translator(dictionaries.pt), taken).message).toBe('Outra pessoa do banco assumiu este caso.')
+    const stale = { ok: false as const, status: 409, message: 'stale version: expected 1, ticket is at 2' }
+    expect(withKnownConflict(translator(dictionaries.es), stale)).toBe(stale)
+    const ok = { ok: true as const }
+    expect(withKnownConflict(translator(dictionaries.es), ok)).toBe(ok)
+  })
+})
+
 describe('BankBridgeCard', () => {
+  it('waits, with no way to the bank, while a message is on its way', () => {
+    renderWithI18n(<BankBridgeCard ticketId="b99d8390-4d20" waiting />)
+    const action = screen.getByRole('link', { name: /Verlo del lado del banco/ })
+    expect(action.getAttribute('aria-disabled')).toBe('true')
+    expect(action.getAttribute('href')).toBeNull()
+  })
+
   it('takes the visitor to the same case on the bank\'s side', () => {
     renderWithI18n(<BankBridgeCard ticketId="b99d8390-4d20" />)
     const card = screen.getByRole('region', { name: 'Tu caso ya llegó al banco' })

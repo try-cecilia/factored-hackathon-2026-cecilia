@@ -28,7 +28,7 @@ function DemoTraces() {
   const { traces } = layout.useLoaderData({ structuralSharing: true })
   const columns = useMemo(() => makeColumns(t), [t])
   return (
-    <section className="op-page demo-traces" aria-label={t('demoMode.desk.traces.caption')}>
+    <section className={traces.length > 0 ? 'op-page demo-traces demo-traces--cards' : 'op-page demo-traces'} aria-label={t('demoMode.desk.traces.caption')}>
       <div className="op-head">
         <h1>{t('demoMode.desk.traces.title')}</h1>
         <span className="op-count">{traces.length}</span>
@@ -42,6 +42,23 @@ function DemoTraces() {
         getRowId={(r) => r.trace_id}
         empty={{ title: t('demoMode.desk.traces.empty') }}
       />
+      {/* The same four fields per trace, for a phone: the CSS shows one presentation or the other, never both. */}
+      {traces.length > 0 && (
+        <ul className="demo-traces__cards" aria-label={t('demoMode.desk.traces.caption')}>
+          {traces.map((r) => (
+            <li key={r.trace_id}>
+              <dl>
+                {columns.map((c) => (
+                  <div key={c.id} className="demo-traces__field">
+                    <dt>{c.header}</dt>
+                    <dd className={c.mono ? 'op-mono' : undefined}>{c.cell(r, 0)}</dd>
+                  </div>
+                ))}
+              </dl>
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   )
 }

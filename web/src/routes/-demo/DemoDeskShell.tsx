@@ -24,7 +24,8 @@ export function DemoDeskShell({ cases, traces, children }: { cases: number | nul
 
   return (
     <div className="op-shell demo-desk" data-nav={open ? 'open' : undefined}>
-      <a className="skip" href="#contenido">{t('operator.skip')}</a>
+      {/* In a landmark of its own, so nothing of the page is outside one (axe, region). */}
+      <nav className="demo-skip" aria-label={t('demoMode.desk.nav.skip')}><a className="skip" href="#contenido">{t('operator.skip')}</a></nav>
       <header className="op-topbar">
         <IconButton variant="ghost" size="sm" label={open ? t('demoMode.desk.nav.closeMenu') : t('demoMode.desk.nav.menu')} aria-expanded={open} aria-controls="op-side" icon={<MenuIcon />} onClick={() => setOpen((v) => !v)} />
         <span className="op-topbar__brand">cecilai <span>{t('demoMode.desk.brand')}</span></span>

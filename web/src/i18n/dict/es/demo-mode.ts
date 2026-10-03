@@ -19,7 +19,6 @@ export const demoMode = {
     errors: {
       failed: 'No se pudo entrar a la demo. Intentar de nuevo.',
       limited: 'Demasiados intentos seguidos. Intentar de nuevo en {seconds} s.',
-      off: 'La demo no está disponible en este momento.',
     },
   },
   bar: {
@@ -29,6 +28,7 @@ export const demoMode = {
     switch: 'Ver como',
     asCustomer: 'Cliente',
     asBank: 'Banco',
+    waiting: 'Esperando la respuesta de Cecilia',
     exit: 'Salir de la demo',
     exiting: 'Saliendo…',
     endsIn: 'La demo termina en {time}',
@@ -50,7 +50,7 @@ export const demoMode = {
       traces: 'Rastreos · Banco demo · Cecilai',
     },
     brand: 'Banco',
-    nav: { label: 'Banco demo', cases: 'Tus casos', traces: 'Rastreos', menu: 'Abrir el menú', closeMenu: 'Cerrar el menú' },
+    nav: { skip: 'Atajos', label: 'Banco demo', cases: 'Tus casos', traces: 'Rastreos', menu: 'Abrir el menú', closeMenu: 'Cerrar el menú' },
     note: 'En la demo no hay monitoreo ni registros de otros visitantes.',
     queue: {
       title: 'Tus casos',
@@ -65,6 +65,7 @@ export const demoMode = {
     },
     choose: { title: 'Ningún caso abierto', body: 'Al elegir un caso de la lista, su detalle aparece aquí.' },
     back: 'Tus casos',
+    takenByOther: 'Otra persona del banco tomó este caso.',
     mine: 'Lo tomaste tú',
     traces: {
       title: 'Rastreos',
@@ -77,7 +78,6 @@ export const demoMode = {
       title: 'La demo terminó',
       body: 'La sesión de prueba dura 15 minutos desde que se entra. Al entrar otra vez empieza una sesión nueva, sin casos.',
     },
-    off: 'La consola de la demo no está disponible.',
   },
   // Labels of the predefined results the API offers for each family of case (GET /demo/desk/tickets/{id}, resolve_results), by
   // code. A code with no label here is shown as it comes.

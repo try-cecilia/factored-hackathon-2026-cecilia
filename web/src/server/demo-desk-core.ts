@@ -45,6 +45,9 @@ export function resolveResultsOf(raw: unknown): string[] {
 
 /** The only actor the demo acts as (api/demo_desk.py ACTOR). */
 export const DEMO_ACTOR = 'demo'
+/** The API's 409 when a person of the team holds the visitor's case (api/demo_desk.py TAKEN): a known conflict the demo translates. */
+export const TAKEN_BY_OTHER = 'another person took this case'
+
 /** What the visitor reads in place of the name of anyone else who touched the case (a real operator of the team). */
 export const SOMEONE_ELSE = 'banco'
 

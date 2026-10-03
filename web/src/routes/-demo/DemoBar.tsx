@@ -16,6 +16,11 @@ export type DemoBarProps = {
   expiresIn: number | null
   /** The test customer of this session, to enter again as the same one; null when it is not one of the dialog's (enter from the dialog). */
   role: DemoRole | null
+  /**
+   * A message of the chat is on its way: the bank's side waits for its answer. Leaving would unmount the conversation that receives
+   * it, and the turn would show only after a reload (the API keeps it, the chat read its history before).
+   */
+  holdBank?: boolean
   inert?: boolean
 }
 
@@ -27,7 +32,7 @@ export const DEMO_ENTRY_HREF = '/?demo=entrar'
  * seen, "Customer | Bank" to switch with one click, and "Leave the demo". In the session's last three minutes it counts down and offers
  * to enter again; leaving signs the customer out, which also closes the bank's side, since that has no credential of its own.
  */
-export function DemoBar({ view, sessionRef, expiresIn, role, inert }: DemoBarProps) {
+export function DemoBar({ view, sessionRef, expiresIn, role, holdBank = false, inert }: DemoBarProps) {
   const t = useT()
   const router = useRouter()
   const navigate = useNavigate()
@@ -71,6 +76,7 @@ export function DemoBar({ view, sessionRef, expiresIn, role, inert }: DemoBarPro
         ) : (
           <span className="demo-bar__text">{view === 'bank' ? t('demoMode.bar.bank') : t('demoMode.bar.customer')}</span>
         )}
+        {holdBank && view === 'customer' && <span id="demo-bar-waiting" className="sr-only">{t('demoMode.bar.waiting')}</span>}
         <span className="sr-only" role="status">
           {failed ? t('demoMode.bar.reenterFailed') : clock.state === 'over' ? t('demoMode.bar.ended') : clock.state === 'warning' ? t('demoMode.bar.endsInMinutes', { n: Math.ceil(clock.seconds / 60) }) : ''}
         </span>
@@ -78,7 +84,11 @@ export function DemoBar({ view, sessionRef, expiresIn, role, inert }: DemoBarPro
       <div className="demo-bar__tools">
         <nav className="demo-seg" aria-label={t('demoMode.bar.switch')}>
           <Link to="/chat" aria-current={view === 'customer' ? 'page' : undefined}>{t('demoMode.bar.asCustomer')}</Link>
-          <Link to="/demo/banco" aria-current={view === 'bank' ? 'page' : undefined}>{t('demoMode.bar.asBank')}</Link>
+          {holdBank && view === 'customer' ? (
+            <span role="link" aria-disabled="true" title={t('demoMode.bar.waiting')} aria-describedby="demo-bar-waiting">{t('demoMode.bar.asBank')}</span>
+          ) : (
+            <Link to="/demo/banco" aria-current={view === 'bank' ? 'page' : undefined}>{t('demoMode.bar.asBank')}</Link>
+          )}
         </nav>
         <button type="button" className="demo-bar__exit" onClick={() => void exit()} disabled={busy !== null}>
           {busy === 'exit' ? t('demoMode.bar.exiting') : t('demoMode.bar.exit')}

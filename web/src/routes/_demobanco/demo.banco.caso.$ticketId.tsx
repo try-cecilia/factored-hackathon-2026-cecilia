@@ -4,7 +4,7 @@ import { useT } from '../../i18n/context'
 import { headTitle } from '../../i18n/head'
 import { actOnDemoTicket, loadDemoCustomerContext, loadDemoTicket } from '../../server/demo-desk.functions'
 import { DEMO_ACTOR } from '../../server/demo-desk-core'
-import { resultLabel } from '../-demo/results'
+import { resultLabel, withKnownConflict } from '../-demo/results'
 import { guarded, readAgain } from '../-operator/reload'
 import { TicketScreen } from '../-operator/TicketScreen'
 
@@ -39,8 +39,8 @@ function DemoTicketPage() {
         ticketId={ticketId}
         result={result}
         view={VIEW}
-        act={(action, { expectedVersion, reason, message, resultCode }) =>
-          actOnDemoTicket({ data: { ticket_id: ticketId, action, expected_version: expectedVersion, reason, message, result_code: resultCode } })}
+        act={async (action, { expectedVersion, reason, message, resultCode }) =>
+          withKnownConflict(t, await actOnDemoTicket({ data: { ticket_id: ticketId, action, expected_version: expectedVersion, reason, message, result_code: resultCode } }))}
         reload={(minVersion) => readAgain(router, Route.id, ticketId, minVersion)}
         onClose={() => void navigate({ to: '/demo/banco' })}
         keyForm={null}

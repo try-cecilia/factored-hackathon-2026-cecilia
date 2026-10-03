@@ -98,20 +98,34 @@ describe('fail-closed: without DEMO_MODE=1 and DEMO_CONSOLE=1, exactly, the demo
     ['DEMO_CONSOLE=true', { DEMO_MODE: '1', DEMO_CONSOLE: 'true' }],
     ['DEMO_MODE unset', { DEMO_MODE: undefined, DEMO_CONSOLE: '1' }],
     ['DEMO_MODE=0', { DEMO_MODE: '0', DEMO_CONSOLE: '1' }],
+    ['DEMO_MODE=true', { DEMO_MODE: 'true', DEMO_CONSOLE: '1' }],
   ]
   for (const [label, env] of off) {
-    test(`${label}: no entry, no bank side, nothing asked of the API`, async () => {
+    test(`${label}: every function of it is an HTTP 404, a malformed payload too, and nothing reaches the API`, async () => {
       for (const [name, value] of Object.entries(env)) value === undefined ? delete process.env[name] : (process.env[name] = value)
-      const entry = await call('enterDemo', { data: { role: 'cuentas' }, headers: fromNewAddress() })
-      assert.deepEqual(entry.result, { ok: false, reason: 'off' })
-      assert.deepEqual(entry.res.headers.getSetCookie(), [])
-      assert.deepEqual((await call('getDemoDeskView', { method: 'GET', headers: session })).result, { status: 'off' })
-      for (const [name, data] of READS) assert.deepEqual((await call(name, { method: 'GET', data, headers: session })).result, { ok: false, status: 404 }, name)
-      assert.deepEqual((await call('actOnDemoTicket', { data: { ticket_id: TICKET, action: 'claim' }, headers: session })).result, { ok: false, status: 404 })
+      const calls: [string, 'GET' | 'POST', unknown][] = [
+        ['enterDemo', 'POST', { role: 'cuentas' }],
+        ['enterDemo', 'POST', { role: 'admin' }],
+        ['getDemoDeskView', 'GET', undefined],
+        ...READS.map(([name, data]): [string, 'GET', unknown] => [name, 'GET', data]),
+        ['loadDemoTicket', 'GET', { ticket_id: '!' }],
+        ['actOnDemoTicket', 'POST', { ticket_id: TICKET, action: 'claim' }],
+        ['actOnDemoTicket', 'POST', { ticket_id: TICKET, action: 'close', expected_version: 'x' }],
+      ]
+      for (const [name, method, data] of calls) {
+        const res = await app.rpc(name, { method, data, proof: SAME, headers: { ...session, ...fromNewAddress() } })
+        assert.equal(res.status, 404, `${name} ${JSON.stringify(data)}`)
+        assert.deepEqual(res.headers.getSetCookie(), [], name)
+        await res.arrayBuffer()
+      }
       assert.deepEqual(toApi('/auth/session'), [])
       assert.deepEqual(toApi('/demo/desk'), [])
       const kit = (await call('getDemoKit', { method: 'GET' })).result as { console?: boolean; entries?: unknown[] }
       assert.ok(kit.console !== true && !kit.entries?.length, JSON.stringify(kit))
+      // The bank's side is not drawn: the page sends to the home page.
+      const page = await app.get('/demo/banco', session)
+      assert.equal(page.status, 307)
+      assert.equal(new URL(page.headers.get('location') ?? '', ORIGIN).pathname, '/')
     })
   }
 })

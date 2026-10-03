@@ -20,29 +20,30 @@
 .demo-bar[data-clock='over'] .demo-bar__clock { color: var(--color-paper); }
 .demo-bar__tools { display: flex; flex: none; align-items: center; gap: 14px; }
 .demo-bar__exit, .demo-bar__reenter {
-  padding: 0; border: 0; background: none; color: var(--color-glass-label); font: inherit; font-size: var(--text-compact-md);
+  min-height: 44px; padding: 0 8px; border: 0; background: none; color: var(--color-glass-label); font: inherit; font-size: var(--text-compact-md);
   font-weight: var(--font-weight-semibold); line-height: 16px; cursor: pointer;
 }
 .demo-bar__exit:hover { color: var(--color-paper); }
-.demo-bar__reenter { padding: 6px 12px; border-radius: var(--radius-control); background: var(--color-paper); color: var(--color-ink); }
+.demo-bar__reenter { min-height: 36px; padding: 6px 12px; border-radius: var(--radius-control); background: var(--color-paper); color: var(--color-ink); }
 .demo-bar__exit:disabled, .demo-bar__reenter:disabled { opacity: 0.6; cursor: default; }
 .demo-bar :focus-visible { outline: 2px solid var(--color-sky-300); outline-offset: 2px; }
 
-.demo-seg { display: flex; padding: 3px; border-radius: 10px; background: #FFFFFF1F; }
-.demo-seg a {
-  padding: 6px 16px; border-radius: var(--radius-control); color: var(--color-glass-label); font-size: var(--text-compact-md);
+.demo-seg { display: flex; padding: 2px; border-radius: 10px; background: #FFFFFF1F; }
+.demo-seg a, .demo-seg [role='link'] {
+  display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border-radius: var(--radius-control); color: var(--color-glass-label); font-size: var(--text-compact-md);
   font-weight: var(--font-weight-semibold); line-height: 16px; text-decoration: none;
 }
 .demo-seg a:hover { color: var(--color-paper); }
+.demo-seg [aria-disabled='true'] { opacity: 0.55; cursor: not-allowed; }
 .demo-seg a[aria-current='page'] { background: var(--color-paper); color: var(--color-ink); }
 
 @media (max-width: 759px) {
-  .demo-bar { gap: 10px; height: 48px; padding: 0 12px; }
+  .demo-bar { gap: 10px; height: 52px; padding: 0 12px; }
   .demo-bar__text { display: none; }
   .demo-bar__tools { gap: 10px; }
-  .demo-seg a { padding: 5px 10px; }
+  .demo-seg a, .demo-seg [role='link'] { padding: 0 12px; }
   .demo-bar__clock { gap: 8px; font-size: var(--text-compact-md); }
-  .demo-bar__reenter { padding: 5px 8px; }
+  .demo-bar__reenter { min-height: 44px; padding: 0 10px; }
   /* The countdown does not fit beside the switch: it takes a second row, under it. */
   .demo-bar:not([data-clock='running']) { flex-wrap: wrap; height: auto; padding-block: 8px; row-gap: 8px; }
   .demo-bar:not([data-clock='running']) .demo-bar__tools { width: 100%; justify-content: space-between; }
@@ -59,7 +60,7 @@
 .demo-dialog__form { display: flex; flex-direction: column; gap: 22px; padding: 36px; }
 .demo-dialog__top { display: flex; align-items: center; justify-content: space-between; }
 .demo-dialog__close {
-  display: inline-grid; place-items: center; width: 32px; height: 32px; margin: -6px -6px -6px 0; padding: 0; border: 0; border-radius: 50%;
+  display: inline-grid; place-items: center; width: 44px; height: 44px; margin: -12px -12px -12px 0; padding: 0; border: 0; border-radius: 50%;
   background: none; color: #616061; cursor: pointer;
 }
 .demo-dialog__close:hover { background: var(--color-fill-subtle); color: var(--color-ink); }
@@ -95,9 +96,10 @@
 .demo-bridge h2 { margin: 0; font-size: var(--text-compact-lg); font-weight: var(--font-weight-semibold); line-height: 21px; }
 .demo-bridge p { margin: 0; color: var(--color-glass-label); font-size: var(--text-compact-md); line-height: 19px; }
 .demo-bridge__action {
-  align-self: start; padding: 9px 14px; border-radius: 10px; background: var(--color-paper); color: var(--color-ink);
+  display: inline-flex; align-items: center; gap: 6px; min-height: 44px; align-self: start; padding: 0 16px; border-radius: 10px; background: var(--color-paper); color: var(--color-ink);
   font-size: var(--text-compact-md); font-weight: var(--font-weight-semibold); line-height: 16px; text-decoration: none;
 }
+.demo-bridge__action[aria-disabled='true'] { opacity: 0.6; cursor: not-allowed; }
 .demo-bridge__action:focus-visible { outline: 2px solid var(--color-paper); outline-offset: 2px; }
 /* Across the chat's full width, the card is one row: what happened on the left, the way to the bank on the right. */
 @media (min-width: 1000px) {
