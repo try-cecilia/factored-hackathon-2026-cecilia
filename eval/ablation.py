@@ -219,7 +219,7 @@ def main() -> None:
     Path("eval/reports").mkdir(parents=True, exist_ok=True)
     scope = "" if a.split == "test" and not a.limit else f"_{a.split}" + (f"_limit{a.limit}" if a.limit else "")  # a partial run never overwrites the report
     Path(f"eval/reports/ABLATION{scope}.md").write_text(md, encoding="utf-8")
-    meta = {"policy_sha256": policy_fingerprint(), "split": a.split, "limit": a.limit, "n_cases": len(cases),
+    meta = {"policy_sha256": policy_fingerprint(), **rse.code_version(), "split": a.split, "limit": a.limit, "n_cases": len(cases),
             "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}  # what the numbers were measured on, and on which code
     Path(f"eval/reports/ablation{scope}.json").write_text(
         json.dumps({"meta": meta, "results": {f"{r}/{m}": {k: v[k] for k in HEADLINE} for (r, m), v in out.items()}}, indent=2), encoding="utf-8")

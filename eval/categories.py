@@ -59,5 +59,6 @@ def table(rows: list[dict], templates: dict[str, list[str]] | None = None) -> di
 
 
 def generated_rows(report: dict, system_key_prefix: str = "proposed") -> list[dict]:
+    """Run 1's rows of the system: a report with repeats keeps every run's rows, each with its `repeat`."""
     (_, rows), = [(k, v) for k, v in report["cases"].items() if k.startswith(system_key_prefix)]
-    return rows
+    return [r for r in rows if r.get("repeat", 1) == 1]

@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-10-02T15:50:51+00:00",
+  "generated_at": "2026-10-03T03:30:52+00:00",
   "inputs": {
     "monthly_transactional_contacts_median": 6701.0,
     "text_channel_share": 0.15,
     "aht_s": 221.0,
-    "model_usd_per_attempted_case": 0.001545,
+    "model_usd_per_attempted_case": 0.001566,
     "sar": {
       "keyword bot (offline)": 0.7017,
       "Sonnet 5, lower bound of its 95% interval": 0.863,
@@ -80,7 +80,7 @@
         "10": 586,
         "20": 1172
       },
-      "model_cost_usd": 1.55
+      "model_cost_usd": 1.57
     },
     {
       "phone_to_text_shift_pct": 10,
@@ -93,7 +93,7 @@
         "10": 918,
         "20": 1837
       },
-      "model_cost_usd": 2.43
+      "model_cost_usd": 2.47
     },
     {
       "phone_to_text_shift_pct": 25,
@@ -106,7 +106,7 @@
         "10": 1417,
         "20": 2833
       },
-      "model_cost_usd": 3.75
+      "model_cost_usd": 3.8
     },
     {
       "phone_to_text_shift_pct": 50,
@@ -119,7 +119,7 @@
         "10": 2247,
         "20": 4494
       },
-      "model_cost_usd": 5.95
+      "model_cost_usd": 6.03
     }
   ],
   "sar_sensitivity_today": {
@@ -134,7 +134,7 @@
         "10": 433,
         "20": 866
       },
-      "model_cost_usd": 1.55
+      "model_cost_usd": 1.57
     },
     "Sonnet 5, lower bound of its 95% interval": {
       "phone_to_text_shift_pct": 0,
@@ -147,7 +147,7 @@
         "10": 533,
         "20": 1065
       },
-      "model_cost_usd": 1.55
+      "model_cost_usd": 1.57
     },
     "Sonnet 5 (live)": {
       "phone_to_text_shift_pct": 0,
@@ -160,7 +160,7 @@
         "10": 586,
         "20": 1172
       },
-      "model_cost_usd": 1.55
+      "model_cost_usd": 1.57
     }
   }
 }
