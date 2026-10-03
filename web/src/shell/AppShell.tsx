@@ -1,13 +1,17 @@
 import { Link, useNavigate, useRouter } from '@tanstack/react-router'
 import { lazy, Suspense, use, useCallback, useEffect, useId, useRef, useState, type ReactNode, type RefObject } from 'react'
 import type { DemoScenario } from '../chat/types'
-import { useConversation } from '../chat/ConversationProvider'
+import { useConversation, type CaseRow } from '../chat/ConversationProvider'
+import { isOpenCase } from '../chat/conversation'
 import { CopyConversation, useConversationCopy } from '../chat/CopyConversation'
 import { useSessionNotice } from '../chat/useSessionNotice'
 import { LockIcon } from '../chat/icons'
 import { useT } from '../i18n/context'
 import { logout, type Session } from '../server/auth.functions'
 import type { DemoKit } from '../server/demo.functions'
+import { demoEntries } from '../server/demo-entry'
+import { BankBridgeCard } from '../routes/-demo/BankBridgeCard'
+import { DemoBar } from '../routes/-demo/DemoBar'
 import {
   Button,
   IconButton,
@@ -127,9 +131,15 @@ export function AppShell({ session, kit, children }: { session: Session; kit: Pr
   const escalations = entries.filter((e) => e.role === 'assistant' && e.reply.disposition === 'ESCALATE').length
   const detail = [session.segment, session.country].filter(Boolean).join(' · ')
 
+  const bridge = <Suspense fallback={null}><DemoBridge kit={kit} cases={cases} /></Suspense>
+
   return (
-    <ShellProvider value={{ showCase, copied: copy.state }}>
+    <ShellProvider value={{ showCase, copied: copy.state, bridge }}>
       <a className="skip" href="#main" inert={behind ? true : undefined}>{t('common.skipToContent')}</a>
+      <div className="demo-frame">
+      <Suspense fallback={null}>
+        <CustomerDemoBar kit={kit} session={session} inert={behind} />
+      </Suspense>
       <div className="shell" data-menu={menuOpen ? 'open' : undefined} data-demo={demoOpen ? 'open' : undefined} data-case={caseOpen ? 'open' : undefined}>
         <div
           id="shell-side"
@@ -250,9 +260,28 @@ export function AppShell({ session, kit, children }: { session: Session; kit: Pr
           )}
         </div>
       </div>
+      </div>
       <ToastRegion>{logoutFailed && <Toast variant="error" onClose={() => setLogoutFailed(false)}>{t('shell.signOutFailed')}</Toast>}</ToastRegion>
     </ShellProvider>
   )
+}
+
+/** The DEMO bar of the one-click demo over the customer's window: only with the demo console on (DEMO_CONSOLE=1, getDemoKit). */
+function CustomerDemoBar({ kit, session, inert }: { kit: Promise<DemoKit>; session: Session; inert: boolean }) {
+  const resolved = use(kit)
+  if (!resolved.enabled || resolved.console !== true) return null
+  const role = demoEntries(resolved).find((e) => e.customer_id === session.customer_id)?.role ?? null
+  return <DemoBar view="customer" sessionRef={session.session_ref} expiresIn={session.expires_in} role={role} inert={inert} />
+}
+
+/** "Tu caso ya llegó al banco", for the newest case of the conversation while no person has decided it. */
+function DemoBridge({ kit, cases }: { kit: Promise<DemoKit>; cases: CaseRow[] }) {
+  const resolved = use(kit)
+  const newest = cases[0]
+  if (!resolved.enabled || resolved.console !== true || !newest) return null
+  const { state } = newest
+  if (state.state === 'not_found' || (state.state === 'ready' && !isOpenCase(state.status))) return null
+  return <BankBridgeCard ticketId={newest.ref.ticketId} />
 }
 
 function DemoToggle({ kit, open, onToggle }: { kit: Promise<DemoKit>; open: boolean; onToggle: () => void }) {

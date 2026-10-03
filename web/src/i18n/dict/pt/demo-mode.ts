@@ -1,0 +1,85 @@
+import type { Like } from '../../types.ts'
+import type { demoMode as source } from '../es/demo-mode.ts'
+
+export const demoMode: Like<typeof source> = {
+  badge: 'DEMO',
+  entry: {
+    open: 'Entrar na demo',
+    title: 'Experimentar a Cecilia como cliente',
+    lead: 'Escolha um cliente de teste. Depois, o console do banco fica a um clique, sem chaves.',
+    legend: 'Cliente de teste',
+    roles: {
+      cuentas: { title: 'Várias contas e um cartão', body: 'Saldos, movimentações e uma cobrança para contestar' },
+      pendiente: { title: 'Uma transferência pendente', body: 'Para pedir o rastreio e confirmá-lo com um «sim»' },
+      portugues: { title: 'Cliente que fala português', body: 'A Cecilia responde em português' },
+    },
+    submit: 'Entrar na demo',
+    entering: 'Entrando…',
+    close: 'Fechar',
+    note: 'São contas inventadas que todos os visitantes compartilham: não digite dados reais.',
+    none: 'A demo não tem clientes de teste disponíveis neste momento.',
+    errors: {
+      failed: 'Não foi possível entrar na demo. Tente de novo.',
+      limited: 'Muitas tentativas seguidas. Tente de novo em {seconds} s.',
+      off: 'A demo não está disponível neste momento.',
+    },
+  },
+  bar: {
+    label: 'Modo demo',
+    customer: 'Você está vendo o app como um cliente de teste',
+    bank: 'Você está vendo o console do banco. Só aparecem os casos que você abriu.',
+    switch: 'Ver como',
+    asCustomer: 'Cliente',
+    asBank: 'Banco',
+    exit: 'Sair da demo',
+    exiting: 'Saindo…',
+    endsIn: 'A demo termina em {time}',
+    endsInMinutes: 'Restam menos de {n} minutos de demo',
+    ended: 'A demo terminou',
+    reenter: 'Entrar de novo',
+    reentering: 'Entrando…',
+    reenterFailed: 'Não foi possível entrar de novo.',
+  },
+  bridge: {
+    title: 'Seu caso já chegou ao banco',
+    body: 'Veja como uma pessoa o recebe e resolva você mesmo.',
+    action: 'Ver pelo lado do banco',
+  },
+  desk: {
+    pageTitle: {
+      queue: 'Seus casos · Banco demo · Cecilai',
+      ticket: 'Caso · Banco demo · Cecilai',
+      traces: 'Rastreios · Banco demo · Cecilai',
+    },
+    brand: 'Banco',
+    nav: { label: 'Banco demo', cases: 'Seus casos', traces: 'Rastreios', menu: 'Abrir o menu', closeMenu: 'Fechar o menu' },
+    note: 'Na demo não há monitoramento nem registros de outros visitantes.',
+    queue: {
+      title: 'Seus casos',
+      caption: 'Casos que esta sessão abriu',
+      columns: { priority: 'Prioridade', ticket: 'Caso', request: 'Pedido', status: 'Status' },
+      emptyTitle: 'Ainda não há casos',
+      emptyBody: 'Os casos que a Cecilia passar para uma pessoa nesta sessão aparecem aqui.',
+    },
+    help: {
+      title: 'Ver outro caso?',
+      body: 'Em «Cliente», peça à Cecilia algo que precise de uma pessoa, como uma cobrança que você não reconhece. Aparece aqui na hora.',
+    },
+    choose: { title: 'Nenhum caso aberto', body: 'Ao escolher um caso da lista, o detalhe aparece aqui.' },
+    back: 'Seus casos',
+    mine: 'Você assumiu',
+    traces: {
+      title: 'Rastreios',
+      caption: 'Rastreios que esta sessão pediu',
+      columns: { trace: 'Rastreio', movement: 'Movimentação', status: 'Status', sla: 'Prazo' },
+      sla: '{days} dias úteis',
+      empty: 'Esta sessão ainda não pediu rastreios.',
+    },
+    expired: {
+      title: 'A demo terminou',
+      body: 'A sessão de teste dura 15 minutos desde a entrada. Ao entrar de novo começa uma sessão nova, sem casos.',
+    },
+    off: 'O console da demo não está disponível.',
+  },
+  results: {},
+}

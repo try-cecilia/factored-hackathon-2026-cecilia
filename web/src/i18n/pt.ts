@@ -3,6 +3,7 @@ import { cases } from './dict/pt/cases.ts'
 import { chat } from './dict/pt/chat.ts'
 import { conversation } from './dict/pt/conversation.ts'
 import { demo } from './dict/pt/demo.ts'
+import { demoMode } from './dict/pt/demo-mode.ts'
 import { gallery } from './dict/pt/gallery.ts'
 import { common } from './dict/pt/common.ts'
 import { loaders } from './dict/pt/loaders.ts'
@@ -14,4 +15,4 @@ import { table } from './dict/pt/table.ts'
 import type { Messages } from './types.ts'
 
 /** Brazilian Portuguese. It must have exactly the keys of `es`: typecheck fails if one is missing or extra. */
-export const pt = { common, shell, home, login, gallery, loaders, sidebar, table, chat, cases, conversation, demo, operator, monitor }
+export const pt = { common, shell, home, login, gallery, loaders, sidebar, table, chat, cases, conversation, demo, demoMode, operator, monitor }

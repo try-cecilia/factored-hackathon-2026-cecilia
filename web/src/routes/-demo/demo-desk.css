@@ -1,0 +1,26 @@
+/* The bank's side of the one-click demo, over the console's styles (operator.css): its sidebar note, the help card under the
+   queue, the end of the session, and the picker of a predefined result in the case. */
+.demo-desk__foot { display: flex; flex-direction: column; gap: 10px; }
+.demo-desk__note { margin: 0; padding: 12px; border-radius: 12px; background: var(--color-paper); color: #43414A; font-size: var(--text-xs); line-height: 18px; }
+.demo-queue { gap: 18px; }
+.demo-help { display: flex; flex-direction: column; gap: 6px; margin-top: auto; padding: 18px; border-radius: 14px; background: #F4F4F5; }
+.demo-help h2 { margin: 0; color: var(--color-ink); font-size: var(--text-sm); font-weight: var(--font-weight-semibold); line-height: 18px; }
+.demo-help p { margin: 0; color: #43414A; font-size: var(--text-compact-md); line-height: 19px; }
+.demo-desk__over { display: grid; place-items: center; height: 100%; padding: 24px; }
+.demo-expired { flex-direction: column; align-items: flex-start; gap: 10px; max-width: 420px; }
+.demo-expired h2 { margin: 0; font-size: var(--text-base); font-weight: var(--font-weight-bold); line-height: 20px; }
+.demo-expired p { margin: 0; }
+.demo-traces { display: flex; flex-direction: column; gap: 14px; }
+
+/* A predefined result of the case's family: one choice, required, as a column of cards. */
+.op-results { display: flex; flex-direction: column; gap: 8px; min-width: 0; margin: 0 0 12px; padding: 0; border: 0; }
+.op-results legend { margin-bottom: 4px; padding: 0; }
+.op-results > p { margin: 0 0 2px; font-size: var(--text-compact-sm); line-height: 16px; }
+.op-result {
+  display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: 12px; box-shadow: inset 0 0 0 1px #00000026;
+  color: var(--color-ink-app); font-size: var(--text-compact-md); line-height: 19px; cursor: pointer;
+}
+.op-result[data-checked] { box-shadow: inset 0 0 0 2px var(--color-ink); }
+.op-results:disabled .op-result { color: var(--color-ink-70); cursor: default; }
+.op-result input { flex: none; margin: 2px 0 0; accent-color: var(--color-ink); }
+.op-block > .op-muted { margin: 6px 0 0; font-size: var(--text-compact-sm); line-height: 16px; }

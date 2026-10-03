@@ -31,7 +31,7 @@ export function ChatView({ session }: { session: Session }) {
   const navigate = useNavigate()
   const { href } = useLocation()
   const { entries, cases, sending, ended, historyFailed, send, retry, reload } = useConversation()
-  const { showCase, copied } = useShell()
+  const { showCase, copied, bridge } = useShell()
   const composer = useRef<ComposerHandle>(null)
   const end = useRef<HTMLDivElement>(null)
   const content = useRef<HTMLDivElement>(null)
@@ -119,6 +119,7 @@ export function ChatView({ session }: { session: Session }) {
         <div ref={end} />
       </div>
       <div className="chat__foot">
+        {bridge}
         <div className="chat__notices" role="status">
           {/* How "copy conversation" went: here, where it covers no message, and the button says it to the screen reader. */}
           {copied && <SystemNote tone={copied === 'ok' ? 'success' : 'neutral'}><CopyNotice state={copied} /></SystemNote>}

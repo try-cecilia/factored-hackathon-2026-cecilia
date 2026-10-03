@@ -42,3 +42,23 @@ export function resolveResultsOf(raw: unknown): string[] {
   if (!Array.isArray(raw)) return []
   return [...new Set(raw.filter((code): code is string => typeof code === 'string' && CODE.test(code)))]
 }
+
+/** The only actor the demo acts as (api/demo_desk.py ACTOR). */
+export const DEMO_ACTOR = 'demo'
+/** What the visitor reads in place of the name of anyone else who touched the case (a real operator of the team). */
+export const SOMEONE_ELSE = 'banco'
+
+type Named = { operator?: string | null; history?: { operator?: string }[] }
+
+/**
+ * A desk state with no name but the demo's own: if a person of the team took or decided a visitor's case, the visitor sees that it
+ * was the bank, not who. The API already keeps the name out of its 409s; this covers the state it reads back.
+ */
+export function withoutNames<T extends Named>(desk: T): T {
+  const mask = (name: string | null | undefined) => (name && name !== DEMO_ACTOR ? SOMEONE_ELSE : name)
+  return {
+    ...desk,
+    ...(desk.operator !== undefined && { operator: mask(desk.operator) }),
+    ...(Array.isArray(desk.history) && { history: desk.history.map((h) => ({ ...h, operator: mask(h.operator) ?? '' })) }),
+  }
+}

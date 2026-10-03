@@ -1,0 +1,85 @@
+/** The one-click demo (DEMO_MODE and DEMO_CONSOLE only): the entry dialog, the DEMO bar, the bridge card and the bank's side. */
+export const demoMode = {
+  badge: 'DEMO',
+  entry: {
+    open: 'Entrar a la demo',
+    title: 'Probar Cecilia como cliente',
+    lead: 'Elegir un cliente de prueba. Después, la consola del banco queda a un clic, sin claves.',
+    legend: 'Cliente de prueba',
+    roles: {
+      cuentas: { title: 'Varias cuentas y una tarjeta', body: 'Saldos, movimientos y un cargo para reclamar' },
+      pendiente: { title: 'Una transferencia pendiente', body: 'Para pedir el rastreo y confirmarlo con un «sí»' },
+      portugues: { title: 'Cliente que habla portugués', body: 'Cecilia responde en portugués' },
+    },
+    submit: 'Entrar a la demo',
+    entering: 'Entrando…',
+    close: 'Cerrar',
+    note: 'Son cuentas inventadas que comparten todos los visitantes: no escribir datos reales.',
+    none: 'La demo no tiene clientes de prueba disponibles en este momento.',
+    errors: {
+      failed: 'No se pudo entrar a la demo. Intentar de nuevo.',
+      limited: 'Demasiados intentos seguidos. Intentar de nuevo en {seconds} s.',
+      off: 'La demo no está disponible en este momento.',
+    },
+  },
+  bar: {
+    label: 'Modo demo',
+    customer: 'Estás viendo la app como un cliente de prueba',
+    bank: 'Estás viendo la consola del banco. Solo aparecen los casos que abriste.',
+    switch: 'Ver como',
+    asCustomer: 'Cliente',
+    asBank: 'Banco',
+    exit: 'Salir de la demo',
+    exiting: 'Saliendo…',
+    endsIn: 'La demo termina en {time}',
+    endsInMinutes: 'Quedan menos de {n} minutos de demo',
+    ended: 'La demo terminó',
+    reenter: 'Entrar otra vez',
+    reentering: 'Entrando…',
+    reenterFailed: 'No se pudo entrar otra vez.',
+  },
+  bridge: {
+    title: 'Tu caso ya llegó al banco',
+    body: 'Puedes ver cómo lo recibe una persona y resolverlo tú.',
+    action: 'Verlo del lado del banco',
+  },
+  desk: {
+    pageTitle: {
+      queue: 'Tus casos · Banco demo · Cecilai',
+      ticket: 'Caso · Banco demo · Cecilai',
+      traces: 'Rastreos · Banco demo · Cecilai',
+    },
+    brand: 'Banco',
+    nav: { label: 'Banco demo', cases: 'Tus casos', traces: 'Rastreos', menu: 'Abrir el menú', closeMenu: 'Cerrar el menú' },
+    note: 'En la demo no hay monitoreo ni registros de otros visitantes.',
+    queue: {
+      title: 'Tus casos',
+      caption: 'Casos que abrió esta sesión',
+      columns: { priority: 'Prioridad', ticket: 'Caso', request: 'Pedido', status: 'Estado' },
+      emptyTitle: 'Todavía no hay casos',
+      emptyBody: 'Los casos que Cecilia pase a una persona en esta sesión aparecen aquí.',
+    },
+    help: {
+      title: '¿Ver otro caso?',
+      body: 'En «Cliente», pedirle a Cecilia algo que necesite una persona, como un cargo que no reconoces. Aparece aquí al momento.',
+    },
+    choose: { title: 'Ningún caso abierto', body: 'Al elegir un caso de la lista, su detalle aparece aquí.' },
+    back: 'Tus casos',
+    mine: 'Lo tomaste tú',
+    traces: {
+      title: 'Rastreos',
+      caption: 'Rastreos que pidió esta sesión',
+      columns: { trace: 'Rastreo', movement: 'Movimiento', status: 'Estado', sla: 'Plazo' },
+      sla: '{days} días hábiles',
+      empty: 'Esta sesión todavía no pidió rastreos.',
+    },
+    expired: {
+      title: 'La demo terminó',
+      body: 'La sesión de prueba dura 15 minutos desde que se entra. Al entrar otra vez empieza una sesión nueva, sin casos.',
+    },
+    off: 'La consola de la demo no está disponible.',
+  },
+  // Labels of the predefined results the API offers for each family of case (GET /demo/desk/tickets/{id}, resolve_results), by
+  // code. A code with no label here is shown as it comes.
+  results: {} as Record<string, string>,
+}
