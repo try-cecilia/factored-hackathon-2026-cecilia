@@ -591,7 +591,7 @@ class Orchestrator:
         return TurnResult(trace_id, Disposition.ESCALATE.value, msg, lang, decision.category, decision.rule,
                           ticket.ticket_id, facts, actions, **llm_meta)
 
-    def _trace_step(self, result, conv, lang, trace_id, actions, done, escalate, meta) -> TurnResult:
+    def _trace_step(self, result, conv, lang, country, trace_id, actions, done, escalate, meta) -> TurnResult:
         """The customer's pending movements that match: propose the one (opened only on their yes), say which trace
         is already open, ask which one, or hand it to a person when nothing of theirs is pending."""
         decision = router.trace_step(result)
@@ -600,21 +600,21 @@ class Orchestrator:
             return escalate(decision, actions, [])
         if decision.rule == "action:trace_choose":
             conv.pending_choice = items  # a plain "la segunda" is resolved in code next turn
-            opts = "; ".join(f"{i}) {render.movement(m, lang)}" for i, m in enumerate(items, start=1))
+            opts = "; ".join(f"{i}) {render.movement(m, lang, country)}" for i, m in enumerate(items, start=1))
             return done(TurnResult(trace_id, decision.disposition.value, render.MSG["trace_choose"][lang].format(opts=opts), lang,
                                    decision.category, decision.rule, None, [], actions, **meta, model_view=MODEL_VIEW["trace_choose"],
                                    choice="movement"))
         m = items[0]
         if decision.rule == "action:trace_already_open":
             opened = m["open_trace"]
-            text = render.MSG["trace_already_open"][lang].format(tid=opened["trace_id"], mov=render.movement(m, lang),
+            text = render.MSG["trace_already_open"][lang].format(tid=opened["trace_id"], mov=render.movement(m, lang, country),
                                                                   sla=opened["sla_business_days"])
             return done(TurnResult(trace_id, decision.disposition.value, text, lang, decision.category, decision.rule, None,
                                    [{"tool": "request_trace", "args": {"product_id": m["product_id"]}, "result": opened}], actions,
                                    **meta, model_view=MODEL_VIEW["trace_already_open"]))
         # One movement: show it and ask for a plain yes; the proposal is kept in code for one turn.
         conv.pending_action = {"transaction_id": m["transaction_id"], "product_id": m["product_id"], "movement": m}
-        return done(TurnResult(trace_id, decision.disposition.value, render.MSG["trace_propose"][lang].format(mov=render.movement(m, lang)),
+        return done(TurnResult(trace_id, decision.disposition.value, render.MSG["trace_propose"][lang].format(mov=render.movement(m, lang, country)),
                                lang, decision.category, decision.rule, None, [], actions, **meta, model_view=MODEL_VIEW["trace_proposed"]))
 
     def _open_trace(self, proposal, session, lang, trace_id, done, escalate) -> TurnResult:
@@ -665,7 +665,7 @@ class Orchestrator:
         if not verified:
             return escalate(router.trace_unverified(), [{**action, "success": False, "error_type": "TraceNotReadBack"}], [])
         decision = router.trace_opened()
-        text = render.MSG["trace_opened"][lang].format(tid=verified["trace_id"], mov=render.movement(proposal["movement"], lang),
+        text = render.MSG["trace_opened"][lang].format(tid=verified["trace_id"], mov=render.movement(proposal["movement"], lang, session.attributes.get("country")),
                                                        sla=verified["sla_business_days"])
         return done(TurnResult(trace_id, decision.disposition.value, text, lang, decision.category, decision.rule, None,
                                [{"tool": "request_trace", "args": {"product_id": proposal["product_id"]}, "result": verified}],
@@ -696,7 +696,7 @@ class Orchestrator:
                 return None
             facts = [{"tool": "get_account_summary", "args": {}, "result": result}]
             trace["rule"] = "degraded:deterministic_balance"
-            return TurnResult(trace_id, Disposition.AUTO_RESOLVE.value, render.render_answer(facts, lang), lang, "resolved",
+            return TurnResult(trace_id, Disposition.AUTO_RESOLVE.value, render.render_answer(facts, lang, country=session.attributes.get("country")), lang, "resolved",
                               "degraded:deterministic_balance", None, facts,
                               [{"tool": "get_account_summary", "args": {}, "success": True, "degraded": True}],
                               model_view=_answered_view(facts, catalog), **meta)
@@ -753,7 +753,7 @@ class Orchestrator:
             choices, conv.pending_choice = conv.pending_choice, None
             index = router.ordinal(text, len(choices))
             if index is not None:
-                return self._trace_step({"items": [choices[index]]}, conv, lang, trace_id, [], done, escalate, llm_meta())
+                return self._trace_step({"items": [choices[index]]}, conv, lang, session.attributes.get("country"), trace_id, [], done, escalate, llm_meta())
 
         # Decide (pre-LLM): compliance hold, safety lexicon, classifier guard.
         with stage("pre_llm"):
@@ -876,13 +876,13 @@ class Orchestrator:
                     continue
                 return escalate(decision, actions, facts)
             if name == "request_trace":
-                return self._trace_step(result, conv, lang, trace_id, actions, lambda res: done(with_unattended(res)), escalate, llm_meta())
+                return self._trace_step(result, conv, lang, session.attributes.get("country"), trace_id, actions, lambda res: done(with_unattended(res)), escalate, llm_meta())
             facts.append({"tool": name, "args": action["args"], "result": result})
 
         if clarify is not None:  # what was answered is said first, then the question for the rest
             decision, missing = clarify
             reply = render.clarify(missing, catalog, lang)
-            answered = render.render_answer(facts, lang, catalog) if facts else ""
+            answered = render.render_answer(facts, lang, catalog, session.attributes.get("country")) if facts else ""
             view = _clarify_view(missing, catalog, reply)
             return done(with_unattended(TurnResult(
                 trace_id, Disposition.CLARIFY.value, f"{answered}\n\n{reply}" if answered else reply, lang, decision.category,
@@ -891,7 +891,7 @@ class Orchestrator:
 
         # Verify + reply: rendered from the verified results only.
         with stage("render"):
-            answer = render.render_answer(facts, lang, catalog)
+            answer = render.render_answer(facts, lang, catalog, session.attributes.get("country"))
         reply = self._no_repeat(conv, TurnResult(trace_id, Disposition.AUTO_RESOLVE.value, answer, lang, "resolved", "verified_tool_results",
                                                  None, facts, actions, **llm_meta(), model_view=_answered_view(facts, catalog)))
         return done(with_unattended(reply))

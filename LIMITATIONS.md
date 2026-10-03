@@ -308,9 +308,8 @@ service, and as our own roadmap.
   sign in, chat) use the kit and i18n; the operator console (`web/src/routes/-operator/`) uses it too.
 - **A movements list shows each movement's type as the data has it.** In both languages a listed movement reads
   "Transfer", "Payment" or "Deposit" (the list's heading, the pending-movement line and the statuses are translated; the
-  line of each listed movement in `agent/core/render.py` is not), and amounts have one format for every country
-  (6,409.61). Found on 2026-10-02 and left as it is for this submission: the fix is one line in the agent, and the
-  evidence was measured on the code as it stands.
+  line of each listed movement in `agent/core/render.py` is not). Amounts follow the customer's country format for
+  Mexico, Colombia, Argentina and Brazil; unknown countries fall back to en-US separators.
 
 ## Operations
 
