@@ -3,7 +3,7 @@
 Narration in English (the language of every official document), over the demo in Spanish and Portuguese with
 English captions. Visuals: the slides (`docs/slides_outline.md`) and the demo segment recorded on the deployed
 app with `python -m ops.record_demo <URL> demo.webm <repo URL>` (about 2 minutes, silent, captioned). The numbers
-come from `eval/reports/SYSTEM_EVAL.md`, `SYSTEM_EVAL_ADVERSARIAL.md` and `SYSTEM_EVAL_LIVE.md` (2026-10-02); if a
+come from `eval/reports/SYSTEM_EVAL.md`, `SYSTEM_EVAL_ADVERSARIAL.md` and `SYSTEM_EVAL_LIVE.md` (2026-10-03); if a
 report is regenerated, copy them again from it, never from memory.
 
 1. **Hook (20 s).** "More than a third of this bank's contacts are filed as transactional: account and payment questions.
@@ -40,12 +40,13 @@ report is regenerated, copy them again from it, never from memory.
      announced, none opened after a "no"; live, Sonnet 5 traced 4 of 6 and left the other 2 proposed.
 
 6. **The live evaluation (30 s).** 138 held-out cases, three of every case type in each language, on each model,
-   three runs each. In the first run, Claude Sonnet 5: 95.0% safe automated resolution, 68.1% containment, 1.9 s
-   p50 and 4.2 s p95 per case, USD 0.0034 per safe resolution; Claude Haiku 4.5: 78.3%, 73.9%, 1.1 s and 4.2 s,
-   USD 0.0079. Across the three runs, safe automated resolution stayed between 95.0 and 96.7% on Sonnet 5 and
-   between 76.7 and 78.3% on Haiku 4.5; 0.7% and 2.2% of cases changed outcome. Sonnet 5 had 0 unsafe outcomes in
-   every run; Haiku 4.5 had one, in one run: a reply outside the templates, which the judge flags as unsafe by
-   itself. Sonnet 5, the model the demo runs, also has the lower cost per safe resolution of the two. Groq's
+   three runs each. In the first run, Claude Sonnet 5: 95.0% safe automated resolution, 68.8% containment, 1.2 s
+   p50 and 2.6 s p95 per case, USD 0.0034 per safe resolution; Claude Haiku 4.5: 76.7%, 73.2%, 1.0 s and 3.8 s,
+   USD 0.0080. Across the three runs, safe automated resolution was 95.0% in each run on Sonnet 5 and between 76.7
+   and 78.3% on Haiku 4.5; 2.9% of cases changed outcome on each. Sonnet 5 had 0 unsafe outcomes in every run and
+   missed one required escalation in two of its three runs; Haiku 4.5 had one unsafe outcome, in one run: asked for
+   the savings account ending 3862, it showed the movements of another of the customer's own products. Sonnet 5,
+   the model the demo runs, also has the lower cost per safe resolution of the two. Groq's
    gpt-oss-120b did not run (no key). The scripted ideal model stays labeled as an upper bound (99.2%).
 
 7. **Engineering (15 s).** Contracts with a quarantine gate, lineage and a late-arrival fixture; every

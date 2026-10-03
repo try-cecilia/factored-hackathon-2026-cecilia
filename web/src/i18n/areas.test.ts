@@ -93,7 +93,7 @@ test('every key a page uses is in the namespaces of its areas', () => {
 
 test('each page is in its own area, and the customer never loads the console, the monitor or the gallery', () => {
   assert.deepEqual(areasOf('/chat'), ['customer'])
-  assert.deepEqual(areasOf('/'), ['customer'])
+  assert.deepEqual(areasOf('/'), ['landing'])
   assert.deepEqual(areasOf('/operador/cola/abc'), ['operator'])
   assert.deepEqual(areasOf('/operador/trazas/abc'), ['operator', 'monitor'])
   assert.deepEqual(areasOf('/operadora'), ['customer'])
@@ -102,6 +102,8 @@ test('each page is in its own area, and the customer never loads the console, th
   assert.deepEqual(areasOf('/demo/bancos'), ['customer'])
   const customer = new Set(areaNamespaces.customer)
   for (const namespace of ['operator', 'monitor', 'gallery', 'table'] as const) assert.ok(!customer.has(namespace), namespace)
+  // The landing's long copy stays on the landing: the customer's pages never carry it.
+  assert.ok(!customer.has('landing'))
 })
 
 test('from the queue to the monitor the texts reload; back to the queue they do not', () => {

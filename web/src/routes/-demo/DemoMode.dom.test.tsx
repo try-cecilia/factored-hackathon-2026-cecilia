@@ -8,7 +8,7 @@ import { I18nProvider } from '../../i18n/context'
 import { translator } from '../../i18n/translate'
 import { dictionaries } from '../../test/render'
 import { BankBridgeCard } from './BankBridgeCard'
-import { EnterDemoButton } from './EnterDemo'
+import { EnterDemoHost } from './EnterDemo'
 import { withKnownConflict } from './results'
 import { DemoBar } from './DemoBar'
 import { EnterDemoDialog } from './EnterDemoDialog'
@@ -218,13 +218,13 @@ describe('EnterDemoDialog', () => {
   })
 })
 
-describe('EnterDemoButton, reached through the entry link (/?demo=entrar)', () => {
+describe('EnterDemoHost, the dialog of the entry link (/?demo=entrar)', () => {
   const showModal = vi.fn(function (this: HTMLDialogElement) { this.setAttribute('open', '') })
   beforeEach(() => void (HTMLDialogElement.prototype.showModal = showModal))
   afterEach(() => void delete (HTMLDialogElement.prototype as Partial<HTMLDialogElement>).showModal)
 
   it('entering lands in the chat and nothing sends the visitor back to the landing', async () => {
-    renderWithI18n(<EnterDemoButton entries={entries} initiallyOpen />)
+    renderWithI18n(<EnterDemoHost entries={entries} open />)
     await userEvent.setup().click(screen.getByRole('dialog').querySelector('button[type="submit"]') as HTMLButtonElement)
     await waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: '/chat' }))
     expect(navigate).toHaveBeenCalledTimes(1)
@@ -232,14 +232,19 @@ describe('EnterDemoButton, reached through the entry link (/?demo=entrar)', () =
   })
 
   it('cancelling on the entry link leaves the link out of the address', async () => {
-    renderWithI18n(<EnterDemoButton entries={entries} initiallyOpen />)
+    renderWithI18n(<EnterDemoHost entries={entries} open />)
     await userEvent.setup().click(screen.getByRole('button', { name: 'Cerrar' }))
     expect(navigate).toHaveBeenCalledWith({ to: '/', search: {}, replace: true })
   })
 
+  it('without test customers (the demo console off) there is no dialog, whatever the address says', () => {
+    renderWithI18n(<EnterDemoHost entries={[]} open />)
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
   it('a close that comes when the visitor is no longer on the entry link does not move them', async () => {
     location.current = { pathname: '/chat', search: {} }
-    renderWithI18n(<EnterDemoButton entries={entries} initiallyOpen />)
+    renderWithI18n(<EnterDemoHost entries={entries} open />)
     await userEvent.setup().click(screen.getByRole('button', { name: 'Cerrar' }))
     expect(navigate).not.toHaveBeenCalled()
   })

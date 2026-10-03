@@ -1,7 +1,7 @@
 # Data engineering: layers, measured load, guarantees
 
-`docs/data_quality.md` has the contract, checks and findings; this page says how the data flows, what a full load costs,
-which guarantees are tested, and what we did not build.
+Start at [DATA.md](DATA.md) for the overview. `docs/data_quality.md` has the contract, checks and findings; this page
+says how the data flows, what a full load costs, which guarantees are tested, and what we did not build.
 
 ## The layers, by their usual names
 
@@ -10,31 +10,17 @@ copy, and we say where it differs from a textbook medallion:
 
 | Layer | In this repository | Differs from a textbook layer in |
 |---|---|---|
-| **Bronze**: the data as delivered | The organizer's CSV files, left where they are (S3 or a local directory) and never rewritten. Each load records every file's size and SHA-256 in `_source_files` | Not copied into our storage: the hash is the proof of what was read. A raw staging table exists only inside the load's transaction |
+| **Bronze**: the data as delivered | The organizer's original CSV files, read from a local directory or from a local cache of the S3 objects under `--raw-dir` (downloaded as they are), and never rewritten. Each load records every file's size and SHA-256 in `_source_files` | No separate bronze store: the hash is the proof of what was read. A raw staging table exists only inside the load's transaction |
 | **Silver**: typed, validated, de-duplicated | `branches`, `customers`, `products`, `transactions`, `daily_exchange_rates` (serving) and `call_center_interactions`, `complaints`, `call_transcripts`, `satisfaction_surveys` (analysis): `TRY_CAST` to the dictionary's types, contract checks, bad rows moved to `_quarantine_<table>`, latest record wins, upsert by primary key. Every row carries `_source_file`, `_run_id`, `_ingested_at` | One layer serves the agent directly: there is no separate cleaned copy |
 | **Gold**: business-ready aggregates | Three marts, built by `python -m data.gold` (`make gold`): `gold_daily_activity`, `gold_customer_summary` and `gold_contact_demand`. Each declares its columns and types and its grain, and is reconciled to the silver rows it summarizes | The baseline report reads five of its figures from `gold_contact_demand`; the agent and the other reports still read silver. There is no feature store |
 | **Open copy**: silver and gold as Parquet | `python -m data.lake` (`make lake`): one zstd file per table and a `manifest.json` with each file's rows, size, SHA-256 and columns, and the silver and gold runs it was written from | A copy for portability and checking, not a second source of truth: the warehouse stays the one the agent reads |
 
-```mermaid
-flowchart LR
-  S["Source CSVs<br>S3 or local<br>(bronze, hashed)"] --> R["Raw staging<br>inside one transaction"]
-  R --> D["Schema drift check"] --> T["Typed staging<br>TRY_CAST to the dictionary"]
-  T --> M["Measure checks"] --> Q["Quarantine<br>_quarantine_table"]
-  M --> U["Dedup + upsert by PK<br>(silver)"]
-  U --> X["Cross-table checks"]
-  U --> A["Agent tools<br>(read-only)"]
-  U --> G["Gold marts<br>gold_*, columns + grain<br>reconciled"]
-  G --> P["analysis/ baseline<br>(5 figures)"]
-  U -.-> P2["analysis/ other reports"]
-  U --> K["Parquet + manifest<br>data/lake"]
-  G --> K
-  R -.-> L["_ingestion_log, _source_files,<br>_partition_log, _dq_results"]
-  G -.-> L2["_gold_log"]
-  U -.-> L
-```
+The figure of the flow, with the row count of every table, one row traced from its file to the agent, and the checks of
+the last full load are in [DATA.md](DATA.md), generated from the committed reports.
 
-A load whose quarantine rate passes `--max-quarantine-rate` (1% by default) or that lacks a required column rolls back,
-and the warehouse keeps its previous state (`data/pipeline.py`).
+A table whose quarantine rate passes `--max-quarantine-rate` (by default 1% of that table's batch) or that lacks a required column
+rolls back: that table keeps its previous state, earlier tables in the run stay committed, and the run stops
+(`data/pipeline.py`).
 
 ## One command
 

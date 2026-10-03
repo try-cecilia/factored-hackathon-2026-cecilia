@@ -1,43 +1,29 @@
 import { useNavigate, useRouterState } from '@tanstack/react-router'
-import { useState } from 'react'
-import { useT } from '../../i18n/context'
 import type { DemoEntry } from '../../server/demo-entry'
-import { Button, type ButtonSize, type ButtonVariant } from '../../ui'
 import { EnterDemoDialog } from './EnterDemoDialog'
 
 export { DEMO_ENTRY_HREF } from './DemoBar'
 
 type Props = {
-  /** The test customers the kit offers (demoEntries): none, and there is no button. */
+  /** The test customers the kit offers (demoEntries): none, and there is no dialog. */
   entries: DemoEntry[]
-  /** Opened from the start: the home page reached through DEMO_ENTRY_HREF (`/?demo=entrar`). */
-  initiallyOpen?: boolean
-  variant?: ButtonVariant
-  size?: ButtonSize
-  className?: string
+  /** The address asks for it: the home page with `?demo=entrar` (DEMO_ENTRY_HREF, the landing's "Probar la demo"). */
+  open: boolean
 }
 
 /**
- * "Entrar a la demo": the button and the dialog it opens. Only with the one-click demo on (DEMO_CONSOLE=1); without it nothing is
- * drawn. A page links to the entry with DEMO_ENTRY_HREF, or mounts this where its button goes.
+ * The one-click demo's dialog on the home page, opened by its address: every "Probar la demo" of the landing is a link to
+ * DEMO_ENTRY_HREF, so it opens from the same page, from another one, or from a link shared. Only with the demo console on.
  */
-export function EnterDemoButton({ entries, initiallyOpen = false, variant = 'outline', size = 'lg', className }: Props) {
-  const t = useT()
+export function EnterDemoHost({ entries, open }: Props) {
   const navigate = useNavigate()
-  const [open, setOpen] = useState(initiallyOpen)
   // Read at the moment of closing, not when drawn: the dialog may close after the visitor has already left this page.
   const onEntryLink = useRouterState({ select: (s) => s.location.pathname === '/' && (s.location.search as { demo?: string }).demo === 'entrar' })
   if (entries.length === 0) return null
+  // Cancelled on the entry link: the link leaves the address (going back does not open it again), and that closes the dialog.
+  // Anywhere else (the chat, after entering) the address is left alone.
   const close = () => {
-    setOpen(false)
-    // Cancelled from the entry link: the link is not kept in the address, so going back does not open it again. Only while the
-    // visitor is still on it; anywhere else (the chat, after entering) the address is left alone.
     if (onEntryLink) void navigate({ to: '/', search: {} as never, replace: true })
   }
-  return (
-    <>
-      <Button variant={variant} size={size} className={className} aria-haspopup="dialog" onClick={() => setOpen(true)}>{t('demoMode.entry.open')}</Button>
-      <EnterDemoDialog open={open} entries={entries} onClose={close} />
-    </>
-  )
+  return <EnterDemoDialog open={open} entries={entries} onClose={close} />
 }
