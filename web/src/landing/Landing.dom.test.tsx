@@ -66,11 +66,11 @@ describe('the landing', () => {
     for (const text of ['4,4 M', '84,7%', '0,506', '+8,2 a +34,1', '0,0029', '4.316', '150.000']) {
       expect(screen.getAllByText((_, el) => el?.textContent === text).length, text).toBeGreaterThan(0)
     }
-    expect(screen.getByText('Casos de Sonnet 5 cuyo resultado cambió entre corridas (1 de 138).')).toBeTruthy()
+    expect(screen.getByText('Casos de Sonnet 5 cuyo resultado cambió entre corridas (4 de 138).')).toBeTruthy()
     expect(screen.getByText('Casos que mandaron un registro del cliente al modelo. En vivo: 0 de 138.')).toBeTruthy()
     expect(screen.getByText(/58\.234 movimientos pendientes en el dataset \(1,99%\)/)).toBeTruthy()
     expect(screen.getByText(/El 63,5% del baseline es una cota superior/)).toBeTruthy()
-    expect(screen.getByText(/En vivo: 2 de octubre de 2026; la tabla muestra la corrida 1 de 3/)).toBeTruthy()
+    expect(screen.getByText(/En vivo: 3 de octubre de 2026; la tabla muestra la corrida 1 de 3/)).toBeTruthy()
   })
 
   it('draws the results as real tables, each with a caption and its column headers', () => {
@@ -86,6 +86,10 @@ describe('the landing', () => {
     expect(within(unsafe).getAllByRole('cell').map((td) => td.textContent)).toEqual(['0/548', '0/548', '0/548'])
     const runs = within(live).getByRole('rowheader', { name: 'Inseguros por corrida' }).closest('tr') as HTMLElement
     expect(within(runs).getAllByRole('cell').map((td) => td.textContent)).toEqual(['0 · 0 · 0', '0 · 1 · 0'])
+    const missed = within(live).getByRole('rowheader', { name: 'Derivaciones obligatorias perdidas, por corrida' }).closest('tr') as HTMLElement
+    expect(within(missed).getAllByRole('cell').map((td) => td.textContent)).toEqual(['1 · 1 · 0', '9 · 9 · 9'])
+    const recall = within(live).getByRole('rowheader', { name: 'Recall de derivación' }).closest('tr') as HTMLElement
+    expect(within(recall).getAllByRole('cell').map((td) => td.textContent)).toEqual(['97,6%', '78,6%'])
     expect(within(ablation).getAllByRole('cell').map((td) => td.textContent)).toEqual(['17,5%', '74,8%', '13,1%', '49,3%', '8,8%', '8,8%', '0,0%', '0,0%'])
     for (const table of tables) expect(table.querySelector('caption')?.textContent).toBeTruthy()
   })
@@ -105,8 +109,8 @@ describe('the landing', () => {
     expect(screen.getByText('No es una medición: aplica la tasa en vivo a los contactos reales.')).toBeTruthy()
     expect(screen.getByText(/^Maqueta con datos de ejemplo\. Los objetivos \(15 min, 2 h, 4 h\) son una propuesta para la demo/)).toBeTruthy()
     expect(screen.getByText('test n = 85 · ADR-006 · 01/10/2026')).toBeTruthy()
-    expect(screen.getByText('57 de 60 en alcance · muestra de 138 · 02/10/2026')).toBeTruthy()
-    expect(screen.getAllByText('Sonnet 5 · muestra de 138 casos · 02/10/2026')).toHaveLength(2)
+    expect(screen.getByText('57 de 60 en alcance · muestra de 138 · 03/10/2026')).toBeTruthy()
+    expect(screen.getAllByText('Sonnet 5 · muestra de 138 casos · 03/10/2026')).toHaveLength(2)
     expect(screen.getByText(/^0 de 138 en vivo da una cota superior aproximada al 95% de ≈2,2%; 0 de 548 offline, de ≈0,55%\. Vale para este experimento/)).toBeTruthy()
   })
 
@@ -133,10 +137,10 @@ describe('the landing', () => {
     expect(screen.getByText('1 · hasta 2 intentos por proveedor')).toBeTruthy()
     expect(screen.getByText(/Hasta 2 intentos por proveedor, con respaldo en otro\./)).toBeTruthy()
     // Offline latencies say which run they are.
-    expect(screen.getByText(/‡ Corrida local del 2 de octubre de 2026: las latencias dependen de la máquina\./)).toBeTruthy()
+    expect(screen.getByText(/‡ Corrida local del 3 de octubre de 2026: las latencias dependen de la máquina\./)).toBeTruthy()
     const offline = screen.getAllByRole('table')[0]
     const latency = within(offline).getByRole('rowheader', { name: /^Latencia sin LLM/ }).closest('tr') as HTMLElement
-    expect(within(latency).getAllByRole('cell').map((td) => td.textContent)).toEqual(['4,1 / 13,3', '7,8 / 29,2', '7,0 / 23,1'])
+    expect(within(latency).getAllByRole('cell').map((td) => td.textContent)).toEqual(['2,4 / 8,5', '5,0 / 17,5', '5,2 / 21,7'])
   })
 
   it('draws the evidence and the limits without links while there is no public repository', () => {
@@ -158,7 +162,7 @@ describe('the landing', () => {
     renderWithI18n(<Landing />, 'pt')
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Olá, sou a Cecilia. O modelo escolhe a consulta. O código escreve a resposta.')
     expect(screen.getByRole('link', { name: /Entrar na demo/ })).toBeTruthy()
-    expect(screen.getByText(/Ao vivo: 2 de outubro de 2026; a tabela mostra a rodada 1 de 3/)).toBeTruthy()
+    expect(screen.getByText(/Ao vivo: 3 de outubro de 2026; a tabela mostra a rodada 1 de 3/)).toBeTruthy()
     expect(screen.getAllByText((_, el) => el?.textContent === '84,7%').length).toBeGreaterThan(0)
   })
 })

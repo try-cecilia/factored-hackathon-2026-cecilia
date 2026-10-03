@@ -4,16 +4,20 @@ import { htmlLang, type Locale } from '../i18n/locales.ts'
  * Every measured figure the landing shows, bound to the one value it comes from; `figures.test.ts` reads each source and fails
  * when that value no longer rounds to what the landing shows. Two kinds of binding:
  *  - `at`: a field of a canonical JSON report (path from the root of the file), times `scale` (100 for a rate shown as %).
+ *  - `rows` + `where`: how many per-case rows of a JSON report match, e.g. the unsafe outcomes of one run.
  *  - `quote` + `pick`: a literal piece of a document or of code (English, dot decimals) and which of its numbers is the figure,
  *    counted from 0 after dropping thousands separators, times `scale`. A quote with more than one number must say which one.
  * When a report is regenerated, update the figure here: nothing else in the landing writes numbers of its own.
  */
 export type JsonBinding = { source: string; at: ReadonlyArray<string | number>; scale?: number; count?: boolean }
 export type QuoteBinding = { source: string; quote: string; pick?: number; scale?: number }
-export type Figure = { value: number; digits: number } & (JsonBinding | QuoteBinding)
+/** How many rows of a JSON list match every condition of `where` (a boolean condition reads a list as "not empty"). */
+export type RowsBinding = { source: string; rows: ReadonlyArray<string>; where: Record<string, string | number | boolean> }
+export type Figure = { value: number; digits: number } & (JsonBinding | QuoteBinding | RowsBinding)
 
 const fig = (value: number, digits: number, source: string, quote: string, pick?: number): Figure => ({ value, digits, source, quote, pick })
 const json = (value: number, digits: number, source: string, at: ReadonlyArray<string | number>, scale?: number): Figure => ({ value, digits, source, at, scale })
+const rows = (value: number, source: string, list: ReadonlyArray<string>, where: Record<string, string | number | boolean>): Figure => ({ value, digits: 0, source, rows: list, where })
 
 const README = 'README.md'
 const EVALUATION = 'EVALUATION.md'
@@ -39,6 +43,9 @@ const ADV = ['systems', 'proposed (adversarial)'] as const
 const SONNET = ['systems', 'proposed (live: claude-sonnet-5)'] as const
 const HAIKU = ['systems', 'proposed (live: claude-haiku-4-5)'] as const
 const SAR = 'safe_automated_resolution'
+// The live report keeps the per-case rows of every run, each with its `repeat` (1 to 3).
+const SONNET_ROWS = ['cases', 'proposed (live: claude-sonnet-5)'] as const
+const HAIKU_ROWS = ['cases', 'proposed (live: claude-haiku-4-5)'] as const
 
 export const figures = {
   // Baseline: the organizer's contact-center data.
@@ -115,16 +122,16 @@ export const figures = {
   idealRecordsToModel: json(0, 0, OFFLINE, [...IDEAL, 'records_sent_to_model', 'k']),
   adversarialRecordsToModel: json(0, 0, ADVERSARIAL, [...ADV, 'records_sent_to_model', 'k']),
   // Without the model, on the machine of the run of `offlineRunDate`: they depend on the machine.
-  keywordLatencyP50: json(4.1, 1, OFFLINE, [...KEYWORD, 'latency_ms_p50']),
-  keywordLatencyP95: json(13.3, 1, OFFLINE, [...KEYWORD, 'latency_ms_p95']),
-  idealLatencyP50: json(7.8, 1, OFFLINE, [...IDEAL, 'latency_ms_p50']),
-  idealLatencyP95: json(29.2, 1, OFFLINE, [...IDEAL, 'latency_ms_p95']),
-  adversarialLatencyP50: json(7.0, 1, ADVERSARIAL, [...ADV, 'latency_ms_p50']),
-  adversarialLatencyP95: json(23.1, 1, ADVERSARIAL, [...ADV, 'latency_ms_p95']),
+  keywordLatencyP50: json(2.4, 1, OFFLINE, [...KEYWORD, 'latency_ms_p50']),
+  keywordLatencyP95: json(8.5, 1, OFFLINE, [...KEYWORD, 'latency_ms_p95']),
+  idealLatencyP50: json(5.0, 1, OFFLINE, [...IDEAL, 'latency_ms_p50']),
+  idealLatencyP95: json(17.5, 1, OFFLINE, [...IDEAL, 'latency_ms_p95']),
+  adversarialLatencyP50: json(5.2, 1, ADVERSARIAL, [...ADV, 'latency_ms_p50']),
+  adversarialLatencyP95: json(21.7, 1, ADVERSARIAL, [...ADV, 'latency_ms_p95']),
   // Zero observed events: ≈3/n, an approximate 95% upper bound under the experiment's assumptions.
   offlineUpperBound: json(0.55, 2, OFFLINE, [...IDEAL, 'unsafe_95pct_upper_bound_if_zero'], 100),
 
-  // Live results: a sample of 138 cases, three runs per model; the tables show run 1. Safe automated resolution is over the
+  // Live results: a sample of 138 cases, three runs per model; the tables show run 1, except the per-run rows. Safe automated resolution is over the
   // 60 in-scope cases of the sample, not the 138.
   liveCases: json(138, 0, LIVE, ['n_cases']),
   liveRuns: json(3, 0, LIVE, [...SONNET, 'repeat_variability', 'runs']),
@@ -133,23 +140,35 @@ export const figures = {
   sonnetSafeResolved: json(57, 0, LIVE, [...SONNET, SAR, 'k']),
   sonnetSafeLow: json(86.3, 1, LIVE, [...SONNET, SAR, 'ci95', 0], 100),
   sonnetSafeHigh: json(98.3, 1, LIVE, [...SONNET, SAR, 'ci95', 1], 100),
-  haikuSafe: json(78.3, 1, LIVE, [...HAIKU, SAR, 'rate'], 100),
-  haikuSafeResolved: json(47, 0, LIVE, [...HAIKU, SAR, 'k']),
-  sonnetRecall: json(100, 0, LIVE, [...SONNET, 'escalation_recall', 'rate'], 100),
+  haikuSafe: json(76.7, 1, LIVE, [...HAIKU, SAR, 'rate'], 100),
+  haikuSafeResolved: json(46, 0, LIVE, [...HAIKU, SAR, 'k']),
+  sonnetRecall: json(97.6, 1, LIVE, [...SONNET, 'escalation_recall', 'rate'], 100),
   haikuRecall: json(78.6, 1, LIVE, [...HAIKU, 'escalation_recall', 'rate'], 100),
   sonnetUnsafe: json(0, 0, LIVE, [...SONNET, 'repeat_variability', 'unsafe_outcomes', 'max']),
-  haikuUnsafeRun2: fig(1, 0, README, '**1 / 138 in run 2**', 0),
+  // Per run, from the per-case rows of every run: unsafe outcomes, and required escalations that did not happen.
+  sonnetUnsafeRun1: rows(0, LIVE, SONNET_ROWS, { repeat: 1, unsafe: true }),
+  sonnetUnsafeRun2: rows(0, LIVE, SONNET_ROWS, { repeat: 2, unsafe: true }),
+  sonnetUnsafeRun3: rows(0, LIVE, SONNET_ROWS, { repeat: 3, unsafe: true }),
+  haikuUnsafeRun1: rows(0, LIVE, HAIKU_ROWS, { repeat: 1, unsafe: true }),
+  haikuUnsafeRun2: rows(1, LIVE, HAIKU_ROWS, { repeat: 2, unsafe: true }),
+  haikuUnsafeRun3: rows(0, LIVE, HAIKU_ROWS, { repeat: 3, unsafe: true }),
+  sonnetMissedRun1: rows(1, LIVE, SONNET_ROWS, { repeat: 1, should_escalate: true, escalated: false }),
+  sonnetMissedRun2: rows(1, LIVE, SONNET_ROWS, { repeat: 2, should_escalate: true, escalated: false }),
+  sonnetMissedRun3: rows(0, LIVE, SONNET_ROWS, { repeat: 3, should_escalate: true, escalated: false }),
+  haikuMissedRun1: rows(9, LIVE, HAIKU_ROWS, { repeat: 1, should_escalate: true, escalated: false }),
+  haikuMissedRun2: rows(9, LIVE, HAIKU_ROWS, { repeat: 2, should_escalate: true, escalated: false }),
+  haikuMissedRun3: rows(9, LIVE, HAIKU_ROWS, { repeat: 3, should_escalate: true, escalated: false }),
   sonnetRecordsToModel: json(0, 0, LIVE, [...SONNET, 'repeat_variability', 'records_sent_to_model', 'max']),
   haikuRecordsToModel: json(0, 0, LIVE, [...HAIKU, 'repeat_variability', 'records_sent_to_model', 'max']),
-  sonnetP50: json(1.9, 1, LIVE, [...SONNET, 'latency_ms_p50'], 0.001),
-  sonnetP95: json(4.2, 1, LIVE, [...SONNET, 'latency_ms_p95'], 0.001),
-  haikuP50: json(1.1, 1, LIVE, [...HAIKU, 'latency_ms_p50'], 0.001),
-  haikuP95: json(4.2, 1, LIVE, [...HAIKU, 'latency_ms_p95'], 0.001),
+  sonnetP50: json(1.2, 1, LIVE, [...SONNET, 'latency_ms_p50'], 0.001),
+  sonnetP95: json(2.6, 1, LIVE, [...SONNET, 'latency_ms_p95'], 0.001),
+  haikuP50: json(1.0, 1, LIVE, [...HAIKU, 'latency_ms_p50'], 0.001),
+  haikuP95: json(3.8, 1, LIVE, [...HAIKU, 'latency_ms_p95'], 0.001),
   sonnetCost: json(0.0034, 4, LIVE, [...SONNET, 'cost_per_safe_resolution_usd']),
-  haikuCost: json(0.0079, 4, LIVE, [...HAIKU, 'cost_per_safe_resolution_usd']),
-  sonnetFlips: json(0.7, 1, LIVE, [...SONNET, 'repeat_variability', 'outcome_flip_rate', 'rate'], 100),
-  sonnetFlippedCases: json(1, 0, LIVE, [...SONNET, 'repeat_variability', 'outcome_flip_rate', 'k']),
-  haikuFlips: json(2.2, 1, LIVE, [...HAIKU, 'repeat_variability', 'outcome_flip_rate', 'rate'], 100),
+  haikuCost: json(0.0080, 4, LIVE, [...HAIKU, 'cost_per_safe_resolution_usd']),
+  sonnetFlips: json(2.9, 1, LIVE, [...SONNET, 'repeat_variability', 'outcome_flip_rate', 'rate'], 100),
+  sonnetFlippedCases: json(4, 0, LIVE, [...SONNET, 'repeat_variability', 'outcome_flip_rate', 'k']),
+  haikuFlips: json(2.9, 1, LIVE, [...HAIKU, 'repeat_variability', 'outcome_flip_rate', 'rate'], 100),
   liveUpperBound: json(2.2, 1, LIVE, [...SONNET, 'unsafe_95pct_upper_bound_if_zero'], 100),
 
   // A projection, not a measurement: Sonnet 5's live rate applied to the text-channel contacts.
@@ -205,8 +224,8 @@ export const figures = {
 
 /** Days, as ISO dates, each with where it is written: a quote of a document or the `generated_at` of a JSON report. */
 export type Day = { iso: string; source: string } & ({ quote: string } | { at: readonly string[] })
-export const liveRunDate: Day = { iso: '2026-10-02', source: LIVE, at: ['generated_at'] }
-export const offlineRunDate: Day = { iso: '2026-10-02', source: OFFLINE, at: ['generated_at'] }
+export const liveRunDate: Day = { iso: '2026-10-03', source: LIVE, at: ['generated_at'] }
+export const offlineRunDate: Day = { iso: '2026-10-03', source: OFFLINE, at: ['generated_at'] }
 export const redTeamDate: Day = { iso: '2026-09-30', source: RED_TEAM, quote: '30/09/2026, from 20:30 to 21:53' }
 export const classifierDate: Day = { iso: '2026-10-01', source: ADR006, quote: 'accepted, recorded 2026-10-01' }
 
