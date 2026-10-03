@@ -5,7 +5,8 @@ One turn = Understand → Decide → Act → Verify → Escalate, orchestrated b
 the deterministic layers.
 
 **The model interprets; the code speaks** ([ADR-001](docs/decisions/ADR-001-model-interprets-code-speaks.md)):
-one model call per turn chooses tools. The system never gives the model a
+one primary model response per turn chooses tools (the client may retry it
+or fall back to another provider). The system never gives the model a
 customer record (no balance, transaction, internal id, account number, name
 or segment). Identifiers the customer types are masked before they leave,
 and the model never writes to the customer. Every reply is rendered from
@@ -31,9 +32,11 @@ operator's message when they resolve a case, shown as the agent's.
    - A product id written in the message that exists but belongs to another
      customer → security escalation with the denied reference as evidence
      (`reference_to_foreign_product`), before any model call.
-3. **Understand** (`agent/llm/`). One call to the first configured provider
-   in `LLM_PROVIDERS` (Groq `openai/gpt-oss-120b`, Together, or Claude). The model
-   sees only:
+3. **Understand** (`agent/llm/`). One primary model response per turn,
+   requested through `LLMClient.chat`: up to 2 attempts per provider (only
+   transient errors are retried), and on an error or an open circuit the next
+   provider in `LLM_PROVIDERS` (Groq `openai/gpt-oss-120b`, Together, or Claude)
+   takes it. The model sees only:
    - the customer's words, masked by `agent/llm/privacy.py` after normalizing
      Unicode dashes, fullwidth and invisible characters:
      - the customer's own product ids become their alias;
@@ -43,7 +46,8 @@ operator's message when they resolve a case, shown as the agent's.
      - dates are kept;
    - a catalog of per-session aliases (`P1`, `P2`...) with product type,
      currency and status;
-   - a history in which our replies are figure-free summaries.
+   - a history: the customer's masked words as they typed them, amounts
+     included, and our replies as figure-free summaries (no warehouse figures).
 
    It declares the reads asked for as tool calls and the code runs at most two of them (measured on the deployed model, a documented limit on the fallback: LIMITATIONS.md). Tool schemas have **no customer_id**.
    Any prose it writes is discarded.
@@ -109,7 +113,7 @@ operator's message when they resolve a case, shown as the agent's.
 | Concern | Where it lives | Why not the LLM |
 |---|---|---|
 | Whose data | session + tool ownership check + pre-LLM foreign-reference check | a prompt can be injected; a SQL `WHERE` can't |
-| What the model may see | orchestrator: masked text, aliases, figure-free history | the brief forbids customer records in external model requests |
+| What the model may see | orchestrator: masked text, aliases, history (customer amounts included; no warehouse figures) | the brief forbids customer records in external model requests |
 | What to disclose | tool layer (masking) | minimization can't depend on model compliance |
 | When to transfer | policy router, lexicon, classifier | must be auditable and testable per rule |
 | What the customer reads | renderer, from verified results and templates | a model can state a wrong figure or an action that never happened |

@@ -23,9 +23,14 @@ service, and as our own roadmap.
    on 2026-08-16.
 2. **Deployment.** Deployed on Render since 2026-09-29 (`render.yaml`): the web at
    https://cecil-ai.onrender.com and the API at https://x-payments-agent.onrender.com, one small instance
-   each (512 MB). What that leaves out: no replicas, the API loads a 5,000-customer sample rather than the
-   whole dataset, and the web calls the API at its public URL, so the API's per-client limits (sign-ins,
-   failed keys) count the web's users as one client. CI builds the Docker image and boots it the way Render
+   each (512 MB). What that leaves out: no replicas, and the API loads a 5,000-customer sample rather than the
+   whole dataset. The web calls the API at its public URL; the API's per-client limits (sign-ins, failed keys)
+   still count each user apart, because the web forwards the user's address in `X-Client-IP` with a secret both
+   services share, and the API believes that address only with the secret (`client_ip` in `api/main.py`,
+   `web/src/server/agent-api.ts`, `tests/test_api.py`, `web/tests/http/client-ip.test.ts`). `render.yaml` configures
+   it: the `bff-client-ip` group on both services and `CF-Connecting-IP` as the trusted header. That is the code and
+   the configuration; we have not checked the variables installed on Render nor triggered a limit in production.
+   CI builds the Docker image and boots it the way Render
    does (a disk mounted owned by root, its own port), then smoke-tests it, checks the disk survives a
    restart, and checks that a first load that fails or is killed leaves nothing a later boot would serve.
 
