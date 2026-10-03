@@ -32,8 +32,7 @@ test('each key uses the same placeholders in both languages', () => {
 
 test('the Spanish is neutral: no voseo in the UI copy', () => {
   const voseo = /\b(probá|ingresá|volvé|elegí|escribí|hacé|mirá|tenés|podés|querés|sabés)\b/i
-  // The landing speaks rioplatense, as its approved design does; the product's own screens stay neutral.
-  for (const [key, text] of spanish) if (!key.startsWith('landing.')) assert.doesNotMatch(text, voseo, key)
+  for (const [key, text] of spanish) assert.doesNotMatch(text, voseo, key)
 })
 
 test('translate interpolates and reports a missing param instead of printing undefined', () => {
