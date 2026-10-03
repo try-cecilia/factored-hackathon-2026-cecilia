@@ -140,7 +140,7 @@ describe('the landing', () => {
     expect(screen.getByText(/‡ Corrida local del 3 de octubre de 2026: las latencias dependen de la máquina\./)).toBeTruthy()
     const offline = screen.getAllByRole('table')[0]
     const latency = within(offline).getByRole('rowheader', { name: /^Latencia sin LLM/ }).closest('tr') as HTMLElement
-    expect(within(latency).getAllByRole('cell').map((td) => td.textContent)).toEqual(['2,4 / 8,5', '5,0 / 17,5', '5,2 / 21,7'])
+    expect(within(latency).getAllByRole('cell').map((td) => td.textContent)).toEqual(['2,4 / 9,0', '7,5 / 30,1', '5,5 / 18,5'])
   })
 
   it('draws the evidence and the limits without links while there is no public repository', () => {
