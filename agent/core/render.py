@@ -50,10 +50,36 @@ MSG = {
                             "pt": "Novidade do seu caso: um atendente analisou e não pode resolvê-lo por este canal. Se precisar de mais ajuda, entre em contato com a central de atendimento do banco."},
     "case_resolved": {"es": "Novedad de tu caso: un agente lo resolvió. Mensaje del agente: «{message}»",
                       "pt": "Novidade do seu caso: um atendente resolveu. Mensagem do atendente: «{message}»"},
+    # Resolved with a predefined result (RESOLVE_RESULT): the bank's fixed words, and the person's own, if any, in the same quote.
+    "case_resolved_result": {"es": "Novedad de tu caso: un agente lo resolvió. {result}",
+                             "pt": "Novidade do seu caso: um atendente resolveu. {result}"},
+    "case_resolved_result_message": {"es": "Novedad de tu caso: un agente lo resolvió. {result} Mensaje del agente: «{message}»",
+                                     "pt": "Novidade do seu caso: um atendente resolveu. {result} Mensagem do atendente: «{message}»"},
     "case_handed_back": {"es": "Novedad de tu caso: un agente lo devolvió al asistente. Cuéntame en qué más puedo ayudarte.",
                          "pt": "Novidade do seu caso: um atendente devolveu ao assistente. Conte como posso ajudar."},
     "case_stale": {"es": "Novedad de tu caso: al revisarlo, el movimiento ya no figura como pendiente, así que no hizo falta abrir un rastreo.",
                    "pt": "Novidade do seu caso: ao revisar, a movimentação já não consta como pendente, então não foi preciso abrir um rastreamento."},
+}
+# The predefined results of a resolution (agent/policy/desk.py RESULTS), as the customer reads them.
+RESOLVE_RESULT = {
+    "dispute_opened": {"es": "Revisamos el cargo y lo marcamos para disputa. Te contactaremos al número registrado.",
+                       "pt": "Analisamos a cobrança e a marcamos para contestação. Entraremos em contato pelo número cadastrado."},
+    "card_blocked": {"es": "Bloqueamos la tarjeta para proteger tu cuenta. Te contactaremos al número registrado para enviarte una nueva.",
+                     "pt": "Bloqueamos o cartão para proteger a sua conta. Entraremos em contato pelo número cadastrado para enviar um novo."},
+    "charge_confirmed": {"es": "Revisamos el movimiento y corresponde a una operación válida de tu cuenta.",
+                         "pt": "Analisamos a movimentação e ela corresponde a uma operação válida da sua conta."},
+    "trace_opened": {"es": "Pedimos a operaciones que rastree el movimiento. La respuesta quedará registrada en tu caso.",
+                     "pt": "Pedimos à equipe de operações que rastreie a movimentação. A resposta ficará registrada no seu caso."},
+    "movement_settled": {"es": "Revisamos el movimiento y ya figura como completado.",
+                         "pt": "Analisamos a movimentação e ela já consta como concluída."},
+    "referred": {"es": "Derivamos tu caso al área especializada del banco, que te contactará al número registrado.",
+                 "pt": "Encaminhamos o seu caso à área especializada do banco, que entrará em contato pelo número cadastrado."},
+    "info_confirmed": {"es": "Confirmamos la información en el sistema del banco y quedó registrada en tu caso.",
+                       "pt": "Confirmamos a informação no sistema do banco e ela ficou registrada no seu caso."},
+    "will_contact": {"es": "Revisamos tu caso. Te contactaremos al número registrado.",
+                     "pt": "Analisamos o seu caso. Entraremos em contato pelo número cadastrado."},
+    "no_action_needed": {"es": "Revisamos tu caso y no hace falta ninguna acción de tu parte.",
+                         "pt": "Analisamos o seu caso e não é necessária nenhuma ação da sua parte."},
 }
 TXN_TYPE = {"es": {"Transfer": "transferencia", "Payment": "operación de pago", "Deposit": "operación de depósito"},
             "pt": {"Transfer": "transferência", "Payment": "operação de pagamento", "Deposit": "operação de depósito"}}
@@ -68,14 +94,18 @@ STATUS = {"es": {"Active": "activa", "Blocked": "bloqueada", "Closed": "cerrada"
 
 
 def case_update(status: str, lang: str, trace: dict | None = None, message: str | None = None,
-                had_action: bool = True) -> str | None:
+                had_action: bool = True, result: str | None = None) -> str | None:
     """The customer-facing line for what a person did with their ticket, or None for a status with nothing to say.
-    `message` is a resolution's words to the customer; `had_action` says whether the ticket carried a trace to decide."""
-    entry = MSG.get("case_rejected_plain" if status == "rejected" and not had_action else f"case_{status}")
+    `message` is a resolution's words to the customer; `had_action` says whether the ticket carried a trace to decide;
+    `result` is the predefined result a resolution named, said before the message, which never replaces it."""
+    key = "case_rejected_plain" if status == "rejected" and not had_action else f"case_{status}"
+    if status == "resolved" and result in RESOLVE_RESULT:
+        key = "case_resolved_result_message" if message else "case_resolved_result"
+    entry = MSG.get(key)
     if entry is None:
         return None
     return entry[lang].format(tid=(trace or {}).get("trace_id", ""), sla=(trace or {}).get("sla_business_days", ""),
-                              message=message or "")
+                              message=message or "", result=RESOLVE_RESULT[result][lang] if key.startswith("case_resolved_result") else "")
 
 
 def money(v: Any, cur: str) -> str:
