@@ -168,7 +168,10 @@ describe('DemoWelcome, the chat of the one-click demo before the first message',
   it('says where the visitor is and offers three situations, each with the verb of what to do', () => {
     renderWithI18n(<DemoWelcome entries={entries} run={vi.fn()} />)
     const welcome = screen.getByRole('region', { name: 'Estás en la demo como un cliente de prueba.' })
-    expect(within(welcome).getByText(/Puedes probar una de estas situaciones o escribir lo que quieras/)).toBeTruthy()
+    // What the bank's side shows, true of every card: the trace opens no case for a person, it shows under Traces.
+    expect(within(welcome).getByText(/Puedes probar una de estas situaciones o escribir lo que quieras/).textContent).toContain(
+      'verás lo que ve el banco: los casos que pasan a una persona y los rastreos que abriste.',
+    )
     const cards = within(within(welcome).getByRole('list', { name: 'Situaciones para probar' })).getAllByRole('button')
     expect(cards.map((c) => c.querySelector('strong')?.textContent)).toEqual([
       'Consultar saldos y reclamar un cargo', 'Rastrear una transferencia que no llegó', 'Hablar en portugués',
@@ -208,6 +211,7 @@ describe('DemoWelcome, the chat of the one-click demo before the first message',
     renderWithI18n(<DemoWelcome entries={entries} run={vi.fn()} />, 'pt')
     expect(screen.getByRole('region', { name: 'Você está na demo como um cliente de teste.' })).toBeTruthy()
     expect(screen.getByRole('button', { name: /Rastrear uma transferência que não chegou/ })).toBeTruthy()
+    expect(screen.getByText(/verá o que o banco vê: os casos que passam para uma pessoa e os rastreios que você abriu\./)).toBeTruthy()
   })
 })
 

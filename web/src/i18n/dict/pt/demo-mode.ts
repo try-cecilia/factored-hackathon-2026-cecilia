@@ -12,7 +12,7 @@ export const demoMode: Like<typeof source> = {
   },
   welcome: {
     title: 'Você está na demo como um cliente de teste.',
-    body: 'Você pode experimentar uma destas situações ou escrever o que quiser. Depois, em «Banco», verá como o seu caso chega a uma pessoa.',
+    body: 'Você pode experimentar uma destas situações ou escrever o que quiser. Depois, em «Banco», verá o que o banco vê: os casos que passam para uma pessoa e os rastreios que você abriu.',
     label: 'Situações para experimentar',
     cards: {
       cuentas: { title: 'Consultar saldos e contestar uma cobrança', body: 'Várias contas e um cartão de crédito' },

@@ -10,7 +10,7 @@ export const demoMode = {
   },
   welcome: {
     title: 'Estás en la demo como un cliente de prueba.',
-    body: 'Puedes probar una de estas situaciones o escribir lo que quieras. Después, en «Banco», verás cómo le llega tu caso a una persona.',
+    body: 'Puedes probar una de estas situaciones o escribir lo que quieras. Después, en «Banco», verás lo que ve el banco: los casos que pasan a una persona y los rastreos que abriste.',
     label: 'Situaciones para probar',
     cards: {
       cuentas: { title: 'Consultar saldos y reclamar un cargo', body: 'Varias cuentas y una tarjeta de crédito' },
