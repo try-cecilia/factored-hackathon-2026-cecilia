@@ -114,5 +114,5 @@ class BaselineBot:
                                   decision.rule, tool_calls=[action], latency_ms=(time.perf_counter() - start) * 1000)
             return esc(decision, [action])
         facts = [{"tool": tool, "args": args, "result": result}]
-        return TurnResult(trace_id, "AUTO_RESOLVE", render.render_answer(facts, lang), lang, "resolved", "keyword_routing",
+        return TurnResult(trace_id, "AUTO_RESOLVE", render.render_answer(facts, lang, country=session.attributes.get("country")), lang, "resolved", "keyword_routing",
                           None, facts, [action], latency_ms=(time.perf_counter() - start) * 1000)

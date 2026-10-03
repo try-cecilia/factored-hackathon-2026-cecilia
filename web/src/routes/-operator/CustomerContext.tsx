@@ -97,7 +97,7 @@ export function ProductsFold({ data }: { data: CustomerContext }) {
 }
 
 /** `inEvidence`: ids of the movements the case already shows in its Evidence section; here they are marked, so the same movement is not read twice as if it were two. */
-export function MovementsFold({ data, inEvidence }: { data: CustomerContext; inEvidence?: ReadonlySet<string> }) {
+export function MovementsFold({ data, inEvidence, country }: { data: CustomerContext; inEvidence?: ReadonlySet<string>; country?: string | null }) {
   const t = useT()
   const [all, setAll] = useState(false)
   const { movements } = data
@@ -117,7 +117,7 @@ export function MovementsFold({ data, inEvidence }: { data: CustomerContext; inE
               {(m.pending || (m.status && m.status !== 'Approved')) && <span className="op-tag op-tag--neutral">{movementStatusName(t, m.status)}</span>}
               {inEvidence?.has(m.transaction_id) && <span className="op-tag op-tag--info" title={t('operator.context.inEvidenceHint')}>{t('operator.context.inEvidence')}</span>}
             </span>
-            <span className="op-mono">{money(m.amount, m.currency)}</span>
+            <span className="op-mono">{money(m.amount, m.currency, country)}</span>
           </li>
         ))}
       </ul>

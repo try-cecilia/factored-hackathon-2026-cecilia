@@ -4,9 +4,13 @@ Every number here is produced by a script in this repo (see `Makefile`) and
 copied from the generated reports. Offline measurements, simulations and
 projections are labeled as such and never mixed.
 
-> **Design version.** Every table here is measured on design v3 (prompt 3.1.0,
-> [ADR-001](docs/decisions/ADR-001-model-interprets-code-speaks.md)) over the organizer's warehouse. The model
-> only interprets and picks tools, in one call per turn; it never sees records and never writes replies.
+> **Design version.** Every table here is measured on design v3
+> ([ADR-001](docs/decisions/ADR-001-model-interprets-code-speaks.md)): the model only interprets and picks tools, in one
+> primary response per turn, and never writes replies. It sees no record or figure from the warehouse; it does see the
+> customer's own words, masked by pattern, amounts they typed included. Each report records the prompt version it ran with: 3.2.1
+> for the current offline, adversarial, failure and live reports, 3.1.0 for the dev split and the reserved set before its
+> fixes. The system evaluation runs on the organizer's warehouse; the reserved failure set runs on the hand-made fixture
+> warehouse (section 3).
 
 ## Summary: human agents vs keyword bot vs this system
 
@@ -49,6 +53,8 @@ projections are labeled as such and never mixed.
 
 Which figures we accept as proof of a claim, and the pass/fail rules for the human-written set (fixed before it has
 results), are in [`docs/preregistration.md`](docs/preregistration.md).
+The key evaluation results with their n, denominator, model, date and fingerprint, generated from the reports, and the
+contract of each stage of a turn with links to its code and tests: [`docs/EVIDENCE.md`](docs/EVIDENCE.md).
 
 ## Provenance of every evaluation input
 
@@ -63,7 +69,7 @@ Each input carries one of the challenge's labels: **Supplied (synthetic)** is th
 | Expired session, revoked session, tool failure, model outage, other customers' ids | Injected | Failure handling | Introduced by the harness (`inject` in `eval/run_system_eval.py`) |
 | Reserved failure set (234 cases) | Team-generated cases over Test fixture customers | Failure evaluation | Batch 1 was written before the system ran on it, batch 2 after seeing batch 1's failures, batch 3 after the judge was fixed: post-fix numbers are regression evidence |
 | Human message set | Real people who consented, through the form | Classifier evaluation | None reported yet: the floor of 60 messages from 8 people is not reached ([human_set.md](docs/human_set.md)) |
-| `tests/fixtures` | Test fixture | Unit tests and the demo without the dataset | Not used for any reported figure |
+| `tests/fixtures` | Test fixture | Unit tests, the demo without the dataset, the reserved failure set, the live smoke run and the compound-request probes | The reserved set's figures (section 3) are on these customers; the system evaluation is not |
 
 ## 1. Problem evidence and human baseline (measured)
 
@@ -663,7 +669,8 @@ on every pull request and every push to `main`, plus the classifier evaluation. 
     reaches the model, checked against values read straight from the warehouse;
   - card, account, ID and email numbers typed by the customer are masked
     before the model and in tickets;
-- one model call per turn, whose prose never reaches the customer;
+- one primary model response per turn (the client may retry it or fall back to another provider), whose prose never
+  reaches the customer;
 - every orchestrator disposition, multi-turn, prompt injection (including a
   foreign product reference caught before the model), LLM outage and degraded mode;
 - a handoff announced only after its ticket reads back (lost write, failed write),

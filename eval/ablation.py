@@ -76,8 +76,8 @@ class NaiveAgent:
     model wrote before it saw any tool result (or the raw tool JSON). The second model call, with the tool results, is made
     only so that the judge's records-sent check sees what would reach the model: its answer is discarded."""
 
-    def __init__(self, store, llm, rung: str, customer_id: str, language: str):
-        self.store, self.llm, self.customer_id, self.language = store, llm, customer_id, language
+    def __init__(self, store, llm, rung: str, customer_id: str, language: str, country: str | None = None):
+        self.store, self.llm, self.customer_id, self.language, self.country = store, llm, customer_id, language, country
         self.layers = RUNGS[rung]
         self.history: list[dict] = []
 
@@ -117,7 +117,7 @@ class NaiveAgent:
         if facts:  # measurement only: what the model would be sent with the results; its answer is not used
             self.llm.chat(self.history + [{"role": "tool", "content": _plain([f["result"] for f in facts])}], None, 0.0)
         if self.layers["code_replies"]:
-            reply = render.render_answer(facts, lang, catalog) if facts else FAILED[lang]
+            reply = render.render_answer(facts, lang, catalog, self.country) if facts else FAILED[lang]
         else:
             reply = resp.content or (_plain([f["result"] for f in facts]) if facts else FAILED[lang])
         self.history.append({"role": "assistant", "content": reply})
@@ -134,7 +134,7 @@ def _run_naive_case(case, rung: str, llm_mode: str) -> dict:
     session = store.issue(case.customer_id, {"segment": case.segment, "country": case.country, "customer_status": case.customer_status})
     scripted = rse.ScriptedLLM(case) if llm_mode == "scripted" else rse.AdversarialLLM(case, rse.FOREIGN_POOL)
     recorder = rse._Recorder(scripted)
-    agent = NaiveAgent(store, recorder, rung, case.customer_id, case.language)
+    agent = NaiveAgent(store, recorder, rung, case.customer_id, case.language, case.country)
     results = []
     kind, _, after = (case.fault or "").partition(":")
     with rse.inject(case.fault):
