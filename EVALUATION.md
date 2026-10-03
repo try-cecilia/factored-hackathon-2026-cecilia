@@ -6,7 +6,8 @@ projections are labeled as such and never mixed.
 
 > **Design version.** Every table here is measured on design v3
 > ([ADR-001](docs/decisions/ADR-001-model-interprets-code-speaks.md)): the model only interprets and picks tools, in one
-> call per turn; it never sees records and never writes replies. Each report records the prompt version it ran with: 3.2.1
+> primary response per turn, and never writes replies. It sees no record or figure from the warehouse; it does see the
+> customer's own words, masked by pattern, amounts they typed included. Each report records the prompt version it ran with: 3.2.1
 > for the current offline, adversarial, failure and live reports, 3.1.0 for the dev split and the reserved set before its
 > fixes. The system evaluation runs on the organizer's warehouse; the reserved failure set runs on the hand-made fixture
 > warehouse (section 3).
