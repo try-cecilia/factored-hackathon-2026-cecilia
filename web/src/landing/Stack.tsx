@@ -1,12 +1,11 @@
 import type { MessageKey } from '../i18n/translate'
 import { useT } from '../i18n/context'
 import { figures as F } from './figures'
-import { sections } from './links'
 import { useFigures } from './useFigures'
 
-const layers = ['model', 'api', 'data', 'web', 'evaluation', 'operations'] as const
+const layers = ['model', 'api', 'data', 'web', 'evaluation', 'operations', 'interface'] as const
 
-/** What it is built with, and the ASVS level 1 controls, the pending ones included. */
+/** What it is built with, and the security controls inside it. */
 export function Stack() {
   const t = useT()
   const f = useFigures()
@@ -24,15 +23,16 @@ export function Stack() {
             ))}
           </dl>
         </div>
-        <div id={sections.security}>
+        <div>
           <h2 className="land-eyebrow">{t('landing.security.eyebrow')}</h2>
           <ul className="land-lines">
             <li>{t('landing.security.session', { bits: f.n(F.sessionTokenBits), minutes: f.n(F.sessionMinutes) })}</li>
             <li>{t('landing.security.roles', { roles: f.n(F.roles) })}</li>
             <li>{t('landing.security.masking')}</li>
-            <li>{t('landing.security.web')}</li>
+            <li>{t('landing.security.csp')}</li>
             <li>{t('landing.security.supplyChain')}</li>
-            <li className="land-lines__pending">{t('landing.security.pending')}</li>
+            <li>{t('landing.security.cookie')}</li>
+            <li>{t('landing.security.attribution')}</li>
           </ul>
         </div>
       </div>

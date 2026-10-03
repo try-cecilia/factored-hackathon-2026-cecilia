@@ -18,6 +18,13 @@ const ADR005 = 'docs/decisions/ADR-005-no-fraud-or-risk-model.md'
 // The warehouse's row counts and the data-quality run are only written in the data engineering docs.
 const DATA_ENGINEERING = 'docs/data_engineering.md'
 const DATA_QUALITY = 'docs/data_quality.md'
+const LIMITATIONS = 'LIMITATIONS.md'
+const ADR006 = 'docs/decisions/ADR-006-learned-classifier-beside-the-lexicon.md'
+const MODEL_CARD = 'docs/MODEL_CARD.md'
+const RED_TEAM = 'eval/reports/RED_TEAM.md'
+const LOADTEST = 'eval/reports/LOADTEST_HTTP.md'
+const ASVS = 'docs/asvs-level1-checklist.md'
+const OPERATIONS = 'docs/operations.md'
 
 export const figures = {
   // Baseline: the organizer's contact-center data.
@@ -37,6 +44,7 @@ export const figures = {
   products: fig(400000, 0, DATA_ENGINEERING, '400,000 products'),
   qualityChecks: fig(294, 0, DATA_QUALITY, '294 checks'),
   qualityErrors: fig(0, 0, DATA_QUALITY, '**0 errors'),
+  qualityTables: fig(9, 0, DATA_QUALITY, '9 tables, 6.13M rows'),
   rollbackThreshold: fig(1, 0, DATA_ENGINEERING, '(1% by default)'),
   classifier: fig(84.7, 1, EVALUATION, '**84.7% [75.6–90.8]**'),
   // An upper bound: two lexicon patterns were added after the test was scored (EVALUATION.md, the † under the table).
@@ -44,6 +52,7 @@ export const figures = {
   classifierGain: fig(21.2, 1, EVALUATION, '+21.2 points'),
   classifierCiLow: fig(8.2, 1, EVALUATION, 'paired bootstrap 95% [+8.2, +34.1]'),
   classifierCiHigh: fig(34.1, 1, EVALUATION, 'paired bootstrap 95% [+8.2, +34.1]'),
+  classifierTestCases: fig(85, 0, MODEL_CARD, '(n=85)'),
   classifierMcNemar: fig(0.0029, 4, EVALUATION, 'exact McNemar p = 0.0029'),
   guardRecall: fig(93.3, 1, EVALUATION, '**93.3%** | **0.0%**'),
   guardFalseEscalations: fig(0, 0, EVALUATION, '**93.3%** | **0.0%**'),
@@ -88,6 +97,8 @@ export const figures = {
   liveCases: fig(138, 0, README, 'stratified sample of 138 of those cases'),
   liveRuns: fig(3, 0, README, '3 of each), three runs each'),
   sonnetSafe: fig(95.0, 1, README, '**95.0%** [86.3–98.3]'),
+  sonnetSafeLow: fig(86.3, 1, README, '**95.0%** [86.3–98.3]'),
+  sonnetSafeHigh: fig(98.3, 1, README, '**95.0%** [86.3–98.3]'),
   haikuSafe: fig(78.3, 1, README, '78.3% [66.4–86.9]'),
   sonnetRecall: fig(100, 0, README, '| Escalation recall | 100% | 78.6% (9 missed) |'),
   haikuRecall: fig(78.6, 1, README, '| Escalation recall | 100% | 78.6% (9 missed) |'),
@@ -103,6 +114,10 @@ export const figures = {
   sonnetFlips: fig(0.7, 1, README, '0.7% (1 of 138)'),
   haikuFlips: fig(2.2, 1, README, '2.2% (3 of 138)'),
 
+  // Zero observed events bound the true rate below ≈3/n.
+  offlineUpperBound: fig(0.55, 2, README, '≈0.55% with 548 cases, ≈2.2% with 138.'),
+  liveUpperBound: fig(2.2, 1, README, '≈0.55% with 548 cases, ≈2.2% with 138.'),
+
   // Ablation: offline, scripted models, variants the team built.
   ablationNoneIdeal: fig(17.5, 1, README, '| None: a single-step chatbot with tools | 17.5% [14.6–20.9] | 74.8% [71.0–78.3] |'),
   ablationNoneBad: fig(74.8, 1, README, '| None: a single-step chatbot with tools | 17.5% [14.6–20.9] | 74.8% [71.0–78.3] |'),
@@ -117,6 +132,34 @@ export const figures = {
   // A projection, not a measurement (EVALUATION.md says so in the same line).
   projectedContacts: fig(955, 0, EVALUATION, '≈955 (≈59 agent-hours)'),
   projectedHours: fig(59, 0, EVALUATION, '≈955 (≈59 agent-hours)'),
+  textContacts: fig(1005, 0, EVALUATION, '≈1,005 text-channel contacts per month.'),
+  projectedFloor: fig(705, 0, EVALUATION, 'That gives ≈705 automated per month'),
+
+  // The human red team on the deployed demo. Its length is the span of the session, 20:30 to 21:53 (figures.test.ts).
+  redTeamMinutes: fig(83, 0, RED_TEAM, '30/09/2026, from 20:30 to 21:53'),
+  redTeamTurns: fig(224, 0, RED_TEAM, '224 turns (3 of them on a dead session) in 42 sessions'),
+  redTeamSessions: fig(42, 0, RED_TEAM, '224 turns (3 of them on a dead session) in 42 sessions'),
+  redTeamCost: fig(0.44, 2, RED_TEAM, 'USD 0.44'),
+  redTeamFailures: fig(0, 0, RED_TEAM, 'None of the five kinds in'),
+  redTeamOpen: fig(10, 0, RED_TEAM, '10. **The bursts stayed under the rate limits**'),
+
+  // OWASP ASVS 4.0.3 level 1: the checklist counts its rows.
+  asvsTotal: fig(128, 0, ASVS, '| **Total Level 1 requirements** | **128** |'),
+  asvsMet: fig(54, 0, ASVS, '| Implemented | 54 |'),
+  asvsPartial: fig(24, 0, ASVS, '| Partial | 24 |'),
+  asvsNotApplicable: fig(46, 0, ASVS, '| Not applicable | 46 |'),
+  asvsMissing: fig(4, 0, ASVS, '| Limitation | 4 |'),
+  pinAttempts: fig(5, 0, ASVS, '5 failed PINs lock a customer for 15 minutes'),
+  pinLockoutMinutes: fig(15, 0, ASVS, '5 failed PINs lock a customer for 15 minutes'),
+
+  // Operation: the default caps, the HTTP load test, the deployment.
+  sessionSpendCap: fig(0.25, 2, OPERATIONS, '| model spend per session | USD 0.25 |'),
+  loadChatsPerSecond: fig(17.5, 1, LOADTEST, '| 17.5 | 5421.6 | 5448.7 | 5.7 |'),
+  loadRejectMs: fig(5.7, 1, LOADTEST, '| 17.5 | 5421.6 | 5448.7 | 5.7 |'),
+  loadSlots: fig(32, 0, LOADTEST, 'max_concurrent_chats=32'),
+  loadModelMs: fig(1800, 0, LOADTEST, 'model simulated at 1800 ms'),
+  instanceMemoryMb: fig(512, 0, LIMITATIONS, 'each (512 MB). What that leaves out: no replicas'),
+  demoCustomers: fig(5000, 0, LIMITATIONS, 'no replicas, the API loads a 5,000-customer sample'),
 
   // Security (SECURITY.md).
   sessionTokenBits: fig(192, 0, SECURITY, '192-bit tokens, stored hashed'),
@@ -124,8 +167,11 @@ export const figures = {
   roles: fig(4, 0, SECURITY, 'four separate credentials'),
 } satisfies Record<string, Figure>
 
-/** The day of the live runs, as an ISO date. */
-export const liveRunDate = { iso: '2026-10-02', source: README, quote: 'measured on 2026-10-02' }
+/** Days, as ISO dates, each with where it is written. */
+export type Day = { iso: string; source: string; quote: string }
+export const liveRunDate: Day = { iso: '2026-10-02', source: README, quote: 'measured on 2026-10-02' }
+export const redTeamDate: Day = { iso: '2026-09-30', source: RED_TEAM, quote: '30/09/2026, from 20:30 to 21:53' }
+export const classifierDate: Day = { iso: '2026-10-01', source: ADR006, quote: 'accepted, recorded 2026-10-01' }
 
 const separators: Record<Locale, { decimal: string; group: string }> = {
   es: { decimal: ',', group: '.' },
@@ -145,6 +191,11 @@ export const formatFigure = (figure: Figure, locale: Locale): string => formatNu
 
 /** Millions with one decimal: 4,425,008 is "4,4". */
 export const formatMillions = (figure: Figure, locale: Locale): string => formatNumber(figure.value / 1e6, 1, locale)
+
+/** The day in figures, as a trace line under a number writes it: "02/10/2026". */
+export function formatShortDate(iso: string, locale: Locale): string {
+  return new Intl.DateTimeFormat(htmlLang[locale], { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${iso}T00:00:00Z`))
+}
 
 /** The day as the language writes it: "2 de octubre de 2026". */
 export function formatDate(iso: string, locale: Locale): string {

@@ -1,11 +1,11 @@
 import type { ReactNode } from 'react'
 import { useT } from '../i18n/context'
-import { figures as F } from './figures'
+import { classifierDate, figures as F, liveRunDate } from './figures'
 import { sections } from './links'
 import { Eyebrow } from './parts'
 import { useFigures } from './useFigures'
 
-type Card = { id: string; label: string; value: string; line: string; rows: Array<[string, ReactNode]>; conclusion: string; dark?: boolean }
+type Card = { id: string; label: string; value: string; line: string; trace: string; rows: Array<[string, ReactNode]>; conclusion: string; dark?: boolean }
 
 /** Four learned or measured pieces, one card each: the figure, what it means, three details and what was decided. */
 export function Science() {
@@ -17,6 +17,7 @@ export function Science() {
       label: t('landing.science.data.label'),
       value: `${f.millions(F.transactions)} M`,
       line: t('landing.science.data.line'),
+      trace: t('landing.science.data.trace', { tables: f.n(F.qualityTables) }),
       rows: [
         [t('landing.science.data.customers'), f.n(F.customers)],
         [t('landing.science.data.products'), f.n(F.products)],
@@ -30,6 +31,7 @@ export function Science() {
       label: t('landing.science.classifier.label'),
       value: f.pct(F.classifier),
       line: t('landing.science.classifier.line', { baseline: f.n(F.keywordBaseline) }),
+      trace: t('landing.science.classifier.trace', { cases: f.n(F.classifierTestCases), date: f.shortDate(classifierDate.iso) }),
       rows: [
         [t('landing.science.classifier.gain'), t('landing.science.classifier.gainValue', { gain: f.n(F.classifierGain) })],
         [t('landing.science.classifier.interval'), t('landing.science.classifier.intervalValue', { low: f.n(F.classifierCiLow), high: f.n(F.classifierCiHigh) })],
@@ -42,6 +44,7 @@ export function Science() {
       label: t('landing.science.fraud.label'),
       value: f.n(F.fraudAuc),
       line: t('landing.science.fraud.line'),
+      trace: t('landing.science.fraud.trace', { millions: f.millions(F.transactions) }),
       rows: [
         [t('landing.science.fraud.model'), t('landing.science.fraud.modelValue')],
         [t('landing.science.fraud.split'), `${f.n(F.fraudTrainShare)} / ${f.n(F.fraudTestShare)}`],
@@ -54,6 +57,7 @@ export function Science() {
       label: t('landing.science.llm.label'),
       value: f.pct(F.sonnetSafe),
       line: t('landing.science.llm.line', { haiku: f.n(F.haikuSafe) }),
+      trace: t('landing.science.llm.trace', { cases: f.n(F.liveCases), runs: f.n(F.liveRuns), date: f.shortDate(liveRunDate.iso) }),
       rows: [
         [t('landing.science.llm.recall'), t('landing.science.llm.recallValue', { sonnet: f.n(F.sonnetRecall), haiku: f.n(F.haikuRecall) })],
         [t('landing.science.llm.cost'), t('landing.science.llm.costValue', { sonnet: f.n(F.sonnetCost), haiku: f.n(F.haikuCost) })],
@@ -74,7 +78,7 @@ export function Science() {
           {cards.map((card) => (
             <li key={card.id} className={card.dark ? 'land-card land-card--dark' : 'land-card'}>
               <h3 className="land-card__label">{card.label}</h3>
-              <p className="land-card__figure"><strong>{card.value}</strong> <span>{card.line}</span></p>
+              <p className="land-card__figure"><strong>{card.value}</strong> <span>{card.line}</span> <small className="land-trace">{card.trace}</small></p>
               <dl className="land-card__rows">
                 {card.rows.map(([term, value]) => (
                   <div key={term}><dt>{term}</dt><dd>{value}</dd></div>

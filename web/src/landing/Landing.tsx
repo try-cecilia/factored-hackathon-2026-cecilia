@@ -5,8 +5,13 @@ import { Ablation } from './Ablation'
 import { Architecture } from './Architecture'
 import { Baseline } from './Baseline'
 import { Closing } from './Closing'
+import { Console } from './Console'
+import { Documents } from './Documents'
 import { Hero } from './Hero'
+import { Limits } from './Limits'
 import { sections, signInEntry } from './links'
+import { Operation } from './Operation'
+import { RedTeam } from './RedTeam'
 import { Results } from './Results'
 import { Science } from './Science'
 import { Stack } from './Stack'
@@ -20,6 +25,8 @@ export function Landing() {
       <a href={`#${sections.architecture}`}>{t('landing.nav.architecture')}</a>
       <a href={`#${sections.data}`}>{t('landing.nav.data')}</a>
       <a href={`#${sections.results}`}>{t('landing.nav.results')}</a>
+      <a href={`#${sections.security}`}>{t('landing.nav.security')}</a>
+      <a href={`#${sections.evidence}`}>{t('landing.nav.evidence')}</a>
     </nav>
   )
   const signIn = <Link className="ui-btn ui-btn--outline ui-btn--lg land-signin" {...signInEntry}>{t('landing.nav.signIn')}</Link>
@@ -32,6 +39,11 @@ export function Landing() {
         <Architecture />
         <Results />
         <Ablation />
+        <Console />
+        <RedTeam />
+        <Operation />
+        <Limits />
+        <Documents />
         <Stack />
         <Closing />
       </main>
@@ -39,9 +51,11 @@ export function Landing() {
         <div className="land-in land-footer__in">
           <p>{t('landing.footer.note')}</p>
           <nav aria-label={t('landing.footer.label')}>
+            <a href={`#${sections.limits}`}>{t('landing.footer.limitations')}</a>
+            <span aria-hidden="true"> · </span>
             <a href={`#${sections.security}`}>{t('landing.footer.security')}</a>
             <span aria-hidden="true"> · </span>
-            <a href={`#${sections.results}`}>{t('landing.footer.evaluation')}</a>
+            <a href={`#${sections.evidence}`}>{t('landing.footer.evaluation')}</a>
           </nav>
         </div>
       </footer>

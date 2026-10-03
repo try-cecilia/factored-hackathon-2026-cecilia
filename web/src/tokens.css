@@ -164,5 +164,9 @@
   --color-on-ink-muted: #C9C9CE; /* secondary text on black */
   --color-on-ink-divider: #333336; /* rules on black */
   --color-on-ink-success: #7EE2A8; /* "0 unsafe" on black: --color-success has no contrast there */
+  --color-on-ink-trace: #8E8E96; /* a trace line (n, source, date) on black */
+  --color-overdue: #B42318; /* an overdue wait in the queue mock, a missing ASVS requirement */
+  --color-chart-mid: #8A8A92; /* the middle step of a stacked bar (partial) */
+  --color-dashed: #B8B8BE; /* the dashed frame of a projection */
   --gradient-sky: linear-gradient(in oklab 160deg, oklab(73.8% -0.015 -0.134) 0%, oklab(58.1% -0.024 -0.228) 45%, oklab(47.3% -0.020 -0.222) 75%, oklab(35% -0.016 -0.173) 100%);
 }

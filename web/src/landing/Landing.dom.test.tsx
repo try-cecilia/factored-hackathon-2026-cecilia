@@ -32,9 +32,14 @@ describe('the landing', () => {
       '548 casos offline y 138 en vivo. Cero resultados inseguros.',
       'Sin controles, un modelo malo da 74,8% de resultados inseguros. Con todos, 0,0%.',
       'Más evidencia',
+      'Lo que Cecilia no resuelve, lo decide una persona con el caso ya armado.',
+      'Personas que no la construyeron la atacaron 83 minutos. Ninguno de los cinco fallos buscados apareció.',
+      'Un tercio de centavo de dólar por resolución. Si el modelo se cae, sigue atendiendo.',
+      'Un cero medido no es un cero garantizado.',
+      'Cada cifra de esta página tiene un documento detrás, con su fecha y su n.',
       'Stack',
-      'Seguridad · OWASP ASVS 4.0.3 nivel 1',
-      'Probala como cliente. Resolvé su caso como operador.',
+      'Seguridad · por dentro',
+      'Probar como cliente. Resolver el caso como operador.',
     ]
     expect(titles).toEqual(expected)
   })
@@ -43,8 +48,10 @@ describe('the landing', () => {
     const { container } = renderWithI18n(<Landing />)
     const nav = screen.getByRole('navigation', { name: 'Secciones' })
     const targets = within(nav).getAllByRole('link').map((a) => a.getAttribute('href'))
-    expect(targets).toEqual([`#${sections.architecture}`, `#${sections.data}`, `#${sections.results}`])
-    for (const target of targets) expect(container.querySelector(target as string)).toBeTruthy()
+    expect(targets).toEqual([`#${sections.architecture}`, `#${sections.data}`, `#${sections.results}`, `#${sections.security}`, `#${sections.evidence}`])
+    const footer = within(screen.getByRole('navigation', { name: 'Documentación' })).getAllByRole('link').map((a) => a.getAttribute('href'))
+    expect(footer).toEqual([`#${sections.limits}`, `#${sections.security}`, `#${sections.evidence}`])
+    for (const target of [...targets, ...footer]) expect(container.querySelector(target as string)).toBeTruthy()
   })
 
   it('shows the figures of figures.ts, in the notation of the language', () => {
@@ -67,8 +74,10 @@ describe('the landing', () => {
   it('draws the results as real tables, each with a caption and its column headers', () => {
     renderWithI18n(<Landing />)
     const tables = screen.getAllByRole('table')
-    expect(tables).toHaveLength(3)
-    const [offline, live, ablation] = tables
+    expect(tables).toHaveLength(4)
+    const [offline, live, ablation, queue] = tables
+    expect(within(queue).getAllByRole('columnheader').map((th) => th.textContent)).toEqual(['Tipo', 'Caso', 'Espera', 'Objetivo'])
+    expect(within(queue).getAllByRole('row').slice(1).map((tr) => tr.lastElementChild?.textContent)).toEqual(['15m', '2h', '4h'])
     expect(within(offline).getAllByRole('columnheader').map((th) => th.textContent)).toEqual(['Offline · 548 casos', 'Bot de palabras', 'Modelo ideal', 'Adversarial'])
     expect(within(live).getAllByRole('columnheader').map((th) => th.textContent)).toEqual(['En vivo · 138 casos × 3 corridas', 'Sonnet 5 ★', 'Haiku 4.5'])
     const unsafe = within(offline).getByRole('rowheader', { name: 'Resultados inseguros' }).closest('tr') as HTMLElement
@@ -87,6 +96,25 @@ describe('the landing', () => {
     expect(screen.getByRole('link', { name: 'Consola con clave' }).getAttribute('href')).toBe(consoleEntry.to)
     expect(screen.getByRole('link', { name: 'Ver la evaluación' }).getAttribute('href')).toBe(`#${sections.results}`)
     for (const link of screen.getAllByRole('link')) expect(link.getAttribute('href') ?? '').not.toMatch(/github\.com/)
+  })
+
+  it('marks the projection as one, the queue as a mock, and traces the big figures to their n and date', () => {
+    renderWithI18n(<Landing />)
+    expect(screen.getByText('No es una medición: aplica la tasa en vivo a los contactos reales.')).toBeTruthy()
+    expect(screen.getByText(/^Maqueta con datos de ejemplo\. Los objetivos \(15 min, 2 h, 4 h\) son una propuesta para la demo/)).toBeTruthy()
+    expect(screen.getByText('test n = 85 · ADR-006 · 01/10/2026')).toBeTruthy()
+    expect(screen.getByText('n = 138 × 3 corridas · 02/10/2026')).toBeTruthy()
+    expect(screen.getAllByText('Sonnet 5 · n = 138 · 02/10/2026')).toHaveLength(2)
+    expect(screen.getByText(/^0 de 138 en vivo deja la tasa real por debajo de ≈2,2%; 0 de 548 offline, por debajo de ≈0,55%\.$/)).toBeTruthy()
+  })
+
+  it('draws the evidence and the limits without links while there is no public repository', () => {
+    renderWithI18n(<Landing />)
+    const grid = screen.getByRole('heading', { name: 'Evaluación del sistema' }).closest('ul') as HTMLElement
+    expect(within(grid).getAllByRole('heading', { level: 3 })).toHaveLength(9)
+    expect(within(grid).queryAllByRole('link')).toHaveLength(0)
+    expect(screen.queryByRole('link', { name: /repositorio/ })).toBeNull()
+    expect(screen.queryByRole('link', { name: /lista completa de límites/ })).toBeNull()
   })
 
   it('gives every image a text alternative, empty only when it repeats what is next to it', () => {
