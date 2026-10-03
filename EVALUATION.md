@@ -49,6 +49,8 @@ projections are labeled as such and never mixed.
 
 Which figures we accept as proof of a claim, and the pass/fail rules for the human-written set (fixed before it has
 results), are in [`docs/preregistration.md`](docs/preregistration.md).
+Every published result with its n, denominator, model, date and fingerprint, generated from the reports, and the contract of
+each stage of a turn with links to its code and tests: [`docs/EVIDENCE.md`](docs/EVIDENCE.md).
 
 ## Provenance of every evaluation input
 

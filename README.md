@@ -43,6 +43,7 @@ only after it is read back ([ADR-002](docs/decisions/ADR-002-one-action-confirme
    [`baseline_metrics.md`](docs/evidence/baseline_metrics.md) (the human baseline).
    [`EVALUATION.md`](EVALUATION.md) explains how each one is measured and marks what is a projection. People who did
    not build it attacked the deployed demo for over an hour: [`RED_TEAM.md`](eval/reports/RED_TEAM.md).
+   **Every contract and every figure on one page,** with links to the code and the tests: [`docs/EVIDENCE.md`](docs/EVIDENCE.md).
 3. **Read the two decisions:** [ADR-001](docs/decisions/ADR-001-model-interprets-code-speaks.md) and
    [ADR-002](docs/decisions/ADR-002-one-action-confirmed-in-code.md).
 4. **Run it:** `make test` needs no keys and no network; `make ingest-demo && make serve` runs the app on
