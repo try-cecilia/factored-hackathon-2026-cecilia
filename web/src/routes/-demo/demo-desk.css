@@ -56,3 +56,9 @@
   .demo-traces__cards dd { margin: 0; overflow-wrap: anywhere; font-size: var(--text-compact-md); line-height: 18px; }
   .demo-traces__cards .op-mono { line-height: 18px; }
 }
+
+/* The console's dense tables keep 720px under 900px and scroll inside their box; the demo's have four columns, which fit the
+   space there is at every width (with the request cut), so they never scroll sideways. Its phone cards start at 700px as the console's. */
+@media (max-width: 900px) {
+  .demo-desk .op-table .ui-dt__table { min-width: 0; }
+}
