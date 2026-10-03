@@ -192,8 +192,9 @@ service, and as our own roadmap.
   reaches it; an old case already decided drops off the list), then filtered, sorted and paginated in the browser (25 per
   page) and refreshed by polling every 30 s, with no notifications. Claim, approve, reject and return act with one click,
   without a confirmation dialog, as in the approved design. The reason the person writes is stored only on reject (it is
-  what the API records). The design shows a "Demo · synthetic data" badge that the console does not draw: the API does
-  not say whether it runs in demo mode. The web's tests (`make web-test`; the CI runs them with `pnpm test:all`) cover
+  what the API records). The console now labels the environment "Demo · datos sintéticos" when the API reports demo mode;
+  if the API is unavailable or does not return that field, it says the environment could not be verified. This reports
+  the API's `DEMO_MODE` setting and does not establish that every connected data source contains synthetic data. The web's tests (`make web-test`; the CI runs them with `pnpm test:all`) cover
   the sign-in form, the session's deadline, HTTP tests against the production build (CSRF, redirects and session
   rotation) and DOM tests of the case panel (its four states, the 409 and the evidence mark) and of the table; the rest
   was checked with `typecheck`, `build` and a walk-through in a browser (`docs/demo/operador-kit-*.png`, in Spanish and

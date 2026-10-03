@@ -315,7 +315,7 @@ def request_trace(customer_id: str, product_id: Optional[str] = None, amount: An
         if day:
             clauses.append("CAST(t.transaction_date AS DATE) = ?"); params.append(day)
         items = _rows(
-            f"""SELECT t.transaction_id, t.transaction_date, t.transaction_type, t.amount, t.currency, t.product_id,
+            f"""SELECT t.transaction_id, t.transaction_date, t.transaction_type, t.amount, t.currency, t.transaction_status, t.product_id,
                        p.product_type, p.product_number, p.opening_date, cu.registration_date
                 FROM transactions t JOIN products p ON p.product_id = t.product_id
                 JOIN customers cu ON cu.customer_id = t.customer_id

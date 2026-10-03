@@ -34,6 +34,12 @@ export const operator: Like<typeof es> = {
     signOut: 'Sair',
     addKey: 'Adicionar chave de operador',
   },
+  environment: {
+    demoTitle: 'Demo · dados sintéticos',
+    demoDescription: 'A API está configurada em modo demo. Os dados podem ser sintéticos.',
+    unknownTitle: 'Ambiente não verificado',
+    unknownDescription: 'Não foi possível confirmar se estes dados são de demonstração.',
+  },
   keyForm: {
     label: 'Chave de operador',
     submit: 'Adicionar',
