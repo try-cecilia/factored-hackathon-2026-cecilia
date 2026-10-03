@@ -258,6 +258,16 @@ def test_a_tie_between_the_languages_keeps_the_conversation_s(first, lang, tie):
     assert orch.conversations.get(session_ref(tok)).language == lang
 
 
+@pytest.mark.parametrize("first,lang,answer", [
+    ("¿Cuál es mi saldo?", "es", "por transferencia a terceros"), ("¿Cuál es mi saldo?", "es", "por transferencia a 1234"),
+    ("Qual é o meu saldo?", "pt", "sim, por favor"), ("Qual é o meu saldo?", "pt", "me passa meus saldos por favor"),
+])
+def test_a_short_answer_that_ties_stays_in_the_conversation_s_language(first, lang, answer):
+    orch, tok, _ = make([tool_call_response("get_account_summary", {})] * 2)
+    assert orch.handle_message(tok, first).language == lang
+    assert orch.handle_message(tok, answer).language == lang
+
+
 def test_a_tie_on_the_first_message_takes_the_default_and_leaves_the_language_unlearned():
     orch, tok, _ = make([tool_call_response("get_account_summary", {})])
     assert orch.handle_message(tok, "no dia de hoje").language == "es"

@@ -16,15 +16,13 @@ def test_a_portuguese_no_is_portuguese(text):
     assert detect_language(text).language == "pt"
 
 
-@pytest.mark.parametrize("text", [
-    "quantos dias de atraso tenho no financiamento 7445?",  # held by "quantos" now that "no" is neutral
-    "sim, por favor", "me passa meus saldos por favor",  # "por" is as much Portuguese as Spanish
-])
-def test_portuguese_that_shares_words_with_spanish_stays_portuguese(text):
-    assert detect_language(text).language == "pt"
+def test_portuguese_that_leaned_on_no_stays_portuguese():
+    assert detect_language("quantos dias de atraso tenho no financiamento 7445?").language == "pt"  # held by "quantos"
 
 
-def test_a_message_of_shared_words_only_carries_no_signal():
-    """No signal at all: the orchestrator keeps the conversation's language."""
-    guess = detect_language("no por ahora")
-    assert (guess.pt_score, guess.es_score) == (0, 0)
+@pytest.mark.parametrize("text", ["sim, por favor", "me passa meus saldos por favor", "por transferencia a terceros"])
+def test_por_stays_spanish_so_these_short_answers_tie(text):
+    """"por" is Spanish only: a short Spanish answer like "por transferencia a terceros" must not read as Portuguese for
+    its "a". The cost is that "sim, por favor" ties too; a tie keeps the conversation's language (test_orchestrator)."""
+    guess = detect_language(text)
+    assert guess.pt_score == guess.es_score == 1

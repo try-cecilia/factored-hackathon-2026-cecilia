@@ -79,7 +79,7 @@ _PT_WORDS = {
     "pagamento", "emprestimo", "cartao", "extrato", "fatura", "cobranca", "movimentacoes", "tambem", "entao",
     "isso", "agora", "sim", "com", "em", "no", "na", "do", "da", "o", "a", "e", "um", "uma", "pra", "para",
     "conta", "saldo", "atrasado", "cotacao", "cambio", "roubaram", "alguem", "quanto", "quanta", "quantos",
-    "quantas", "posso", "gostaria", "por",
+    "quantas", "posso", "gostaria",
 }
 _ES_WORDS = {
     "el", "la", "los", "las", "mi", "mis", "cual", "que", "cuanto", "cuanta", "quiero", "necesito", "tengo",
@@ -89,9 +89,14 @@ _ES_WORDS = {
     "no",
 }
 # Words present in both sets carry no signal. "no" is Spanish's negation as well as Portuguese's "em + o", so a Spanish
-# "No" (the "Ahora no" button) used to switch the conversation to Portuguese; "por" is as common in "por favor" in either
-# language. Short words that are just as common in the other language ("a", "de", "em", "que"...) stay one-sided: over the
-# repo's labeled messages, making any of them neutral turns more right guesses into ties than it fixes.
+# "No" (the "Ahora no" button) used to switch the conversation to Portuguese. Other short words just as common in the
+# other language ("a", "de", "em", "que", "por"...) stay one-sided, a trade-off measured on the repo's labeled messages:
+# - making "a", "de", "em" or "que" neutral turns more right guesses into ties than it fixes;
+# - "por" stays Spanish. Neutral, it settled the 6 Portuguese ties of "por favor" ("sim, por favor") but left a short
+#   Spanish answer such as "por transferencia a terceros" with only the Portuguese "a" and moved the conversation to
+#   Portuguese. Kept Spanish, those "por favor" messages tie, and a tie keeps the conversation's language
+#   (agent/core/orchestrator.py), so they read as Portuguese inside a Portuguese conversation and only a first message
+#   takes the default.
 _PT_ONLY = _PT_WORDS - _ES_WORDS
 _ES_ONLY = _ES_WORDS - _PT_WORDS
 
