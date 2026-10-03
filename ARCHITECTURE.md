@@ -32,9 +32,11 @@ operator's message when they resolve a case, shown as the agent's.
    - A product id written in the message that exists but belongs to another
      customer → security escalation with the denied reference as evidence
      (`reference_to_foreign_product`), before any model call.
-3. **Understand** (`agent/llm/`). One call to the first configured provider
-   in `LLM_PROVIDERS` (Groq `openai/gpt-oss-120b`, Together, or Claude). The model
-   sees only:
+3. **Understand** (`agent/llm/`). One primary model response per turn,
+   requested through `LLMClient.chat`: up to 2 attempts per provider (only
+   transient errors are retried), and on an error or an open circuit the next
+   provider in `LLM_PROVIDERS` (Groq `openai/gpt-oss-120b`, Together, or Claude)
+   takes it. The model sees only:
    - the customer's words, masked by `agent/llm/privacy.py` after normalizing
      Unicode dashes, fullwidth and invisible characters:
      - the customer's own product ids become their alias;
