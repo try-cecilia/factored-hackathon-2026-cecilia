@@ -125,10 +125,32 @@ def test_a_slow_write_that_then_fails_leaves_no_reference_and_is_recorded_by_typ
 def test_a_ticket_written_in_time_but_read_back_late_is_not_named_either(monkeypatch):
     monkeypatch.setenv("HANDOFF_BUDGET_SECONDS", "0.05")
     real = escalation.HumanQueue.get
-    monkeypatch.setattr(escalation.HumanQueue, "get", lambda self, ticket_id: (time.sleep(0.2), real(self, ticket_id))[1])
+
+    def slow_read_back(self, ticket_id):
+        found = real(self, ticket_id)
+        if found is not None:  # only the read-back: the write's own look for a copy finds nothing and stays fast
+            time.sleep(0.2)
+        return found
+
+    monkeypatch.setattr(escalation.HumanQueue, "get", slow_read_back)
     orch, tok = orchestrator()
     r = orch.handle_message(tok, "Me clonaron la tarjeta")
     assert r.ticket_id is None and r.policy_rule.endswith("|handoff_unverified") and tickets()[0]["trace_id"] == r.trace_id
+
+
+def test_a_slow_look_for_a_copy_before_the_write_files_nothing_and_names_nothing(monkeypatch):
+    """The write first looks for the ticket under the lock (idempotency). If that look outlasts the budget, the write never
+    begins: the customer gets the code to quote, and no ticket lands afterwards."""
+    monkeypatch.setenv("HANDOFF_BUDGET_SECONDS", "0.05")
+    real = escalation.HumanQueue.get
+    monkeypatch.setattr(escalation.HumanQueue, "get", lambda self, ticket_id: (time.sleep(0.2), real(self, ticket_id))[1])
+    landed, failed = late_counts()
+    orch, tok = orchestrator()
+    r = orch.handle_message(tok, "Me clonaron la tarjeta")
+    assert r.ticket_id is None and r.policy_rule.endswith("|handoff_unverified")
+    assert r.response_text == render.MSG["escalate_unverified"]["es"].format(code=r.trace_id[:8])
+    time.sleep(0.3)  # past the slow look: the write would have begun by now
+    assert tickets() == [] and late_counts() == (landed, failed)  # never begun, so nothing late to record either
 
 
 

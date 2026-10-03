@@ -232,4 +232,4 @@ def test_with_freshness_enforced_a_warehouse_older_than_its_limit_is_unavailable
     assert last["warehouse"] == "unavailable" and last["error_type"] == "DataUnavailable"
     assert "exceeds freshness" not in json.dumps(last) + caplog.text  # the type only, not the message
     monkeypatch.delenv("FRESHNESS_ENFORCE")
-    assert context(ticket_id).json()["warehouse"]["available"] is False
+    assert context(ticket_id).json()["warehouse"]["available"] is True  # opt-in: off, the same data is served

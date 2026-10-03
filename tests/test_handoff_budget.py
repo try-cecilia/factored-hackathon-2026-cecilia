@@ -165,8 +165,10 @@ def test_a_ticket_read_back_after_the_budget_is_not_claimed_as_filed_or_named(mo
     real = escalation.HumanQueue.get
 
     def just_late(self, ticket_id):
-        time.sleep(0.11)  # returns, but after the budget
-        return real(self, ticket_id)
+        found = real(self, ticket_id)
+        if found is not None:  # the read-back of the written ticket, not the write's own look for a copy (still None)
+            time.sleep(0.11)  # returns, but after the budget
+        return found
 
     monkeypatch.setattr(escalation.HumanQueue, "get", just_late)
     orch, tok = orchestrator()
