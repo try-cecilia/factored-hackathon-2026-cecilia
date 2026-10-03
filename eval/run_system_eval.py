@@ -590,6 +590,8 @@ def _candidates(case: Case, r, traces: dict):
 
     yield "fixed", {render.MSG[k][lang]: (k, lang) for k in _FIXED for lang in _LANGS}
     yield "escalate_unverified", {render.MSG["escalate_unverified"][lang].format(code=r.trace_id[:8]): ("escalate_unverified", lang) for lang in _LANGS}
+    if r.policy_rule == "action:trace_unmatched":
+        yield "trace_unmatched", _unmatched_notices(case, r)
     # What `Orchestrator._repeated` says: the notice, with the date of the facts it would have shown again.
     as_ofs = {None} | {f["result"].get("as_of") for f in r.verified_facts if isinstance(f.get("result"), dict)}
     yield "repeat", {render.repeat_notice(a, lang): ("repeat", lang) for a in as_ofs for lang in _LANGS}
@@ -618,6 +620,27 @@ def _candidates(case: Case, r, traces: dict):
                     texts[render.MSG[key][lang].format(tid=t["trace_id"], mov=render.movement(m, lang, country), sla=t["sla_business_days"])] = (key, lang)
     yield "trace", texts
     yield "trace_choose", moves  # structural, see reply_template
+
+
+def _unmatched_notices(case: Case, r) -> dict[str, tuple[str, str]]:
+    """What `Orchestrator._trace_step` says when a trace request matched nothing: "no match" after a search narrowed by product, amount or
+    date, and "nothing pending" after one that was not, only if nothing of the customer's that can be traced is pending in the warehouse."""
+    from agent.core import render
+    from agent.tools.account_tools import TRACEABLE_TYPES
+
+    searches = [a for a in r.tool_calls if a.get("tool") == "request_trace" and "args" in a and not a.get("confirmed_by_customer")]
+    if not searches:
+        return {}
+    if any(v not in (None, "") for k, v in searches[-1]["args"].items() if k in ("product_id", "amount", "on_date")):
+        key = "trace_unmatched_filtered"
+    else:
+        pending = get_connection().execute(
+            f"SELECT count(*) FROM transactions WHERE customer_id = ? AND transaction_status = 'Pending' "
+            f"AND transaction_type IN ({', '.join('?' * len(TRACEABLE_TYPES))})", [case.customer_id, *TRACEABLE_TYPES]).fetchone()[0]
+        if pending:
+            return {}
+        key = "trace_unmatched"
+    return {render.MSG[key][lang]: (key, lang) for lang in _LANGS}
 
 
 def _is_trace_choose(text: str, moves: dict[str, dict], lang: str, country: str | None = None) -> bool:
@@ -711,7 +734,7 @@ def reply_template(case: Case, r, tickets: dict, traces: dict | None = None) -> 
 
 def _handoff_claimed_without_a_ticket(key: str | None, r, tickets: dict) -> bool:
     """The reply is the template that tells the customer their case was handed to a person, and the queue holds no ticket for that turn."""
-    return key in ("escalate", "escalate_security") and not (r.ticket_id is not None and r.ticket_id in tickets)
+    return key in ("escalate", "escalate_security", "trace_unmatched", "trace_unmatched_filtered") and not (r.ticket_id is not None and r.ticket_id in tickets)
 
 
 def _first_dead_turn(case: Case) -> int | None:

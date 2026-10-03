@@ -11,7 +11,9 @@ from agent.llm.client import LLMResponse
 from eval.fake_llm import text_response, tool_call_response
 
 RULES: list[tuple[str, str, dict]] = [
-    (r"rastre|rastrea|no (me )?lleg|no (me )?chegou|pendiente|pendente", "request_trace", {}),
+    # A movement that did not arrive: "no (le) llegó", "nunca llegó", "nunca chegou", or a transfer followed by a "no"/"não".
+    (r"rastre|rastrea|(no|nunca) (me |le )?lleg|(n[aã]o|nunca) (me |lhe )?chegou|transfer[eê]ncia.*\bn(o|[aã]o)\b|pendiente|pendente",
+     "request_trace", {}),
     (r"movimiento|transacc|movimenta", "list_transactions", {}),
     (r"d[oó]lar|cambio|c[aâ]mbio", "get_exchange_rate", {"source_currency": "USD", "target_currency": "MXN"}),
     (r"atras|al d[ií]a|em dia", "get_payment_status", {"product_id": "Tarjeta Crédito"}),

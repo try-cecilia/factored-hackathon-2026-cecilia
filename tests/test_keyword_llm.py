@@ -39,3 +39,22 @@ def test_a_product_chosen_after_a_clarification_repeats_that_sessions_own_lookup
 def test_naming_a_product_with_nothing_asked_before_is_not_guessed():
     orch, login = make()
     assert orch.handle_message(login(), "Cuenta Ahorro ···0002").disposition != "AUTO_RESOLVE"
+
+
+def test_a_movement_that_never_arrived_asks_for_the_trace():
+    from eval.keyword_llm import _lookup
+
+    for text in ("hice una transferencia y nunca llegó", "nunca le llegó el depósito", "nunca llego mi pago",
+                 "el pago no llegó", "no le llego la plata", "la transferencia que hice no aparece",
+                 "fiz uma transferência e nunca chegou", "o depósito não chegou", "minha transferência não caiu"):
+        assert _lookup(text.lower())[0] == "request_trace", text
+    for text in ("cuál es mi saldo", "movimientos de mi cuenta de ahorros", "qual é o meu saldo"):
+        assert _lookup(text)[0] != "request_trace", text
+
+
+def test_a_transfer_that_never_arrived_reaches_the_trace_and_says_why_it_goes_to_a_person():
+    from agent.core import render
+
+    orch, login = make()
+    r = orch.handle_message(login(), "hice una transferencia y nunca llegó")  # CLI-FIX0001 has nothing pending
+    assert (r.policy_rule, r.response_text) == ("action:trace_unmatched", render.MSG["trace_unmatched"]["es"])

@@ -251,7 +251,11 @@ the latencies per case change with the machine, and `sync-eval-latencies` copies
     nothing opened;
   - `trace_unmatched`: money that never arrived, with nothing pending. It must
     reach a person, through the trace flow or earlier through the dispute
-    guard.
+    guard. Through the trace flow, once the ticket reads back, the reply says
+    why: nothing of theirs is pending, or, after a search narrowed by amount,
+    date or product, nothing matched. The judge accepts "nothing pending" only
+    if the warehouse holds no pending transfer, payment or deposit of that
+    customer.
 
   Each case gets its own tracing store, read by the judge straight from its
   file. The second turn of the first two never reaches the model, so its
