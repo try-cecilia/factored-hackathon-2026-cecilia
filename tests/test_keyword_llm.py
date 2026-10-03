@@ -105,3 +105,20 @@ def test_a_payment_or_deposit_that_did_not_arrive_still_asks_for_the_trace():
     for text in ("el pago no se acreditó", "mi depósito no aparece", "el pago no me llegó", "el depósito no entró",
                  "o pagamento não caiu", "meu depósito não apareceu", "o pagamento não chegou"):
         assert _lookup(text)[0] == "request_trace", text
+
+
+@pytest.mark.parametrize("text", ["no aparece mi pago del mes", "no se acreditó mi pago", "não apareceu meu pagamento"])
+def test_a_missing_payment_said_verb_first_asks_for_the_trace(text):
+    from eval.keyword_llm import _lookup
+
+    assert _lookup(text)[0] == "request_trace", text
+    orch, login = make()
+    r = orch.handle_message(login(), text)
+    assert [c["tool"] for c in r.tool_calls] == ["request_trace"], (r.policy_rule, r.response_text)
+
+
+def test_a_payment_that_did_arrive_is_not_a_trace():
+    from eval.keyword_llm import _lookup
+
+    for text in ("el pago entró", "mis pagos entraron tarde", "o pagamento caiu", "llegó mi pago", "apareció el depósito"):
+        assert _lookup(text)[0] != "request_trace", text
