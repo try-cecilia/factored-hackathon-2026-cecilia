@@ -131,12 +131,13 @@ service, and as our own roadmap.
     a single import commit, so only "the files have not changed since they
     were measured" (their hashes) is checkable;
   - a similarity of characters does not see a paraphrase with other words.
-- **Freshness is off in the demo and lightly covered.** The SLO
-  (`FRESHNESS_ENFORCE=1`) gates balances, transactions and payment status only;
-  the profile and the exchange rate are not gated. Age is counted in whole days
-  from the as-of date, which each process reads once (`lru_cache`), so a
-  re-ingest into a running server is not seen until it restarts. The dataset is
-  a static snapshot, so no real update cadence has been measured.
+- **Freshness is enforced by default.** The SLO gates balances, transactions
+  and payment status; the profile and exchange rate are not gated. Age is
+  counted in whole days from the as-of date, which each process reads once
+  (`lru_cache`), so a re-ingest into a running server is not seen until it
+  restarts. The local static snapshot is stale, so those inquiries go to a
+  person until newer data is ingested. `FRESHNESS_ENFORCE=0` disables the age
+  limit; data with no as-of date remains unavailable.
 - **Lineage is a CLI, from this version on.** `python -m data.lineage` follows a
   row to its run, contract and code version, and the SHA-256 of the CSV as it
   was on disk when loaded (after download; the S3 object's own ETag is not

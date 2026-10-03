@@ -44,7 +44,12 @@ def context(ticket_id: str, headers=ADMIN):
 def test_it_lists_the_customers_products_masked_and_the_movements_with_the_pending_one_marked():
     body = context(file_ticket()).json()
     assert body["warehouse"]["available"] is True and body["warehouse"]["as_of"]
+    assert body["warehouse"]["source"] == "account_warehouse"
+    assert body["warehouse"]["freshness"] == "current"
+    from datetime import datetime
+    assert datetime.fromisoformat(body["warehouse"]["queried_at"])
     assert body["products"], "the customer has products"
+    assert {p["currency"] for p in body["products"]} >= {"USD"}
     assert {tuple(sorted(p)) for p in body["products"]} == {("currency", "last4", "product_id", "status", "type")}
     assert all(len(p["last4"]) == 4 for p in body["products"])
     pending = [m for m in body["movements"] if m["pending"]]
@@ -116,7 +121,12 @@ def test_when_the_warehouse_does_not_answer_it_says_so_and_still_gives_the_cases
         response = context(mine)
     body = response.json()
     assert response.status_code == 200
-    assert body["warehouse"] == {"available": False, "as_of": None}
+    assert body["warehouse"]["available"] is False
+    assert body["warehouse"]["source"] == "account_warehouse"
+    assert body["warehouse"]["freshness"] == "unavailable"
+    assert body["warehouse"]["as_of"] == "2024-01-16"
+    from datetime import datetime
+    assert datetime.fromisoformat(body["warehouse"]["queried_at"])
     assert body["products"] == [] and body["movements"] == []
     assert [c["ticket_id"] for c in body["cases"]] == [older] and len(body["traces"]) == 1
     assert observability.failure_counts()["customer_context_unavailable"] == before + 1
@@ -211,10 +221,15 @@ def test_with_freshness_enforced_a_warehouse_older_than_its_limit_is_unavailable
     monkeypatch.setenv("FRESHNESS_SLO_HOURS", "36")
     with caplog.at_level(logging.WARNING):
         body = context(ticket_id).json()
-    assert body["warehouse"] == {"available": False, "as_of": None}
+    assert body["warehouse"]["available"] is False
+    assert body["warehouse"]["as_of"] == "2024-01-16"
+    assert body["warehouse"]["freshness"] == "stale"
+    assert body["warehouse"]["source"] == "account_warehouse"
+    from datetime import datetime
+    assert datetime.fromisoformat(body["warehouse"]["queried_at"])
     assert body["products"] == [] and body["movements"] == []
     last = [e for e in main.default_audit_log.recent() if e.get("event") == "customer_context_read"][-1]
     assert last["warehouse"] == "unavailable" and last["error_type"] == "DataUnavailable"
     assert "exceeds freshness" not in json.dumps(last) + caplog.text  # the type only, not the message
     monkeypatch.delenv("FRESHNESS_ENFORCE")
-    assert context(ticket_id).json()["warehouse"]["available"] is True
+    assert context(ticket_id).json()["warehouse"]["available"] is False

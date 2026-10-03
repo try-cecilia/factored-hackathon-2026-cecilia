@@ -596,7 +596,7 @@ table and the file list different alerts.
 | cost per safe resolution | unit economics | `CecilaiCostPerSafeResolutionHigh` | above USD 0.01 (about 3x the measured 0.0034); set your own |
 | daily model budget | degraded mode is coming or here | `CecilaiLlmBudgetNearlyGone`, `CecilaiLlmBudgetExhausted` | 80% spent; exhausted |
 | `_dq_results` failed errors, `_ingestion_log` failures | pipeline health | `CecilaiQualityChecksFailing`, `CecilaiIngestionFailed` | any, for 10 minutes |
-| data older than its SLO | stale answers | `CecilaiDataStale` | age above `FRESHNESS_SLO_HOURS` for 15 minutes, only with `FRESHNESS_ENFORCE=1` (the static dataset never fires it) |
+| data older than its SLO | stale answers | `CecilaiDataStale` | age above `FRESHNESS_SLO_HOURS` for 15 minutes while freshness is enabled (the default) |
 | the API stops answering | availability | `CecilaiDown`, `CecilaiServerErrors` | no scrape for 2 minutes; more than 5% 5xx for 10 minutes |
 | a gauge's source is broken | the alerts on it cannot fire | `CecilaiScrapeSourceFailing` | any, for 15 minutes |
 | retention stopped | expired records pile up | `CecilaiRetentionNotRunning`, `CecilaiRetentionFailing` | no purge in twice the interval; a store that could not be pruned |

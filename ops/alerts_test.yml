@@ -133,7 +133,7 @@ tests:
           - exp_labels: {severity: critical, signal: freshness}
             exp_annotations:
               summary: The warehouse is older than the freshness SLO
-              description: With FRESHNESS_ENFORCE=1 every tool refuses and turns escalate as data_unavailable. Without it (the static dataset) this never fires.
+              description: When freshness is enabled (the default), stale account data is refused and escalated as data_unavailable.
               runbook: docs/operations.md#runbook-short
 
   - name: a retention purge that stopped running

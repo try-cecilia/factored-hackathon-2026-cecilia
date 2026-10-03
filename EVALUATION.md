@@ -418,13 +418,15 @@ and country (MX/CO/AR) is reported per cell in `SYSTEM_EVAL.md`.
   attribute enters any decision.
 - n = 60–120 per cell, so these are small-sample comparisons.
 
-> Live figures measured on other code: measured fingerprint `ad2212c4c416`; current fingerprint `1259b0b356a1` (formatting amounts by the customer's country, telling the customer why a trace request that matched nothing goes to a person, the judge's check of that reply, the verified receipt of an opened trace, and the language-detection fix (a Spanish "no", and a tie keeping the conversation's language) changed the measured code after the live run; the offline reports are regenerated on the current one).
+> Live figures measured on other code: measured fingerprint `ad2212c4c416`; current fingerprint `c7bfb65b730b` (formatting amounts by the customer's country, explaining unmatched trace requests, verifying receipts, checking account data provenance, and detecting the conversation's language changed the measured code after the live run; the offline reports are regenerated on the current one).
 
 **Live models (test split, the 138-case sample, 3 runs each), measured on 2026-10-03 on the code this evaluation describes
 (prompt 3.2.1, policy fingerprint `ad2212c4c416`, commit `8578e450`).** `make eval-live` →
+Live report measured on other code: ad2212c4c416 → b9cfd902bd32.
 [`eval/reports/SYSTEM_EVAL_LIVE.md`](eval/reports/SYSTEM_EVAL_LIVE.md). The sample is 3 cases of every case type in each
 language (23 types × 2 languages, `--limit 138`; the 132 of the earlier runs gives 2 per group since the trace-review type
 was added). Only Anthropic was configured, with no fallback to another provider. The table shows run 1, as the report does;
+Live report measured on other code: ad2212c4c416 -> 5c3e84f5dfa0.
 the ranges are across the three runs. The JSON keeps the per-case rows of every run, each with its run number and the
 model that answered, and each run's fingerprint, commit and times; `tests/test_live_report.py` recomputes every figure
 the report publishes from those rows, and `make gate` fails if a later change to the measured code is not declared

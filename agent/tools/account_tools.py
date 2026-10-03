@@ -8,8 +8,8 @@ function, in code:
    exist; otherwise DataUnavailable. Questions that don't apply to a product
    raise NotApplicable, which the policy layer answers rather than escalates.
 3. Data minimization: account/card numbers leave this layer as last-4 only.
-4. Freshness: every result carries `as_of` (the warehouse's data date). With
-   FRESHNESS_ENFORCE=1, a warehouse older than FRESHNESS_SLO_HOURS makes
+4. Freshness: every result carries `as_of` (the warehouse's data date). By
+   default, a warehouse older than FRESHNESS_SLO_HOURS makes
    balance/transaction answers DataUnavailable instead of silently stale.
 All calls are written to the audit log with the current trace id.
 """
@@ -72,7 +72,7 @@ def data_as_of() -> date | None:
 
 
 def freshness_enforced() -> bool:
-    return os.environ.get("FRESHNESS_ENFORCE") == "1"
+    return os.environ.get("FRESHNESS_ENFORCE", "1") != "0"
 
 
 def freshness_slo_hours() -> float:
@@ -80,11 +80,13 @@ def freshness_slo_hours() -> float:
 
 
 def _check_freshness() -> None:
+    as_of = data_as_of()
+    if as_of is None:
+        raise DataUnavailable("warehouse has no data date", field="as_of")
     if not freshness_enforced():
         return
-    as_of = data_as_of()
     slo_h = freshness_slo_hours()
-    age_h = (datetime.now(timezone.utc).date() - as_of).days * 24 if as_of else float("inf")
+    age_h = (datetime.now(timezone.utc).date() - as_of).days * 24
     if age_h > slo_h:
         raise DataUnavailable(f"warehouse data as of {as_of} exceeds freshness SLO of {slo_h:.0f}h", field="as_of")
 

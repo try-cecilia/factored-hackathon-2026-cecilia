@@ -16,10 +16,11 @@ export type ContextMovement = {
 }
 export type ContextCase = { ticket_id: string; category: string | null; queue: string | null; priority: string | null; created_at: number | null; status: string | null }
 export type ContextTrace = { trace_id: string; transaction_id: string | null; status: string | null; created_at: number | null }
+export type WarehouseFreshness = 'current' | 'stale' | 'missing' | 'unavailable'
 
 export type CustomerContext = {
   /** The warehouse's own part (products and movements); the cases and traces come from files and are there without it. */
-  warehouse: { available: boolean; as_of: string | null }
+  warehouse: { available: boolean; source: 'account_warehouse'; as_of: string | null; queried_at: string | null; freshness: WarehouseFreshness }
   products: ContextProduct[]
   movements: ContextMovement[]
   /** Pending movements the API left out of `movements` (it lists them all up to a cap). */
@@ -42,8 +43,15 @@ export function toCustomerContext(raw: unknown): CustomerContext | null {
   const body = record(raw)
   const warehouse = record(body?.warehouse)
   if (!body || !warehouse || typeof warehouse.available !== 'boolean') return null
+  const freshness = warehouse.freshness
   return {
-    warehouse: { available: warehouse.available, as_of: text(warehouse.as_of) },
+    warehouse: {
+      available: warehouse.available,
+      source: 'account_warehouse',
+      as_of: text(warehouse.as_of),
+      queried_at: text(warehouse.queried_at),
+      freshness: freshness === 'current' || freshness === 'stale' || freshness === 'missing' ? freshness : 'unavailable',
+    },
     products: rows(body.products, (p) => (typeof p.product_id === 'string' && typeof p.type === 'string' ? { product_id: p.product_id, type: p.type, currency: text(p.currency), status: text(p.status), last4: mark(p.last4) } : null)),
     movements: rows(body.movements, (m) =>
       typeof m.transaction_id === 'string'
