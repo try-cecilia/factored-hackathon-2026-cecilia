@@ -12,6 +12,7 @@ import os
 
 import pytest
 
+from agent.core import render
 from agent.core.orchestrator import Orchestrator
 from agent.policy import router
 from agent.session.auth import SessionStore, session_ref
@@ -24,6 +25,7 @@ ASK = {"es": "hice una transferencia que todavía no llega", "pt": "fiz uma tran
 @pytest.fixture(autouse=True)
 def trace_store(tmp_path, monkeypatch):
     monkeypatch.setenv("TRACE_REQUESTS_PATH", str(tmp_path / "trace_requests.jsonl"))
+    monkeypatch.setenv("HUMAN_QUEUE_PATH", str(tmp_path / "human_queue.jsonl"))
     return tmp_path / "trace_requests.jsonl"
 
 
@@ -122,12 +124,36 @@ def test_a_trace_that_does_not_read_back_is_never_announced(monkeypatch):
     assert "abrí" not in r.response_text.lower()
 
 
-def test_with_nothing_pending_a_person_checks_it():
+@pytest.mark.parametrize("lang", ["es", "pt"])
+def test_with_nothing_pending_a_person_checks_it_and_the_customer_is_told_why(lang):
     orch, tok, _ = make(tool_call_response("request_trace", {}), customer="CLI-FIX0001")
-    r = orch.handle_message(tok, "me hicieron una transferencia y nunca llegó")
-    assert (r.disposition, r.category) == ("ESCALATE", "trace_unmatched") and r.ticket_id
+    r = orch.handle_message(tok, ASK[lang])
+    assert (r.disposition, r.category, r.policy_rule, r.language) == ("ESCALATE", "trace_unmatched", "action:trace_unmatched", lang) and r.ticket_id
+    assert r.response_text == render.MSG["trace_unmatched"][lang]
     ticket = json.loads(open(os.environ["HUMAN_QUEUE_PATH"], encoding="utf-8").read().splitlines()[-1])
     assert ticket["queue"] == "payments_ops" and ticket["ticket_id"] == r.ticket_id
+
+
+@pytest.mark.parametrize("lang", ["es", "pt"])
+@pytest.mark.parametrize("narrowed_by", [{"amount": "999"}, {"on_date": "2024-02-20"}])
+def test_a_narrowed_search_that_matches_nothing_does_not_say_nothing_is_pending(lang, narrowed_by):
+    """CLI-FIX0004 has a pending transfer (40.00 USD, 15/01/2024): a search by another amount or date finds nothing, and the
+    customer hears that nothing matched, never that nothing is pending, and nothing of the movement the search left out."""
+    orch, tok, _ = make(tool_call_response("request_trace", narrowed_by))
+    r = orch.handle_message(tok, ASK[lang])
+    assert (r.disposition, r.policy_rule) == ("ESCALATE", "action:trace_unmatched") and r.ticket_id
+    assert r.response_text == render.MSG["trace_unmatched_filtered"][lang]
+    assert not any(f in r.response_text for f in ("40", "15/01/2024", "0010")) and stored() == []
+
+
+def test_with_nothing_pending_and_a_ticket_that_does_not_read_back_the_customer_is_not_told_of_a_handoff(monkeypatch):
+    from agent.policy import escalation
+
+    monkeypatch.setattr(escalation.default_queue, "get", lambda ticket_id: None)  # the write was lost
+    orch, tok, _ = make(tool_call_response("request_trace", {}), customer="CLI-FIX0001")
+    r = orch.handle_message(tok, "me hicieron una transferencia y nunca llegó")
+    assert (r.disposition, r.policy_rule, r.ticket_id) == ("ESCALATE", "action:trace_unmatched|handoff_unverified", None)
+    assert r.response_text == render.MSG["escalate_unverified"]["es"].format(code=r.trace_id[:8])
 
 
 def test_another_customers_product_cannot_be_traced():
@@ -253,3 +279,119 @@ def test_a_movement_pushed_past_the_candidate_cap_is_still_traced_on_confirmatio
     monkeypatch.setattr(account_tools, "MAX_TRACE_CANDIDATES", 0)  # a list query would now return nothing
     r = orch.handle_message(tok, "sí")
     assert r.policy_rule == "action:trace_opened" and len(stored()) == 1
+
+
+def test_sequential_payments_keep_the_first_trace_and_open_only_the_selected_second(monkeypatch):
+    from agent.core import orchestrator as orch_mod
+    from agent.tools import account_tools
+
+    real = account_tools.request_trace
+    first = real("CLI-FIX0004")["items"][0]
+    second = {**first, "transaction_id": "TXN-FIX0099", "amount": 15, "transaction_type": "Payment", "open_trace": None}
+
+    def candidates(customer_id, **filters):
+        if filters.get("transaction_id"):
+            items = [first if filters["transaction_id"] == first["transaction_id"] else second]
+        else:
+            items = [first, second]
+        if filters.get("amount") is not None:
+            amount = float(filters["amount"])
+            items = [item for item in items if float(item["amount"]) == amount]
+        return {"items": [{**item, "open_trace": traces.default_traces.find(customer_id, item["transaction_id"])}
+                           for item in items]}
+
+    monkeypatch.setitem(orch_mod.TOOL_FUNCTIONS, "request_trace", candidates)
+    orch, tok, _ = make(tool_call_response("request_trace", {}), tool_call_response("request_trace", {}),
+                        tool_call_response("request_trace", {"amount": 40}))
+
+    choices = orch.handle_message(tok, "rastrea mis pagos pendientes")
+    assert choices.policy_rule == "action:trace_choose"
+    assert orch.handle_message(tok, "1").policy_rule == "action:trace_proposed"
+    assert orch.handle_message(tok, "s\u00ed").policy_rule == "action:trace_opened"
+
+    second_choices = orch.handle_message(tok, "rastrea el otro pago")
+    assert second_choices.policy_rule == "action:trace_choose"
+    assert "rastreo ya abierto" in second_choices.response_text.lower()
+    assert "sin rastreo" in second_choices.response_text.lower()
+    assert orch.handle_message(tok, "2").policy_rule == "action:trace_proposed"
+    orch.handle_message(tok, "s\u00ed")
+
+    first_again = orch.handle_message(tok, "mu\u00e9strame el rastreo del pago de 40")
+    assert first_again.policy_rule == "action:trace_already_open"
+    records = stored()
+    assert {row["transaction_id"] for row in records} == {"TXN-FIX0006", "TXN-FIX0099"}
+    assert len({row["trace_id"] for row in records}) == 2
+    assert first_again.verified_facts[0]["result"]["trace_id"] == records[0]["trace_id"]
+    queue_path = os.environ["HUMAN_QUEUE_PATH"]
+    assert not os.path.exists(queue_path) or open(queue_path, encoding="utf-8").read().strip() == ""
+
+
+def test_repeated_handoffs_for_the_same_payment_reuse_its_case_but_distinct_payments_do_not(monkeypatch):
+    from agent.core import orchestrator as orch_mod
+    from agent.tools import account_tools
+
+    real = account_tools.request_trace
+    first = real("CLI-FIX0004")["items"][0]
+    second = {**first, "transaction_id": "TXN-FIX0099", "amount": 15, "transaction_type": "Payment", "open_trace": None}
+
+    def candidates(customer_id, **filters):
+        if filters.get("transaction_id"):
+            items = [first if filters["transaction_id"] == first["transaction_id"] else second]
+        else:
+            items = [first, second]
+        return {"items": [{**item, "open_trace": traces.default_traces.find(customer_id, item["transaction_id"])}
+                           for item in items]}
+
+    monkeypatch.setitem(orch_mod.TOOL_FUNCTIONS, "request_trace", candidates)
+    monkeypatch.setattr(traces.default_traces, "open_verified", lambda *args, **kwargs: None)
+    orch, tok, _ = make(*(tool_call_response("request_trace", {}) for _ in range(4)))
+
+    def handoff_for(option):
+        assert orch.handle_message(tok, "rastrea mis pagos pendientes").policy_rule == "action:trace_choose"
+        assert orch.handle_message(tok, option).policy_rule == "action:trace_proposed"
+        return orch.handle_message(tok, "s\u00ed")
+
+    first_case = handoff_for("1")
+    first_retry = handoff_for("1")
+    second_case = handoff_for("2")
+    second_retry = handoff_for("2")
+    records = [json.loads(line) for line in open(os.environ["HUMAN_QUEUE_PATH"], encoding="utf-8") if line.strip()]
+    assert first_case.ticket_id == first_retry.ticket_id
+    assert second_case.ticket_id == second_retry.ticket_id
+    assert first_case.ticket_id != second_case.ticket_id
+    assert len(records) == 2
+
+
+def test_a_payment_case_written_without_readback_is_reused_on_the_next_attempt(monkeypatch):
+    from agent.core import orchestrator as orch_mod
+    from agent.policy import escalation
+    from agent.tools import account_tools
+
+    real_request = account_tools.request_trace
+    movement = real_request("CLI-FIX0004")["items"][0]
+    monkeypatch.setitem(orch_mod.TOOL_FUNCTIONS, "request_trace", lambda customer_id, **kw: {"items": [
+        {**movement, "open_trace": traces.default_traces.find(customer_id, movement["transaction_id"])}]})
+    monkeypatch.setattr(traces.default_traces, "open_verified", lambda *args, **kwargs: None)
+    real_get = escalation.default_queue.get
+    readback = {"miss": True}
+
+    def misses_only_first_readback(ticket_id):
+        existing = real_get(ticket_id)
+        if readback["miss"] and existing is not None:
+            readback["miss"] = False
+            return None
+        return existing
+
+    monkeypatch.setattr(escalation.default_queue, "get", misses_only_first_readback)
+    orch, tok, _ = make(tool_call_response("request_trace", {}), tool_call_response("request_trace", {}))
+
+    def try_trace():
+        assert orch.handle_message(tok, "rastrea mi transferencia pendiente").policy_rule == "action:trace_proposed"
+        return orch.handle_message(tok, "s\u00ed")
+
+    first = try_trace()
+    second = try_trace()
+    records = [json.loads(line) for line in open(os.environ["HUMAN_QUEUE_PATH"], encoding="utf-8") if line.strip()]
+    assert first.ticket_id is None  # the ticket was written but the read-back was unavailable
+    assert second.ticket_id == records[0]["ticket_id"]
+    assert len(records) == 1

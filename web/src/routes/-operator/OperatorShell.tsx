@@ -82,6 +82,8 @@ export function OperatorShell({ view, queue, children }: { view: Active; queue: 
       </div>
       <NewCasesAnnouncer />
       <main className="op-main" id="contenido" tabIndex={-1}>
+        {view.demoMode === true && <div className="op-banner op-banner--caution" role="status"><div><strong>{t('operator.environment.demoTitle')}</strong><p>{t('operator.environment.demoDescription')}</p></div></div>}
+        {view.demoMode === null && <div className="op-banner op-banner--neutral" role="status"><div><strong>{t('operator.environment.unknownTitle')}</strong><p>{t('operator.environment.unknownDescription')}</p></div></div>}
         {children}
       </main>
     </div>

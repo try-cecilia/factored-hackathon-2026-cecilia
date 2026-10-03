@@ -97,8 +97,9 @@ class HumanQueue:
 
     def enqueue(self, ticket: EscalationTicket) -> None:
         """Append the ticket, retrying a failed write a bounded number of times, all inside the handoff's budget. The ticket
-        id is the idempotency key: a retry first looks for the ticket, so a write that landed but reported failure is not
-        filed twice. The wait for the lock is what is left of the budget, and once it is spent no write begins: a ticket never
+        id is the idempotency key: every attempt looks for the ticket under the lock, so a write that landed but reported
+        failure, or a repeated request with the same movement key, is not filed twice. The wait for the lock is what is left
+        of the budget, and once it is spent no write begins: a ticket never
         lands after the customer was told it did not. A write that has already begun is not cut off (half a line would be
         worse than a late one): if it outlasts the budget, HandoffInFlight is raised, the write finishes on its own, and its
         outcome is recorded when it does. The write takes a slot of `resilience.writes` until it ends; with none free it is
@@ -113,9 +114,8 @@ class HumanQueue:
             tries += 1
             # Between processes and threads, and never past the budget: the wait for the lock is what is left of it.
             with locked(self.path, timeout=budget.remaining()), open(self.path, "a", encoding="utf-8") as f:
-                # A retry first looks for the ticket, under the file's lock (so a write that landed is seen, and nobody else
-                # appends meanwhile) but outside `guard`: that lookup is I/O, and the caller needs `guard` to give up on time.
-                if tries > 1 and self.get(ticket.ticket_id) is not None:
+                # A retry or repeated payment handoff checks under the lock first, so a write that already landed is reused.
+                if self.get(ticket.ticket_id) is not None:
                     return
                 with guard:  # the last look before the write: it begins only if the budget is left and the caller still waits
                     if budget.expired or state["given_up"]:
@@ -231,6 +231,7 @@ def escalate(
     attributes: dict,
     trace_id: str | None,
     pending_action: dict[str, Any] | None = None,
+    ticket_id: str | None = None,
 ) -> EscalationTicket:
     with handoff_deadline() as budget:
         if budget.expired:  # best-effort by design, and never worth more time than the handoff has
@@ -241,14 +242,14 @@ def escalate(
             except TimeoutError:
                 evidence, notes = [], [question("evidence_skipped_slow")]
         return _file(decision, customer_id, session_ref, request, language, actions, verified_facts, prior_requests, attributes,
-                     trace_id, pending_action, evidence, notes)
+                     trace_id, pending_action, evidence, notes, ticket_id)
 
 
 def _file(decision, customer_id, session_ref, request, language, actions, verified_facts, prior_requests, attributes, trace_id,
-          pending_action, evidence, notes) -> EscalationTicket:
+          pending_action, evidence, notes, ticket_id: str | None = None) -> EscalationTicket:
     questions = [*decision.open_questions, *notes]
     ticket = EscalationTicket(
-        ticket_id=str(uuid.uuid4()),
+        ticket_id=ticket_id or str(uuid.uuid4()),
         trace_id=trace_id,
         created_at=time.time(),
         category=decision.category,
