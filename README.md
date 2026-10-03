@@ -108,7 +108,7 @@ measured code changes and the docs do not say so)
 Live report measured on other code: ad2212c4c416 → b9cfd902bd32.
 ([`eval/reports/SYSTEM_EVAL_LIVE.md`](eval/reports/SYSTEM_EVAL_LIVE.md)):
 
-> Live figures measured on other code: measured fingerprint `ad2212c4c416`; current fingerprint `22038bc5e482` (formatting amounts by the customer's country, telling the customer why a trace request that matched nothing goes to a person, and the judge's check of that reply changed the measured code after the live run; the offline reports are regenerated on the current one).
+> Live figures measured on other code: measured fingerprint `ad2212c4c416`; current fingerprint `50621129e47b` (formatting amounts by the customer's country, explaining unmatched trace requests, verifying receipts, and checking account data provenance changed the measured code after the live run; the offline reports are regenerated on the current one).
 
 | | Claude Sonnet 5 | Claude Haiku 4.5 |
 |---|---|---|

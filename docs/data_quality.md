@@ -140,14 +140,14 @@ coverage. Non-null values are checked only when interactions are present.
   transactions, 2026-06-17 for this dataset) is stated in every answer. It is
   read once per process, so a re-ingest shows up after a restart (ingestion
   runs at boot; LIMITATIONS.md).
-- **Freshness SLO.** With `FRESHNESS_ENFORCE=1`, an answer from the account
+- **Freshness SLO.** By default, an answer from the account
   summary (balance), the transaction list or the payment status becomes "data
   unavailable → escalate" (a ticket, no figure) when the as-of date is more
   than `FRESHNESS_SLO_HOURS` (default 36) before today in UTC. Age is counted
   in whole days of 24 h, exactly at the limit is still fresh, and a warehouse
   with no as-of date is never fresh. The customer profile and the exchange
-  rate (which says the date it used) are not gated. It is off by default only
-  because this dataset is a static 2023–2026 snapshot. Tested in
+  rate (which says the date it used) are not gated. Set `FRESHNESS_ENFORCE=0`
+  only when serving a known static snapshot is intentional. Tested in
   `tests/test_data_ml_validation.py` (`test_freshness_*`), including the
   end-to-end turn.
 

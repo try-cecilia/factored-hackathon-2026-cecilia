@@ -69,6 +69,8 @@ def fixture_warehouse(tmp_path_factory):
     for var in ("LLM_PROVIDERS", "LLM_MODEL", "GROQ_MODEL", "TOGETHER_MODEL", "ANTHROPIC_MODEL", "ANTHROPIC_EFFORT",
                 "ANTHROPIC_FALLBACKS", "FRESHNESS_ENFORCE", "FRESHNESS_SLO_HOURS", "DEMO_PUBLIC_CUSTOMERS"):
         mp.delenv(var, raising=False)
+    mp.setenv("FRESHNESS_ENFORCE", "0")
+    mp.setenv("FRESHNESS_ENFORCE", "0")
     mp.setenv("DUCKDB_PATH", str(db_path))
     build_fixture_warehouse()
     db.close_all()

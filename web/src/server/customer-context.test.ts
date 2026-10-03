@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { toCustomerContext } from './customer-context.ts'
 
 const api = {
-  warehouse: { available: true, as_of: '2026-06-01' },
+  warehouse: { available: true, as_of: '2026-06-01', source: 'account_warehouse', queried_at: '2026-06-01T12:34:56+00:00', freshness: 'current' },
   products: [{ product_id: 'PRD-1', type: 'Cuenta Ahorro', currency: 'USD', status: 'Active', last4: '0001' }],
   movements: [{ transaction_id: 'TXN-1', date: '2026-05-30T10:00:00', product_id: 'PRD-1', type: 'Transfer', amount: 40, currency: 'USD', merchant: null, status: 'Pending', pending: true }],
   pending_omitted: 0,
@@ -33,7 +33,7 @@ test('an account number can never travel: a product mark longer than four charac
 })
 
 test('a warehouse that is down keeps the rest', () => {
-  const down = { ...api, warehouse: { available: false, as_of: null }, products: [], movements: [], pending_omitted: 0 }
+  const down = { ...api, warehouse: { available: false, as_of: null, source: 'account_warehouse', queried_at: '2026-06-01T12:34:56+00:00', freshness: 'unavailable' }, products: [], movements: [], pending_omitted: 0 }
   assert.deepEqual(toCustomerContext(down), down)
 })
 

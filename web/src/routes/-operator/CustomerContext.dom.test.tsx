@@ -10,7 +10,7 @@ import { FoldGroup } from './Folds'
 
 const NOW = Date.now() / 1000
 const data = (over: Partial<CustomerContext> = {}): CustomerContext => ({
-  warehouse: { available: true, as_of: '2026-06-01' },
+  warehouse: { available: true, as_of: '2026-06-01', source: 'account_warehouse', queried_at: '2026-06-01T12:34:56+00:00', freshness: 'current' },
   products: [
     { product_id: 'PRD-1', type: 'Cuenta Ahorro', currency: 'USD', status: 'Active', last4: '0001' },
     { product_id: 'PRD-2', type: 'Tarjeta Crédito', currency: 'USD', status: 'Blocked', last4: '0004' },
@@ -68,6 +68,22 @@ describe('the customer sections of a case', () => {
     expect(fold(/^Rastreos/).textContent).toContain('1')
     for (const name of [/^Productos/, /^Movimientos/, /^Otros casos/, /^Rastreos/]) expect(fold(name).getAttribute('aria-expanded')).toBe('false')
     expect(screen.queryByText('Cuenta de ahorro')).toBeNull()
+  })
+
+  it('shows the source, query time, data date, and original currency to the operator', async () => {
+    await draw(ok())
+    await unfold(/^Productos/)
+    expect(document.body.textContent).toContain('Fuente: Almacén de cuentas y pagos')
+    expect(document.body.textContent).toContain('Consultado: 2026-06-01T12:34:56+00:00')
+    expect(document.body.textContent).toContain('Datos al 2026-06-01')
+    expect((document.body.textContent?.match(/Moneda original: USD/g) ?? [])).toHaveLength(2)
+  })
+
+  it('explains stale account data and still shows its provenance', async () => {
+    await draw(ok({ warehouse: { ...data().warehouse, available: false, as_of: '2024-01-16', freshness: 'stale' } }))
+    expect(screen.getByText(/Los datos están vencidos al 2024-01-16/)).toBeTruthy()
+    expect(document.body.textContent).toContain('Fuente: Almacén de cuentas y pagos')
+    expect(document.body.textContent).toContain('Consultado: 2026-06-01T12:34:56+00:00')
   })
 
   it('shows the products by type with the last four digits only, and never a number that is longer', async () => {
@@ -189,7 +205,7 @@ describe('the customer sections of a case', () => {
   })
 
   it('a warehouse that is down says so, and the cases and rastreos are still there', async () => {
-    await draw(ok({ warehouse: { available: false, as_of: null }, products: [], movements: [] }))
+    await draw(ok({ warehouse: { ...data().warehouse, available: false, as_of: null, freshness: 'unavailable' }, products: [], movements: [] }))
     expect(screen.getByText('Los productos y movimientos del cliente no están disponibles ahora.')).toBeTruthy()
     expect(screen.queryByRole('button', { name: /^Productos|^Movimientos/ })).toBeNull()
     await unfold(/^Rastreos/)
@@ -242,7 +258,7 @@ describe('reading it', () => {
   })
 
   it('what the operator opened stays open when the context is read again', async () => {
-    const down = ok({ warehouse: { available: false, as_of: null }, products: [], movements: [] })
+    const down = ok({ warehouse: { ...data().warehouse, available: false, as_of: null, freshness: 'unavailable' }, products: [], movements: [] })
     const load = vi.fn<(id: string) => Promise<Result<CustomerContext>>>()
     load.mockResolvedValueOnce(down).mockResolvedValueOnce(ok())
     renderWithI18n(<Sections load={load} />)

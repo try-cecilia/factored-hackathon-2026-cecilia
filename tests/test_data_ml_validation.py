@@ -482,14 +482,16 @@ def _fixed_today(monkeypatch, day: str):
     monkeypatch.setattr(tools, "datetime", Clock)
 
 
-def test_freshness_the_documented_defaults_and_the_as_of_date(record_property):
-    assert tools.freshness_enforced() is False and tools.freshness_slo_hours() == 36.0
-    assert "`FRESHNESS_SLO_HOURS` (default 36)" in DATA_QUALITY_DOC and "off by default" in DATA_QUALITY_DOC
-    summary = tools.get_account_summary("CLI-FIX0004")  # 2024 data, served: the policy is off
-    assert summary["as_of"].isoformat() == "2024-01-16" == str(tools.data_as_of())
+def test_freshness_the_documented_defaults_and_the_as_of_date(monkeypatch, record_property):
+    monkeypatch.delenv("FRESHNESS_ENFORCE", raising=False)
+    assert tools.freshness_enforced() is True and tools.freshness_slo_hours() == 36.0
+    assert "`FRESHNESS_SLO_HOURS` (default 36)" in DATA_QUALITY_DOC and "By default" in DATA_QUALITY_DOC
+    with pytest.raises(DataUnavailable) as exc:
+        tools.get_account_summary("CLI-FIX0004")
+    assert exc.value.field == "as_of" and str(tools.data_as_of()) == "2024-01-16"
     assert RunConfig().lookback_days == 3 and "default 3" in DATA_QUALITY_DOC
     assert hasattr(tools._as_of_for, "cache_clear") and "read once per process" in DATA_QUALITY_DOC
-    record_property("evidence", "without FRESHNESS_ENFORCE the 2024 data is served with as_of=2024-01-16; default SLO 36 h; lookback 3 days")
+    record_property("evidence", "without FRESHNESS_ENFORCE the 2024 fixture data is rejected by default; SLO 36 h; lookback 3 days")
 
 
 def test_freshness_stale_data_is_unavailable_on_the_gated_tools_and_only_on_them(monkeypatch, record_property):
@@ -535,6 +537,14 @@ def test_freshness_a_stale_warehouse_ends_in_an_escalation_not_an_answer(monkeyp
     assert stale.disposition == "ESCALATE" and stale.category == "data_unavailable" and stale.ticket_id
     assert "2,455.81" not in stale.response_text  # the stale figure is not shown
     record_property("evidence", "the same question: without the policy, AUTO_RESOLVE with 'al 16/01/2024'; with stale data, ESCALATE/data_unavailable with a ticket and without the figure")
+
+
+def test_stale_warehouse_is_handed_off_by_default(monkeypatch):
+    monkeypatch.delenv("FRESHNESS_ENFORCE", raising=False)
+    orch, token, _ = make([tool_call_response("get_account_summary", {"product_id": "PRD-FIX0001"})])
+    stale = orch.handle_message(token, "balance de mi cuenta terminada en 0001")
+    assert stale.disposition == "ESCALATE" and stale.category == "data_unavailable" and stale.ticket_id
+    assert "2,455.81" not in stale.response_text
 
 
 # ---------------------------------------------------------------- 5. Componente aprendido contra una línea base
