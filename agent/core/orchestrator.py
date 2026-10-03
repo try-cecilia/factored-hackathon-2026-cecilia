@@ -165,6 +165,7 @@ class _Conversation:
     cases: dict[str, str] = field(default_factory=dict)  # legacy notices, retained when loading older conversations
     transcript: list[dict] = field(default_factory=list)  # what the customer saw, as rendered: card numbers masked, no model data
     case_index: list[dict] = field(default_factory=list)  # the session's handoffs (ticket_id, category, at), not bounded by the transcript
+    payment_cases: dict[str, str] = field(default_factory=dict)  # active handoffs keyed by this conversation and movement
 
     @classmethod
     def from_saved(cls, data: dict) -> "_Conversation":
@@ -600,15 +601,44 @@ class Orchestrator:
         self.conversations.append_request(conv, ticket_text)
         return result
 
+    @staticmethod
+    def _payment_case_key(session_ref: str, category: str, pending_action: dict | None) -> str | None:
+        transaction_id = pending_action.get("transaction_id") if pending_action else None
+        if not pending_action or pending_action.get("tool") != "request_trace" or not transaction_id:
+            return None
+        identity = f"{session_ref}\0{category}\0{transaction_id}"
+        return hashlib.sha256(identity.encode("utf-8")).hexdigest()
+
     def _escalate(self, decision: Decision, session, conv, ticket_text, lang, trace_id, actions, facts, llm_meta,
                   pending_action: dict | None = None, notice: str | None = None) -> TurnResult:
         """File the ticket, read it back, and only then tell the customer they were transferred (`notice`: the render.MSG key
         that says why, instead of the plain one)."""
+        payment_key = self._payment_case_key(session.ref, decision.category, pending_action)
+        payment_ticket_id = conv.payment_cases.get(payment_key) if payment_key else None
+        if payment_ticket_id:
+            existing = escalation.default_queue.get(payment_ticket_id)
+            if existing:
+                try:
+                    status = default_desk.state(payment_ticket_id)["status"]
+                except Exception:  # noqa: BLE001 - an existing case stays the safe handoff if its desk is unavailable
+                    status = "open"
+                if status in {"open", "claimed"}:
+                    msg = render.MSG["escalate_security" if decision.category == "security" else "escalate"][lang]
+                    return TurnResult(trace_id, Disposition.ESCALATE.value, msg, lang, decision.category, decision.rule,
+                                      payment_ticket_id, facts, actions, **llm_meta)
+                payment_ticket_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"payment-case:{payment_key}:after:{payment_ticket_id}"))
+        elif payment_key:
+            payment_ticket_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"payment-case:{payment_key}:first"))
+        if payment_key:
+            conv.payment_cases[payment_key] = payment_ticket_id
+            while len(conv.payment_cases) > MAX_CASE_INDEX:
+                del conv.payment_cases[next(iter(conv.payment_cases))]
         try:
             with handoff_deadline() as budget, stage("ticket", category=decision.category) as info:
                 ticket = escalation.escalate(decision, session.customer_id, session.ref, ticket_text, lang, actions,
                                              [{"tool": f["tool"], "result": f["result"]} for f in facts],
-                                             list(conv.requests), session.attributes, trace_id, pending_action)
+                                             list(conv.requests), session.attributes, trace_id, pending_action,
+                                             ticket_id=payment_ticket_id)
                 # The read-back is the last step of the same budget, bounded like the others, and the clock is checked after
                 # it: a ticket that cannot be confirmed in time is not claimed, and not named: only a confirmed ticket has an id here.
                 try:
@@ -637,7 +667,10 @@ class Orchestrator:
             return escalate(decision, actions, [], notice="trace_unmatched_filtered" if narrowed else "trace_unmatched")
         if decision.rule == "action:trace_choose":
             conv.pending_choice = items  # a plain "la segunda" is resolved in code next turn
-            opts = "; ".join(f"{i}) {render.movement(m, lang, country)}" for i, m in enumerate(items, start=1))
+            already_open = "rastreo ya abierto" if lang == "es" else "rastreamento j\u00e1 aberto"
+            not_open = "sin rastreo" if lang == "es" else "sem rastreamento"
+            opts = "; ".join(f"{i}) {render.movement(m, lang, country)} ({already_open if m.get('open_trace') else not_open})"
+                             for i, m in enumerate(items, start=1))
             return done(TurnResult(trace_id, decision.disposition.value, render.MSG["trace_choose"][lang].format(opts=opts), lang,
                                    decision.category, decision.rule, None, [], actions, **meta, model_view=MODEL_VIEW["trace_choose"],
                                    choice="movement"))
@@ -658,13 +691,13 @@ class Orchestrator:
     def _open_trace(self, proposal, session, lang, trace_id, done, escalate) -> TurnResult:
         """The customer said yes: open the trace, read it back, and only then say it exists."""
         action = {"tool": "request_trace", "args": {"product_id": proposal["product_id"]}, "confirmed_by_customer": True}
+        case_action = {"tool": "request_trace", "transaction_id": proposal["transaction_id"],
+                       "product_id": proposal["product_id"], "movement": proposal["movement"]}
 
         def out_of_time_handoff() -> TurnResult:
             # Nothing was written: the customer's yes is recorded and a person decides, with the proposal intact.
             return escalate(router.turn_timeout(), [{**action, "success": False, "error_type": "TurnTimeout"}], [],
-                            {"tool": "request_trace", "transaction_id": proposal["transaction_id"],
-                             "product_id": proposal["product_id"], "review_reason": "turn_timeout", "age_days": None,
-                             "movement": proposal["movement"]})
+                            {**case_action, "review_reason": "turn_timeout", "age_days": None})
 
         if out_of_time():
             return out_of_time_handoff()
@@ -695,14 +728,14 @@ class Orchestrator:
             return out_of_time_handoff()
         if review:  # old or self-contradicting: the customer's yes is recorded, a person decides
             return escalate(router.trace_review(review), [{**action, "success": False, "error_type": "NeedsHumanApproval"}], [],
-                            {"tool": "request_trace", "transaction_id": proposal["transaction_id"],
-                             "product_id": proposal["product_id"], "review_reason": review, "age_days": age_days,
-                             "movement": proposal["movement"]})
+                            {**case_action, "review_reason": review, "age_days": age_days})
         if not still_pending:
-            return escalate(router.trace_step({"items": []}), [{**action, "success": False, "error_type": "MovementNoLongerPending"}], [])
+            return escalate(router.trace_step({"items": []}), [{**action, "success": False, "error_type": "MovementNoLongerPending"}], [],
+                            case_action)
         receipt = _trace_receipt_for(found, verified, session.customer_id) if verified else None
         if not receipt:
-            return escalate(router.trace_unverified(), [{**action, "success": False, "error_type": "TraceNotReadBack"}], [])
+            return escalate(router.trace_unverified(), [{**action, "success": False, "error_type": "TraceNotReadBack"}], [],
+                            case_action)
         decision = router.trace_opened()
         text = render.MSG["trace_opened"][lang].format(tid=verified["trace_id"], mov=render.movement(proposal["movement"], lang, session.attributes.get("country")),
                                                        sla=verified["sla_business_days"])
