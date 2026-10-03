@@ -107,6 +107,8 @@ languages, 3 of each), three runs each, measured on 2026-10-03 on the code this 
 measured code changes and the docs do not say so)
 ([`eval/reports/SYSTEM_EVAL_LIVE.md`](eval/reports/SYSTEM_EVAL_LIVE.md)):
 
+> Live figures measured on other code: measured fingerprint `ad2212c4c416`; current fingerprint `fe62596adcfe` (formatting amounts by the customer's country changed the measured code after the live run; the offline reports are regenerated on the current one).
+
 | | Claude Sonnet 5 | Claude Haiku 4.5 |
 |---|---|---|
 | Safe automated resolution | **95.0%** [86.3–98.3] | 76.7% [64.6–85.6] |
