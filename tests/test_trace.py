@@ -12,6 +12,7 @@ import os
 
 import pytest
 
+from agent.core import render
 from agent.core.orchestrator import Orchestrator
 from agent.policy import router
 from agent.session.auth import SessionStore, session_ref
@@ -122,12 +123,36 @@ def test_a_trace_that_does_not_read_back_is_never_announced(monkeypatch):
     assert "abrí" not in r.response_text.lower()
 
 
-def test_with_nothing_pending_a_person_checks_it():
+@pytest.mark.parametrize("lang", ["es", "pt"])
+def test_with_nothing_pending_a_person_checks_it_and_the_customer_is_told_why(lang):
     orch, tok, _ = make(tool_call_response("request_trace", {}), customer="CLI-FIX0001")
-    r = orch.handle_message(tok, "me hicieron una transferencia y nunca llegó")
-    assert (r.disposition, r.category) == ("ESCALATE", "trace_unmatched") and r.ticket_id
+    r = orch.handle_message(tok, ASK[lang])
+    assert (r.disposition, r.category, r.policy_rule, r.language) == ("ESCALATE", "trace_unmatched", "action:trace_unmatched", lang) and r.ticket_id
+    assert r.response_text == render.MSG["trace_unmatched"][lang]
     ticket = json.loads(open(os.environ["HUMAN_QUEUE_PATH"], encoding="utf-8").read().splitlines()[-1])
     assert ticket["queue"] == "payments_ops" and ticket["ticket_id"] == r.ticket_id
+
+
+@pytest.mark.parametrize("lang", ["es", "pt"])
+@pytest.mark.parametrize("narrowed_by", [{"amount": "999"}, {"on_date": "2024-02-20"}])
+def test_a_narrowed_search_that_matches_nothing_does_not_say_nothing_is_pending(lang, narrowed_by):
+    """CLI-FIX0004 has a pending transfer (40.00 USD, 15/01/2024): a search by another amount or date finds nothing, and the
+    customer hears that nothing matched, never that nothing is pending, and nothing of the movement the search left out."""
+    orch, tok, _ = make(tool_call_response("request_trace", narrowed_by))
+    r = orch.handle_message(tok, ASK[lang])
+    assert (r.disposition, r.policy_rule) == ("ESCALATE", "action:trace_unmatched") and r.ticket_id
+    assert r.response_text == render.MSG["trace_unmatched_filtered"][lang]
+    assert not any(f in r.response_text for f in ("40", "15/01/2024", "0010")) and stored() == []
+
+
+def test_with_nothing_pending_and_a_ticket_that_does_not_read_back_the_customer_is_not_told_of_a_handoff(monkeypatch):
+    from agent.policy import escalation
+
+    monkeypatch.setattr(escalation.default_queue, "get", lambda ticket_id: None)  # the write was lost
+    orch, tok, _ = make(tool_call_response("request_trace", {}), customer="CLI-FIX0001")
+    r = orch.handle_message(tok, "me hicieron una transferencia y nunca llegó")
+    assert (r.disposition, r.policy_rule, r.ticket_id) == ("ESCALATE", "action:trace_unmatched|handoff_unverified", None)
+    assert r.response_text == render.MSG["escalate_unverified"]["es"].format(code=r.trace_id[:8])
 
 
 def test_another_customers_product_cannot_be_traced():

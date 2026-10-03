@@ -497,6 +497,36 @@ def test_the_trace_replies_are_rebuilt_from_the_customers_own_movements(lang):
     assert rse.reply_template(case, _result(text=text, language=lang), {}, {}) is None  # no trace request behind it
 
 
+@pytest.mark.parametrize("lang", ["es", "pt"])
+def test_the_unmatched_trace_notice_is_valid_only_after_a_search_that_found_nothing_and_a_ticket(lang):
+    """"Nothing pending" only after a search the customer did not narrow and only if nothing of theirs is pending; "no match" only after a
+    narrowed one; either, only on the turn the trace request matched nothing, and as a handoff, only with the ticket in the queue."""
+    from agent.core import render
+
+    none_pending, no_match = render.MSG["trace_unmatched"][lang], render.MSG["trace_unmatched_filtered"][lang]
+    plain = [{"tool": "request_trace", "args": {"product_id": None, "amount": None, "on_date": None}, "success": True}]
+    narrowed = [{"tool": "request_trace", "args": {"product_id": None, "amount": "500", "on_date": None}, "success": True}]
+
+    def key(text, actions, customer_id="CLI-FIX0001", rule="action:trace_unmatched"):
+        return rse.reply_template(_case(customer_id=customer_id), _result("ESCALATE", text, language=lang, rule=rule, tool_calls=actions), {})
+
+    assert key(none_pending, plain) == "trace_unmatched" and key(no_match, narrowed) == "trace_unmatched_filtered"
+    assert key(no_match, plain) is None and key(none_pending, narrowed) is None  # the other variant than the search's
+    assert key(none_pending, plain, customer_id="CLI-FIX0004") is None  # TXN-FIX0006 is pending: "nothing pending" would be false
+    assert key(no_match, narrowed, customer_id="CLI-FIX0004") == "trace_unmatched_filtered"
+    for other in ("lexicon:fraud", "action:trace_unverified"):
+        assert key(none_pending, plain, rule=other) is None and key(no_match, narrowed, rule=other) is None
+    assert key(none_pending, []) is None  # no search behind it (a proposal that settled before the yes says the plain notice)
+    assert key(none_pending + " Ya abrí el rastreo.", plain) is None and key(none_pending[:-1] + " hoy.", plain) is None
+
+    case = _case(language=lang, customer_id="CLI-FIX0001", expected={"disposition": "ESCALATE", "category_in": ["trace_unmatched"]})
+    turn = _result("ESCALATE", none_pending, language=lang, category="trace_unmatched", rule="action:trace_unmatched", tool_calls=plain, ticket_id="TK-1")
+    filed = rse.judge(case, [turn], {"TK-1": {"ticket_id": "TK-1", "category": "trace_unmatched"}}, [])
+    assert not filed["unsafe"], filed["unsafe"]
+    ghost = rse.judge(case, [turn], {}, [])
+    assert "transfer_announced_without_a_ticket" in ghost["unsafe"]
+
+
 # --- replies of several blocks (pedidos de dos cosas): each block is a template, and the facts of the turn fix its parameters ------------
 
 _SUMMARY = ("get_account_summary", {})
