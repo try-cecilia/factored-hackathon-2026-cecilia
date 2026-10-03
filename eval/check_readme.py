@@ -8,9 +8,10 @@ It reads the two results tables of the README (offline and live) and compares ev
 `eval/reports/system_eval*.json`; it also flags any case count the README states that is not the reports' count.
 Only the headline tables are checked: prose, footnotes and the human-baseline figures are not.
 
-It also checks the latencies per case that EVALUATION.md and the slides cite (LATENCY_ROWS). The offline ones change with
-the machine that regenerates the reports, so a regeneration that leaves the docs behind fails here; `--write-latencies`
-(`make sync-eval-latencies`) copies them, touching only those cells.
+It also checks the latencies per case that EVALUATION.md and the slides cite (LATENCY_ROWS), and the landing's figures
+that depend on the machine (LANDING_LATENCIES and LANDING_DATES, in web/src/landing/figures.ts). The offline ones change
+with the machine that regenerates the reports, so a regeneration that leaves the docs or the landing behind fails here;
+`--write-latencies` (`make sync-eval-latencies`) copies them, touching only those cells and those values.
 """
 from __future__ import annotations
 
@@ -18,6 +19,7 @@ import argparse
 import json
 import re
 import sys
+from decimal import ROUND_HALF_UP, Decimal, localcontext
 from pathlib import Path
 
 REPORTS = Path("eval/reports")
@@ -100,11 +102,35 @@ def _pattern(template: str) -> re.Pattern:
     return re.compile(r"(?<![\d.])" + re.escape(template).replace(r"\{p50\}", FIG).replace(r"\{p95\}", FIG) + r"(?![\w.])")
 
 
+def _fixed(value: float, digits: int, shift: int = 0) -> str:
+    """The rounding every written figure shares (EVALUATION.md, the slides, the landing and the landing's own test): the
+    shortest decimal form of `value` that reads back as the same float (`repr`, what JavaScript's String also gives), times
+    10**shift, rounded half up to `digits` decimals. Decimal arithmetic on that string, never the binary float: 2.25 → 2.3,
+    2.55 → 2.6, 2.449999999999 → 2.4, 1.005 → 1.01. Any size (the precision follows the number, as JavaScript's BigInt does),
+    and no negative zero: what rounds to zero is written unsigned (-0.01 → 0.0). web/src/landing/rounding-cases.json holds the
+    cases both sides test."""
+    number = Decimal(repr(value)).scaleb(shift)
+    with localcontext() as ctx:
+        ctx.prec = max(number.adjusted(), 0) + digits + 2  # every digit of the integer part and the decimals kept, none rounded away
+        rounded = number.quantize(Decimal(1).scaleb(-digits), rounding=ROUND_HALF_UP)
+    return format(rounded.copy_abs() if rounded == 0 else rounded, "f")
+
+
+def _read(path: Path) -> str:
+    """The file as it is on disk: newline="" keeps its line endings, so writing it back changes only the values."""
+    with path.open(encoding="utf-8", newline="") as f:
+        return f.read()
+
+
+def _write(path: Path, text: str) -> None:
+    with path.open("w", encoding="utf-8", newline="") as f:
+        f.write(text)
+
+
 def _latency(report: str, key: str, unit: str) -> tuple[str, str]:
     m = next(v for k, v in load(report).items() if key in k)
-    if unit == "ms":
-        return f"{m['latency_ms_p50']:.1f}", f"{m['latency_ms_p95']:.1f}"
-    return f"{m['latency_ms_p50'] / 1000:.1f}", f"{m['latency_ms_p95'] / 1000:.1f}"
+    shift = 0 if unit == "ms" else -3
+    return _fixed(m["latency_ms_p50"], 1, shift), _fixed(m["latency_ms_p95"], 1, shift)
 
 
 def latencies(root: Path = Path("."), write: bool = False) -> list[str]:
@@ -114,7 +140,7 @@ def latencies(root: Path = Path("."), write: bool = False) -> list[str]:
     returned as a problem and not written."""
     problems, texts = [], {}
     for doc, label, columns in LATENCY_ROWS:
-        lines = texts.setdefault(doc, (root / doc).read_text(encoding="utf-8").split("\n"))
+        lines = texts.setdefault(doc, _read(root / doc).split("\n"))
         at = [i for i, ln in enumerate(lines) if ln.startswith(f"| {label} |")]
         if len(at) != 1:
             problems.append(f"{doc}: {len(at)} rows labeled {label!r}, expected one")
@@ -136,25 +162,100 @@ def latencies(root: Path = Path("."), write: bool = False) -> list[str]:
                 cells[i] = _pattern(template).sub(template.format(p50=p50, p95=p95), cells[i])
             elif [float(x) for x in found[0]] != [float(p50), float(p95)]:
                 problems.append(f"{doc}, {label}: says {cells[i]!r}, the report says p50 / p95 = {p50} / {p95} {unit}")
-        lines[at[0]] = "| " + " | ".join([label, *cells]) + " |"
+        eol = "\r" if lines[at[0]].endswith("\r") else ""  # a CRLF file keeps its line endings
+        lines[at[0]] = "| " + " | ".join([label, *cells]) + " |" + eol
     if write:
         for doc, lines in texts.items():
             text = "\n".join(lines)
-            if text != (root / doc).read_text(encoding="utf-8"):
-                (root / doc).write_text(text, encoding="utf-8")
+            if text != _read(root / doc):
+                _write(root / doc, text)
     return problems
 
 
+# The landing (web/src/landing/figures.ts) binds each figure to a field of a report, and its test fails when the two differ.
+# The offline latencies and the day of the offline run change with the machine that regenerates the reports, so they are
+# written here too. Only these, by name: every other figure of the landing (security, live, ...) is never touched.
+LANDING = Path("web/src/landing/figures.ts")
+LANDING_SOURCES = {"OFFLINE": "system_eval", "ADVERSARIAL": "system_eval_adversarial"}
+LANDING_SYSTEMS = {"KEYWORD": "baseline", "IDEAL": "proposed (scripted)", "ADV": "proposed (adversarial)"}
+LANDING_LATENCIES = (
+    ("keywordLatencyP50", "system_eval", "baseline", "latency_ms_p50"),
+    ("keywordLatencyP95", "system_eval", "baseline", "latency_ms_p95"),
+    ("idealLatencyP50", "system_eval", "proposed (scripted)", "latency_ms_p50"),
+    ("idealLatencyP95", "system_eval", "proposed (scripted)", "latency_ms_p95"),
+    ("adversarialLatencyP50", "system_eval_adversarial", "proposed (adversarial)", "latency_ms_p50"),
+    ("adversarialLatencyP95", "system_eval_adversarial", "proposed (adversarial)", "latency_ms_p95"),
+)
+# The day the landing gives for the offline run, and the reports whose `generated_at` must all fall on it.
+LANDING_DATES = (("offlineRunDate", ("system_eval", "system_eval_adversarial")),)
+_FIGURE = re.compile(r"  (?P<name>\w+): json\((?P<value>\d+(?:\.\d+)?), (?P<digits>\d), (?P<source>[A-Z]+), \[\.\.\.(?P<system>[A-Z]+), '(?P<field>\w+)'\]\),")
+_DAY = re.compile(r"export const (?P<name>\w+): Day = \{ iso: '(?P<iso>\d{4}-\d{2}-\d{2})', source: (?P<source>[A-Z]+), at: \['generated_at'\] \}")
+
+
+def _one_line(lines: list[str], start: str, pattern: re.Pattern) -> tuple[int, re.Match] | str:
+    """The only line that starts with `start`, matched in full by `pattern`; or why it is not there or not as expected."""
+    at = [i for i, ln in enumerate(lines) if ln.startswith(start)]
+    if len(at) != 1:
+        return f"{len(at)} lines start with {start.strip()!r}, expected one"
+    match = pattern.fullmatch(lines[at[0]].removesuffix("\r"))  # the \r of a CRLF line stays after the match
+    return (at[0], match) if match else f"{lines[at[0]].strip()!r} is not shaped as expected"
+
+
+def landing(root: Path = Path("."), write: bool = False) -> list[str]:
+    """The landing's machine-dependent figures against their reports. With `write`, each value is replaced by the report's,
+    and nothing else of the file changes; if any line is missing or not shaped as expected, the file is not written at all."""
+    path = root / LANDING
+    lines = _read(path).split("\n")
+    problems, stale = [], []
+    for name, report, system, field in LANDING_LATENCIES:
+        found = _one_line(lines, f"  {name}: ", _FIGURE)
+        if isinstance(found, str):
+            problems.append(f"{LANDING}: {found}")
+            continue
+        i, m = found
+        if (LANDING_SOURCES.get(m["source"]), LANDING_SYSTEMS.get(m["system"]), m["field"]) != (report, system, field):
+            problems.append(f"{LANDING}, {name}: bound to {m['source']} › {m['system']} › {m['field']}, expected {report} › {system} › {field}")
+            continue
+        want = _fixed(load(report)[system][field], int(m["digits"]))
+        if Decimal(m["value"]) != Decimal(want):
+            stale.append(f"{LANDING}, {name}: says {m['value']}, {report}.json says {want}")
+            lines[i] = lines[i][:m.start("value")] + want + lines[i][m.end("value"):]
+    for name, reports in LANDING_DATES:
+        found = _one_line(lines, f"export const {name}: Day = ", _DAY)
+        if isinstance(found, str):
+            problems.append(f"{LANDING}: {found}")
+            continue
+        i, m = found
+        if LANDING_SOURCES.get(m["source"]) != reports[0]:
+            problems.append(f"{LANDING}, {name}: cites {m['source']}, expected the report {reports[0]}")
+            continue
+        days = {json.loads((REPORTS / f"{r}.json").read_text(encoding="utf-8"))["generated_at"][:10] for r in reports}
+        if len(days) != 1:
+            problems.append(f"{LANDING}, {name}: {', '.join(reports)} were generated on different days ({', '.join(sorted(days))})")
+            continue
+        want = days.pop()
+        if m["iso"] != want:
+            stale.append(f"{LANDING}, {name}: says {m['iso']}, the reports were generated on {want}")
+            lines[i] = lines[i][:m.start("iso")] + want + lines[i][m.end("iso"):]
+    if write and not problems:
+        text = "\n".join(lines)
+        if text != _read(path):
+            _write(path, text)
+        return []
+    return problems + stale
+
+
 def check_latencies(root: Path = Path(".")) -> list[str]:
-    return latencies(root)
+    return latencies(root) + landing(root)
 
 
 def main(argv: list[str] | tuple = ()) -> int:
     ap = argparse.ArgumentParser(description="the docs' figures against the generated reports")
     ap.add_argument("--write-latencies", action="store_true",
-                    help="copy the reports' latencies into the cells of LATENCY_ROWS (EVALUATION.md, the slides), then check")
+                    help="copy the reports' latencies into the cells of LATENCY_ROWS (EVALUATION.md, the slides) and the "
+                         "landing's machine-dependent figures (web/src/landing/figures.ts), then check")
     if ap.parse_args(list(argv)).write_latencies:
-        for problem in latencies(write=True):
+        for problem in latencies(write=True) + landing(write=True):
             print("not written:", problem)
     text = Path("README.md").read_text(encoding="utf-8")
     lines = text.splitlines()

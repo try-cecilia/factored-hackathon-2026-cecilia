@@ -166,7 +166,7 @@ Last full load `20260929T145046Z-12c946` (2026-09-29, contract 2.1.0, code `0f05
 | `call_transcripts` | `rule:agent_text_rendered` | 171,321 | 171,321 |
 | `call_transcripts` | `rule:dictionary_not_null:duration_seconds` | 24,029 | 171,321 |
 
-`make validate-data-ml` (part of `make gate` and CI) holds the claims about contracts, quality, lineage and freshness, and the classifier's claims, to tests: the committed evidence ([data_ml_validation.md](evidence/data_ml_validation.md), 2026-09-29, code `0d71649`) has contracts PASS (11 tests), quality PASS (2 tests), lineage PASS (13 tests), freshness PASS (4 tests), learned PASS (5 tests), leakage PASS (8 tests).
+`make validate-data-ml` (part of `make gate` and CI) holds the claims about contracts, quality, lineage and freshness, and the classifier's claims, to tests: the committed evidence ([data_ml_validation.md](evidence/data_ml_validation.md), 2026-10-03, code `be7537c9`) has contracts PASS (11 tests), quality PASS (2 tests), lineage PASS (13 tests), freshness PASS (4 tests), learned PASS (5 tests), leakage PASS (8 tests).
 
 ## Reproduce
 
