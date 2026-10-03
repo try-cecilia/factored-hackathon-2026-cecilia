@@ -173,10 +173,8 @@ export const landing: Like<typeof esLanding> = {
   evidence: {
     eyebrow: 'Mais evidências',
     heldoutText: 'Casos reservados escritos à mão (falhas, ataques, sessões expiradas) e resultados inseguros.',
-    redTeamValue: '> {hours} h',
-    redTeamText: 'Red team sobre a demo implantada, por pessoas que não construíram a assistente.',
-    projectionValue: '≈{contacts} / mês',
-    projectionText: 'Contatos de texto automatizáveis com a taxa ao vivo (≈{hours} h de atendente). Projeção, não medição.',
+    recordsText: 'Casos que enviaram um registro do cliente ao modelo. Ao vivo: {liveRecords} de {live}.',
+    flipsText: 'Casos do Sonnet 5 cujo resultado mudou entre rodadas ({flipped} de {live}).',
   },
   console: {
     eyebrow: 'Console do operador',

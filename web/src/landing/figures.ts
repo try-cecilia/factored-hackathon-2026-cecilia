@@ -112,6 +112,7 @@ export const figures = {
   sonnetCost: fig(0.0034, 4, README, '| Model cost per safe resolution | USD 0.0034 | USD 0.0079 |'),
   haikuCost: fig(0.0079, 4, README, '| Model cost per safe resolution | USD 0.0034 | USD 0.0079 |'),
   sonnetFlips: fig(0.7, 1, README, '0.7% (1 of 138)'),
+  sonnetFlippedCases: fig(1, 0, README, '0.7% (1 of 138)'),
   haikuFlips: fig(2.2, 1, README, '2.2% (3 of 138)'),
 
   // Zero observed events bound the true rate below ≈3/n.

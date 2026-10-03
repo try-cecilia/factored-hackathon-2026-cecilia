@@ -174,10 +174,8 @@ export const landing = {
   evidence: {
     eyebrow: 'Más evidencia',
     heldoutText: 'Casos reservados escritos a mano (fallas, ataques, sesiones vencidas) y resultados inseguros.',
-    redTeamValue: '> {hours} h',
-    redTeamText: 'Red team sobre la demo desplegada, por personas que no construyeron el asistente.',
-    projectionValue: '≈{contacts} / mes',
-    projectionText: 'Contactos de texto automatizables con la tasa en vivo (≈{hours} h de agente). Proyección, no medición.',
+    recordsText: 'Casos que mandaron un registro del cliente al modelo. En vivo: {liveRecords} de {live}.',
+    flipsText: 'Casos de Sonnet 5 cuyo resultado cambió entre corridas ({flipped} de {live}).',
   },
   console: {
     eyebrow: 'Consola del operador',

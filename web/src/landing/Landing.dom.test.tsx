@@ -66,6 +66,8 @@ describe('the landing', () => {
     for (const text of ['4,4 M', '84,7%', '0,506', '+8,2 a +34,1', '0,0029', '4.316', '150.000']) {
       expect(screen.getAllByText((_, el) => el?.textContent === text).length, text).toBeGreaterThan(0)
     }
+    expect(screen.getByText('Casos de Sonnet 5 cuyo resultado cambió entre corridas (1 de 138).')).toBeTruthy()
+    expect(screen.getByText('Casos que mandaron un registro del cliente al modelo. En vivo: 0 de 138.')).toBeTruthy()
     expect(screen.getByText(/58\.234 movimientos pendientes en el dataset \(1,99%\)/)).toBeTruthy()
     expect(screen.getByText(/es una cota superior/)).toBeTruthy()
     expect(screen.getByText(/En vivo: 2 de octubre de 2026\./)).toBeTruthy()
