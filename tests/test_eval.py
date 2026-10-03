@@ -513,6 +513,8 @@ def test_a_live_run_with_repeats_keeps_every_runs_rows_and_says_what_code_it_mea
     monkeypatch.setattr(rse, "LLMClient", lambda: None)  # no model: the ideal script stands in for it, run by run
     monkeypatch.setattr(rse, "run", lambda system, mode, cs, live=None: scripted_run(system, "scripted", cs))
     monkeypatch.setenv("ANTHROPIC_API_KEY", "not-used")
+    monkeypatch.setenv("LLM_PROVIDERS", "anthropic")  # main() sets both for the model it runs: recorded here, they are
+    monkeypatch.setenv("ANTHROPIC_MODEL", "m")         # restored after the test
     monkeypatch.setattr(sys, "argv", ["run_system_eval", "--system", "proposed", "--llm", "live", "--repeats", "2", "--cases", str(cases),
                                       "--models", "anthropic:m", "--out-json", str(tmp_path / "r.json"), "--out-md", str(tmp_path / "R.md")])
     rse.main()
