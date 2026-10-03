@@ -214,7 +214,7 @@ export const figures = {
   loadSlots: fig(32, 0, LOADTEST, 'max_concurrent_chats=32'),
   loadModelMs: fig(1800, 0, LOADTEST, 'model simulated at 1800 ms'),
   instanceMemoryMb: fig(512, 0, LIMITATIONS, 'each (512 MB). What that leaves out: no replicas'),
-  demoCustomers: fig(5000, 0, LIMITATIONS, 'no replicas, the API loads a 5,000-customer sample'),
+  demoCustomers: fig(5000, 0, LIMITATIONS, 'no replicas, and the API loads a 5,000-customer sample'),
 
   // Security (SECURITY.md).
   sessionTokenBits: fig(192, 0, SECURITY, '192-bit tokens, stored hashed'),
