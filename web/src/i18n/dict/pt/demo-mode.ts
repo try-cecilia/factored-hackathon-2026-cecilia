@@ -4,24 +4,24 @@ import type { demoMode as source } from '../es/demo-mode.ts'
 export const demoMode: Like<typeof source> = {
   badge: 'DEMO',
   entry: {
-    open: 'Entrar na demo',
-    title: 'Experimentar a Cecilia como cliente',
-    lead: 'Escolha um cliente de teste. Depois, o console do banco fica a um clique, sem chaves.',
-    legend: 'Cliente de teste',
-    roles: {
-      cuentas: { title: 'Várias contas e um cartão', body: 'Saldos, movimentações e uma cobrança para contestar' },
-      pendiente: { title: 'Uma transferência pendente', body: 'Para pedir o rastreio e confirmá-lo com um «sim»' },
-      portugues: { title: 'Cliente que fala português', body: 'A Cecilia responde em português' },
-    },
-    submit: 'Entrar na demo',
-    entering: 'Entrando…',
-    close: 'Fechar',
-    note: 'São contas inventadas que todos os visitantes compartilham: não digite dados reais.',
-    none: 'A demo não tem clientes de teste disponíveis neste momento.',
+    entering: 'Entrando na demo…',
     errors: {
       failed: 'Não foi possível entrar na demo. Tente de novo.',
       limited: 'Muitas tentativas seguidas. Tente de novo em {seconds} s.',
     },
+  },
+  welcome: {
+    title: 'Você está na demo como um cliente de teste.',
+    body: 'Você pode experimentar uma destas situações ou escrever o que quiser. Depois, em «Banco», verá como o seu caso chega a uma pessoa.',
+    label: 'Situações para experimentar',
+    cards: {
+      cuentas: { title: 'Consultar saldos e contestar uma cobrança', body: 'Várias contas e um cartão de crédito' },
+      pendiente: { title: 'Rastrear uma transferência que não chegou', body: 'A Cecilia propõe o rastreio e o abre com o seu «sim»' },
+      portugues: { title: 'Falar em português', body: 'Um cliente que escreve em português, e a Cecilia responde do mesmo jeito' },
+    },
+    starting: 'Preparando a situação…',
+    failed: 'Não foi possível preparar essa situação. Tente de novo.',
+    note: 'São contas inventadas que todos os visitantes compartilham: não digite dados reais.',
   },
   bar: {
     label: 'Modo demo',
@@ -29,6 +29,8 @@ export const demoMode: Like<typeof source> = {
     bank: 'Você está vendo o console do banco. Só aparecem os casos que você abriu.',
     switch: 'Ver como',
     asCustomer: 'Cliente',
+    bankHint: 'Banco: atende o seu caso como faria uma pessoa do banco.',
+    bankHintClose: 'Entendi',
     asBank: 'Banco',
     waiting: 'Aguardando a resposta da Cecilia',
     exit: 'Sair da demo',

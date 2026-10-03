@@ -16,7 +16,7 @@ import { Unavailable } from './-operator/Unavailable'
 type Desk = Extract<DemoDeskView, { status: 'active' }> | { status: 'expired' }
 
 export const Route = createFileRoute('/_demobanco')({
-  // Without the demo console the bank's side does not exist; without a session it starts at the entry dialog. A session that ends
+  // Without the demo console the bank's side does not exist; without a session it starts at the landing ("Probar la demo"). A session that ends
   // while the visitor is here (the 30-second refresh finds it gone) stays on screen and says so, with the way back in.
   beforeLoad: async ({ cause }): Promise<{ desk: Desk }> => {
     // Off, the function is an HTTP 404: a Response where it runs in the server's render, an Error with its text in the browser.
@@ -26,7 +26,7 @@ export const Route = createFileRoute('/_demobanco')({
     })
     if (view.status === 'no_session') {
       if (cause === 'stay') return { desk: { status: 'expired' } }
-      throw redirect({ to: '/', search: { demo: 'entrar' } })
+      throw redirect({ to: '/' })
     }
     return { desk: view }
   },

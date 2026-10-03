@@ -1,25 +1,25 @@
-/** The one-click demo (DEMO_MODE and DEMO_CONSOLE only): the entry dialog, the DEMO bar, the bridge card and the bank's side. */
+/** The one-click demo (DEMO_MODE and DEMO_CONSOLE only): the welcome in the chat, the DEMO bar, the bridge card and the bank's side. */
 export const demoMode = {
   badge: 'DEMO',
   entry: {
-    open: 'Entrar a la demo',
-    title: 'Probar Cecilia como cliente',
-    lead: 'Elegir un cliente de prueba. Después, la consola del banco queda a un clic, sin claves.',
-    legend: 'Cliente de prueba',
-    roles: {
-      cuentas: { title: 'Varias cuentas y una tarjeta', body: 'Saldos, movimientos y un cargo para reclamar' },
-      pendiente: { title: 'Una transferencia pendiente', body: 'Para pedir el rastreo y confirmarlo con un «sí»' },
-      portugues: { title: 'Cliente que habla portugués', body: 'Cecilia responde en portugués' },
-    },
-    submit: 'Entrar a la demo',
-    entering: 'Entrando…',
-    close: 'Cerrar',
-    note: 'Son cuentas inventadas que comparten todos los visitantes: no escribir datos reales.',
-    none: 'La demo no tiene clientes de prueba disponibles en este momento.',
+    entering: 'Entrando a la demo…',
     errors: {
       failed: 'No se pudo entrar a la demo. Intentar de nuevo.',
       limited: 'Demasiados intentos seguidos. Intentar de nuevo en {seconds} s.',
     },
+  },
+  welcome: {
+    title: 'Estás en la demo como un cliente de prueba.',
+    body: 'Puedes probar una de estas situaciones o escribir lo que quieras. Después, en «Banco», verás cómo le llega tu caso a una persona.',
+    label: 'Situaciones para probar',
+    cards: {
+      cuentas: { title: 'Consultar saldos y reclamar un cargo', body: 'Varias cuentas y una tarjeta de crédito' },
+      pendiente: { title: 'Rastrear una transferencia que no llegó', body: 'Cecilia propone el rastreo y lo abre con tu «sí»' },
+      portugues: { title: 'Hablar en portugués', body: 'Un cliente que escribe en portugués, y Cecilia le responde igual' },
+    },
+    starting: 'Preparando la situación…',
+    failed: 'No se pudo preparar esa situación. Intentar de nuevo.',
+    note: 'Son cuentas inventadas que comparten todos los visitantes: no escribir datos reales.',
   },
   bar: {
     label: 'Modo demo',
@@ -27,6 +27,8 @@ export const demoMode = {
     bank: 'Estás viendo la consola del banco. Solo aparecen los casos que abriste.',
     switch: 'Ver como',
     asCustomer: 'Cliente',
+    bankHint: 'Banco: atiende tu caso como lo haría una persona del banco.',
+    bankHintClose: 'Entendido',
     asBank: 'Banco',
     waiting: 'Esperando la respuesta de Cecilia',
     exit: 'Salir de la demo',

@@ -8,19 +8,16 @@ import { I18nProvider } from '../../i18n/context'
 import { translator } from '../../i18n/translate'
 import { dictionaries } from '../../test/render'
 import { BankBridgeCard } from './BankBridgeCard'
-import { EnterDemoHost } from './EnterDemo'
 import { withKnownConflict } from './results'
 import { DemoBar } from './DemoBar'
-import { EnterDemoDialog } from './EnterDemoDialog'
+import { DemoWelcome } from './DemoWelcome'
+import { DemoExpired } from './DemoExpired'
 
 const navigate = vi.hoisted(() => vi.fn(async () => {}))
 const invalidate = vi.hoisted(() => vi.fn(async () => {}))
 const logout = vi.hoisted(() => vi.fn())
 const enterDemo = vi.hoisted(() => vi.fn())
-// Where the visitor is, for the entry button's cancel: the entry link unless a test says otherwise.
-const location = vi.hoisted(() => ({ current: { pathname: '/', search: { demo: 'entrar' } as Record<string, string> } }))
 vi.mock('@tanstack/react-router', () => ({
-  useRouterState: ({ select }: { select: (state: { location: typeof location.current }) => unknown }) => select({ location: location.current }),
   Link: ({ to, params, children, ...rest }: { to: string; params?: Record<string, string>; children?: ReactNode }) => (
     <a href={params ? Object.entries(params).reduce((path, [key, value]) => path.replace(`$${key}`, value), to) : to} {...rest}>{children}</a>
   ),
@@ -37,7 +34,7 @@ const entries: DemoEntry[] = [
 ]
 
 beforeEach(() => {
-  location.current = { pathname: '/', search: { demo: 'entrar' } }
+  window.localStorage.clear()
   navigate.mockClear()
   invalidate.mockClear()
   logout.mockReset().mockResolvedValue({ revoked: true })
@@ -95,17 +92,18 @@ describe('DemoBar', () => {
     expect(screen.getByRole('button', { name: 'Entrar otra vez' })).toBeTruthy()
   })
 
-  it('a failed re-entry is said, and a session of no known customer goes to the entry dialog', async () => {
+  it('a failed re-entry is said, and a session of no known customer enters again as the default one, straight away', async () => {
     enterDemo.mockResolvedValue({ ok: false, reason: 'failed' })
     const { unmount } = renderWithI18n(<DemoBar view="customer" sessionRef="s1" expiresIn={0} role="cuentas" />)
     await userEvent.setup().click(screen.getByRole('button', { name: 'Entrar otra vez' }))
     expect(await screen.findByText('No se pudo entrar otra vez.')).toBeTruthy()
     expect(navigate).not.toHaveBeenCalled()
     unmount()
+    enterDemo.mockResolvedValue({ ok: true, language: 'es' })
     renderWithI18n(<DemoBar view="customer" sessionRef="s1" expiresIn={0} role={null} />)
     await userEvent.setup().click(screen.getByRole('button', { name: 'Entrar otra vez' }))
-    expect(navigate).toHaveBeenCalledWith({ href: '/?demo=entrar' })
-    expect(enterDemo).toHaveBeenCalledTimes(1)
+    expect(enterDemo).toHaveBeenLastCalledWith({ data: { role: 'cuentas' } })
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: '/chat' }))
   })
 
   it('while a message is on its way, "Banco" waits: no link, and the reason is said', async () => {
@@ -136,117 +134,89 @@ describe('DemoBar', () => {
   })
 })
 
-describe('EnterDemoDialog', () => {
-  const showModal = vi.fn(function (this: HTMLDialogElement) { this.setAttribute('open', '') })
-  beforeEach(() => {
-    showModal.mockClear()
-    HTMLDialogElement.prototype.showModal = showModal
-  })
-  afterEach(() => {
-    delete (HTMLDialogElement.prototype as Partial<HTMLDialogElement>).showModal
-  })
-
-  it('opens as a modal dialog with the test customers, the first one chosen', () => {
-    renderWithI18n(<EnterDemoDialog open entries={entries} onClose={() => {}} />)
-    expect(showModal).toHaveBeenCalledTimes(1)
-    const dialog = screen.getByRole('dialog', { name: 'Probar Cecilia como cliente' })
-    const options = within(dialog).getAllByRole('radio')
-    expect(options).toHaveLength(3)
-    expect((within(dialog).getByRole('radio', { name: /Varias cuentas y una tarjeta/ }) as HTMLInputElement).checked).toBe(true)
-    expect(within(dialog).getByText('Son cuentas inventadas que comparten todos los visitantes: no escribir datos reales.')).toBeTruthy()
+describe('BankHint, on the customer\'s side of the bar', () => {
+  it('says what Banco is the first time, and not again once closed', async () => {
+    const { unmount } = renderWithI18n(<DemoBar view="customer" sessionRef="s1" expiresIn={900} role="cuentas" />)
+    const hint = await screen.findByRole('note')
+    expect(hint.textContent).toContain('Banco: atiende tu caso como lo haría una persona del banco.')
+    expect(screen.getByRole('link', { name: 'Banco' }).getAttribute('title')).toBe('Banco: atiende tu caso como lo haría una persona del banco.')
+    await userEvent.setup().click(within(hint).getByRole('button', { name: 'Entendido' }))
+    expect(screen.queryByRole('note')).toBeNull()
+    unmount()
+    renderWithI18n(<DemoBar view="customer" sessionRef="s1" expiresIn={900} role="cuentas" />)
+    await act(async () => {})
+    expect(screen.queryByRole('note')).toBeNull()
   })
 
-  it('enters as the chosen customer with one click, with no PIN, and lands in the chat', async () => {
-    const onClose = vi.fn()
-    renderWithI18n(<EnterDemoDialog open entries={entries} onClose={onClose} />)
-    const user = userEvent.setup()
-    await user.click(screen.getByRole('radio', { name: /Una transferencia pendiente/ }))
-    await user.click(screen.getByRole('button', { name: 'Entrar a la demo' }))
-    expect(enterDemo).toHaveBeenCalledWith({ data: { role: 'pendiente' } })
-    await waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: '/chat' }))
-    expect(invalidate).toHaveBeenCalled()
-    // Entering is not cancelling: the close handler (which leaves the entry link) is not called on the way to the chat.
-    expect(onClose).not.toHaveBeenCalled()
-    expect(screen.queryByRole('textbox')).toBeNull()
+  it('opening Banco counts as having seen it: back on the customer\'s side it does not show', async () => {
+    const { unmount } = renderWithI18n(<DemoBar view="bank" sessionRef="s1" expiresIn={900} role="cuentas" />)
+    await act(async () => {})
+    expect(screen.queryByRole('note')).toBeNull()
+    unmount()
+    renderWithI18n(<DemoBar view="customer" sessionRef="s1" expiresIn={900} role="cuentas" />)
+    await act(async () => {})
+    expect(screen.queryByRole('note')).toBeNull()
   })
 
-  it('the keyboard picks a customer and enters: Space on a radio, Enter on the form', async () => {
-    renderWithI18n(<EnterDemoDialog open entries={entries} onClose={() => {}} />)
-    const user = userEvent.setup()
-    screen.getByRole('radio', { name: /Cliente que habla portugués/ }).focus()
-    await user.keyboard(' ')
-    expect((screen.getByRole('radio', { name: /Cliente que habla portugués/ }) as HTMLInputElement).checked).toBe(true)
-    await user.keyboard('{Enter}')
-    expect(enterDemo).toHaveBeenCalledWith({ data: { role: 'portugues' } })
-  })
-
-  it('while entering the button says so and the options are held; a refusal is said and nothing navigates', async () => {
-    let answer!: (value: unknown) => void
-    enterDemo.mockReturnValue(new Promise((done) => (answer = done)))
-    renderWithI18n(<EnterDemoDialog open entries={entries} onClose={() => {}} />)
-    const user = userEvent.setup()
-    await user.click(screen.getByRole('button', { name: 'Entrar a la demo' }))
-    expect(screen.getByRole('button', { name: /Entrando/ })).toBeTruthy()
-    expect(screen.getByRole('radio', { name: /Varias cuentas/ }).matches(':disabled')).toBe(true)
-    await act(async () => answer({ ok: false, reason: 'limited', retryAfter: 42 }))
-    expect(screen.getByRole('alert').textContent).toBe('Demasiados intentos seguidos. Intentar de nuevo en 42 s.')
-    expect(navigate).not.toHaveBeenCalled()
-  })
-
-  it('a demo that is off (an HTTP 404), or an error on the way, is said with a fixed text', async () => {
-    enterDemo.mockRejectedValueOnce(new Error('Not Found')).mockRejectedValueOnce(new Error('network'))
-    renderWithI18n(<EnterDemoDialog open entries={entries} onClose={() => {}} />)
-    const user = userEvent.setup()
-    for (let i = 0; i < 2; i++) {
-      await user.click(screen.getByRole('button', { name: 'Entrar a la demo' }))
-      await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('No se pudo entrar a la demo. Intentar de nuevo.'))
-    }
-    expect(navigate).not.toHaveBeenCalled()
-  })
-
-  it('the close button closes it', async () => {
-    const onClose = vi.fn()
-    renderWithI18n(<EnterDemoDialog open entries={entries} onClose={onClose} />)
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Cerrar' }))
-    expect(onClose).toHaveBeenCalled()
-  })
-
-  it('in Portuguese', () => {
-    renderWithI18n(<EnterDemoDialog open entries={entries} onClose={() => {}} />, 'pt')
-    expect(screen.getByRole('dialog', { name: 'Experimentar a Cecilia como cliente' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Entrar na demo' })).toBeTruthy()
+  it('in Portuguese', async () => {
+    renderWithI18n(<DemoBar view="customer" sessionRef="s1" expiresIn={900} role="cuentas" />, 'pt')
+    expect((await screen.findByRole('note')).textContent).toContain('Banco: atende o seu caso como faria uma pessoa do banco.')
   })
 })
 
-describe('EnterDemoHost, the dialog of the entry link (/?demo=entrar)', () => {
-  const showModal = vi.fn(function (this: HTMLDialogElement) { this.setAttribute('open', '') })
-  beforeEach(() => void (HTMLDialogElement.prototype.showModal = showModal))
-  afterEach(() => void delete (HTMLDialogElement.prototype as Partial<HTMLDialogElement>).showModal)
-
-  it('entering lands in the chat and nothing sends the visitor back to the landing', async () => {
-    renderWithI18n(<EnterDemoHost entries={entries} open />)
-    await userEvent.setup().click(screen.getByRole('dialog').querySelector('button[type="submit"]') as HTMLButtonElement)
-    await waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: '/chat' }))
-    expect(navigate).toHaveBeenCalledTimes(1)
-    expect(navigate).not.toHaveBeenCalledWith(expect.objectContaining({ to: '/' }))
+describe('DemoWelcome, the chat of the one-click demo before the first message', () => {
+  it('says where the visitor is and offers three situations, each with the verb of what to do', () => {
+    renderWithI18n(<DemoWelcome entries={entries} run={vi.fn()} />)
+    const welcome = screen.getByRole('region', { name: 'Estás en la demo como un cliente de prueba.' })
+    expect(within(welcome).getByText(/Puedes probar una de estas situaciones o escribir lo que quieras/)).toBeTruthy()
+    const cards = within(within(welcome).getByRole('list', { name: 'Situaciones para probar' })).getAllByRole('button')
+    expect(cards.map((c) => c.querySelector('strong')?.textContent)).toEqual([
+      'Consultar saldos y reclamar un cargo', 'Rastrear una transferencia que no llegó', 'Hablar en portugués',
+    ])
   })
 
-  it('cancelling on the entry link leaves the link out of the address', async () => {
-    renderWithI18n(<EnterDemoHost entries={entries} open />)
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Cerrar' }))
-    expect(navigate).toHaveBeenCalledWith({ to: '/', search: {}, replace: true })
+  it('a card starts its scenario through the demo panel (its customer and first message), and holds the others meanwhile', async () => {
+    let done!: (ok: boolean) => void
+    const run = vi.fn(() => new Promise<boolean>((resolve) => (done = resolve)))
+    renderWithI18n(<DemoWelcome entries={entries} run={run} />)
+    await userEvent.setup().click(screen.getByRole('button', { name: /Rastrear una transferencia que no llegó/ }))
+    expect(run).toHaveBeenCalledWith('action_trace')
+    expect(screen.getByRole('button', { name: /Rastrear una transferencia/ }).getAttribute('aria-busy')).toBe('true')
+    expect(screen.getByText('Preparando la situación…')).toBeTruthy()
+    for (const card of screen.getAllByRole('button')) expect((card as HTMLButtonElement).disabled).toBe(true)
+    await act(async () => done(true))
+    expect((screen.getByRole('button', { name: /Hablar en portugués/ }) as HTMLButtonElement).disabled).toBe(false)
   })
 
-  it('without test customers (the demo console off) there is no dialog, whatever the address says', () => {
-    renderWithI18n(<EnterDemoHost entries={[]} open />)
-    expect(screen.queryByRole('dialog')).toBeNull()
+  it('the other two scenarios, and a failure said with a fixed text', async () => {
+    const run = vi.fn(async () => false)
+    renderWithI18n(<DemoWelcome entries={entries} run={run} />)
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: /Consultar saldos/ }))
+    expect(run).toHaveBeenLastCalledWith('normal_balance')
+    expect((await screen.findByRole('alert')).textContent).toBe('No se pudo preparar esa situación. Intentar de nuevo.')
+    await user.click(screen.getByRole('button', { name: /Hablar en portugués/ }))
+    expect(run).toHaveBeenLastCalledWith('normal_pt_arrears')
   })
 
-  it('a close that comes when the visitor is no longer on the entry link does not move them', async () => {
-    location.current = { pathname: '/chat', search: {} }
-    renderWithI18n(<EnterDemoHost entries={entries} open />)
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Cerrar' }))
-    expect(navigate).not.toHaveBeenCalled()
+  it('until the panel hands out its way to run a scenario, the cards wait', () => {
+    renderWithI18n(<DemoWelcome entries={entries} run={null} />)
+    for (const card of screen.getAllByRole('button')) expect((card as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('in Portuguese', () => {
+    renderWithI18n(<DemoWelcome entries={entries} run={vi.fn()} />, 'pt')
+    expect(screen.getByRole('region', { name: 'Você está na demo como um cliente de teste.' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Rastrear uma transferência que não chegou/ })).toBeTruthy()
+  })
+})
+
+describe('DemoExpired, the bank\'s side after the session', () => {
+  it('enters again straight away as the same customer, on the bank\'s side', async () => {
+    renderWithI18n(<DemoExpired role="pendiente" />)
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Entrar otra vez' }))
+    expect(enterDemo).toHaveBeenCalledWith({ data: { role: 'pendiente' } })
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: '/demo/banco' }))
   })
 })
 

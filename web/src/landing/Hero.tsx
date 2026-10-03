@@ -1,14 +1,13 @@
 import { Link } from '@tanstack/react-router'
 import { useT } from '../i18n/context'
 import { figures as F } from './figures'
-import { useDemoEntry } from './demo-entry'
+import { DemoEntryCta } from './demo-entry'
 import { sections } from './links'
 import { useFigures } from './useFigures'
 
 /** The claim, the way in, the four figures that back it, and Cecilia next to a conversation written by the code. */
 export function Hero() {
   const t = useT()
-  const demoEntry = useDemoEntry()
   const f = useFigures()
   return (
     <section className="land-hero" aria-labelledby="land-title">
@@ -21,10 +20,10 @@ export function Hero() {
         </h1>
         <p className="land-hero__lead">{t('landing.hero.lead', { attempts: f.n(F.attemptsPerProvider) })}</p>
         <div className="land-hero__actions">
-          <Link className="ui-btn ui-btn--primary ui-btn--lg land-cta" {...demoEntry}>
+          <DemoEntryCta className="ui-btn ui-btn--primary ui-btn--lg land-cta">
             <span>{t('landing.hero.tryDemo')}</span>
             <span className="land-cta__arrow" aria-hidden="true">→</span>
-          </Link>
+          </DemoEntryCta>
           <a className="ui-btn ui-btn--outline ui-btn--lg land-cta" href={`#${sections.results}`}>{t('landing.hero.seeEvaluation')}</a>
         </div>
         <p className="land-hero__note">{t('landing.hero.disclaimer')}</p>

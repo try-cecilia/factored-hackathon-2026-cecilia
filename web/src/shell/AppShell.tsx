@@ -12,6 +12,7 @@ import type { DemoKit } from '../server/demo.functions'
 import { demoEntries } from '../server/demo-entry'
 import { BankBridgeCard } from '../routes/-demo/BankBridgeCard'
 import { DemoBar } from '../routes/-demo/DemoBar'
+import { DemoWelcome } from '../routes/-demo/DemoWelcome'
 import {
   Button,
   IconButton,
@@ -64,8 +65,19 @@ export function AppShell({ session, kit, children }: { session: Session; kit: Pr
   // Wide screens show the demo panel from the start; narrow ones keep it behind its button until the reader asks. Without the
   // sandbox there is neither panel nor button, so on a narrow screen it can never be opened.
   const [demoChoice, setDemoChoice] = useState<boolean | null>(null)
-  const demoOpen = demoChoice ?? !narrow
-  const setDemoOpen = useCallback((next: boolean | ((open: boolean) => boolean)) => setDemoChoice((current) => (typeof next === 'function' ? next(current ?? !narrow) : next)), [narrow])
+  // The one-click demo (the kit's console): its welcome in the chat is the way in, so the panel of guided scenarios starts closed
+  // there too, behind its button. The welcome's cards run the panel's own scenarios (`runScenario`, handed out by the panel).
+  const [entriesOfKit, setEntriesOfKit] = useState<ReturnType<typeof demoEntries>>([])
+  useEffect(() => {
+    let live = true
+    void kit.then((resolved) => live && setEntriesOfKit(demoEntries(resolved)), () => undefined)
+    return () => void (live = false)
+  }, [kit])
+  const oneClick = entriesOfKit.length > 0
+  const [runScenario, setRunScenario] = useState<((id: string) => Promise<boolean>) | null>(null)
+  const onPanelReady = useCallback((run: (id: string) => Promise<boolean>) => setRunScenario(() => run), [])
+  const demoOpen = demoChoice ?? (!narrow && !oneClick)
+  const setDemoOpen = useCallback((next: boolean | ((open: boolean) => boolean)) => setDemoChoice((current) => (typeof next === 'function' ? next(current ?? (!narrow && !oneClick)) : next)), [narrow, oneClick])
   const [loggingOut, setLoggingOut] = useState(false)
   const [logoutFailed, setLogoutFailed] = useState(false)
   // The case being looked at. `open` slides the view in; the case stays while it slides out, and `seen` counts the openings, so
@@ -134,7 +146,7 @@ export function AppShell({ session, kit, children }: { session: Session; kit: Pr
   const bridge = <Suspense fallback={null}><DemoBridge kit={kit} cases={cases} waiting={sending} /></Suspense>
 
   return (
-    <ShellProvider value={{ showCase, copied: copy.state, bridge }}>
+    <ShellProvider value={{ showCase, copied: copy.state, bridge, welcome: oneClick ? <DemoWelcome entries={entriesOfKit} run={runScenario} /> : undefined }}>
       <a className="skip" href="#main" inert={behind ? true : undefined}>{t('common.skipToContent')}</a>
       <div className="demo-frame">
       <Suspense fallback={null}>
@@ -231,6 +243,7 @@ export function AppShell({ session, kit, children }: { session: Session; kit: Pr
                 copy={copy}
                 onSessionChanged={() => router.invalidate()}
                 onClose={() => setDemoOpen(false)}
+                onReady={onPanelReady}
               />
             )}
           </DemoColumn>

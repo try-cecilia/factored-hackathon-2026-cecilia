@@ -331,6 +331,21 @@ describe('the one-click demo', () => {
     expect(within(bar).getByRole('button', { name: 'Entrar otra vez' })).toBeTruthy()
   })
 
+  it('the empty chat shows the welcome with its three situations, and the panel of guided scenarios starts closed', async () => {
+    const Page = () => <>{useShell().welcome}</>
+    await draw({ kit: console(true), page: <Page /> })
+    const welcome = await screen.findByRole('region', { name: 'Estás en la demo como un cliente de prueba.' })
+    expect(within(welcome).getAllByRole('button')).toHaveLength(1)
+    expect(screen.getByRole('button', { name: 'Demo' }).getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it('without the demo console there is no welcome, and the panel opens on a wide screen as before', async () => {
+    const Page = () => <>{useShell().welcome ?? <p>sin bienvenida</p>}</>
+    await draw({ scenarios, page: <Page /> })
+    expect(screen.getByText('sin bienvenida')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Demo' }).getAttribute('aria-expanded')).toBe('true')
+  })
+
   it('a case nobody has decided yet brings the card to the same case on the bank\'s side', async () => {
     // The chat draws the card over its composer, from the shell's context.
     const Page = () => <>{useShell().bridge}</>

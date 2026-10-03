@@ -1,10 +1,11 @@
-import { Link, useNavigate, useRouter } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import { useT } from '../../i18n/context'
 import { logout } from '../../server/auth.functions'
 import type { DemoRole } from '../../server/demo-entry'
-import { enterDemo } from '../../server/demo.functions'
 import { minutesSeconds } from './expiry'
+import { BankHint } from './BankHint'
+import { DEFAULT_DEMO_ROLE, useEnterDemo } from './useEnterDemo'
 import { useDemoClock } from './useDemoClock'
 import './demo-mode.css'
 
@@ -14,7 +15,7 @@ export type DemoBarProps = {
   /** The session the countdown belongs to, and the seconds the API says it has left. Null: not known (no countdown). */
   sessionRef: string | null
   expiresIn: number | null
-  /** The test customer of this session, to enter again as the same one; null when it is not one of the dialog's (enter from the dialog). */
+  /** The test customer of this session, to enter again as the same one; null when it is not one of the three (the default one, then). */
   role: DemoRole | null
   /**
    * The end is already known (the API said the session is gone, or the chat's own countdown reached 0): the bar says so whatever its
@@ -29,9 +30,6 @@ export type DemoBarProps = {
   inert?: boolean
 }
 
-/** Where entering the demo starts: the home page with its dialog open. */
-export const DEMO_ENTRY_HREF = '/?demo=entrar'
-
 /**
  * The bar of the one-click demo, fixed on top of both sides (Paper "03 · Modo demo sin doble ingreso"): the DEMO chip, what is being
  * seen, "Customer | Bank" to switch with one click, and "Leave the demo". In the session's last three minutes it counts down and offers
@@ -39,33 +37,24 @@ export const DEMO_ENTRY_HREF = '/?demo=entrar'
  */
 export function DemoBar({ view, sessionRef, expiresIn, role, ended = false, holdBank = false, inert }: DemoBarProps) {
   const t = useT()
-  const router = useRouter()
   const navigate = useNavigate()
+  const entry = useEnterDemo()
   const counted = useDemoClock(sessionRef, expiresIn)
   const clock: typeof counted = ended ? { state: 'over' } : counted
-  const [busy, setBusy] = useState<'exit' | 'reenter' | null>(null)
-  const [failed, setFailed] = useState(false)
+  const [exiting, setExiting] = useState(false)
 
   async function exit() {
-    setBusy('exit')
+    setExiting(true)
     // The cookie goes whatever the API answers (auth.functions.ts); the home page is the way back in.
     await logout().catch(() => undefined)
     await navigate({ to: '/' })
-    setBusy(null)
+    setExiting(false)
   }
 
-  async function reenter() {
-    if (!role) return void navigate({ href: DEMO_ENTRY_HREF })
-    setBusy('reenter')
-    setFailed(false)
-    const result = await enterDemo({ data: { role } }).catch(() => null)
-    if (result?.ok) {
-      // A new session, with no cases yet: every loader reads again with it.
-      await router.invalidate()
-      await navigate({ to: view === 'bank' ? '/demo/banco' : '/chat' })
-    } else setFailed(true)
-    setBusy(null)
-  }
+  // A new session as the same test customer, straight away, on the side the visitor is on: it starts with no cases.
+  const reenter = () => entry.enter(role ?? DEFAULT_DEMO_ROLE, view === 'bank' ? '/demo/banco' : '/chat')
+  const busy = exiting || entry.pending
+  const failed = entry.failure !== null
 
   const warning = clock.state !== 'running'
   return (
@@ -75,8 +64,8 @@ export function DemoBar({ view, sessionRef, expiresIn, role, ended = false, hold
         {warning ? (
           <span className="demo-bar__clock">
             <span aria-hidden="true">{clock.state === 'over' ? t('demoMode.bar.ended') : t('demoMode.bar.endsIn', { time: minutesSeconds(clock.seconds) })}</span>
-            <button type="button" className="demo-bar__reenter" onClick={() => void reenter()} disabled={busy !== null}>
-              {busy === 'reenter' ? t('demoMode.bar.reentering') : t('demoMode.bar.reenter')}
+            <button type="button" className="demo-bar__reenter" onClick={() => void reenter()} disabled={busy}>
+              {entry.pending ? t('demoMode.bar.reentering') : t('demoMode.bar.reenter')}
             </button>
           </span>
         ) : (
@@ -88,16 +77,19 @@ export function DemoBar({ view, sessionRef, expiresIn, role, ended = false, hold
         </span>
       </div>
       <div className="demo-bar__tools">
-        <nav className="demo-seg" aria-label={t('demoMode.bar.switch')}>
-          <Link to="/chat" aria-current={view === 'customer' ? 'page' : undefined}>{t('demoMode.bar.asCustomer')}</Link>
-          {holdBank && view === 'customer' ? (
-            <span role="link" aria-disabled="true" title={t('demoMode.bar.waiting')} aria-describedby="demo-bar-waiting">{t('demoMode.bar.asBank')}</span>
-          ) : (
-            <Link to="/demo/banco" aria-current={view === 'bank' ? 'page' : undefined}>{t('demoMode.bar.asBank')}</Link>
-          )}
-        </nav>
-        <button type="button" className="demo-bar__exit" onClick={() => void exit()} disabled={busy !== null}>
-          {busy === 'exit' ? t('demoMode.bar.exiting') : t('demoMode.bar.exit')}
+        <div className="demo-seg-wrap">
+          <nav className="demo-seg" aria-label={t('demoMode.bar.switch')}>
+            <Link to="/chat" aria-current={view === 'customer' ? 'page' : undefined}>{t('demoMode.bar.asCustomer')}</Link>
+            {holdBank && view === 'customer' ? (
+              <span role="link" aria-disabled="true" title={t('demoMode.bar.waiting')} aria-describedby="demo-bar-waiting">{t('demoMode.bar.asBank')}</span>
+            ) : (
+              <Link to="/demo/banco" aria-current={view === 'bank' ? 'page' : undefined} title={t('demoMode.bar.bankHint')}>{t('demoMode.bar.asBank')}</Link>
+            )}
+          </nav>
+          <BankHint view={view} />
+        </div>
+        <button type="button" className="demo-bar__exit" onClick={() => void exit()} disabled={busy}>
+          {exiting ? t('demoMode.bar.exiting') : t('demoMode.bar.exit')}
         </button>
       </div>
     </div>

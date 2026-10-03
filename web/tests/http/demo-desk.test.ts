@@ -223,6 +223,15 @@ describe('only from the app\'s own page: the origin check on top of the framewor
 })
 
 describe('the bank\'s side', () => {
+  test('without a session it is the landing, where one click enters: no dialog, no entry link in the address', async () => {
+    const page = await app.get('/demo/banco')
+    assert.equal(page.status, 307)
+    const to = new URL(page.headers.get('location') ?? '', ORIGIN)
+    assert.equal(to.pathname, '/')
+    assert.equal(to.search, '')
+    await page.arrayBuffer()
+  })
+
   test('carries the customer\'s session and no operator key, even with an operator\'s cookie in the same browser', async () => {
     const both = { Cookie: `cecilai_session=${TOKEN}; cecilai_operator=someone-elses-console-session` }
     for (const [name, data] of READS) await call(name, { method: 'GET', data, headers: both })

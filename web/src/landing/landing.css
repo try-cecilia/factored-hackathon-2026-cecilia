@@ -516,3 +516,6 @@
 @media (pointer: coarse) {
   .land-nav a, .land-footer a, .land-closing__links a { display: inline-flex; align-items: center; min-height: 44px; }
 }
+
+/* The one-click entry could not sign in: said under its button, on a line of its own. */
+.land-cta__error { flex-basis: 100%; margin: 0; color: var(--color-danger); font-size: var(--text-sm); line-height: 20px; }
