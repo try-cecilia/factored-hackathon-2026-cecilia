@@ -1,36 +1,42 @@
 """The jury demo's console: a visitor who signed in as a public sandbox customer resolves, as the bank, the cases that same
 session filed, without an operator key.
 
-Only with DEMO_MODE=1 and DEMO_CONSOLE=1, each exactly "1": with anything else every route here is the same 404 as a route that
-does not exist. There is no operator session: the credential is the customer's session token (X-Session-Token), and it opens
+Only with DEMO_MODE=1 and DEMO_CONSOLE=1, each exactly "1": with anything else every request under /demo/desk is the same 404
+as a route that does not exist, whatever its method or body (`ConsoleSwitch`, which answers before routing and before the body
+is parsed; the routes' own dependencies stay, for the access matrix). There is no operator session: the credential is the customer's session token (X-Session-Token), and it opens
 these routes only for an account in DEMO_PUBLIC_CUSTOMERS, read again on every call. The isolation is here, in the API, not in
 the web: the public accounts' PINs are published, so anyone can call this with their own token. Every ticket is looked up and
-must have been filed by the caller's session (`session_ref`); someone else's answers exactly like one that does not exist. The
-actor of every move is "demo", set here, never by the body. The moves are the real desk's (agent/policy/desk.py), with its
+must have been filed by the caller's session (`session_ref`); someone else's answers exactly like one that does not exist, and is
+looked up the same way (`_session_tickets`), so not even the time taken tells them apart. The actor of every move is "demo", set
+here, never by the body, and a name no real operator may have (agent/session/operators.py). The moves are the real desk's (agent/policy/desk.py), with its
 versions and its conflicts, so approving a trace opens it in the sandbox's tracing service, once.
 
 Checks, in order: the switches (404), a live session (401), a public account (403), the rate limits (429), the ticket (404).
 """
 from __future__ import annotations
 
+import json
 import os
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from agent.policy import desk as desk_policy
-from agent.policy.desk import Conflict, DeskError, NotFound, default_desk
+from agent.policy.desk import Conflict, DeskError, HeldByAnother, NotFound, default_desk
 from agent.policy.escalation import default_queue
 from agent.session.auth import Session, SessionError, default_store
+from agent.session.operators import DEMO_ACTOR
 from agent.session.public_accounts import public_customer_ids
 from agent.tools.traces import default_traces
 from api import customer_context
-from api.demo import _of_session, require_demo
+from api.demo import _of_session, enabled as demo_enabled, require_demo
 from api.human_queue import _DeskSnapshot
 from api.limits import RateLimiter, too_many
 
-ACTOR = "demo"
+ACTOR = DEMO_ACTOR
+PREFIX = "/demo/desk"
 NOT_FOUND = "ticket not found"
 TAKEN = "another person took this case"
 
@@ -42,6 +48,22 @@ def console_enabled() -> bool:
 def require_demo_console() -> None:
     if not console_enabled():
         raise HTTPException(404, "Not Found")
+
+
+class ConsoleSwitch:
+    """ASGI guard: with either switch off, anything under /demo/desk is the 404 of a route that does not exist. It runs before
+    routing and before the body is read, so a method the routes do not take is not a 405 and a malformed body is not a 422.
+    It sits inside the request middleware (api/main.py), so the body cap answers it as it answers any other path."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send) -> None:
+        path = scope.get("path", "") if scope["type"] == "http" else ""
+        if (path == PREFIX or path.startswith(PREFIX + "/")) and not (demo_enabled() and console_enabled()):
+            await JSONResponse({"detail": "Not Found"}, status_code=404)(scope, receive, send)
+            return
+        await self.app(scope, receive, send)
 
 
 # Per visitor (session) and, to bound the total, per public account: every visitor of one account shares the second.
@@ -67,10 +89,30 @@ def demo_visitor(x_session_token: str | None = Header(default=None)) -> Session:
 router = APIRouter(prefix="/demo/desk", dependencies=[Depends(require_demo), Depends(require_demo_console)])
 
 
+def _session_tickets(session: Session) -> dict[str, dict]:
+    """Every ticket this session filed, by id. The whole queue is read and only this session's lines are parsed, whatever id is
+    asked for: finding another session's ticket costs what finding none does (a lookup by id stops at the line it finds)."""
+    path = default_queue.path
+    if not path.exists():
+        return {}
+    found = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if session.ref not in line:
+            continue
+        try:
+            ticket = json.loads(line)
+        except ValueError:
+            continue
+        if (isinstance(ticket, dict) and isinstance(ticket.get("ticket_id"), str) and ticket.get("session_ref") == session.ref
+                and ticket.get("customer_id") == session.customer_id):
+            found[ticket["ticket_id"]] = ticket
+    return found
+
+
 def _own_ticket(ticket_id: str, session: Session) -> dict:
     """The ticket, if this session filed it. Anyone else's answers the same 404 as one that does not exist."""
-    ticket = default_queue.get(ticket_id)
-    if ticket is None or ticket.get("customer_id") != session.customer_id or ticket.get("session_ref") != session.ref:
+    ticket = _session_tickets(session).get(ticket_id)
+    if ticket is None:
         raise HTTPException(404, NOT_FOUND)
     return ticket
 
@@ -124,8 +166,9 @@ def ticket_action(ticket_id: str, action: Literal["claim", "approve", "reject", 
                                 result=body.result_code if action == "resolve" else None)
     except NotFound:
         raise HTTPException(404, NOT_FOUND) from None
+    except HeldByAnother:  # a real operator holds the case: they are not named, whatever the move
+        raise HTTPException(409, TAKEN) from None
     except Conflict as exc:
-        detail = str(exc)  # a conflict that names someone else (a real operator took the case) does not reach the visitor
-        raise HTTPException(409, TAKEN if detail.startswith("ticket is already claimed by") else detail) from None
+        raise HTTPException(409, str(exc)) from None
     except DeskError as exc:
         raise HTTPException(400, str(exc)) from None
