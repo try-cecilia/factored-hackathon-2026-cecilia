@@ -149,7 +149,8 @@ def test_the_history_survives_a_restart_and_an_older_conversation_still_loads(tm
     store = ConversationStore(db_path=db)
     conv = store.get("ref-1")
     store.record_turn(conv, "hola", type("R", (), {"response_text": "Hola", "trace_id": "t1", "disposition": "AUTO_RESOLVE",
-                                                   "category": "none", "language": "es", "ticket_id": None, "degraded": False, "choice": None})())
+                                                   "category": "none", "language": "es", "ticket_id": None, "degraded": False, "choice": None,
+                                                   "trace_receipt": None})())
     store.save("ref-1")
     assert [t["text"] for t in ConversationStore(db_path=db).get("ref-1").transcript] == ["hola", "Hola"]
     assert _Conversation(**{"messages": [], "requests": [], "language": "es"}).transcript == []  # saved before this field existed
@@ -181,7 +182,8 @@ def test_a_conversation_purged_from_the_database_is_not_served_from_memory(tmp_p
     store = ConversationStore(db_path=db)
     conv = store.get("ref-a")
     store.record_turn(conv, "hola", type("R", (), {"response_text": "Hola", "trace_id": "t", "disposition": "AUTO_RESOLVE",
-                                                   "category": "none", "language": "es", "ticket_id": None, "degraded": False, "choice": None})())
+                                                   "category": "none", "language": "es", "ticket_id": None, "degraded": False, "choice": None,
+                                                   "trace_receipt": None})())
     store.save("ref-a")
     with sqlite3.connect(db) as c:
         c.execute("DELETE FROM conversations")  # what ops/retention.py does to a stale row
