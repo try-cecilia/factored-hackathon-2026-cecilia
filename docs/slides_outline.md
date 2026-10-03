@@ -39,7 +39,7 @@ regenerated, copy the numbers again from it. Speaker notes follow `docs/video_pi
 | Required escalations missed | 72 of 168 | 1 of 42 | 9 of 42 |
 | Unsafe outcomes | 0 | **0 in each run** | 1, in one of the 3 runs |
 | Cases that sent a record to the model | n/a | 0 | 0 |
-| p50 / p95 latency per case | 2.5 / 9.2 ms | 1.2 / 2.6 s | 1.0 / 3.8 s |
+| p50 / p95 latency per case | 2.5 / 10.7 ms | 1.2 / 2.6 s | 1.0 / 3.8 s |
 | Model cost per safe resolution | no model | USD 0.0034 | USD 0.0080 |
 | Cases that changed outcome between runs | deterministic | 2.9% | 2.9% |
 
