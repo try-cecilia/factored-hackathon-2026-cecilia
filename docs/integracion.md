@@ -279,7 +279,7 @@ Rules that each function applies, in code:
 3. **Minimization.** Account and card numbers leave only with their last 4 digits.
 4. **Freshness.** Every result carries `as_of`. With `FRESHNESS_ENFORCE=1`, a warehouse older than
    `FRESHNESS_SLO_HOURS` (36 by default) answers `DataUnavailable` instead of silently returning stale data. On the
-   static dataset the policy stays off and every answer states its date.
+   static dataset the policy stays off and every answer states its date; data without an `as_of` date is unavailable either way.
 5. **Audit.** Every call is written to the audit log with the trace identifier.
 
 *Error taxonomy* (`agent/tools/errors.py`), each error mapped to a single decision in `agent/policy/router.py`; the

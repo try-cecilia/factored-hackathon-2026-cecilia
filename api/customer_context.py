@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -40,12 +40,13 @@ def for_ticket(ticket: dict, queue: HumanQueue, desk: TicketDesk, traces: TraceS
                actor: str | None = None) -> dict[str, Any]:
     """`session_ref`, when given, limits the other cases and the traces to that session's; `actor` names who read it in the audit."""
     customer_id = ticket["customer_id"]
-    products, movements, as_of, omitted, error_type = _warehouse(customer_id)
+    products, movements, as_of, omitted, error_type, queried_at, freshness = _warehouse(customer_id)
     available = products is not None
     default_audit_log.event("customer_context_read", ticket_id=ticket["ticket_id"], warehouse="ok" if available else "unavailable",
                             **({} if available else {"error_type": error_type}), **({"actor": actor} if actor else {}))
     return {
-        "warehouse": {"available": available, "as_of": as_of},
+        "warehouse": {"available": available, "source": "account_warehouse", "as_of": as_of,
+                      "queried_at": queried_at, "freshness": freshness},
         "products": products or [],
         "movements": movements or [],
         "pending_omitted": omitted,
@@ -60,22 +61,25 @@ _MOVEMENTS = """SELECT transaction_id, transaction_date, product_id, transaction
                 FROM transactions WHERE customer_id = ? {where} ORDER BY transaction_date DESC, transaction_id LIMIT ?"""
 
 
-def _warehouse(customer_id: str) -> tuple[list[dict] | None, list[dict] | None, str | None, int, str | None]:
-    """(products, movements, data date, pending left out by the cap, None), or (None, None, None, 0, the exception's type) when the warehouse does not answer,
-    whatever the reason. The exception is counted and logged by its type only: its message can quote a path, a query or a customer."""
+def _warehouse(customer_id: str) -> tuple[list[dict] | None, list[dict] | None, str | None, int, str | None, str, str]:
+    """Return the customer data with its source date, query time, and freshness state."""
+    queried_at = datetime.now(timezone.utc).isoformat()
+    as_of = None
     try:
-        account_tools._check_freshness()  # with FRESHNESS_ENFORCE=1 the tools refuse data older than the limit; so does this
+        as_of = account_tools.data_as_of()
+        account_tools._check_freshness()
         if not account_tools._rows("SELECT 1 FROM customers WHERE customer_id = ?", [customer_id]):
             raise LookupError("no such customer")
         products = account_tools._rows(_PRODUCTS, [customer_id])
         latest = account_tools._rows(_MOVEMENTS.format(where=""), [customer_id, MOVEMENTS_SHOWN])
         pending = account_tools._rows(_MOVEMENTS.format(where="AND transaction_status = 'Pending'"), [customer_id, PENDING_SHOWN])
         pending_total = account_tools._rows("SELECT count(*) AS n FROM transactions WHERE customer_id = ? AND transaction_status = 'Pending'", [customer_id])[0]["n"]
-        as_of = account_tools.data_as_of()
     except Exception as exc:
         observability.count_failure("customer_context_unavailable")
         logger.warning("customer context: the warehouse did not answer (%s)", type(exc).__name__)
-        return None, None, None, 0, type(exc).__name__
+        stale = isinstance(exc, account_tools.DataUnavailable) and exc.field == "as_of"
+        freshness = "stale" if stale and as_of else "missing" if stale else "unavailable"
+        return None, None, _iso(as_of), 0, type(exc).__name__, queried_at, freshness
     products = [{"product_id": p["product_id"], "type": p["product_type"], "currency": p["currency"], "status": p["product_status"],
                  "last4": p["last4"]} for p in products]
     seen: set[str] = set()
@@ -87,7 +91,7 @@ def _warehouse(customer_id: str) -> tuple[list[dict] | None, list[dict] | None, 
         movements.append({"transaction_id": m["transaction_id"], "date": _iso(m["transaction_date"]), "product_id": m["product_id"],
                           "type": m["transaction_type"], "amount": _number(m["amount"]), "currency": m["currency"],
                           "merchant": m["merchant_name"], "status": m["transaction_status"], "pending": m["transaction_status"] == "Pending"})
-    return products, movements, _iso(as_of), max(pending_total - len(pending), 0), None
+    return products, movements, _iso(as_of), max(pending_total - len(pending), 0), None, queried_at, "current"
 
 
 def _iso(value: Any) -> str | None:

@@ -49,5 +49,18 @@ def test_freshness_policy_blocks_stale_answers_when_enforced(monkeypatch):
     assert exc.value.field == "as_of"
 
 
+def test_freshness_is_opt_in_and_stale_data_is_served_with_its_date_by_default(monkeypatch):
+    monkeypatch.delenv("FRESHNESS_ENFORCE", raising=False)
+    assert t.get_account_summary("CLI-FIX0004")["as_of"].isoformat() == "2024-01-16"
+
+
+def test_missing_data_date_is_rejected_even_when_age_check_is_disabled(monkeypatch):
+    monkeypatch.setenv("FRESHNESS_ENFORCE", "0")
+    monkeypatch.setattr(t, "data_as_of", lambda: None)
+    with pytest.raises(DataUnavailable) as exc:
+        t.get_account_summary("CLI-FIX0004")
+    assert exc.value.field == "as_of"
+
+
 def test_transaction_limit_is_clamped_in_the_tool_too():
     assert t.list_transactions("CLI-FIX0001", limit=10_000)["limit"] == 50

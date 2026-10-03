@@ -84,6 +84,10 @@ services:
       # The first boot's load on this 512 MB instance: DuckDB's cap plus the Python process (about 170 MB) must fit, and
       # each DuckDB thread holds its own CSV buffers. With the image's 400MB and every core the load was killed for memory
       # (2026-09-29); measurements in docs/operations.md, "Deploy (container)".
+      # The demo serves a static snapshot whose every answer states its date: freshness stays off here explicitly
+      # (opt-in with "1"; docs/data_quality.md), so the deploy never depends on the code's default.
+      - key: FRESHNESS_ENFORCE
+        value: "0"
       - key: DUCKDB_THREADS
         value: "1"
       - key: DUCKDB_MEMORY_LIMIT
