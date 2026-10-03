@@ -16,6 +16,8 @@ export const landing = {
   },
   hero: {
     eyebrow: 'Factored Hackathon 2026 · cuentas y pagos · MX · CO · AR · ES/PT',
+    greeting: 'Hola, soy',
+    name: 'Cecilia',
     title: 'El modelo elige la consulta. El código escribe la respuesta.',
     lead: 'Una consulta al modelo por turno, con hasta {attempts} intentos por proveedor y respaldo en otro proveedor, que nunca recibe registros del cliente. Las respuestas salen de plantillas ES/PT con datos verificados en SQL. Una sola acción con efecto: rastrear un movimiento pendiente, con el «sí» evaluado en código y el pedido releído antes de anunciarse.',
     tryDemo: 'Probar la demo',

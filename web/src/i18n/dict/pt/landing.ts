@@ -15,6 +15,8 @@ export const landing: Like<typeof esLanding> = {
   },
   hero: {
     eyebrow: 'Factored Hackathon 2026 · contas e pagamentos · MX · CO · AR · ES/PT',
+    greeting: 'Olá, sou a',
+    name: 'Cecilia',
     title: 'O modelo escolhe a consulta. O código escreve a resposta.',
     lead: 'Uma consulta ao modelo por turno, com até {attempts} tentativas por provedor e reserva em outro provedor, que nunca recebe registros do cliente. As respostas saem de modelos de texto ES/PT com dados verificados em SQL. Uma única ação com efeito: rastrear uma movimentação pendente, com o «sim» avaliado no código e o pedido relido antes de ser anunciado.',
     tryDemo: 'Testar a demo',

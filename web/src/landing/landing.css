@@ -60,7 +60,10 @@
 }
 .land-hero__copy { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
 .land-hero__eyebrow { display: flex; align-items: center; gap: 8px; color: var(--color-ink-soft); font-size: var(--text-compact-md); font-weight: var(--font-weight-medium); line-height: 16px; }
-.land-hero__title { font-size: 68px; font-weight: var(--font-weight-bold); letter-spacing: -0.045em; line-height: 70px; }
+.land-hero__title { display: flex; flex-direction: column; gap: 14px; font-size: 68px; font-weight: var(--font-weight-bold); letter-spacing: -0.045em; line-height: 70px; }
+/* «Hola, soy Cecilia.» is the big line, her name in the brand blue; the claim under it keeps the technical register. */
+.land-hero__name { color: var(--color-cecil-blue); }
+.land-hero__claim { font-size: 34px; letter-spacing: -0.035em; line-height: 38px; }
 .land-hero__lead { max-width: 600px; color: var(--color-ink-70); font-size: 17px; letter-spacing: -0.005em; line-height: 27px; }
 .land-hero__actions { display: flex; flex-wrap: wrap; gap: 12px; padding-top: 8px; }
 .land-hero__note { color: var(--color-ink-muted); font-size: var(--text-compact-md); line-height: 16px; }
@@ -349,6 +352,7 @@
 @media (max-width: 1199px) {
   .land { --land-pad: 40px; }
   .land-hero__title { font-size: 56px; line-height: 58px; }
+  .land-hero__claim { font-size: 30px; line-height: 34px; }
   .land-baseline__in { grid-template-columns: minmax(0, 1fr); gap: 24px; }
   .land-baseline__list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px 40px; }
   .land-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -413,7 +417,8 @@
 
   .land-hero { gap: 28px; padding-block: 28px 32px; }
   .land-hero__copy { gap: 20px; }
-  .land-hero__title { font-size: 44px; line-height: 46px; }
+  .land-hero__title { gap: 10px; font-size: 44px; line-height: 46px; }
+  .land-hero__claim { font-size: 26px; letter-spacing: -0.03em; line-height: 30px; }
   .land-hero__lead { font-size: var(--text-base); line-height: 25px; }
   .land-hero__actions { flex-direction: column; gap: 10px; padding-top: 0; }
   .land-hero__actions .land-cta { width: 100%; border-radius: var(--radius-xl); }
@@ -501,6 +506,7 @@
 }
 @media (max-width: 359px) {
   .land-hero__title { font-size: 38px; line-height: 40px; }
+  .land-hero__claim { font-size: 23px; line-height: 27px; }
   .land-strip strong { font-size: var(--text-lg); }
   .land-evidence { grid-template-columns: minmax(0, 1fr); }
   .land-lines dt { width: 96px; }

@@ -12,7 +12,11 @@ export function Hero() {
     <section className="land-hero" aria-labelledby="land-title">
       <div className="land-hero__copy">
         <p className="land-hero__eyebrow"><span className="land-dot" aria-hidden="true" />{t('landing.hero.eyebrow')}</p>
-        <h1 id="land-title" className="land-hero__title">{t('landing.hero.title')}</h1>
+        {/* One heading: Cecilia introduces herself, and the claim that says how she works is the rest of it. */}
+        <h1 id="land-title" className="land-hero__title">
+          <span className="land-hero__hello">{t('landing.hero.greeting')} <span className="land-hero__name">{t('landing.hero.name')}</span>.</span>{' '}
+          <span className="land-hero__claim">{t('landing.hero.title')}</span>
+        </h1>
         <p className="land-hero__lead">{t('landing.hero.lead', { attempts: f.n(F.attemptsPerProvider) })}</p>
         <div className="land-hero__actions">
           <Link className="ui-btn ui-btn--primary ui-btn--lg land-cta" {...demoEntry}>

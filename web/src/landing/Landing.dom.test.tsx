@@ -20,7 +20,7 @@ describe('the landing', () => {
   it('has one h1, the landmarks and every section of the design, in order', () => {
     renderWithI18n(<Landing />)
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('El modelo elige la consulta. El código escribe la respuesta.')
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Hola, soy Cecilia. El modelo elige la consulta. El código escribe la respuesta.')
     expect(screen.getByRole('banner')).toBeTruthy()
     expect(screen.getByRole('main')).toBeTruthy()
     expect(screen.getByRole('contentinfo')).toBeTruthy()
@@ -156,7 +156,7 @@ describe('the landing', () => {
 
   it('speaks Portuguese with the same figures', () => {
     renderWithI18n(<Landing />, 'pt')
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('O modelo escolhe a consulta. O código escreve a resposta.')
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Olá, sou a Cecilia. O modelo escolhe a consulta. O código escreve a resposta.')
     expect(screen.getByRole('link', { name: /Entrar na demo/ })).toBeTruthy()
     expect(screen.getByText(/Ao vivo: 2 de outubro de 2026; a tabela mostra a rodada 1 de 3/)).toBeTruthy()
     expect(screen.getAllByText((_, el) => el?.textContent === '84,7%').length).toBeGreaterThan(0)
