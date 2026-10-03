@@ -136,6 +136,7 @@ def test_writing_fixes_the_landings_old_latencies_and_day_and_nothing_else(tmp_p
 def test_the_landing_writer_never_touches_a_figure_outside_its_list(tmp_path):
     """The live figures and the security ones are bound to reports too, but they do not depend on the machine."""
     root = _docs(tmp_path)
+    current = _line(_landing(root).read_text(encoding="utf-8"), "  keywordLatencyP50: ")
     for name, other in (("sonnetP50", "9.9"), ("haikuCost", "0.1234"), ("sessionTokenBits", "1"), ("liveCases", "1")):
         _set_value(_landing(root), name, other)
     _set_value(_landing(root), "keywordLatencyP50", "4.1")
@@ -143,7 +144,7 @@ def test_the_landing_writer_never_touches_a_figure_outside_its_list(tmp_path):
     assert check_readme.landing(root, write=True) == []
     after = _landing(root).read_text(encoding="utf-8")
     changed = [(a, b) for a, b in zip(before.split("\n"), after.split("\n")) if a != b]
-    assert len(changed) == 1 and changed[0][1].startswith("  keywordLatencyP50: json(2.4,"), changed
+    assert changed == [(changed[0][0], current)], changed
     for name in ("sonnetP50: json(9.9,", "haikuCost: json(0.1234,", "sessionTokenBits: fig(1,", "liveCases: json(1,"):
         assert f"  {name}" in after, name  # left as it was: outside the list, never written
 
@@ -151,11 +152,9 @@ def test_the_landing_writer_never_touches_a_figure_outside_its_list(tmp_path):
 @LANDING_HERE
 @pytest.mark.parametrize("edit,why", [
     (lambda t: t.replace("  idealLatencyP95: json(", "  idealLatencyP95x: json("), "0 lines start with 'idealLatencyP95:'"),  # renamed
-    (lambda t: t.replace("  keywordLatencyP50: json(2.4, 1, OFFLINE, [...KEYWORD, 'latency_ms_p50']),",
-                         "  keywordLatencyP50: json(2.4, 1, OFFLINE, [...KEYWORD, 'latency_ms_p50']),\n  keywordLatencyP50: json(2.4, 1, OFFLINE, [...KEYWORD, 'latency_ms_p50']),"),
-     "2 lines start with 'keywordLatencyP50:'"),                                                                       # duplicated
+    (lambda t: re.sub(r"^(  keywordLatencyP50: .*\n)", r"\1\1", t, count=1, flags=re.M), "2 lines start with 'keywordLatencyP50:'"),  # duplicated
     (lambda t: t.replace("[...KEYWORD, 'latency_ms_p95']", "[...IDEAL, 'latency_ms_p95']"), "expected system_eval › baseline › latency_ms_p95"),  # other system
-    (lambda t: t.replace("json(17.5, 1, OFFLINE, [...IDEAL, 'latency_ms_p95'])", "json(17.5, 1, OFFLINE, [...IDEAL, 'latency_ms_p50'])"), "expected system_eval › proposed (scripted) › latency_ms_p95"),  # other field
+    (lambda t: re.sub(r"^(  idealLatencyP95: .*)'latency_ms_p95'", r"\1'latency_ms_p50'", t, count=1, flags=re.M), "expected system_eval › proposed (scripted) › latency_ms_p95"),  # other field
     (lambda t: t.replace("adversarialLatencyP50: json(", "adversarialLatencyP50: fig("), "is not shaped as expected"),  # another binding
     (lambda t: re.sub(r"(offlineRunDate: Day = \{ iso: '[\d-]+', source: )OFFLINE", r"\g<1>LIVE", t), "cites LIVE, expected the report system_eval"),  # another report for the day
 ])
@@ -227,7 +226,7 @@ def _crlf(path: Path) -> bytes:
 def test_a_crlf_landing_keeps_every_byte_but_the_value(tmp_path):
     root = _docs(tmp_path)
     current = _crlf(_landing(root))
-    _set_value_bytes(_landing(root), b"keywordLatencyP50: json(2.4,", b"keywordLatencyP50: json(4.1,")
+    _set_value_bytes(_landing(root), _line(current, b"  keywordLatencyP50: "), b"  keywordLatencyP50: json(999.9, 1, OFFLINE, [...KEYWORD, 'latency_ms_p50']),")
     assert check_readme.landing(root, write=True) == []
     assert _landing(root).read_bytes() == current  # 259-odd CRLF endings kept, only the value back
 
@@ -236,9 +235,15 @@ def test_a_crlf_landing_keeps_every_byte_but_the_value(tmp_path):
 def test_a_crlf_document_keeps_every_byte_but_the_cells(tmp_path):
     root = _docs(tmp_path)
     current = _crlf(root / "EVALUATION.md")
-    _set_value_bytes(root / "EVALUATION.md", NON_LLM.encode() + b" 2.4 / 8.5 ms", NON_LLM.encode() + b" 6.5 / 31.3 ms")
+    _set_value_bytes(root / "EVALUATION.md", _line(current, NON_LLM.encode()), NON_LLM.encode() + b" 999.9 / 999.9 ms | 999.9 / 999.9 ms | 999.9 / 999.9 ms |")
     assert check_readme.latencies(root, write=True) == []
     assert (root / "EVALUATION.md").read_bytes() == current
+
+
+def _line(text, start):
+    """The line of `text` (str or bytes) that starts with `start`, without its ending: the tests never hard-code a value the next regeneration may change."""
+    newline, cr = ("\n", "\r") if isinstance(text, str) else (b"\n", b"\r")
+    return next(ln for ln in text.split(newline) if ln.startswith(start)).removesuffix(cr)
 
 
 def _set_value_bytes(path: Path, old: bytes, new: bytes) -> None:
