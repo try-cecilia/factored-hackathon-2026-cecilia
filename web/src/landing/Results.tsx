@@ -10,14 +10,15 @@ export function Results() {
   const f = useFigures()
   const unsafe = (k: typeof F.idealUnsafe) => `${f.n(k)}/${f.n(F.offlineCases)}`
   const notApplicable = <><span aria-hidden="true">—</span><span className="sr-only">{t('landing.results.notApplicable')}</span></>
-  const runs = (values: number[]) => values.join(' · ')
+  const runs = (values: Array<typeof F.sonnetUnsafeRun1>) => values.map((v) => f.n(v)).join(' · ')
+  const haikuUnsafe = F.haikuUnsafeRun1.value + F.haikuUnsafeRun2.value + F.haikuUnsafeRun3.value
   return (
     <section id={sections.results} className="land-sec land-results" aria-labelledby="land-results">
       <div className="land-in">
         <div className="land-head land-head--split">
           <div>
             <Eyebrow>{t('landing.results.eyebrow')}</Eyebrow>
-            <h2 id="land-results" className="land-title">{t('landing.results.title', { offline: f.n(F.offlineCases), live: f.n(F.liveCases), haikuUnsafe: f.n(F.haikuUnsafeRun2) })}</h2>
+            <h2 id="land-results" className="land-title">{t('landing.results.title', { offline: f.n(F.offlineCases), live: f.n(F.liveCases), haikuUnsafe: haikuUnsafe })}</h2>
           </div>
           <p className="land-head__aside">{t('landing.results.note', { types: f.n(F.caseTypes), cells: f.n(F.countrySegmentCells) })}</p>
         </div>
@@ -50,7 +51,8 @@ export function Results() {
             rows={[
               { label: t('landing.results.live.safe', { eligible: f.n(F.liveEligible) }), cells: [f.pct(F.sonnetSafe), f.pct(F.haikuSafe)] },
               { label: t('landing.results.live.recall'), cells: [f.pct(F.sonnetRecall), f.pct(F.haikuRecall)] },
-              { label: t('landing.results.live.unsafeRuns'), cells: [runs([F.sonnetUnsafe.value, F.sonnetUnsafe.value, F.sonnetUnsafe.value]), runs([0, F.haikuUnsafeRun2.value, 0])], strong: true, tones: ['good'] },
+              { label: t('landing.results.live.unsafeRuns'), cells: [runs([F.sonnetUnsafeRun1, F.sonnetUnsafeRun2, F.sonnetUnsafeRun3]), runs([F.haikuUnsafeRun1, F.haikuUnsafeRun2, F.haikuUnsafeRun3])], strong: true, tones: ['good'] },
+              { label: t('landing.results.live.missedRuns'), cells: [runs([F.sonnetMissedRun1, F.sonnetMissedRun2, F.sonnetMissedRun3]), runs([F.haikuMissedRun1, F.haikuMissedRun2, F.haikuMissedRun3])] },
               { label: t('landing.results.live.records'), cells: [f.n(F.sonnetRecordsToModel), f.n(F.haikuRecordsToModel)] },
               { label: t('landing.results.live.latency'), cells: [`${f.n(F.sonnetP50)} / ${f.n(F.sonnetP95)} s`, `${f.n(F.haikuP50)} / ${f.n(F.haikuP95)} s`] },
               { label: t('landing.results.live.cost'), cells: [`US$ ${f.n(F.sonnetCost)}`, `US$ ${f.n(F.haikuCost)}`] },

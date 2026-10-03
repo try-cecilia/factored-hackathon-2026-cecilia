@@ -41,7 +41,13 @@ function mismatch(name: string, figure: Figure): string | null {
   if ('quote' in figure && !read(figure.source).includes(figure.quote)) return `${name}: "${figure.quote}" is no longer in ${figure.source}`
   if (name in derived) return derived[name](figure) === figure.value ? null : `${name}: derived ${derived[name](figure)}, shown ${shown}`
   let source: number
-  if ('at' in figure) {
+  if ('rows' in figure) {
+    const list = field(figure.source, figure.rows)
+    if (!Array.isArray(list)) return `${name}: ${figure.source} has no rows at ${figure.rows.join(' › ')}`
+    const matches = (row: Record<string, unknown>) =>
+      Object.entries(figure.where).every(([key, want]) => (typeof want === 'boolean' ? (Array.isArray(row[key]) ? (row[key] as unknown[]).length > 0 : Boolean(row[key])) === want : row[key] === want))
+    source = list.filter(matches).length
+  } else if ('at' in figure) {
     const value = field(figure.source, figure.at)
     if (figure.count) source = value && typeof value === 'object' ? Object.keys(value).length : NaN
     else if (typeof value !== 'number') return `${name}: ${figure.source} has no number at ${figure.at.join(' › ')}`
@@ -72,6 +78,9 @@ test('a figure taken from the wrong column, percentile, unit or row is rejected'
     ['redTeamSessions', 224], // the turns
     ['guardRecall', 0], // the false escalations
     ['attemptsPerProvider', 4], // two providers × two attempts is not the per-provider constant
+    ['haikuUnsafeRun2', 0], // run 2 had Haiku's one unsafe outcome
+    ['sonnetMissedRun3', 1], // Sonnet missed its escalation in runs 1 and 2, not 3
+    ['sonnetRecall', 100], // run 3's recall, not run 1's
   ]
   for (const [name, value] of wrong) assert.notEqual(mismatch(name, { ...figures[name], value }), null, `${name} = ${value} passed`)
   // A derived figure needs its quote too: a made-up span that says 120 minutes is not in RED_TEAM.md.
@@ -106,8 +115,8 @@ test('figures come out in the notation of each language', () => {
   assert.equal(formatNumber(95, 1, 'pt'), '95,0')
   assert.equal(formatFigure(figures.classifier, 'es'), '84,7')
   assert.equal(formatMillions(figures.transactions, 'es'), '4,4')
-  assert.equal(formatDate(liveRunDate.iso, 'es'), '2 de octubre de 2026')
-  assert.equal(formatDate(liveRunDate.iso, 'pt'), '2 de outubro de 2026')
-  assert.equal(formatShortDate(liveRunDate.iso, 'es'), '02/10/2026')
+  assert.equal(formatDate(liveRunDate.iso, 'es'), '3 de octubre de 2026')
+  assert.equal(formatDate(liveRunDate.iso, 'pt'), '3 de outubro de 2026')
+  assert.equal(formatShortDate(liveRunDate.iso, 'es'), '03/10/2026')
   assert.equal(formatShortDate(redTeamDate.iso, 'pt'), '30/09/2026')
 })
