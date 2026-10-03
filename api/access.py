@@ -12,6 +12,8 @@ row, a row has no route, or a route that should demand a key does not carry that
 unclassified. tests/test_access_matrix.py then calls every row as every role and compares the answer with this table.
 
 `demo_only` rows answer 404 to everyone unless DEMO_MODE=1 (the jury sandbox): they are not part of the surface anywhere else.
+`demo_console` rows (the demo's console, api/demo_desk.py) also need DEMO_CONSOLE=1; both rules are checked against the routes'
+dependencies (require_demo, require_demo_console) when the service starts.
 `optional` rows exist only when EXPOSE_API_DOCS=1.
 """
 from __future__ import annotations
@@ -33,6 +35,7 @@ ANYONE = frozenset(Role)
 CUSTOMER, OPERATOR, ADMIN = frozenset({Role.CUSTOMER}), frozenset({Role.OPERATOR}), frozenset({Role.ADMIN})
 
 GUARDS = {"admin": "require_admin", "operator": "require_operator", "metrics": "require_metrics"}
+SWITCHES = {"demo_only": "require_demo", "demo_console": "require_demo_console"}
 
 
 @dataclass(frozen=True)
@@ -40,6 +43,7 @@ class Policy:
     roles: frozenset[Role]  # who gets past the door
     guard: str = "none"  # none | session (checked in the handler) | admin | operator | metrics (a dependency on the route)
     demo_only: bool = False
+    demo_console: bool = False  # demo_only and, besides, DEMO_CONSOLE=1
     optional: bool = False
     note: str = ""
 
@@ -83,6 +87,16 @@ POLICY: dict[tuple[str, str], Policy] = {
     ("POST", "/demo/tickets"): Policy(CUSTOMER, "session", demo_only=True, note="the session's own tickets"),
     ("POST", "/demo/traces"): Policy(CUSTOMER, "session", demo_only=True, note="the session's own trace requests"),
     ("GET", "/admin/demo_pin/{customer_id}"): Policy(ADMIN, "admin", demo_only=True, note="derives any customer's test PIN"),
+    # The demo's console: the customer's own session acts as the bank, only on a public sandbox account and only on its own tickets
+    ("GET", "/demo/desk/tickets"): Policy(CUSTOMER, "session", demo_only=True, demo_console=True,
+                                          note="a public sandbox account only; the session's own tickets, with their desk state"),
+    ("GET", "/demo/desk/tickets/{ticket_id}"): Policy(CUSTOMER, "session", demo_only=True, demo_console=True,
+                                                      note="the session's own ticket; anyone else's is the same 404 as none"),
+    ("GET", "/demo/desk/tickets/{ticket_id}/customer_context"): Policy(
+        CUSTOMER, "session", demo_only=True, demo_console=True, note="as the admin's, with the other cases and traces of this session only"),
+    ("POST", "/demo/desk/tickets/{ticket_id}/{action}"): Policy(
+        CUSTOMER, "session", demo_only=True, demo_console=True,
+        note="claim, approve, reject, release, resolve on the session's own ticket; the actor is always `demo`"),
     # FastAPI's own pages: the API's schema is not published unless asked for
     ("GET", "/openapi.json"): Policy(ANYONE, optional=True, note="EXPOSE_API_DOCS=1"),
     ("GET", "/docs"): Policy(ANYONE, optional=True, note="EXPOSE_API_DOCS=1"),
@@ -123,6 +137,16 @@ def problems(app, policy: dict[tuple[str, str], Policy] = POLICY) -> list[str]:
         if GUARDS[row.guard] not in _dependency_names(dependant):
             out.append(f"{key[0]} {key[1]}: declared {row.guard!r} but the route does not depend on {GUARDS[row.guard]}")
     for key, row in sorted(policy.items()):
+        rc = routes.get(key)
+        if rc is None:
+            continue
+        names = _dependency_names(getattr(getattr(rc, "route", None), "dependant", None))
+        for flag, guard in SWITCHES.items():
+            if getattr(row, flag) and guard not in names:
+                out.append(f"{key[0]} {key[1]}: declared {flag} but the route does not depend on {guard}")
+        if row.demo_console and not row.demo_only:
+            out.append(f"{key[0]} {key[1]}: demo_console without demo_only")
+    for key, row in sorted(policy.items()):
         if key in routes and row.guard not in ("none", "session", *GUARDS):
             out.append(f"{key[0]} {key[1]}: unknown guard {row.guard!r}")
     return out
@@ -136,11 +160,13 @@ def check_app(app, policy: dict[tuple[str, str], Policy] = POLICY) -> None:
 
 def matrix_markdown(policy: dict[tuple[str, str], Policy] = POLICY) -> str:
     """The matrix as the Markdown table in docs/operations.md ("Access control"); tests/test_access_matrix.py keeps the two equal.
-    `yes` = gets past the door; `-` = refused. Demo-only rows say so: without DEMO_MODE=1 they are a 404 for every role."""
+    `yes` = gets past the door; `-` = refused. Demo-only rows say so: without DEMO_MODE=1 they are a 404 for every role, and the
+    demo console's also without DEMO_CONSOLE=1."""
     header = ["Endpoint", *(r.value for r in Role), "Notes"]
     lines = ["| " + " | ".join(header) + " |", "|" + "|".join("---" for _ in header) + "|"]
     for (method, path), row in policy.items():
-        note = ("demo only. " if row.demo_only else "") + ("with EXPOSE_API_DOCS=1. " if row.optional else "") + row.note
+        note = (("demo console only (DEMO_CONSOLE=1). " if row.demo_console else "demo only. ") if row.demo_only else "") + (
+            "with EXPOSE_API_DOCS=1. " if row.optional else "") + row.note
         cells = ["yes" if r in row.roles else "-" for r in Role]
         lines.append(f"| `{method} {path}` | " + " | ".join(cells) + f" | {note.strip()} |")
     return "\n".join(lines)

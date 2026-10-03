@@ -8,6 +8,9 @@ serves, and a message can quote a path, a query or a customer. The read is recor
 the outcome and, on a failure, the exception's type. The cases and traces come
 from the queue, the desk and the trace file, so they are there even when the warehouse is not: the warehouse's part is `warehouse`
 (available or not), and when it fails the rest is still answered.
+
+The jury demo's console (api/demo_desk.py) reads it for a public sandbox account, which many visitors share: there it passes the
+visitor's `session_ref`, and the cases and traces are only that session's, never another visitor's.
 """
 from __future__ import annotations
 
@@ -33,19 +36,21 @@ CASES_SHOWN = 10
 TRACES_SHOWN = 10
 
 
-def for_ticket(ticket: dict, queue: HumanQueue, desk: TicketDesk, traces: TraceService) -> dict[str, Any]:
+def for_ticket(ticket: dict, queue: HumanQueue, desk: TicketDesk, traces: TraceService, session_ref: str | None = None,
+               actor: str | None = None) -> dict[str, Any]:
+    """`session_ref`, when given, limits the other cases and the traces to that session's; `actor` names who read it in the audit."""
     customer_id = ticket["customer_id"]
     products, movements, as_of, omitted, error_type = _warehouse(customer_id)
     available = products is not None
     default_audit_log.event("customer_context_read", ticket_id=ticket["ticket_id"], warehouse="ok" if available else "unavailable",
-                            **({} if available else {"error_type": error_type}))
+                            **({} if available else {"error_type": error_type}), **({"actor": actor} if actor else {}))
     return {
         "warehouse": {"available": available, "as_of": as_of},
         "products": products or [],
         "movements": movements or [],
         "pending_omitted": omitted,
-        "cases": _other_cases(ticket, queue, desk),
-        "traces": _traces(customer_id, traces.path),
+        "cases": _other_cases(ticket, queue, desk, session_ref),
+        "traces": _traces(customer_id, traces.path, session_ref),
     }
 
 
@@ -93,16 +98,18 @@ def _number(value: Any) -> float | None:
     return None if value is None else float(value)
 
 
-def _other_cases(ticket: dict, queue: HumanQueue, desk: TicketDesk) -> list[dict]:
-    """The customer's other cases, newest first, each with the desk's state now."""
-    others = [t for t in queue.for_customer(ticket["customer_id"]) if t["ticket_id"] != ticket["ticket_id"]]
+def _other_cases(ticket: dict, queue: HumanQueue, desk: TicketDesk, session_ref: str | None = None) -> list[dict]:
+    """The customer's other cases (only that session's, given one), newest first, each with the desk's state now."""
+    others = [t for t in queue.for_customer(ticket["customer_id"]) if t["ticket_id"] != ticket["ticket_id"]
+              and (session_ref is None or t.get("session_ref") == session_ref)]
     others.sort(key=lambda t: t.get("created_at") or 0, reverse=True)
     return [{"ticket_id": t["ticket_id"], "category": t.get("category"), "queue": t.get("queue"), "priority": t.get("priority"),
              "created_at": t.get("created_at"), "status": desk.state(t["ticket_id"])["status"]} for t in others[:CASES_SHOWN]]
 
 
-def _traces(customer_id: str, path: Path) -> list[dict]:
-    """The customer's trace requests, newest first. A line that is not a JSON object is skipped, never quoted."""
+def _traces(customer_id: str, path: Path, session_ref: str | None = None) -> list[dict]:
+    """The customer's trace requests (only that session's, given one), newest first. A line that is not a JSON object is
+    skipped, never quoted."""
     if not path.exists():
         return []
     found = []
@@ -113,7 +120,8 @@ def _traces(customer_id: str, path: Path) -> list[dict]:
             request = json.loads(line)
         except ValueError:
             continue
-        if isinstance(request, dict) and request.get("customer_id") == customer_id:
+        if isinstance(request, dict) and request.get("customer_id") == customer_id and (
+                session_ref is None or request.get("session_ref") == session_ref):
             found.append({"trace_id": request.get("trace_id"), "transaction_id": request.get("transaction_id"),
                           "status": request.get("status"), "created_at": request.get("created_at")})
     found.sort(key=lambda t: t["created_at"] or 0, reverse=True)
