@@ -35,6 +35,12 @@ MSG = {
                      "pt": "Pronto: abri o pedido de rastreamento {tid} para a {mov}. A equipe de operações responde em até {sla} dias úteis; se pedirem, o número é {tid}."},
     "trace_already_open": {"es": "Ya tienes abierto el pedido de rastreo {tid} para la {mov}. Operaciones responde en hasta {sla} días hábiles desde que se abrió.",
                            "pt": "Você já tem aberto o pedido de rastreamento {tid} para a {mov}. A equipe de operações responde em até {sla} dias úteis desde a abertura."},
+    # A trace request that matched nothing, said only once the ticket reads back. "Nothing pending" only for a search the
+    # customer did not narrow: with an amount, a date or a product, other movements may still be pending.
+    "trace_unmatched": {"es": "No encontré transferencias, pagos ni depósitos pendientes en tus cuentas. Paso tu caso a un agente con todo el detalle para que revise el movimiento; no hace falta que lo repitas.",
+                        "pt": "Não encontrei transferências, pagamentos nem depósitos pendentes nas suas contas. Vou encaminhar seu caso a um atendente, com todos os detalhes, para analisar a movimentação; você não precisa repetir."},
+    "trace_unmatched_filtered": {"es": "No encontré ningún movimiento pendiente que coincida con los datos que me diste. Paso tu caso a un agente con todo el detalle para que revise el movimiento; no hace falta que lo repitas.",
+                                 "pt": "Não encontrei nenhuma movimentação pendente que corresponda aos dados que você informou. Vou encaminhar seu caso a um atendente, com todos os detalhes, para analisar a movimentação; você não precisa repetir."},
     "trace_cancelled": {"es": "Entendido, no abrí ningún pedido. Si más adelante lo necesitas, pídemelo.",
                         "pt": "Entendido, não abri nenhum pedido. Se precisar depois, é só pedir."},
     # What the customer is told when a person acts on their case (agent/policy/desk.py). Never the operator's name or a

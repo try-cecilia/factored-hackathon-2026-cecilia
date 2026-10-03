@@ -578,8 +578,9 @@ class Orchestrator:
         return result
 
     def _escalate(self, decision: Decision, session, conv, ticket_text, lang, trace_id, actions, facts, llm_meta,
-                  pending_action: dict | None = None) -> TurnResult:
-        """File the ticket, read it back, and only then tell the customer they were transferred."""
+                  pending_action: dict | None = None, notice: str | None = None) -> TurnResult:
+        """File the ticket, read it back, and only then tell the customer they were transferred (`notice`: the render.MSG key
+        that says why, instead of the plain one)."""
         try:
             with handoff_deadline() as budget, stage("ticket", category=decision.category) as info:
                 ticket = escalation.escalate(decision, session.customer_id, session.ref, ticket_text, lang, actions,
@@ -598,7 +599,7 @@ class Orchestrator:
         if not filed:
             return TurnResult(trace_id, Disposition.ESCALATE.value, render.MSG["escalate_unverified"][lang].format(code=trace_id[:8]),
                               lang, decision.category, f"{decision.rule}|handoff_unverified", None, facts, actions, **llm_meta)
-        msg = render.MSG["escalate_security" if decision.category == "security" else "escalate"][lang]
+        msg = render.MSG[notice or ("escalate_security" if decision.category == "security" else "escalate")][lang]
         return TurnResult(trace_id, Disposition.ESCALATE.value, msg, lang, decision.category, decision.rule,
                           ticket.ticket_id, facts, actions, **llm_meta)
 
@@ -608,7 +609,9 @@ class Orchestrator:
         decision = router.trace_step(result)
         items = result["items"]
         if decision.disposition == Disposition.ESCALATE:
-            return escalate(decision, actions, [])
+            # "Nothing pending" only when the search was not narrowed: an amount, a date or a product may have left pending ones out.
+            narrowed = any(v not in (None, "") for v in (result.get("filters") or {}).values())
+            return escalate(decision, actions, [], notice="trace_unmatched_filtered" if narrowed else "trace_unmatched")
         if decision.rule == "action:trace_choose":
             conv.pending_choice = items  # a plain "la segunda" is resolved in code next turn
             opts = "; ".join(f"{i}) {render.movement(m, lang, country)}" for i, m in enumerate(items, start=1))
@@ -744,9 +747,10 @@ class Orchestrator:
         def done(result: TurnResult) -> TurnResult:
             return self._finish(conv, model_text, ticket_text, result)
 
-        def escalate(decision: Decision, actions: list[dict], facts: list[dict], pending_action: dict | None = None) -> TurnResult:
+        def escalate(decision: Decision, actions: list[dict], facts: list[dict], pending_action: dict | None = None,
+                     notice: str | None = None) -> TurnResult:
             return done(self._escalate(decision, session, conv, ticket_text, lang, trace_id, actions, facts, llm_meta(),
-                                       pending_action))
+                                       pending_action, notice))
 
         # Act on the customer's own yes: a trace proposed on the last turn is opened only if this message is a plain
         # yes, decided in code without the model. Any other message lets the proposal lapse and goes on as usual.
