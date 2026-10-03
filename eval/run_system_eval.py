@@ -29,6 +29,11 @@ Metric definitions (rubric "Evaluation evidence"):
   that answered the wrong thing.
 - efficiency: end-to-end p50/p95 latency; cost per attempted case and per
   safe resolution ("not defined" without billed tokens or resolutions).
+
+What a report records: the policy fingerprint (eval/fingerprint.py) and the commit it measured, and, per run, when it
+started, that fingerprint and commit again, the model asked for and the models that answered. With repeats the JSON
+keeps the per-case rows of every run (`cases`, each row with its `repeat`), so every aggregate it publishes can be
+computed again from them; the Markdown table shows run 1, and a table of every run follows it.
 """
 from __future__ import annotations
 
@@ -42,6 +47,7 @@ import logging
 import os
 import re
 import statistics
+import subprocess
 import sys
 import tempfile
 import time
@@ -68,7 +74,7 @@ from agent.tools.db import get_connection
 from eval import tracking
 from eval.baseline_bot import BaselineBot
 from eval.fake_llm import text_response, tool_call_response, unavailable
-from eval.fingerprint import policy_fingerprint
+from eval.fingerprint import ROOT, policy_files, policy_fingerprint
 from eval.stats import fmt, rate, zero_event_upper_bound
 from eval.workload import SEEDS, Case, load
 
@@ -952,6 +958,29 @@ def variability(reps: list[tuple[dict, list[dict]]]) -> dict:
     return out | {"outcome_flip_rate": rate(len(unstable), len(per_case)), "unstable_cases": unstable[:20]}
 
 
+def code_version() -> dict:
+    """The commit the measured code came from, and whether a file of the fingerprint (eval/fingerprint.py) differed from it
+    when the run started: a report says which code it measured, not only that the code had some fingerprint."""
+    def git(*args: str) -> str | None:
+        try:
+            return subprocess.check_output(["git", *args], cwd=ROOT, stderr=subprocess.DEVNULL, text=True).strip()
+        except Exception:  # noqa: BLE001 - not a git checkout (the container), or no git
+            return None
+
+    sha = git("rev-parse", "HEAD")
+    changed = git("status", "--porcelain", "--", *(p.relative_to(ROOT).as_posix() for p in policy_files())) if sha else None
+    return {"code_sha": sha, "code_dirty": None if changed is None else bool(changed)}
+
+
+REPEAT_SUMMARY = (*VARIABILITY_RATES, *VARIABILITY_VALUES, "missed_escalations_n", "unsafe_by_type", "llm_calls_per_case", "served_by")
+
+
+def rows_of_repeat(rows: list[dict], repeat: int = 1) -> list[dict]:
+    """The rows of one run of a report's `cases`, which keeps every run's rows, each with its `repeat` (a report made before
+    rows carried it holds run 1 only)."""
+    return [r for r in rows if r.get("repeat", 1) == repeat]
+
+
 def error_analysis(rows: list[dict]) -> list[dict]:
     """What went wrong, grouped by case type, expected and actual outcome, the policy rule that decided it and the
     tools the model chose. Counts and languages only, no customer ids or text: it goes into public reports."""
@@ -1125,6 +1154,28 @@ def to_markdown(rep: dict) -> str:
     errors_txt = "## Error analysis\nEvery case that went wrong, grouped by what happened (no customer data).\n\n" + (
         "\n".join(error_blocks) if error_blocks else "No case went wrong in this run.\n")
 
+    code = rep.get("code_sha")
+    dirty = {True: "with uncommitted changes to the measured files", False: "measured files as committed"}.get(rep.get("code_dirty"), "state unknown")
+    provenance = (f"Measured with policy fingerprint `{rep['policy_sha256']}` (`policy_sha256`, eval/fingerprint.py) on code "
+                  f"`{code or 'unknown'}` ({dirty}). `make gate` compares this fingerprint with the current code's.\n"
+                  if rep.get("policy_sha256") else "")
+    every_run = [(s, r) for s in systems for r in systems[s].get("repeats") or []]
+    runs_txt = ""
+    if any(len(systems[s].get("repeats") or []) > 1 for s in systems):
+        runs_txt = ("## Every run\nThe JSON keeps the per-case rows of every run (`cases`, each row with its `repeat`); the table at "
+                    "the top shows run 1.\n\n| System | Run | Started (UTC) | Answered by | Safe automated resolution | Correct "
+                    "disposition | Unsafe | Records sent to the model | Missed escalations | Fingerprint | Code |\n"
+                    "|---|---|---|---|---|---|---|---|---|---|---|\n" + "".join(
+                        f"| {s} | {r['repeat']} | {r['started_at'][:19]} | {cell(', '.join(f'{k} ({n})' for k, n in r['served_by'].items()) or 'no model')} "
+                        f"| {fmt(r['safe_automated_resolution'])} | {fmt(r['disposition_accuracy'])} "
+                        f"| {r['unsafe_outcomes']['k']} / {r['unsafe_outcomes']['n']}{' ' + json.dumps(r['unsafe_by_type']) if r['unsafe_by_type'] else ''} "
+                        f"| {r['records_sent_to_model']['k']} / {r['records_sent_to_model']['n']} | {r['missed_escalations_n']} "
+                        f"| `{str(r['policy_sha256'])[:12]}` | `{str(r['code_sha'])[:12]}` |\n" for s, r in every_run))
+        unsafe = [(s, r) for s in systems for r in rep.get("cases", {}).get(s, []) if r["unsafe"]]
+        runs_txt += ("\nUnsafe outcomes in any run (case type, language, run, type): " + "; ".join(
+            f"{s}: {r['template']} ({r['language']}), run {r.get('repeat', 1)}, {', '.join(r['unsafe'])}" for s, r in unsafe)
+            + ".\n" if unsafe else "\nNo unsafe outcome in any run.\n")
+
     def cat_table(key):
         cats = sorted({c for s in systems for c in systems[s][key]})
         h = "| " + key.replace("by_", "") + " | n | " + " | ".join(f"{s}: correct disposition" for s in systems) + " |\n|---|---|" + "---|" * len(systems) + "\n"
@@ -1172,7 +1223,7 @@ Measured text-channel Transaccional contacts/month ≈ {proj['monthly_text_chann
     return f"""# System evaluation (auto-generated)
 
 Generated by `python -m eval.run_system_eval` at {rep['generated_at']} · prompt v{rep['prompt_version']} · pricing {rep['pricing_as_of']}.
-
+{provenance}
 **Mode: {rep['mode_label']}**
 
 {workload}
@@ -1180,7 +1231,7 @@ Generated by `python -m eval.run_system_eval` at {rep['generated_at']} · prompt
 ## {title}
 {head}{body}
 Cases that reached a model, by the model that answered: {served}.
-{unstable_txt}
+{unstable_txt}{runs_txt}
 Unsafe outcomes by type: {json.dumps({s: systems[s]['unsafe_by_type'] for s in systems})}.
 Incorrect but not unsafe (irrelevant answer, no wrong figures or data): {json.dumps({s: systems[s]['incorrect_not_unsafe'] for s in systems})}.
 Missed escalations: {json.dumps({s: systems[s]['missed_escalations'] for s in systems}, ensure_ascii=False)}.
@@ -1285,6 +1336,7 @@ def main() -> None:
     if a.limit:
         cases = sample(cases, a.limit)
     systems, runs, tracked = {}, {}, {}
+    measured = {"policy_sha256": policy_fingerprint(), **code_version()}  # before the first case: what was measured
     targets: list = [None]
     if a.llm == "live" and a.models:
         targets = [t.split(":", 1) for t in a.models.split(",")]
@@ -1301,18 +1353,24 @@ def main() -> None:
                 os.environ["LOCAL_LLM_MODEL" if target[0] == "local" else f"{target[0].upper()}_MODEL"] = target[1]
             live = LLMClient() if a.llm == "live" and system == "proposed" else None
             name = system if system == "baseline" else f"proposed ({a.llm}{': ' + target[1] if target else ''})"
-            reps = [run(system, a.llm, cases, live) for _ in range(a.repeats if (system == "proposed" and a.llm == "live") else 1)]
-            systems[name] = reps[0][0]
+            provider, model = target if target else _model_of(system, a.llm)
+            reps, repeats = [], []
+            for i in range(1, (a.repeats if (system == "proposed" and a.llm == "live") else 1) + 1):
+                started, at_start = datetime.now(timezone.utc).isoformat(), {"policy_sha256": policy_fingerprint(), **code_version()}
+                m, rows = run(system, a.llm, cases, live)
+                reps.append((m, [{**r, "repeat": i} for r in rows]))
+                repeats.append({"repeat": i, "started_at": started, "finished_at": datetime.now(timezone.utc).isoformat(), **at_start,
+                                "model_requested": f"{provider}:{model}", **{k: m[k] for k in REPEAT_SUMMARY}})
+            systems[name] = reps[0][0] | {"repeats": repeats}
             if len(reps) > 1:
                 systems[name]["repeat_variability"] = variability(reps)
-            runs[name] = reps[0][1]
-            provider, model = target if target else _model_of(system, a.llm)
+            runs[name] = [r for _, rows in reps for r in rows]  # every run's rows, in run order
             tracked[name] = {"system": system, "llm_mode": a.llm if system == "proposed" else "none", "provider": provider,
                              "model": model, "effort": anthropic_effort(model) if provider == "anthropic" else None,
                              "limit": a.limit, "repeats": [m for m, _ in reps]}
     proposed = next((m for n, m in systems.items() if n.startswith("proposed")), None)
     rep = {
-        "generated_at": datetime.now(timezone.utc).isoformat(), "prompt_version": PROMPT_VERSION, "policy_sha256": policy_fingerprint(), "pricing_as_of": PRICING_AS_OF,
+        "generated_at": datetime.now(timezone.utc).isoformat(), "prompt_version": PROMPT_VERSION, **measured, "pricing_as_of": PRICING_AS_OF,
         "mode_label": {"scripted": "OFFLINE — baseline bot measured; proposed system run with a scripted ideal-model LLM (upper bound on model "
                                    "understanding; no model latency or cost)",
                        "adversarial": "OFFLINE STRESS TEST — proposed system run with a deliberately bad scripted LLM (obeys injections, "

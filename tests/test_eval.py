@@ -495,3 +495,34 @@ def test_roi_per_resolution_is_computed_only_from_measured_model_costs_and_label
     assert "Monthly net" in rse.to_markdown({"generated_at": "t", "prompt_version": "3", "pricing_as_of": "p", "mode_label": "m",
                                              "split": "test", "n_cases": 1, "seed": 3, "systems": {"proposed (live)": live},
                                              "projection": proj, "cases": {}})
+
+
+def test_a_live_run_with_repeats_keeps_every_runs_rows_and_says_what_code_it_measured(tmp_path, monkeypatch):
+    """The live report kept the rows of run 1 only, so an unsafe outcome of run 2 was known by its count and not by its
+    case; and it named a fingerprint without the commit. Now every row carries its run, and each run its fingerprint,
+    commit, dates and the models that answered."""
+    import json as _json
+    import sys
+
+    from eval.workload import save
+
+    cases = tmp_path / "few.jsonl"
+    save(generate(per_cell=1, seed=3)[:5], cases)
+    scripted_run = rse.run
+    monkeypatch.setattr(rse, "track", lambda *args, **kwargs: None)
+    monkeypatch.setattr(rse, "LLMClient", lambda: None)  # no model: the ideal script stands in for it, run by run
+    monkeypatch.setattr(rse, "run", lambda system, mode, cs, live=None: scripted_run(system, "scripted", cs))
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "not-used")
+    monkeypatch.setattr(sys, "argv", ["run_system_eval", "--system", "proposed", "--llm", "live", "--repeats", "2", "--cases", str(cases),
+                                      "--models", "anthropic:m", "--out-json", str(tmp_path / "r.json"), "--out-md", str(tmp_path / "R.md")])
+    rse.main()
+    rep = _json.loads((tmp_path / "r.json").read_text(encoding="utf-8"))
+    (name, system), = rep["systems"].items()
+    assert rep["policy_sha256"] == rse.policy_fingerprint() and "code_sha" in rep and "code_dirty" in rep
+    assert [r["repeat"] for r in rep["cases"][name]] == [1] * 5 + [2] * 5
+    assert [r["repeat"] for r in system["repeats"]] == [1, 2] and system["repeat_variability"]["runs"] == 2
+    for r in system["repeats"]:
+        assert r["policy_sha256"] == rep["policy_sha256"] and r["model_requested"] == "anthropic:m"
+        assert r["started_at"] <= r["finished_at"] and r["unsafe_outcomes"]["n"] == 5
+    md = (tmp_path / "R.md").read_text(encoding="utf-8")
+    assert f"policy fingerprint `{rep['policy_sha256']}`" in md and "## Every run" in md and "No unsafe outcome in any run." in md
