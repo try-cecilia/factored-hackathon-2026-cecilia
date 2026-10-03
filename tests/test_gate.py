@@ -147,13 +147,17 @@ LIVE_NAME = "proposed (live: m)"
 
 
 def _live(fp: str = "f" * 64, runs: int = 2) -> dict:
-    """A live report of two cases and `runs` runs, its per-run counts taken from its rows."""
-    rows = [{"case_id": c, "repeat": i, "unsafe": [], "records_sent_to_model": [], "safe_resolution": True, "in_scope": True}
+    """A live report of two cases and `runs` runs, its per-run counts and models taken from its rows."""
+    rows = [{"case_id": c, "repeat": i, "unsafe": [], "records_sent_to_model": [], "safe_resolution": True, "in_scope": True, "model": "x/m"}
             for i in range(1, runs + 1) for c in ("a", "b")]
-    repeats = [{"repeat": i, "policy_sha256": fp, "code_sha": "c" * 40, "unsafe_outcomes": {"k": 0},
+    repeats = [{"repeat": i, "policy_sha256": fp, "code_sha": "c" * 40, "unsafe_outcomes": {"k": 0}, "served_by": {"x/m": 2},
                 "records_sent_to_model": {"k": 0}, "safe_automated_resolution": {"k": 2}} for i in range(1, runs + 1)]
     return {"policy_sha256": fp, "code_sha": "c" * 40, "n_cases": 2, "cases": {LIVE_NAME: rows},
-            "systems": {LIVE_NAME: {"repeats": repeats, "repeat_variability": {"runs": runs}}}}
+            "systems": {LIVE_NAME: {"repeats": repeats, "repeat_variability": {"runs": runs}, "served_by": {"x/m": 2}}}}
+
+
+def _found(live: dict) -> list[str]:
+    return gate.check_live(live, current="f" * 64, docs=_docs())
 
 
 def _docs(*lines: str) -> dict[str, str]:
@@ -195,7 +199,7 @@ def test_a_live_report_that_dropped_a_runs_rows_or_its_provenance_fails():
     assert any("code_sha" in f for f in gate.check_live(no_code, current="f" * 64, docs=_docs()))
     fewer_runs = _live()
     fewer_runs["systems"][LIVE_NAME]["repeats"].pop()
-    assert any("1 corrida(s) descritas para 2" in f for f in gate.check_live(fewer_runs, current="f" * 64, docs=_docs()))
+    assert any("corridas descritas [1] para 2" in f for f in gate.check_live(fewer_runs, current="f" * 64, docs=_docs()))
 
 
 def test_a_per_run_count_that_does_not_come_from_the_rows_fails():
@@ -206,3 +210,56 @@ def test_a_per_run_count_that_does_not_come_from_the_rows_fails():
     other_code = _live()
     other_code["systems"][LIVE_NAME]["repeats"][1]["policy_sha256"] = "e" * 64  # the code changed during the measurement
     assert any("corrida 2: medida con la huella" in f for f in gate.check_live(other_code, current="f" * 64, docs=_docs()))
+
+
+def test_a_live_report_without_a_measured_system_fails():
+    empty = {**_live(), "systems": {}, "cases": {}}
+    assert any("ningún sistema propuesto" in f for f in _found(empty))
+    rows_without_system = {**_live(), "systems": {}}
+    assert any("filas de" in f for f in _found(rows_without_system))
+    no_cases = {**_live(), "n_cases": 0}
+    assert any("n_cases es 0" in f for f in _found(no_cases))
+
+
+def test_a_live_report_with_no_runs_fails():
+    live = _live()
+    live["systems"][LIVE_NAME]["repeat_variability"]["runs"] = 0
+    live["systems"][LIVE_NAME]["repeats"], live["cases"][LIVE_NAME] = [], []
+    assert any("corridas descritas [] para 0" in f for f in _found(live))
+
+
+def test_a_run_described_twice_fails_and_its_copy_does_not_hide_the_other_runs_rows():
+    live = _live()
+    repeats = live["systems"][LIVE_NAME]["repeats"]
+    repeats[1] = dict(repeats[0])  # run 2's description is a copy of run 1's: run 2's rows would go unchecked
+    found = _found(live)
+    assert any("corridas descritas [1, 1] para 2" in f for f in found)
+    assert any("filas de corridas que el reporte no describe (2)" in f for f in found)
+
+
+def test_rows_of_a_run_the_report_does_not_describe_fail():
+    live = _live()
+    live["cases"][LIVE_NAME].append({**live["cases"][LIVE_NAME][0], "repeat": 3})
+    found = _found(live)
+    assert any("no describe (3)" in f for f in found) and any("5 filas para 2 corrida(s)" in f for f in found)
+
+
+def test_a_case_twice_in_a_run_or_other_cases_in_another_run_fails():
+    twice = _live()
+    twice["cases"][LIVE_NAME][1]["case_id"] = "a"  # run 1 has a, a instead of a, b
+    found = _found(twice)
+    assert any("corrida 1: un caso aparece más de una vez" in f for f in found)
+    assert any("no cubren los mismos casos" in f for f in found)
+    other = _live()
+    other["cases"][LIVE_NAME][3]["case_id"] = "z"  # run 2 has a, z
+    assert [f for f in _found(other)] == [f"reporte en vivo / {LIVE_NAME}: las corridas no cubren los mismos casos"]
+
+
+def test_a_published_model_count_that_is_not_the_rows_fails():
+    headline = _live()
+    headline["systems"][LIVE_NAME]["served_by"] = {"other/provider": 999}
+    assert _found(headline) == [f"reporte en vivo / {LIVE_NAME}: el titular publica served_by {{'other/provider': 999}}, "
+                                "las filas de la corrida 1 dan {'x/m': 2}"]
+    per_run = _live()
+    per_run["systems"][LIVE_NAME]["repeats"][1]["served_by"] = {"other/provider": 999}
+    assert any("corrida 2: served_by publica" in f for f in _found(per_run))

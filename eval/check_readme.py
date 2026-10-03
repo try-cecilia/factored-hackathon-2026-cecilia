@@ -6,6 +6,9 @@ was regenerated, fails here instead of in front of a reader.
 It reads the two results tables of the README (offline and live) and compares every figure with the same cell of
 `eval/reports/system_eval*.json`; it also flags any case count the README states that is not the reports' count.
 Only the headline tables are checked: prose, footnotes and the human-baseline figures are not.
+
+It also checks the latencies per case that EVALUATION.md and the slides cite (LATENCY_ROWS). The offline ones change with
+the machine that regenerates the reports, so a regeneration that leaves the docs behind fails here.
 """
 from __future__ import annotations
 
@@ -70,6 +73,37 @@ def check_table(lines: list[str], header_start: str, rows: dict, columns: list[d
     return problems
 
 
+# (file, row label, one entry per data column: None, or (report, system key fragment, unit) whose p50 and p95 the cell
+# states first). The unit is the cell's: "ms" as the report has it, "s" rounded to a tenth.
+LATENCY_ROWS = (
+    ("EVALUATION.md", "Handling time", [None, ("system_eval", "baseline", "ms"), ("system_eval", "proposed (scripted)", "ms")]),
+    ("EVALUATION.md", "Total per inquiry", [None, None, ("system_eval_live", "sonnet", "s")]),
+    ("EVALUATION.md", "Latency p50 / p95 per case (non-LLM, local)", [("system_eval", "baseline", "ms"), ("system_eval", "proposed (scripted)", "ms"),
+                                                                      ("system_eval_adversarial", "proposed (adversarial)", "ms")]),
+    ("docs/slides_outline.md", "p50 / p95 latency per case", [("system_eval", "baseline", "ms"), ("system_eval_live", "sonnet", "s"),
+                                                              ("system_eval_live", "haiku", "s")]),
+)
+
+
+def check_latencies(root: Path = Path(".")) -> list[str]:
+    problems = []
+    for doc, label, columns in LATENCY_ROWS:
+        rows = [ln for ln in (root / doc).read_text(encoding="utf-8").splitlines() if ln.startswith(f"| {label} |")]
+        if len(rows) != 1:
+            problems.append(f"{doc}: {len(rows)} rows labeled {label!r}, expected one")
+            continue
+        cells = [c.strip() for c in rows[0].strip().strip("|").split("|")][1:]
+        for cell, column in zip(cells, columns):
+            if column is None:
+                continue
+            report, key, unit = column
+            m = next(v for k, v in load(report).items() if key in k)
+            want = [m["latency_ms_p50"], m["latency_ms_p95"]] if unit == "ms" else [round(m["latency_ms_p50"] / 1000, 1), round(m["latency_ms_p95"] / 1000, 1)]
+            if numbers(re.sub(r"p(?:50|95)", "", cell))[:2] != want:  # "p95" is a label, not a figure
+                problems.append(f"{doc}, {label}: says {cell!r}, the report says p50 / p95 = {want[0]} / {want[1]} {unit}")
+    return problems
+
+
 def main() -> int:
     text = Path("README.md").read_text(encoding="utf-8")
     lines = text.splitlines()
@@ -82,6 +116,7 @@ def main() -> int:
                                                                      next(m for k, m in live.items() if "haiku" in k)])
     counts = {int(a or b) for a, b in re.findall(r"\b(5\d\d) cases\b|/ (5\d\d)\b", text)}
     problems += [f"case count: README says {c}, the reports have {n}" for c in sorted(counts) if c != n]
+    problems += check_latencies()
     print("\n".join(problems) if problems else "README figures match the reports")
     return 1 if problems else 0
 

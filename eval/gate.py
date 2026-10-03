@@ -18,7 +18,8 @@ lo que faltaba, sobre los reportes de evaluación que se versionan en `eval/repo
    `agent/core/render.py` y lo que hay debajo; la lista está en ese archivo): si
    cualquiera cambió sin volver a medir, la evidencia no habla del sistema que se va a desplegar.
 6. **El reporte en vivo, trazable y con su huella declarada** (`system_eval_live.json`, `make eval-live`). Guarda las filas
-   de cada corrida, y lo que publica por corrida (inseguros, registros enviados, resolución segura) tiene que salir de ellas.
+   de cada corrida (corridas 1..n, cada una con los mismos casos, una vez cada uno, y ninguna fila de otra corrida), y lo que
+   publica por corrida (inseguros, registros enviados, resolución segura, qué modelo respondió) tiene que salir de ellas.
    Volver a medirlo cuesta dinero y una clave que el CI no tiene, así que no se exige que su huella sea la actual: se exige
    que una diferencia no pase en silencio. Si la huella del reporte en vivo no es la actual, README.md y EVALUATION.md
    tienen que decirlo en una línea con la frase «measured on other code» (`LIVE_STALE`) y las dos huellas abreviadas (12 caracteres); si coincide, esa
@@ -35,6 +36,7 @@ from __future__ import annotations
 
 import json
 import sys
+from collections import Counter
 from pathlib import Path
 
 from agent.llm.prompts import PROMPT_VERSION
@@ -146,24 +148,48 @@ def check_live(live: dict, current: str | None = None, docs: dict[str, str] | No
     out, measured = [], live.get("policy_sha256")
     if not measured or not live.get("code_sha"):
         out.append("reporte en vivo: no dice con qué huella y qué commit se midió (policy_sha256, code_sha): volver a correr `make eval-live`")
-    for name, system in live["systems"].items():
-        repeats, rows = system.get("repeats") or [], live.get("cases", {}).get(name, [])
+    systems, cases = live.get("systems") or {}, live.get("cases") or {}
+    if not any(name.startswith("proposed") for name in systems):
+        out.append("reporte en vivo: no tiene ningún sistema propuesto medido")
+    if sorted(cases) != sorted(systems):
+        out.append(f"reporte en vivo: filas de {sorted(cases)} para los sistemas {sorted(systems)}")
+    if not live.get("n_cases"):
+        out.append("reporte en vivo: n_cases es 0")
+    for name, system in systems.items():
+        label = f"reporte en vivo / {name}"
+        repeats, rows = system.get("repeats") or [], cases.get(name, [])
         runs = (system.get("repeat_variability") or {}).get("runs", 1)
-        if len(repeats) != runs:
-            out.append(f"reporte en vivo / {name}: {len(repeats)} corrida(s) descritas para {runs} medidas")
+        tags = [r.get("repeat") for r in repeats]
+        if runs < 1 or tags != list(range(1, runs + 1)):
+            out.append(f"{label}: corridas descritas {tags} para {runs} medidas (deben ser 1..{runs}, una vez cada una)")
+        if stray := sorted({str(row.get("repeat")) for row in rows} - {str(t) for t in tags}):
+            out.append(f"{label}: filas de corridas que el reporte no describe ({', '.join(stray)})")
+        if len(rows) != live.get("n_cases", 0) * len(repeats):
+            out.append(f"{label}: {len(rows)} filas para {len(repeats)} corrida(s) de {live.get('n_cases')} casos")
+        case_sets = []
         for r in repeats:
-            mine = [row for row in rows if row.get("repeat") == r["repeat"]]
-            if len(mine) != live["n_cases"]:
-                out.append(f"reporte en vivo / {name}, corrida {r['repeat']}: {len(mine)} filas para {live['n_cases']} casos")
+            where = f"{label}, corrida {r.get('repeat')}"
+            mine = [row for row in rows if row.get("repeat") == r.get("repeat")]
+            ids = [row.get("case_id") for row in mine]
+            case_sets.append(frozenset(ids))
+            if len(set(ids)) != len(ids):
+                out.append(f"{where}: un caso aparece más de una vez")
+            if len(mine) != live.get("n_cases"):
+                out.append(f"{where}: {len(mine)} filas para {live.get('n_cases')} casos")
                 continue
             if r.get("policy_sha256") != measured:
-                out.append(f"reporte en vivo / {name}, corrida {r['repeat']}: medida con la huella {str(r.get('policy_sha256'))[:12]}, "
-                           f"el reporte dice {str(measured)[:12]}")
+                out.append(f"{where}: medida con la huella {str(r.get('policy_sha256'))[:12]}, el reporte dice {str(measured)[:12]}")
             counts = {"unsafe_outcomes": sum(bool(x["unsafe"]) for x in mine),
                       "records_sent_to_model": sum(bool(x["records_sent_to_model"]) for x in mine),
                       "safe_automated_resolution": sum(bool(x["safe_resolution"]) for x in mine if x["in_scope"])}
-            out += [f"reporte en vivo / {name}, corrida {r['repeat']}: {k} publica {r[k]['k']}, las filas dan {k_rows}"
-                    for k, k_rows in counts.items() if r[k]["k"] != k_rows]
+            out += [f"{where}: {k} publica {r[k]['k']}, las filas dan {k_rows}" for k, k_rows in counts.items() if r[k]["k"] != k_rows]
+            served = dict(Counter(x["model"] for x in mine if x.get("model")))
+            if r.get("served_by") != served:
+                out.append(f"{where}: served_by publica {r.get('served_by')}, las filas dan {served}")
+            if r.get("repeat") == 1 and system.get("served_by") != served:
+                out.append(f"{label}: el titular publica served_by {system.get('served_by')}, las filas de la corrida 1 dan {served}")
+        if len(set(case_sets)) > 1:
+            out.append(f"{label}: las corridas no cubren los mismos casos")
     docs = docs if docs is not None else {name: (DOCS / name).read_text(encoding="utf-8") for name in LIVE_DOCS}
     for doc, text in docs.items():
         declared = [ln for ln in text.splitlines() if LIVE_STALE in ln]
