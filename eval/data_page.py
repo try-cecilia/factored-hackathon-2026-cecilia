@@ -335,7 +335,8 @@ def _hashes(report: dict, manifest: dict, as_of: str, ex: dict) -> list[str]:
         "A gold build has its own id in `_gold_log` and on every mart row (`_gold_run_id`).", "",
         f"**As-of.** The warehouse's as-of date is the last processed day of `transactions`: **{as_of}** for the organizer's "
         f"data ([baseline_metrics.json](evidence/baseline_metrics.json)), {ex['as_of']} for the fixture. A reply that presents data read from the warehouse "
-        "(balances, movements, payment status) states it. Clarifications, abstentions and some trace replies carry no date. "
+        "(balances, movements, payment status) states it. Replies with no warehouse data, such as standalone clarifications and "
+        "abstentions, carry no date. Some trace replies also omit it. "
         "The freshness policy is in [data_quality.md](data_quality.md#update-and-freshness-policy).", "",
         "**Source hashes.** `_source_files` keeps the size and SHA-256 of every file a load read, flat tables included. "
         "`make lineage` (`python -m data.lineage --verify --raw-dir $RAW_DATA_DIR`) exits 1 if a served row has no lineage, "
