@@ -24,7 +24,7 @@
   font-weight: var(--font-weight-semibold); line-height: 16px; cursor: pointer;
 }
 .demo-bar__exit:hover { color: var(--color-paper); }
-.demo-bar__reenter { min-height: 36px; padding: 6px 12px; border-radius: var(--radius-control); background: var(--color-paper); color: var(--color-ink); }
+.demo-bar__reenter { padding: 0 14px; border-radius: var(--radius-control); background: var(--color-paper); color: var(--color-ink); }
 .demo-bar__exit:disabled, .demo-bar__reenter:disabled { opacity: 0.6; cursor: default; }
 .demo-bar :focus-visible { outline: 2px solid var(--color-sky-300); outline-offset: 2px; }
 

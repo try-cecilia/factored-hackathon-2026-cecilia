@@ -17,6 +17,11 @@ export type DemoBarProps = {
   /** The test customer of this session, to enter again as the same one; null when it is not one of the dialog's (enter from the dialog). */
   role: DemoRole | null
   /**
+   * The end is already known (the API said the session is gone, or the chat's own countdown reached 0): the bar says so whatever its
+   * clock counts. Kept apart from `expiresIn` so it never moves the clock's end, which a new session must start afresh.
+   */
+  ended?: boolean
+  /**
    * A message of the chat is on its way: the bank's side waits for its answer. Leaving would unmount the conversation that receives
    * it, and the turn would show only after a reload (the API keeps it, the chat read its history before).
    */
@@ -32,11 +37,12 @@ export const DEMO_ENTRY_HREF = '/?demo=entrar'
  * seen, "Customer | Bank" to switch with one click, and "Leave the demo". In the session's last three minutes it counts down and offers
  * to enter again; leaving signs the customer out, which also closes the bank's side, since that has no credential of its own.
  */
-export function DemoBar({ view, sessionRef, expiresIn, role, holdBank = false, inert }: DemoBarProps) {
+export function DemoBar({ view, sessionRef, expiresIn, role, ended = false, holdBank = false, inert }: DemoBarProps) {
   const t = useT()
   const router = useRouter()
   const navigate = useNavigate()
-  const clock = useDemoClock(sessionRef, expiresIn)
+  const counted = useDemoClock(sessionRef, expiresIn)
+  const clock: typeof counted = ended ? { state: 'over' } : counted
   const [busy, setBusy] = useState<'exit' | 'reenter' | null>(null)
   const [failed, setFailed] = useState(false)
 

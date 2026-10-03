@@ -41,7 +41,8 @@
 .demo-desk .ui-btn, .demo-desk .ui-lang__option, .demo-desk .ui-sidebar__row { min-height: 44px; }
 .demo-desk .ui-btn--icon { min-width: 44px; }
 .demo-desk .op-back a { display: inline-flex; align-items: center; min-height: 44px; }
-.demo-skip { position: absolute; }
+/* Out of the grid, at the corner of the window: the link stays hidden above it until focused, as everywhere else. */
+.demo-skip { position: fixed; top: 0; left: 0; z-index: 60; }
 
 /* Rastreos: a table on a wide screen, a card per trace with its four fields on a phone (the console's table needs 720px). */
 .demo-traces__cards { display: none; margin: 0; padding: 0; list-style: none; }

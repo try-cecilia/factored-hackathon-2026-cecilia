@@ -73,7 +73,7 @@ function DemoBankLayout() {
   const over = !active || (queue && !queue.ok && (queue.status === 401 || queue.status === 0))
   return (
     <div className="op demo-frame">
-      <DemoBar view="bank" sessionRef={active ? desk.sessionRef : 'ended'} expiresIn={over || !active ? 0 : desk.expiresIn} role={role.current} />
+      <DemoBar view="bank" sessionRef={active ? desk.sessionRef : null} expiresIn={active ? desk.expiresIn : null} ended={Boolean(over)} role={role.current} />
       <DemoDeskShell cases={queue?.ok ? queue.data.length : null} traces={active ? traces.length : null}>
         {over ? <div className="demo-desk__over"><DemoExpired role={role.current} /></div> : <Outlet />}
       </DemoDeskShell>

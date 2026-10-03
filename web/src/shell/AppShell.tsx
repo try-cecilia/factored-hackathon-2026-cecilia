@@ -273,7 +273,7 @@ function CustomerDemoBar({ kit, session, over, holdBank, inert }: { kit: Promise
   const resolved = use(kit)
   if (!resolved.enabled || resolved.console !== true) return null
   const role = demoEntries(resolved).find((e) => e.customer_id === session.customer_id)?.role ?? null
-  return <DemoBar view="customer" sessionRef={session.session_ref} expiresIn={over ? 0 : session.expires_in} role={role} holdBank={holdBank} inert={inert} />
+  return <DemoBar view="customer" sessionRef={session.session_ref} expiresIn={session.expires_in} ended={over} role={role} holdBank={holdBank} inert={inert} />
 }
 
 /** "Tu caso ya llegó al banco", for the newest case of the conversation while it is open (no person has decided it). */

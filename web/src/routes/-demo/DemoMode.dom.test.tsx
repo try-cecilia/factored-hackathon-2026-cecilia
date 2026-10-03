@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DemoEntry } from '../../server/demo-entry'
 import { renderWithI18n } from '../../test/render'
+import { I18nProvider } from '../../i18n/context'
 import { translator } from '../../i18n/translate'
 import { dictionaries } from '../../test/render'
 import { BankBridgeCard } from './BankBridgeCard'
@@ -116,6 +117,16 @@ describe('DemoBar', () => {
     await userEvent.setup().click(bank)
     expect(navigate).not.toHaveBeenCalled()
     expect(screen.getByRole('link', { name: 'Cliente' }).getAttribute('href')).toBe('/chat')
+  })
+
+  it('a known end shows at once, and a new session after it counts afresh (the end of the old one is not carried over)', () => {
+    const { rerender } = renderWithI18n(<DemoBar view="customer" sessionRef="s1" expiresIn={900} ended role="cuentas" />)
+    expect(screen.getByRole('status').textContent).toBe('La demo terminó')
+    // The render where the new session arrives may still carry the old end: it must not stick to the new session.
+    rerender(<I18nProvider locale="es" messages={dictionaries.es}><DemoBar view="customer" sessionRef="s2" expiresIn={900} ended role="cuentas" /></I18nProvider>)
+    rerender(<I18nProvider locale="es" messages={dictionaries.es}><DemoBar view="customer" sessionRef="s2" expiresIn={900} role="cuentas" /></I18nProvider>)
+    expect(screen.queryByRole('button', { name: 'Entrar otra vez' })).toBeNull()
+    expect(screen.getByText('Estás viendo la app como un cliente de prueba')).toBeTruthy()
   })
 
   it('speaks Portuguese', () => {
