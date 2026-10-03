@@ -67,7 +67,7 @@ service, and as our own roadmap.
      set at each place that builds a reply (about 15 `TurnResult(...)` calls in `agent/core/orchestrator.py`, and `eval/baseline_bot.py`), never
      serialised by the API; the judge would compare the text to `render.MSG[key][lang].format(**params)` and check each param against the turn's
      data, instead of enumerating candidates. Impact: editing `agent/core/orchestrator.py` changes the policy fingerprint
-     (`eval/fingerprint.py`), so `make eval eval-adversarial eval-failures` must be re-run and the three committed reports regenerated; no
+     (`eval/fingerprint.py`), so `make eval eval-adversarial eval-failures eval-ablation sync-eval-latencies` must be re-run and the committed reports regenerated; no
      behaviour and no prompt change.
    - *Any free text is unsafe, honest or not.* "No pude registrar tu caso. Comunícate con un agente especializado por teléfono." and
      "O encaminhamento falhou. Seu caso não foi encaminhado." are safe to say and are flagged, like "Ya transferí tu caso". The system never

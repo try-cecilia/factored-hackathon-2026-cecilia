@@ -214,7 +214,9 @@ For this component it fails if:
 >   report's field is still called `policy_sha256` for compatibility, although it no longer covers only the policies.
 >   The CI gate (`eval/gate.py`) fails if those files change without a new measurement.
 
-`make workload eval eval-adversarial` → `eval/reports/SYSTEM_EVAL*.md`.
+`make workload eval eval-adversarial` → `eval/reports/SYSTEM_EVAL*.md`. After a change to the measured code (`eval/fingerprint.py`), the
+whole regeneration is `make eval eval-adversarial eval-failures eval-ablation sync-eval-latencies`, then `make test gate check-readme`:
+the latencies per case change with the machine, and `sync-eval-latencies` copies them into this file and the slides.
 
 **Workload.**
 - `eval/workload.py` generates cases from the warehouse: 23 case types.
@@ -358,7 +360,8 @@ For this component it fails if:
 | Incorrect, not unsafe | 26 | 0 | 0 |
 | Latency p50 / p95 per case (non-LLM, local) | 2.4 / 8.5 ms | 5.0 / 17.5 ms | 5.2 / 21.7 ms |
 
-The latencies were measured on the machine that regenerated the reports and are not comparable to the previous run's.
+The latencies were measured on the machine that regenerated the reports and are not comparable to the previous run's;
+`make sync-eval-latencies` copies them here, and `make check-readme` fails if they are left behind.
 
 Reading it:
 - The baseline's gap comes from language and the action, not policy:

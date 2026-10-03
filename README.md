@@ -322,6 +322,7 @@ make ingest                 # full warehouse from S3 (~6 min: 1.1 GB of daily fi
 make serve                  # http://localhost:8000: web chat with the sandbox test logins
 make test                   # hermetic suite (`pytest tests/`): fixture warehouse, no S3, no API keys
 make all                    # rebuilds every number in the docs
+make eval eval-adversarial eval-failures eval-ablation sync-eval-latencies   # after a change to the measured code (eval/fingerprint.py); then make test gate check-readme
 make validate-data-ml       # contracts, quality, lineage, freshness, classifier vs baseline and leakage: PASS/FAIL, writes nothing; `make evidence` regenerates docs/evidence/data_ml_validation.md
 make mlflow-ui              # every classifier selection and evaluation, logged in MLflow
 ```
