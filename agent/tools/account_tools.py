@@ -8,9 +8,12 @@ function, in code:
    exist; otherwise DataUnavailable. Questions that don't apply to a product
    raise NotApplicable, which the policy layer answers rather than escalates.
 3. Data minimization: account/card numbers leave this layer as last-4 only.
-4. Freshness: every result carries `as_of` (the warehouse's data date). By
-   default, a warehouse older than FRESHNESS_SLO_HOURS makes
-   balance/transaction answers DataUnavailable instead of silently stale.
+4. Freshness: every result carries `as_of` (the warehouse's data date).
+   Configurable and off by default, because the demo serves a static snapshot
+   and every answer states its date: with FRESHNESS_ENFORCE=1, a warehouse
+   older than FRESHNESS_SLO_HOURS makes balance/transaction answers
+   DataUnavailable instead of silently stale. A warehouse with no data date
+   is unavailable either way.
 All calls are written to the audit log with the current trace id.
 """
 from __future__ import annotations
@@ -72,7 +75,7 @@ def data_as_of() -> date | None:
 
 
 def freshness_enforced() -> bool:
-    return os.environ.get("FRESHNESS_ENFORCE", "1") != "0"
+    return os.environ.get("FRESHNESS_ENFORCE") == "1"
 
 
 def freshness_slo_hours() -> float:

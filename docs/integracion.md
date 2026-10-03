@@ -223,7 +223,7 @@ monitoring and traces. How the keys are configured:
   operator key does not open it, neither does a customer session, and a case that does not exist gives 404. It reads the warehouse with the
   connection and the data date of `agent/tools/account_tools.py`, but **not through its tools**: those write `str(error)` to the audit log
   when they fail, `/admin/audit_log` serves it, and a message can quote a path, a query or a customer. The query cuts the number to its
-  last four digits in the database (the number is never read). It respects freshness like the tools: by default, data
+  last four digits in the database (the number is never read). It respects freshness like the tools: with `FRESHNESS_ENFORCE=1` and data
   older than `FRESHNESS_SLO_HOURS`, the warehouse block comes out `unavailable`, not current. Pending movements have an explicit cap,
   `PENDING_SHOWN = 100`, far above what a customer holds: if it were reached, the response carries `pending_omitted` and the console says
   "y N pendientes más" (and N more, singular for one). The read is left in the audit log as a `customer_context_read` event with the case, the outcome
@@ -277,9 +277,9 @@ Rules that each function applies, in code:
 2. **Verification.** It returns a result only if the fields the answer needs exist; otherwise, `DataUnavailable`.
    A valid question that does not apply to the product raises `NotApplicable`, and it is answered instead of transferred.
 3. **Minimization.** Account and card numbers leave only with their last 4 digits.
-4. **Freshness.** Every result carries `as_of`. By default, a warehouse older than
-   `FRESHNESS_SLO_HOURS` (36 by default) answers `DataUnavailable` instead of silently returning stale data. Set
-   `FRESHNESS_ENFORCE=0` only when serving a known static snapshot is intentional; data without an `as_of` date remains unavailable.
+4. **Freshness.** Every result carries `as_of`. With `FRESHNESS_ENFORCE=1`, a warehouse older than
+   `FRESHNESS_SLO_HOURS` (36 by default) answers `DataUnavailable` instead of silently returning stale data. On the
+   static dataset the policy stays off and every answer states its date; data without an `as_of` date is unavailable either way.
 5. **Audit.** Every call is written to the audit log with the trace identifier.
 
 *Error taxonomy* (`agent/tools/errors.py`), each error mapped to a single decision in `agent/policy/router.py`; the
