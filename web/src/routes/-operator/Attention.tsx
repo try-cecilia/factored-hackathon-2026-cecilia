@@ -24,14 +24,14 @@ export function Attention({ ticket, data }: { ticket: Ticket; data: CustomerCont
         {pending.map((m) => (
           <li key={`pending:${m.transaction_id}`}>
             <span className="op-attention__title">{t('operator.ticket.attention.pendingMovement', { type: movementTypeName(t, m.type) })}</span>
-            <span className="op-mono">{money(m.amount, m.currency)}</span>
+            <span className="op-mono">{money(m.amount, m.currency, ticket.country)}</span>
             <span className="op-mono op-attention__sub">{shortStamp(m.date)}</span>
           </li>
         ))}
         {flagged.map((e, i) => (
           <li key={`flagged:${e.id ?? i}`}>
             <span className="op-attention__title">{t('operator.ticket.attention.flaggedMovement')}</span>
-            <span className="op-mono">{money(e.detail.amount, e.detail.currency)}</span>
+            <span className="op-mono">{money(e.detail.amount, e.detail.currency, ticket.country)}</span>
             <span className="op-mono op-attention__sub">{[shortStamp(e.detail.transaction_date), e.detail.merchant_name, t('operator.ticket.attention.score', { score: scoreLabel(e) })].filter(Boolean).map(String).join(' · ')}</span>
           </li>
         ))}
