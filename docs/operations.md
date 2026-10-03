@@ -250,7 +250,9 @@ boot would (a partial build, a stale WAL) and checks the next boot loads again.
 - **The web** (`cecil-ai`): `ops/Dockerfile.web` with `web/` as its context, the same instance type, its health check on
   `/_healthz`. It calls the API at its public URL (`AGENT_API_URL`) and `WEB_PUBLIC_ORIGIN` is its own public URL: both are
   fixed in `render.yaml` (neither is a secret), so renaming either service means updating them. Its users reach the API
-  from the web's address, so the API's per-client limits (logins, failed keys) count them together.
+  from the web's address; the web forwards each user's address with `BFF_CLIENT_IP_SECRET` (the `bff-client-ip` group,
+  on both services), so the API's per-client limits (logins, failed keys) count them one by one. Without that secret on
+  both, they count them together.
 1. In Render: New > Blueprint, pick the repository and branch. When asked, fill
    `ANTHROPIC_API_KEY` (a key with a spend limit set at the provider), optionally
    `GROQ_API_KEY`, and the organizer's `AWS_*` and `DATASET_BUCKET`. Without those
