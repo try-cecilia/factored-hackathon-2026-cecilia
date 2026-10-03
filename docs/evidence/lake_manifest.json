@@ -1,0 +1,742 @@
+{
+  "generated_at": "2026-10-03T03:04:36+00:00",
+  "code_version": "55193cda",
+  "silver_runs": {
+    "daily_exchange_rates": "20260929T143939Z-5c15cb",
+    "products": "20260929T143939Z-5c15cb",
+    "transactions": "20260929T143939Z-5c15cb",
+    "complaints": "20260929T143939Z-5c15cb",
+    "branches": "20260929T143939Z-5c15cb",
+    "customers": "20260929T143939Z-5c15cb"
+  },
+  "gold_runs": {
+    "gold_customer_summary": "20261003T030434Z-c2c07d",
+    "gold_daily_activity": "20261003T030434Z-c2c07d"
+  },
+  "files": [
+    {
+      "layer": "silver",
+      "table": "branches",
+      "path": "silver/branches.parquet",
+      "rows": 350,
+      "bytes": 22222,
+      "sha256": "80db868b8b8696b5d49537708a7fa29d1b29a36b1c43ba3599b9a8ba9a20a62c",
+      "columns": [
+        {
+          "name": "branch_id",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "branch_code",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "branch_name",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "branch_type",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "address",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "city",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "state",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "country",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "postal_code",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "geographic_zone",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "phone",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "email",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "opening_time",
+          "type": "TIME"
+        },
+        {
+          "name": "closing_time",
+          "type": "TIME"
+        },
+        {
+          "name": "has_atms",
+          "type": "BOOLEAN"
+        },
+        {
+          "name": "atm_count",
+          "type": "INTEGER"
+        },
+        {
+          "name": "has_teller_windows",
+          "type": "BOOLEAN"
+        },
+        {
+          "name": "teller_window_count",
+          "type": "INTEGER"
+        },
+        {
+          "name": "latitude",
+          "type": "DECIMAL(10,7)"
+        },
+        {
+          "name": "longitude",
+          "type": "DECIMAL(10,7)"
+        },
+        {
+          "name": "branch_opening_date",
+          "type": "DATE"
+        },
+        {
+          "name": "branch_status",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "_source_file",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "_run_id",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "_ingested_at",
+          "type": "TIMESTAMP"
+        }
+      ]
+    },
+    {
+      "layer": "silver",
+      "table": "daily_exchange_rates",
+      "path": "silver/daily_exchange_rates.parquet",
+      "rows": 13164,
+      "bytes": 131452,
+      "sha256": "f9f8a5e51628b3edc937d829540415bac19e5c7f7c9fb72f633767f89f50d80d",
+      "columns": [
+        {
+          "name": "date",
+          "type": "DATE"
+        },
+        {
+          "name": "source_currency",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "target_currency",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "exchange_rate",
+          "type": "DECIMAL(12,6)"
+        },
+        {
+          "name": "buy_rate",
+          "type": "DECIMAL(12,6)"
+        },
+        {
+          "name": "sell_rate",
+          "type": "DECIMAL(12,6)"
+        },
+        {
+          "name": "source",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "_source_file",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "_run_id",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "_ingested_at",
+          "type": "TIMESTAMP"
+        }
+      ]
+    },
+    {
+      "layer": "silver",
+      "table": "customers",
+      "path": "silver/customers.parquet",
+      "rows": 150000,
+      "bytes": 11353286,
+      "sha256": "1271d640f6875cc9b5e4c8558e14f33ac74cedccd8a653d334dada2efbf10d4b",
+      "columns": [
+        {
+          "name": "customer_id",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "document_number",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "document_type",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "first_name",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "last_name",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "date_of_birth",
+          "type": "DATE"
+        },
+        {
+          "name": "gender",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "email",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "mobile_phone",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "landline_phone",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "address",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "city",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "state",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "country",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "postal_code",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "detected_accent",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "segment",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "credit_score",
+          "type": "INTEGER"
+        },
+        {
+          "name": "estimated_monthly_income",
+          "type": "DECIMAL(12,2)"
+        },
+        {
+          "name": "occupation",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "marital_status",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "education_level",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "registration_date",
+          "type": "TIMESTAMP"
+        },
+        {
+          "name": "registration_branch_id",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "customer_status",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "last_updated",
+          "type": "TIMESTAMP"
+        },
+        {
+          "name": "accepts_marketing",
+          "type": "BOOLEAN"
+        },
+        {
+          "name": "_source_file",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "_run_id",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "_ingested_at",
+          "type": "TIMESTAMP"
+        }
+      ]
+    },
+    {
+      "layer": "silver",
+      "table": "products",
+      "path": "silver/products.parquet",
+      "rows": 400000,
+      "bytes": 19150781,
+      "sha256": "10bccd180c5965b444dc680b9604eab7e7d1075060919499b5819bce9fd6dc96",
+      "columns": [
+        {
+          "name": "product_id",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "customer_id",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "product_type",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "product_number",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "currency",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "current_balance",
+          "type": "DECIMAL(15,2)"
+        },
+        {
+          "name": "credit_limit",
+          "type": "DECIMAL(15,2)"
+        },
+        {
+          "name": "interest_rate",
+          "type": "DECIMAL(5,2)"
+        },
+        {
+          "name": "opening_date",
+          "type": "DATE"
+        },
+        {
+          "name": "expiration_date",
+          "type": "DATE"
+        },
+        {
+          "name": "opening_branch_id",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "product_status",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "opening_channel",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "has_linked_app",
+          "type": "BOOLEAN"
+        },
+        {
+          "name": "days_past_due",
+          "type": "INTEGER"
+        },
+        {
+          "name": "last_transaction_date",
+          "type": "TIMESTAMP"
+        },
+        {
+          "name": "last_updated",
+          "type": "TIMESTAMP"
+        },
+        {
+          "name": "_source_file",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "_run_id",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "_ingested_at",
+          "type": "TIMESTAMP"
+        }
+      ]
+    },
+    {
+      "layer": "silver",
+      "table": "transactions",
+      "path": "silver/transactions.parquet",
+      "rows": 4425008,
+      "bytes": 214108402,
+      "sha256": "7ff4af16a3a2f6855fbf09fb7b78b8f3cc5f584cd22dd9e85da55e432cba045f",
+      "columns": [
+        {
+          "name": "transaction_id",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "transaction_date",
+          "type": "TIMESTAMP"
+        },
+        {
+          "name": "process_date",
+          "type": "DATE"
+        },
+        {
+          "name": "product_id",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "customer_id",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "transaction_type",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "transaction_category",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "amount",
+          "type": "DECIMAL(15,2)"
+        },
+        {
+          "name": "currency",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "amount_usd",
+          "type": "DECIMAL(15,2)"
+        },
+        {
+          "name": "channel",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "branch_id",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "merchant_name",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "merchant_category",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "transaction_country",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "transaction_city",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "transaction_status",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "response_code",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "is_fraud",
+          "type": "BOOLEAN"
+        },
+        {
+          "name": "fraud_score",
+          "type": "DECIMAL(5,2)"
+        },
+        {
+          "name": "latitude",
+          "type": "DECIMAL(10,7)"
+        },
+        {
+          "name": "longitude",
+          "type": "DECIMAL(10,7)"
+        },
+        {
+          "name": "_source_file",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "_run_id",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "_ingested_at",
+          "type": "TIMESTAMP"
+        }
+      ]
+    },
+    {
+      "layer": "silver",
+      "table": "complaints",
+      "path": "silver/complaints.parquet",
+      "rows": 67095,
+      "bytes": 3415469,
+      "sha256": "b96f8d760f9c5106e1408bd8b6b51f28cab96bd06f8a7d33bfe324b508491326",
+      "columns": [
+        {
+          "name": "complaint_id",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "creation_date",
+          "type": "TIMESTAMP"
+        },
+        {
+          "name": "process_date",
+          "type": "DATE"
+        },
+        {
+          "name": "customer_id",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "case_type",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "category",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "subcategory",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "reception_channel",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "affected_product_id",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "related_branch_id",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "origin_interaction_id",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "description",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "claimed_amount",
+          "type": "DECIMAL(15,2)"
+        },
+        {
+          "name": "currency",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "priority",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "assigned_agent_id",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "assignment_date",
+          "type": "TIMESTAMP"
+        },
+        {
+          "name": "first_response_date",
+          "type": "TIMESTAMP"
+        },
+        {
+          "name": "resolution_date",
+          "type": "TIMESTAMP"
+        },
+        {
+          "name": "closing_date",
+          "type": "TIMESTAMP"
+        },
+        {
+          "name": "sla_breached",
+          "type": "BOOLEAN"
+        },
+        {
+          "name": "resolution_days",
+          "type": "INTEGER"
+        },
+        {
+          "name": "resolution",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "compensation_granted",
+          "type": "DECIMAL(15,2)"
+        },
+        {
+          "name": "resolution_satisfaction",
+          "type": "INTEGER"
+        },
+        {
+          "name": "is_repeat_complainer",
+          "type": "BOOLEAN"
+        },
+        {
+          "name": "_source_file",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "_run_id",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "_ingested_at",
+          "type": "TIMESTAMP"
+        }
+      ]
+    },
+    {
+      "layer": "gold",
+      "table": "gold_daily_activity",
+      "path": "gold/gold_daily_activity.parquet",
+      "rows": 178941,
+      "bytes": 2513312,
+      "sha256": "b9cbdce93a4a7b418378c1fd6ecb40dd457fde17327c3235a5d9ea6991d4ea18",
+      "columns": [
+        {
+          "name": "activity_date",
+          "type": "DATE"
+        },
+        {
+          "name": "transaction_country",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "currency",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "transaction_type",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "transaction_status",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "n_transactions",
+          "type": "BIGINT"
+        },
+        {
+          "name": "n_customers",
+          "type": "BIGINT"
+        },
+        {
+          "name": "total_abs_amount",
+          "type": "DECIMAL(38,2)"
+        },
+        {
+          "name": "avg_abs_amount",
+          "type": "DOUBLE"
+        },
+        {
+          "name": "_gold_run_id",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "_built_at",
+          "type": "TIMESTAMP"
+        }
+      ]
+    },
+    {
+      "layer": "gold",
+      "table": "gold_customer_summary",
+      "path": "gold/gold_customer_summary.parquet",
+      "rows": 134515,
+      "bytes": 3031518,
+      "sha256": "47d77abd6a45182867e18ad6107a60215ecb8886483d4a9589109240c8422506",
+      "columns": [
+        {
+          "name": "customer_id",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "n_transactions",
+          "type": "BIGINT"
+        },
+        {
+          "name": "first_transaction_at",
+          "type": "TIMESTAMP"
+        },
+        {
+          "name": "last_transaction_at",
+          "type": "TIMESTAMP"
+        },
+        {
+          "name": "n_channels",
+          "type": "BIGINT"
+        },
+        {
+          "name": "n_countries",
+          "type": "BIGINT"
+        },
+        {
+          "name": "n_currencies",
+          "type": "BIGINT"
+        },
+        {
+          "name": "n_products",
+          "type": "BIGINT"
+        },
+        {
+          "name": "_gold_run_id",
+          "type": "VARCHAR"
+        },
+        {
+          "name": "_built_at",
+          "type": "TIMESTAMP"
+        }
+      ]
+    }
+  ]
+}
