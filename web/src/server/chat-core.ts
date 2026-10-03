@@ -1,10 +1,23 @@
-import type { Disposition, Reply, SendResult, Why } from '../chat/types'
+import type { Disposition, Reply, SendResult, TraceReceipt, Why } from '../chat/types'
 import { PublicError } from './rpc-guard.ts'
 
 // The send path without the framework: what the API answered, and what that means for the customer. The server
 // function wires it to the session cookie and to agentFetch; tests wire it to fakes.
 
 const DISPOSITIONS: readonly string[] = ['AUTO_RESOLVE', 'CLARIFY', 'ABSTAIN', 'ESCALATE']
+
+function parseTraceReceipt(value: unknown): TraceReceipt | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null
+  const r = value as Record<string, unknown>
+  if (typeof r.transaction_id !== 'string' || typeof r.transaction_type !== 'string'
+      || typeof r.transaction_date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(r.transaction_date)
+      || typeof r.amount !== 'number' || !Number.isFinite(r.amount)
+      || typeof r.currency !== 'string' || !/^[A-Z]{3}$/.test(r.currency)
+      || typeof r.movement_status !== 'string' || typeof r.trace_id !== 'string'
+      || typeof r.trace_status !== 'string' || r.read_back !== true
+      || typeof r.sla_business_days !== 'number' || !Number.isInteger(r.sla_business_days) || r.sla_business_days < 0) return null
+  return r as unknown as TraceReceipt
+}
 
 // One turn at a time per session: a second tab or a double click cannot send the same message twice while the
 // first is still running. Best effort (one process); the composer also disables itself while sending.
@@ -49,6 +62,8 @@ export function parseReply(body: unknown): Reply | null {
   }
   if (r.degraded === true) reply.degraded = true
   if (r.choice === 'product' || r.choice === 'movement') reply.choice = r.choice
+  const traceReceipt = parseTraceReceipt(r.trace_receipt)
+  if (traceReceipt) reply.trace_receipt = traceReceipt
   if (typeof r.why === 'object' && r.why !== null) reply.why = r.why as Why
   return reply
 }

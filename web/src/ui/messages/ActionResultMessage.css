@@ -10,3 +10,9 @@
 .ui-result__title { color: var(--color-ink-app); font-size: var(--text-compact-md); font-weight: var(--font-weight-bold); line-height: 16px; }
 .ui-result__detail { margin: 0; color: var(--color-ink-app); font-size: var(--text-compact-md); line-height: 150%; overflow-wrap: anywhere; }
 .ui-result__ref { font-family: var(--font-mono); letter-spacing: 0; }
+.ui-result__reference-label { display: block; margin-top: 2px; color: var(--color-ink-70); font-size: var(--text-compact-sm); }
+.ui-result__facts { display: grid; gap: 7px; margin: 8px 0 0; }
+.ui-result__facts > div { display: grid; grid-template-columns: 6.5rem minmax(0, 1fr); gap: 8px; align-items: baseline; }
+.ui-result__facts dt { color: var(--color-ink-70); font-size: var(--text-compact-sm); }
+.ui-result__facts dd { margin: 0; min-width: 0; color: var(--color-ink-app); font-size: var(--text-compact-sm); font-weight: var(--font-weight-medium); overflow-wrap: anywhere; }
+.ui-result__next { margin: 9px 0 0; padding-top: 8px; border-top: 1px solid color-mix(in srgb, var(--color-ink-70) 18%, transparent); color: var(--color-ink-app); font-size: var(--text-compact-sm); line-height: 150%; }

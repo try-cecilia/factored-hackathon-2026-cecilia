@@ -103,6 +103,7 @@ export function classifyReply(reply: Reply, before: readonly Entry[] = []): Repl
   if (variant === 'clarify') return isProposal(reply) ? { kind: 'confirmTrace' } : { kind: 'clarify', options: parseOptions(reply.response_text, reply.choice) }
   if (variant === 'decline') return reply.category === 'action_cancelled' ? { kind: 'answer' } : { kind: 'decline' }
   if (variant === 'handoff') return reply.ticket_id ? { kind: 'handoff', ticketId: reply.ticket_id, category: reply.category } : { kind: 'couldNotVerify' }
+  if (variant === 'answer' && reply.trace_receipt?.read_back) return { kind: 'actionResult' }
   if (variant === 'answer' && answersAYes(before)) return { kind: 'actionResult' }
   if (variant === 'answer') return { kind: 'answer' }
   return { kind: variant }
