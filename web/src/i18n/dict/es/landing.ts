@@ -184,11 +184,11 @@ export const landing = {
     title: 'Lo que Cecilia no resuelve, lo decide una persona con el caso ya armado.',
     queue: {
       title: 'Cola · casos abiertos',
-      columns: 'espera · objetivo',
+      columns: 'en espera · objetivo',
       caption: 'Maqueta de la cola del operador',
       kind: 'Tipo',
       case: 'Caso',
-      wait: 'Espera',
+      wait: 'Tiempo en espera',
       target: 'Objetivo',
       security: 'Seguridad',
       securityCase: 'Tarjeta robada · pide bloqueo',

@@ -76,7 +76,7 @@ describe('the landing', () => {
     const tables = screen.getAllByRole('table')
     expect(tables).toHaveLength(4)
     const [offline, live, ablation, queue] = tables
-    expect(within(queue).getAllByRole('columnheader').map((th) => th.textContent)).toEqual(['Tipo', 'Caso', 'Espera', 'Objetivo'])
+    expect(within(queue).getAllByRole('columnheader').map((th) => th.textContent)).toEqual(['Tipo', 'Caso', 'Tiempo en espera', 'Objetivo'])
     expect(within(queue).getAllByRole('row').slice(1).map((tr) => tr.lastElementChild?.textContent)).toEqual(['15m', '2h', '4h'])
     expect(within(offline).getAllByRole('columnheader').map((th) => th.textContent)).toEqual(['Offline · 548 casos', 'Bot de palabras', 'Modelo ideal', 'Adversarial'])
     expect(within(live).getAllByRole('columnheader').map((th) => th.textContent)).toEqual(['En vivo · 138 casos × 3 corridas', 'Sonnet 5 ★', 'Haiku 4.5'])
