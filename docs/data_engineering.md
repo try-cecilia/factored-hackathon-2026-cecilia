@@ -1,7 +1,7 @@
 # Data engineering: layers, measured load, guarantees
 
-`docs/data_quality.md` has the contract, checks and findings; this page says how the data flows, what a full load costs,
-which guarantees are tested, and what we did not build.
+Start at [DATA.md](DATA.md) for the overview. `docs/data_quality.md` has the contract, checks and findings; this page
+says how the data flows, what a full load costs, which guarantees are tested, and what we did not build.
 
 ## The layers, by their usual names
 
@@ -15,23 +15,8 @@ copy, and we say where it differs from a textbook medallion:
 | **Gold**: business-ready aggregates | Three marts, built by `python -m data.gold` (`make gold`): `gold_daily_activity`, `gold_customer_summary` and `gold_contact_demand`. Each declares its columns and types and its grain, and is reconciled to the silver rows it summarizes | The baseline report reads five of its figures from `gold_contact_demand`; the agent and the other reports still read silver. There is no feature store |
 | **Open copy**: silver and gold as Parquet | `python -m data.lake` (`make lake`): one zstd file per table and a `manifest.json` with each file's rows, size, SHA-256 and columns, and the silver and gold runs it was written from | A copy for portability and checking, not a second source of truth: the warehouse stays the one the agent reads |
 
-```mermaid
-flowchart LR
-  S["Source CSVs<br>S3 or local<br>(bronze, hashed)"] --> R["Raw staging<br>inside one transaction"]
-  R --> D["Schema drift check"] --> T["Typed staging<br>TRY_CAST to the dictionary"]
-  T --> M["Measure checks"] --> Q["Quarantine<br>_quarantine_table"]
-  M --> U["Dedup + upsert by PK<br>(silver)"]
-  U --> X["Cross-table checks"]
-  U --> A["Agent tools<br>(read-only)"]
-  U --> G["Gold marts<br>gold_*, columns + grain<br>reconciled"]
-  G --> P["analysis/ baseline<br>(5 figures)"]
-  U -.-> P2["analysis/ other reports"]
-  U --> K["Parquet + manifest<br>data/lake"]
-  G --> K
-  R -.-> L["_ingestion_log, _source_files,<br>_partition_log, _dq_results"]
-  G -.-> L2["_gold_log"]
-  U -.-> L
-```
+The figure of the flow, with the row count of every table, one row traced from its file to the agent, and the checks of
+the last full load are in [DATA.md](DATA.md), generated from the committed reports.
 
 A load whose quarantine rate passes `--max-quarantine-rate` (1% by default) or that lacks a required column rolls back,
 and the warehouse keeps its previous state (`data/pipeline.py`).
