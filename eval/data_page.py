@@ -13,6 +13,7 @@ tests/test_data_page.py holds the committed page to a fresh render.
 """
 from __future__ import annotations
 
+import argparse
 import csv
 import json
 import os
@@ -59,13 +60,15 @@ def n(x: int) -> str:
     return f"{x:,}"
 
 
-def readers(names: list[str]) -> dict[str, list[str]]:
-    """Per table, the modules under agent/, api/ and analysis/ that query it (`FROM`/`JOIN`, or the mart's name as a literal)."""
-    sources = {p.relative_to(ROOT).as_posix(): p.read_text(encoding="utf-8")
-               for folder, _ in READERS for p in sorted((ROOT / folder).rglob("*.py"))}
+def readers(names: list[str], root: Path = ROOT) -> dict[str, list[str]]:
+    """Per table, the modules under agent/, api/ and analysis/ that query it (`FROM`/`JOIN` in any case, or the mart's name as
+    a literal)."""
+    sources = {p.relative_to(root).as_posix(): p.read_text(encoding="utf-8")
+               for folder, _ in READERS for p in sorted((root / folder).rglob("*.py"))}
     out = {}
     for name in names:
-        pattern = re.compile(rf"""(?:FROM|JOIN)\s+{name}\b|["']{name}["']""" if name.startswith("gold_") else rf"(?:FROM|JOIN)\s+{name}\b")
+        query = rf"\b(?:FROM|JOIN)\s+{name}\b"
+        pattern = re.compile(rf"""{query}|["']{name}["']""" if name.startswith("gold_") else query, re.IGNORECASE)
         out[name] = [path for path, text in sources.items() if pattern.search(text)]
     return out
 
@@ -164,10 +167,10 @@ def _flow(report: dict, manifest: dict, threshold: float, sample: str) -> list[s
     return [
         "```mermaid",
         "flowchart LR",
-        f'  B["<b>Bronze</b><br>organizer CSVs, S3 or local<br>never rewritten<br>{len(t)} tables<br>{n(parts)} daily partitions or flat files<br>SHA-256 of every file"]',
+        f'  B["<b>Bronze</b><br>the original CSVs<br>local, or S3 via a local cache<br>never rewritten<br>{len(t)} tables<br>{n(parts)} daily partitions or flat files<br>SHA-256 of every file"]',
         '  B --> C["<b>Contracts</b><br>schema drift<br>TRY_CAST to the dictionary<br>NOT NULL, domain rules"]',
         f'  C -- "error-level rule broken" --> Q["<b>Quarantine</b><br>one _quarantine_ table per table<br>{n(quarantined)} of {n(staged)} rows<br>in the last full load"]',
-        f'  Q -. "over {threshold:.0%} of a table" .-> RB["<b>Rollback</b><br>the warehouse keeps<br>its previous state"]',
+        f'  Q -. "over {threshold:.0%} of the table\'s batch" .-> RB["<b>Rollback of that table</b><br>it keeps its previous state<br>earlier tables stay committed<br>the run stops"]',
         '  C -- "clean rows" --> D["dedup: latest record wins<br>upsert by primary key"]',
         f'  D --> SS["<b>Silver, serving</b><br>{lines(serving)}"]',
         f'  D --> SA["<b>Silver, analysis</b><br>{lines(analysis)}"]',
@@ -186,6 +189,10 @@ def _flow(report: dict, manifest: dict, threshold: float, sample: str) -> list[s
     ]
 
 
+def _count(k: int, noun: str) -> str:
+    return f"{n(k)} {noun}{'' if k == 1 else 's'}"
+
+
 def _sample_short(sample: str) -> str:
     customers = re.search(r"--sample-customers (\d+)", sample)
     since = re.search(r"--since (\S+)", sample)
@@ -201,8 +208,12 @@ def _layers(report: dict, manifest: dict, read_by: dict[str, list[str]]) -> list
     exported = {f["table"]: f["rows"] for f in manifest["files"]}
 
     def who(name: str) -> str:
-        found = [f"[`{Path(p).name}`](../{p})" for p in read_by.get(name, [])]
-        return ", ".join(found) or "none"
+        groups = []
+        for folder, label in READERS:
+            found = [f"[`{Path(p).name}`](../{p})" for p in read_by.get(name, []) if p.startswith(folder + "/")]
+            if found:
+                groups.append(f"{label}: {', '.join(found)}")
+        return "<br>".join(groups) or "none"
 
     L = ["| Layer | Table | Rows loaded in the last full load | Rows in the Parquet export | Quarantined | Read by |",
          "|---|---|---|---|---|---|"]
@@ -257,7 +268,8 @@ def _example(ex: dict, read_by: dict[str, list[str]]) -> list[str]:
         "version, the parameters and the machine; `_source_files` records the file with the same SHA-256.", "",
         "**4. Gold: the marts it adds to.** In `gold_daily_activity`, the row for "
         + ", ".join(f"`{k}` = {v}" for k, v in gd["grain"].items())
-        + f" counts {gd['n_transactions']} movement(s) of {gd['n_customers']} customer(s), {gd['total_abs_amount']} in absolute amount. "
+        + f" counts {_count(gd['n_transactions'], 'transaction')} from {_count(gd['n_customers'], 'customer')}, "
+        f"{gd['total_abs_amount']} in absolute amount. "
         f"In `gold_customer_summary`, `{gs['customer_id']}` has {gs['n_transactions']} movements on {gs['n_products']} products.", "",
         f"**5. The agent.** {', '.join(agent)} reads `transactions` from silver, never gold: `list_transactions` returns this "
         f"movement to `{shown['customer_id']}` once the session is bound to that customer, with the warehouse's as-of date.", "",
@@ -322,8 +334,9 @@ def _hashes(report: dict, manifest: dict, as_of: str, ex: dict) -> list[str]:
         "`_ingestion_log`, `_source_files`, `_partition_log` and `_dq_results`, and to quarantined rows (`_quarantine_run`). "
         "A gold build has its own id in `_gold_log` and on every mart row (`_gold_run_id`).", "",
         f"**As-of.** The warehouse's as-of date is the last processed day of `transactions`: **{as_of}** for the organizer's "
-        f"data ([baseline_metrics.json](evidence/baseline_metrics.json)), {ex['as_of']} for the fixture. Every answer states it, "
-        "and the freshness policy is in [data_quality.md](data_quality.md#update-and-freshness-policy).", "",
+        f"data ([baseline_metrics.json](evidence/baseline_metrics.json)), {ex['as_of']} for the fixture. A reply that presents data read from the warehouse "
+        "(balances, movements, payment status) states it. Clarifications, abstentions and some trace replies carry no date. "
+        "The freshness policy is in [data_quality.md](data_quality.md#update-and-freshness-policy).", "",
         "**Source hashes.** `_source_files` keeps the size and SHA-256 of every file a load read, flat tables included. "
         "`make lineage` (`python -m data.lineage --verify --raw-dir $RAW_DATA_DIR`) exits 1 if a served row has no lineage, "
         "names a run that did not succeed or a file with no hash, or if a file on disk no longer has the recorded hash.", "",
@@ -356,28 +369,36 @@ def render(report: dict, manifest: dict, baseline: dict, validation: dict, examp
     L = [
         "# Data engineering at a glance", "",
         "<!-- Generated by `python -m eval.data_page`; tests/test_data_page.py fails if this page differs. Do not edit by hand. -->", "",
-        "How the organizer's files become the rows the agent answers from, and how each step can be checked. Every figure is "
-        "read from a committed report: [`quality_report.json`](../data/reports/quality_report.json) (the last full load), "
-        "[`lake_manifest.json`](evidence/lake_manifest.json) (the Parquet export) and the code. The detail behind each section: "
-        "[data_engineering.md](data_engineering.md) (layers, measured load times, guarantees and their tests, what is not built), "
-        "[data_quality.md](data_quality.md) (contract, checks, findings, freshness), "
-        "[data-validation-catalog.md](data-validation-catalog.md) (each defect of the dataset and its rule) and "
-        "[dataset-audit.md](dataset-audit.md).", "",
+        "How the organizer's files become the rows the agent answers from, and how each step can be checked.", "",
+        "Every figure is read from a committed report: [`quality_report.json`](../data/reports/quality_report.json) (the last "
+        "full load), [`lake_manifest.json`](evidence/lake_manifest.json) (the Parquet export) and the code.", "",
+        "The detail behind each section:", "",
+        "- [data_engineering.md](data_engineering.md): layers, measured load times, guarantees and their tests, what is not built",
+        "- [data_quality.md](data_quality.md): contract, checks, findings, freshness",
+        "- [data-validation-catalog.md](data-validation-catalog.md): each defect of the dataset and its rule",
+        "- [dataset-audit.md](dataset-audit.md): the audit of the dataset", "",
         "## The flow", "",
         *_flow(report, manifest, threshold, sample), "",
-        f"A table rolls back when more than {threshold:.0%} of its batch is quarantined (`--max-quarantine-rate`) or a required "
-        "column is missing; the warehouse keeps its previous state. A gold mart that fails its column contract, its grain or "
-        "its reconciliation to silver rolls back the same way. The agent reads silver; only the baseline report reads gold. "
+        "Each table is loaded and committed in its own transaction. A table rolls back when more than "
+        f"{threshold:.0%} of its own batch is quarantined (`--max-quarantine-rate`, strictly greater) or a required column is "
+        "missing. The affected table keeps its previous state; earlier tables in the run stay committed, and the run stops there.", "",
+        "Gold is committed mart by mart. A mart that fails its column contract, its grain or its reconciliation to "
+        "silver keeps its previous version; marts built before it in that build stay, and the build stops.", "",
+        "The agent reads silver; only the baseline report reads gold. "
         f"The demo on Render loads a sample, `{sample}` ([render.yaml](../render.yaml)), so the counts below are not the demo's.", "",
         "## Each layer in numbers", "",
-        f"Silver from the last full load (`{report['run_id']}`, {len(t)} tables, "
-        f"{n(sum(v['rows_new'] + v['rows_updated'] for v in t.values()))} rows). Gold and the export come from the Parquet copy "
-        f"of a full-data warehouse with {len(exported_silver)} of those tables ({', '.join(f'`{x}`' for x in exported_silver)})"
-        + (", so `gold_contact_demand`, which needs `call_center_interactions`, is not there (its one measured row count is in "
-           "[data_engineering.md](data_engineering.md#the-gold-marts))" if "gold_contact_demand" not in exported else "")
-        + ". Where both have a table, its rows agree.", "",
+        "The figures come from two committed artifacts:", "",
+        f"- **Silver:** the last full load, `{report['run_id']}`: {len(t)} tables, "
+        f"{n(sum(v['rows_new'] + v['rows_updated'] for v in t.values()))} rows.",
+        f"- **Gold and the export:** the Parquet copy of a full-data warehouse with {len(exported_silver)} of those tables "
+        f"({', '.join(f'`{x}`' for x in exported_silver)}).", "",
+        "Where both have a table, its row count agrees."
+        + (" `gold_contact_demand` needs `call_center_interactions`, which that warehouse lacks, so it is not in the export; its "
+           "one measured row count is in [data_engineering.md](data_engineering.md#the-gold-marts)." if "gold_contact_demand" not in exported else ""), "",
         *_layers(report, manifest, read_by), "",
-        "Bronze is not copied: the files stay where they were delivered and the hash in `_source_files` proves what was read. "
+        "There is no separate bronze store. The pipeline reads the original CSVs, either from a local directory or from a local "
+        "cache of the S3 objects under `--raw-dir` (downloaded as they are, never rewritten). The hash in `_source_files` proves "
+        "which bytes were read. "
         "\"Read by\" lists the modules under `agent/`, `api/` and `analysis/` that query the table.", "",
         "## One row, end to end", "",
         *_example(example, read_by),
@@ -403,7 +424,7 @@ def render(report: dict, manifest: dict, baseline: dict, validation: dict, examp
         "make pipeline INGEST=ingest-local RAW_DATA_DIR=data/raw  # from a local copy",
         "",
         "make validate-data-ml   # contracts, quality, lineage and freshness as PASS/FAIL; writes nothing",
-        "python -m eval.data_page   # regenerate this page",
+        "python -m eval.data_page   # regenerate this page in docs/ (--out elsewhere, --tmp-dir for the throwaway warehouse)",
         "```", "",
         "`make pipeline` with no variables writes the warehouse to `DUCKDB_PATH` and the report to "
         "`data/reports/quality_report.json`, the committed one this page reads.", "",
@@ -411,17 +432,22 @@ def render(report: dict, manifest: dict, baseline: dict, validation: dict, examp
     return "\n".join(L)
 
 
-def inputs(example: dict | None = None) -> tuple:
+def inputs(example: dict | None = None, tmp_dir: str | None = None) -> tuple:
+    """The committed reports, plus the fixture's traced row; that row is built in a throwaway directory under `tmp_dir`
+    (by default the system's, which honours TMPDIR) and deleted afterwards."""
     if example is None:
-        with tempfile.TemporaryDirectory() as tmp:
+        with tempfile.TemporaryDirectory(dir=tmp_dir) as tmp:
             example = collect_example(Path(tmp))
     return _read(REPORT), _read(MANIFEST), _read(BASELINE), _read(VALIDATION), example
 
 
 def main() -> None:
-    page = render(*inputs())
-    (ROOT / OUT).write_text(page, encoding="utf-8")
-    print(f"wrote {OUT}")
+    p = argparse.ArgumentParser(description="Render the data engineering page from the committed reports and the fixture")
+    p.add_argument("--out", default=str(ROOT / OUT), help=f"where to write the page (default {OUT})")
+    p.add_argument("--tmp-dir", help="where to build the throwaway fixture warehouse (default: the system's temp dir, TMPDIR)")
+    a = p.parse_args()
+    Path(a.out).write_text(render(*inputs(tmp_dir=a.tmp_dir)), encoding="utf-8")
+    print(f"wrote {a.out}")
 
 
 if __name__ == "__main__":

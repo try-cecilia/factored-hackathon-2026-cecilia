@@ -60,3 +60,14 @@ def test_every_link_on_the_page_resolves():
 
 def test_the_readme_links_the_page():
     assert "(docs/DATA.md)" in (ROOT / "README.md").read_text(encoding="utf-8")
+
+
+def test_a_reader_is_found_whatever_the_case_of_its_sql(tmp_path):
+    (tmp_path / "agent").mkdir()
+    (tmp_path / "agent" / "tools.py").write_text('SQL = "select amount from transactions where customer_id = ?"\n', encoding="utf-8")
+    (tmp_path / "analysis").mkdir()
+    (tmp_path / "analysis" / "report.py").write_text('SQL = "SELECT 1 FROM customers c Join products p USING (customer_id)"\n', encoding="utf-8")
+    (tmp_path / "api").mkdir()
+    (tmp_path / "api" / "demo.py").write_text('NAME = "the transactions_daily view"\n', encoding="utf-8")
+    found = data_page.readers(["transactions", "products", "branches"], root=tmp_path)
+    assert found == {"transactions": ["agent/tools.py"], "products": ["analysis/report.py"], "branches": []}
