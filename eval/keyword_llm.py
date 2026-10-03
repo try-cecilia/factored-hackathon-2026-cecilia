@@ -11,7 +11,21 @@ from agent.llm.client import LLMResponse
 from eval.fake_llm import text_response, tool_call_response
 
 RULES: list[tuple[str, str, dict]] = [
-    (r"rastre|rastrea|no (me )?lleg|no (me )?chegou|pendiente|pendente", "request_trace", {}),
+    # A movement that did not arrive: "no (le) llegó", "nunca llegó", "nunca chegou", a transfer followed by a "no"/"não", or a
+    # payment or deposit that did not arrive, show up or post, either way round ("el pago no aparece", "no se acreditó mi pago",
+    # "não caiu"). First, so it asks for the trace and not for the list of that kind; "mis pagos no están al día" is not a
+    # missing payment but the status.
+    (r"rastre|rastrea|(no|nunca) (me |le )?lleg|(n[aã]o|nunca) (me |lhe )?chegou|transfer[eê]ncia.*\bn(o|[aã]o)\b"
+     r"|(pago|pagamento|dep[oó]sito).*\bn(o|[aã]o) (me |le |lhe |se )?(lleg|aparec|acredit|ca[ií]|cheg|entr)"
+     r"|\bn(o|[aã]o) (me |le |lhe |se )?(lleg|aparec|acredit|ca[ií]|cheg|entr)\w*\b.*(pago|pagamento|dep[oó]sito)"
+     r"|pendiente|pendente", "request_trace", {}),
+    # The status of a payment, said as such ("estado de pago", "estado de mis pagos", "situação do pagamento").
+    (r"estado de(l| mis?)? pagos?\b|(estado|situa[cç][aã]o) d[oe]s? (meus? )?pagamentos?", "get_payment_status", {"product_id": "Tarjeta Crédito"}),
+    # One kind of movement, named in the plural ("transferencias", "mis pagos", "depósitos"): the list narrowed to it. Late
+    # payments ("pagos atrasados", "al día") are the payment status below.
+    (r"transfer[eê]ncias", "list_transactions", {"transaction_type": "Transfer"}),
+    (r"^(?!.*(atras|al d[ií]a|em dia)).*\b(pagos|pagamentos)\b", "list_transactions", {"transaction_type": "Payment"}),
+    (r"dep[oó]sitos", "list_transactions", {"transaction_type": "Deposit"}),
     (r"movimiento|transacc|movimenta", "list_transactions", {}),
     (r"d[oó]lar|cambio|c[aâ]mbio", "get_exchange_rate", {"source_currency": "USD", "target_currency": "MXN"}),
     (r"atras|al d[ií]a|em dia", "get_payment_status", {"product_id": "Tarjeta Crédito"}),
