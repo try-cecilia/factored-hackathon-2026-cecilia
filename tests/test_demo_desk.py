@@ -287,3 +287,91 @@ def test_a_result_alone_has_no_quote_and_a_portuguese_session_reads_it_in_portug
     said = say(client, a, "quanto eu tenho de saldo na minha conta?")["response_text"]
     assert said.startswith("Novidade do seu caso: um atendente resolveu. " + render.RESOLVE_RESULT["will_contact"]["pt"])
     assert "Mensagem do atendente" not in said and "«" not in said.split("\n\n")[0]
+
+
+# --- review findings ----------------------------------------------------------------------------------------------
+
+REAL_KEY = "review-only-key-long-enough"
+
+
+@pytest.mark.parametrize("action", ["claim", "approve", "reject", "release", "resolve"])
+def test_a_case_a_real_operator_holds_is_the_same_conflict_for_every_move_and_never_names_them(client, monkeypatch, action):
+    a = visitor()
+    ticket_id = theft_ticket(client, a)
+    monkeypatch.setenv("OPERATOR_KEYS", f"review-real={REAL_KEY}")
+    assert client.post(f"/admin/tickets/{ticket_id}/claim", headers={"X-Operator-Key": REAL_KEY}, json={}).status_code == 200
+    body = {"result_code": "will_contact"} if action == "resolve" else {}
+    r = act(client, a, ticket_id, action, **body)
+    assert (r.status_code, r.json()) == (409, {"detail": "another person took this case"})
+    stale = act(client, a, ticket_id, action, expected_version=0, **body)  # a stale screen is still told so, as before
+    assert stale.status_code == 409 and stale.json()["detail"].startswith("the ticket changed")
+    assert default_desk.state(ticket_id)["operator"] == "review-real" and default_desk.state(ticket_id)["version"] == 1
+
+
+def test_the_real_desk_keeps_its_own_words_for_a_case_another_operator_holds():
+    from agent.policy.desk import Conflict, HeldByAnother
+
+    ticket_id = theft_ticket(TestClient(main.app), visitor())
+    default_desk.act(ticket_id, "claim", "ana")
+    with pytest.raises(HeldByAnother, match="ticket is already claimed by ana"):
+        default_desk.act(ticket_id, "claim", "beto")
+    with pytest.raises(HeldByAnother, match="claim the ticket before deciding it"):
+        default_desk.act(ticket_id, "release", "beto")
+    with pytest.raises(Conflict) as plain:  # not claimed by anyone: an ordinary conflict, not "held by another"
+        default_desk.act(theft_ticket(TestClient(main.app), visitor()), "release", "beto")
+    assert type(plain.value) is Conflict
+
+
+def test_no_real_operator_may_carry_the_demo_consoles_name(client, monkeypatch):
+    from agent.session.operators import OperatorConfigError, OperatorDirectory
+
+    for raw in (f"demo={REAL_KEY}", f"ana={'a' * 24},demo={REAL_KEY}"):
+        with pytest.raises(OperatorConfigError, match="reservado"):
+            OperatorDirectory.parse(raw)
+    a = visitor()
+    ticket_id = theft_ticket(client, a)
+    monkeypatch.setenv("OPERATOR_KEYS", f"demo={REAL_KEY}")  # read again on every operator call: refused there too
+    r = TestClient(main.app, raise_server_exceptions=False).post(f"/admin/tickets/{ticket_id}/claim",
+                                                                  headers={"X-Operator-Key": REAL_KEY}, json={})
+    assert r.status_code == 500 and default_desk.state(ticket_id)["version"] == 0
+
+
+def test_a_ticket_is_looked_up_only_among_the_sessions_own(client, monkeypatch):
+    """Not by id across the whole queue: that lookup stops at the line it finds, so another session's ticket would answer sooner
+    than one that does not exist. Here every lookup reads the queue whole and parses only the session's own lines."""
+    a, b = visitor(), visitor()
+    ticket_id = theft_ticket(client, a)
+    parsed = []
+    real_loads = json.loads
+    monkeypatch.setattr(default_queue, "get", lambda *_: pytest.fail("looked up by id across the queue"))
+    monkeypatch.setattr(demo_desk.json, "loads", lambda s, *k, **kw: parsed.append(s) or real_loads(s, *k, **kw))
+    for target in (ticket_id, str(uuid.uuid4())):
+        parsed.clear()
+        r = client.get(f"/demo/desk/tickets/{target}", headers=h(b))
+        queue_lines = [s for s in parsed if isinstance(s, str) and '"ticket_id"' in s]  # a ticket of the queue, parsed
+        assert (r.status_code, r.json(), queue_lines) == (404, {"detail": "ticket not found"}, [])
+        assert client.get(f"/demo/desk/tickets/{target}/customer_context", headers=h(b)).status_code == 404
+    parsed.clear()
+    assert client.get(f"/demo/desk/tickets/{ticket_id}", headers=h(a)).status_code == 200
+    assert len([s for s in parsed if isinstance(s, str) and '"ticket_id"' in s]) == 1  # its own line, found the same way
+
+
+@pytest.mark.parametrize("demo_mode, console", [("1", None), ("1", "0"), ("1", " 1"), ("1", "1 "), ("1", "2"), (None, "1"), ("0", "1")])
+def test_with_a_switch_off_any_method_or_body_is_the_404_of_a_route_that_does_not_exist(client, monkeypatch, demo_mode, console):
+    for name, value in (("DEMO_MODE", demo_mode), ("DEMO_CONSOLE", console)):
+        if value is None:
+            monkeypatch.delenv(name, raising=False)
+        else:
+            monkeypatch.setenv(name, value)
+    token = visitor()
+    malformed = {"content": "{", "headers": {**h(token), "Content-Type": "application/json"}}
+    for method, path, extra in [
+        ("POST", "/demo/desk/tickets/x/claim", malformed), ("POST", "/demo/desk/tickets/x/claim", {"json": {"operator": 1}}),
+        ("POST", "/demo/desk/tickets/x/nope", {}), ("GET", "/demo/desk/tickets/", {}), ("GET", "/demo/desk", {}),
+        *[(m, "/demo/desk/tickets", {"headers": h(token)}) for m in ("HEAD", "PUT", "DELETE", "OPTIONS", "PATCH", "POST")],
+    ]:
+        mine = client.request(method, path, **extra)
+        missing = client.request(method, "/route-does-not-exist", **extra)
+        assert (mine.status_code, mine.content) == (missing.status_code, missing.content) == (
+            404, b"" if method == "HEAD" else b'{"detail":"Not Found"}'), (method, path)
+        assert "allow" not in mine.headers

@@ -68,6 +68,11 @@ class Conflict(DeskError):
     pass
 
 
+class HeldByAnother(Conflict):
+    """Another operator holds the ticket (claimed it). Its text is the desk's as always; the type lets a caller that must not
+    name that operator (the demo's console) say so in its own words."""
+
+
 class TicketDesk:
     def __init__(self):
         self._lock = threading.Lock()
@@ -134,11 +139,12 @@ class TicketDesk:
                 if status == "claimed":
                     if current["operator"] == operator:
                         return current
-                    raise Conflict(f"ticket is already claimed by {current['operator']}")
+                    raise HeldByAnother(f"ticket is already claimed by {current['operator']}")
                 self._record(ticket_id, action, "claimed", operator)
             else:
                 if status != "claimed" or current["operator"] != operator:
-                    raise Conflict("claim the ticket before deciding it")
+                    error = HeldByAnother if status == "claimed" else Conflict
+                    raise error("claim the ticket before deciding it")
                 self._decide(ticket, action, operator, reason, message, result)
             return self.state(ticket_id)
 
