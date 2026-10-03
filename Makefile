@@ -159,7 +159,7 @@ eval-adversarial: ## same workload with a deliberately bad model: safety must no
 eval-ablation:    ## what each group of safety controls buys: the same models with the groups taken off, cumulatively -> eval/reports/ABLATION.md
 	$(PY) -m eval.ablation
 
-check-readme:    ## the README's headline figures and the latencies EVALUATION.md and the slides cite, against the generated reports (fails on a mismatch)
+check-readme:    ## the README's headline figures, the latencies EVALUATION.md and the slides cite, and the landing's machine-dependent figures, against the generated reports (fails on a mismatch)
 	$(PY) -m eval.check_readme
 
 sync-eval-latencies: ## copy the regenerated reports' latencies per case into EVALUATION.md, the slides and the landing's figures.ts (only those cells and values, plus the landing's offline day), then check

@@ -102,11 +102,29 @@ def _pattern(template: str) -> re.Pattern:
     return re.compile(r"(?<![\d.])" + re.escape(template).replace(r"\{p50\}", FIG).replace(r"\{p95\}", FIG) + r"(?![\w.])")
 
 
+def _fixed(value: float, digits: int, shift: int = 0) -> str:
+    """The rounding every written figure shares (EVALUATION.md, the slides, the landing and the landing's own test): the
+    shortest decimal form of `value` that reads back as the same float (`repr`, what JavaScript's String also gives), times
+    10**shift, rounded half up to `digits` decimals. Decimal arithmetic on that string, never the binary float: 2.25 → 2.3,
+    2.55 → 2.6, 2.449999999999 → 2.4, 1.005 → 1.01 (web/src/landing/rounding-cases.json holds the shared cases)."""
+    return format(Decimal(repr(value)).scaleb(shift).quantize(Decimal(1).scaleb(-digits), rounding=ROUND_HALF_UP), "f")
+
+
+def _read(path: Path) -> str:
+    """The file as it is on disk: newline="" keeps its line endings, so writing it back changes only the values."""
+    with path.open(encoding="utf-8", newline="") as f:
+        return f.read()
+
+
+def _write(path: Path, text: str) -> None:
+    with path.open("w", encoding="utf-8", newline="") as f:
+        f.write(text)
+
+
 def _latency(report: str, key: str, unit: str) -> tuple[str, str]:
     m = next(v for k, v in load(report).items() if key in k)
-    if unit == "ms":
-        return f"{m['latency_ms_p50']:.1f}", f"{m['latency_ms_p95']:.1f}"
-    return f"{m['latency_ms_p50'] / 1000:.1f}", f"{m['latency_ms_p95'] / 1000:.1f}"
+    shift = 0 if unit == "ms" else -3
+    return _fixed(m["latency_ms_p50"], 1, shift), _fixed(m["latency_ms_p95"], 1, shift)
 
 
 def latencies(root: Path = Path("."), write: bool = False) -> list[str]:
@@ -116,7 +134,7 @@ def latencies(root: Path = Path("."), write: bool = False) -> list[str]:
     returned as a problem and not written."""
     problems, texts = [], {}
     for doc, label, columns in LATENCY_ROWS:
-        lines = texts.setdefault(doc, (root / doc).read_text(encoding="utf-8").split("\n"))
+        lines = texts.setdefault(doc, _read(root / doc).split("\n"))
         at = [i for i, ln in enumerate(lines) if ln.startswith(f"| {label} |")]
         if len(at) != 1:
             problems.append(f"{doc}: {len(at)} rows labeled {label!r}, expected one")
@@ -138,12 +156,13 @@ def latencies(root: Path = Path("."), write: bool = False) -> list[str]:
                 cells[i] = _pattern(template).sub(template.format(p50=p50, p95=p95), cells[i])
             elif [float(x) for x in found[0]] != [float(p50), float(p95)]:
                 problems.append(f"{doc}, {label}: says {cells[i]!r}, the report says p50 / p95 = {p50} / {p95} {unit}")
-        lines[at[0]] = "| " + " | ".join([label, *cells]) + " |"
+        eol = "\r" if lines[at[0]].endswith("\r") else ""  # a CRLF file keeps its line endings
+        lines[at[0]] = "| " + " | ".join([label, *cells]) + " |" + eol
     if write:
         for doc, lines in texts.items():
             text = "\n".join(lines)
-            if text != (root / doc).read_text(encoding="utf-8"):
-                (root / doc).write_text(text, encoding="utf-8")
+            if text != _read(root / doc):
+                _write(root / doc, text)
     return problems
 
 
@@ -167,17 +186,12 @@ _FIGURE = re.compile(r"  (?P<name>\w+): json\((?P<value>\d+(?:\.\d+)?), (?P<digi
 _DAY = re.compile(r"export const (?P<name>\w+): Day = \{ iso: '(?P<iso>\d{4}-\d{2}-\d{2})', source: (?P<source>[A-Z]+), at: \['generated_at'\] \}")
 
 
-def _fixed(value: float, digits: int) -> str:
-    """`value` with `digits` decimals, half up on its decimal form: what the landing's test computes with toFixed."""
-    return str(Decimal(repr(value)).quantize(Decimal(1).scaleb(-digits), rounding=ROUND_HALF_UP))
-
-
 def _one_line(lines: list[str], start: str, pattern: re.Pattern) -> tuple[int, re.Match] | str:
     """The only line that starts with `start`, matched in full by `pattern`; or why it is not there or not as expected."""
     at = [i for i, ln in enumerate(lines) if ln.startswith(start)]
     if len(at) != 1:
         return f"{len(at)} lines start with {start.strip()!r}, expected one"
-    match = pattern.fullmatch(lines[at[0]])
+    match = pattern.fullmatch(lines[at[0]].removesuffix("\r"))  # the \r of a CRLF line stays after the match
     return (at[0], match) if match else f"{lines[at[0]].strip()!r} is not shaped as expected"
 
 
@@ -185,7 +199,7 @@ def landing(root: Path = Path("."), write: bool = False) -> list[str]:
     """The landing's machine-dependent figures against their reports. With `write`, each value is replaced by the report's,
     and nothing else of the file changes; if any line is missing or not shaped as expected, the file is not written at all."""
     path = root / LANDING
-    lines = path.read_text(encoding="utf-8").split("\n")
+    lines = _read(path).split("\n")
     problems, stale = [], []
     for name, report, system, field in LANDING_LATENCIES:
         found = _one_line(lines, f"  {name}: ", _FIGURE)
@@ -219,8 +233,8 @@ def landing(root: Path = Path("."), write: bool = False) -> list[str]:
             lines[i] = lines[i][:m.start("iso")] + want + lines[i][m.end("iso"):]
     if write and not problems:
         text = "\n".join(lines)
-        if text != path.read_text(encoding="utf-8"):
-            path.write_text(text, encoding="utf-8")
+        if text != _read(path):
+            _write(path, text)
         return []
     return problems + stale
 

@@ -1,6 +1,8 @@
 """The README's headline figures match the generated reports (eval/check_readme.py)."""
 from __future__ import annotations
 
+import copy
+import json
 import re
 from pathlib import Path
 
@@ -177,7 +179,68 @@ def test_checking_the_landing_writes_nothing(tmp_path):
     assert _landing(root).read_text(encoding="utf-8") == before
 
 
-def test_the_landing_rounds_as_its_test_does():
-    assert check_readme._fixed(2.25, 1) == "2.3"  # half up, like toFixed on the decimal form; Python's format would say 2.2
-    assert check_readme._fixed(0.003376, 4) == "0.0034"
-    assert check_readme._fixed(5.0, 1) == "5.0"
+# One rounding for every written figure: the cases web/src/landing/rounding.test.ts checks too.
+ROUNDING = json.loads(Path("web/src/landing/rounding-cases.json").read_text(encoding="utf-8"))["cases"] if Path("web/src/landing/rounding-cases.json").exists() else []
+
+
+@pytest.mark.skipif(not ROUNDING, reason="the landing is not in this copy")
+@pytest.mark.parametrize("case", ROUNDING, ids=lambda c: f"{c['value']}-{c['digits']}-{c.get('shift', 0)}")
+def test_the_rounding_matches_the_landings_shared_cases(case):
+    assert check_readme._fixed(case["value"], case["digits"], case.get("shift", 0)) == case["expected"]
+
+
+def _with_latency(monkeypatch, value: float) -> None:
+    """The reports as they are, but the keyword bot's offline p50 is `value`."""
+    real = check_readme.load
+    def load(name: str) -> dict:
+        systems = copy.deepcopy(real(name))
+        if name == "system_eval":
+            systems["baseline"]["latency_ms_p50"] = value
+        return systems
+    monkeypatch.setattr(check_readme, "load", load)
+
+
+@LANDING_HERE
+@pytest.mark.parametrize("case", [c for c in ROUNDING if c["digits"] == 1 and not c.get("shift")], ids=lambda c: str(c["value"]))
+def test_evaluation_the_slides_and_the_landing_round_a_latency_the_same(tmp_path, monkeypatch, case):
+    root = _docs(tmp_path)
+    _with_latency(monkeypatch, case["value"])
+    assert check_readme.latencies(root, write=True) == [] and check_readme.landing(root, write=True) == []
+    assert check_readme.check_latencies(root) == []
+    want = case["expected"]
+    evaluation = (root / "EVALUATION.md").read_text(encoding="utf-8").split("\n")
+    slides = (root / "docs/slides_outline.md").read_text(encoding="utf-8").split("\n")
+    assert next(ln for ln in evaluation if ln.startswith("| Handling time |")).split("|")[3].strip().startswith(f"{want} ms per case")
+    assert next(ln for ln in evaluation if ln.startswith(NON_LLM)).split("|")[2].strip().startswith(f"{want} / ")
+    assert next(ln for ln in slides if ln.startswith("| p50 / p95 latency per case |")).split("|")[2].strip().startswith(f"{want} / ")
+    assert f"  keywordLatencyP50: json({want}, 1, OFFLINE," in _landing(root).read_text(encoding="utf-8")
+
+
+def _crlf(path: Path) -> bytes:
+    data = path.read_bytes().replace(b"\r\n", b"\n").replace(b"\n", b"\r\n")
+    path.write_bytes(data)
+    return data
+
+
+@LANDING_HERE
+def test_a_crlf_landing_keeps_every_byte_but_the_value(tmp_path):
+    root = _docs(tmp_path)
+    current = _crlf(_landing(root))
+    _set_value_bytes(_landing(root), b"keywordLatencyP50: json(2.4,", b"keywordLatencyP50: json(4.1,")
+    assert check_readme.landing(root, write=True) == []
+    assert _landing(root).read_bytes() == current  # 259-odd CRLF endings kept, only the value back
+
+
+@REPORTS_HERE
+def test_a_crlf_document_keeps_every_byte_but_the_cells(tmp_path):
+    root = _docs(tmp_path)
+    current = _crlf(root / "EVALUATION.md")
+    _set_value_bytes(root / "EVALUATION.md", NON_LLM.encode() + b" 2.4 / 8.5 ms", NON_LLM.encode() + b" 6.5 / 31.3 ms")
+    assert check_readme.latencies(root, write=True) == []
+    assert (root / "EVALUATION.md").read_bytes() == current
+
+
+def _set_value_bytes(path: Path, old: bytes, new: bytes) -> None:
+    data = path.read_bytes()
+    assert data.count(old) == 1, old
+    path.write_bytes(data.replace(old, new))

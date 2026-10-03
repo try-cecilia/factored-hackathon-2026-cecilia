@@ -218,6 +218,8 @@ For this component it fails if:
 whole regeneration is `make eval eval-adversarial eval-failures eval-ablation sync-eval-latencies`, then `make test gate check-readme`:
 the latencies per case change with the machine, and `sync-eval-latencies` copies them into this file, the slides and the landing
 (`web/src/landing/figures.ts`: the offline latencies and the day of the offline run, nothing else), so the web's figures test keeps passing.
+The three round alike, and so does that test: the shortest decimal form of the report's number, rounded half up
+(`web/src/landing/rounding-cases.json` holds the cases both sides test).
 
 **Workload.**
 - `eval/workload.py` generates cases from the warehouse: 23 case types.
