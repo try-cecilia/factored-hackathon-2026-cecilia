@@ -106,6 +106,12 @@ def validate_catalog(raw: dict) -> list[PaymentRule]:
         allowed = DAY_UNITS if kind == "deadline" else (currency, "percent") if kind == "commission" else (currency,)
         if unit not in allowed:
             raise ValueError(f"a {kind} rule's unit must be one of {', '.join(allowed)}")
+        if operation == "Trace":
+            # A trace's deadline is told in the reply, the receipt and the bank view alike (`sla_business_days`): only a whole
+            # number of business days fits all three, so any other trace rule is refused here instead of said in one and not the others.
+            if kind != "deadline" or unit != "business days" or value != int(value):
+                raise ValueError("a Trace rule must be a deadline in a whole number of business days")
+            value = int(value)
 
         source = record.get("source")
         if not isinstance(source, dict):

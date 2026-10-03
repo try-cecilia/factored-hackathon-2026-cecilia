@@ -12,6 +12,7 @@ import { conflictOf, holdConflict, type Conflict } from './conflicts'
 import { segmentName } from './context'
 import { evidenceTypeName, keyName, nextStepText, questionTexts, reasonText, reviewReasonName, ruleName } from './notes'
 import { KeyValues } from './ui'
+import { PaymentRuleFact } from './PaymentRuleFact'
 import { Attention } from './Attention'
 import { CasesFold, ContextNotice, MovementsFold, ProductsFold, TracesFold, useCustomerContext, type CaseLink } from './CustomerContext'
 import { Fold, FoldGroup } from './Folds'
@@ -342,7 +343,9 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
                 {ticket.verified_facts.map((fact, i) => (
                   <li key={i}>
                     <CheckIcon size={10} />
-                    <span className="op-mono">{Object.entries(fact).map(([k, v]) => `${keyName(t, k)}: ${typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v)}`).join(' · ')}</span>
+                    {fact.tool === 'get_payment_conditions' && typeof fact.result === 'object' && fact.result !== null && !Array.isArray(fact.result)
+                      ? <PaymentRuleFact result={fact.result} />
+                      : <span className="op-mono">{Object.entries(fact).map(([k, v]) => `${keyName(t, k)}: ${typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v)}`).join(' · ')}</span>}
                   </li>
                 ))}
               </ul>

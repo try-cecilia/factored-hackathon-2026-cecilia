@@ -74,6 +74,8 @@ export const demoMode = {
       caption: 'Rastreos que pidió esta sesión',
       columns: { trace: 'Rastreo', movement: 'Movimiento', status: 'Estado', sla: 'Plazo' },
       sla: '{days} días hábiles',
+      slaOne: '1 día hábil',
+      slaNone: 'Sin plazo respaldado',
       empty: 'Esta sesión todavía no pidió rastreos.',
     },
     expired: {

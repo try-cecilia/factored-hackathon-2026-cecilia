@@ -47,13 +47,18 @@ def proposal(orch, tok) -> dict | None:
     return orch.conversations.get(session_ref(tok)).pending_action
 
 
-def deadline_rule(value=3, unit="business days"):
-    from datetime import date
+TRACE_RULE = {"rule_id": "trace_deadline", "version": 2, "country": "MX", "operation": "Trace", "kind": "deadline",
+              "currency": "USD", "value": 3, "unit": "business days", "valid_from": "2026-10-01",
+              "source": {"issuer": "Payments regulator", "url": "https://example.test/trace", "checked_at": "2026-10-01",
+                         "officially_reviewed": True}}
 
-    from agent.policy.payment_rules import PaymentRule
 
-    return PaymentRule("trace_deadline", 2, "MX", "Trace", "deadline", "USD", value, unit, "Payments regulator",
-                       "https://example.test/trace", date(2026, 10, 1), date(2026, 10, 1), None)
+def deadline_rule(**changes):
+    """A trace deadline rule as the catalog loads it: through its validation, never built around it."""
+    from agent.policy.payment_rules import validate_catalog
+
+    [rule] = validate_catalog({"schema_version": 1, "rules": [{**TRACE_RULE, **changes}]})
+    return rule
 
 
 def test_legacy_trace_sla_is_never_repeated_in_a_customer_update():
@@ -120,16 +125,30 @@ def test_a_backed_deadline_of_zero_is_said_and_an_incomplete_rule_is_not(lang, e
     assert deadline_business_days(None) is None and deadline_business_days([zero, zero]) is None
 
 
-@pytest.mark.parametrize("lang,one,calendar", [("es", "1 día hábil", "5 días corridos"), ("pt", "1 dia útil", "5 dias corridos")])
-def test_deadline_units_are_said_in_the_customer_s_language(lang, one, calendar):
-    from agent.policy.payment_rules import deadline_business_days, snapshot
+@pytest.mark.parametrize("changes", [{"value": 5, "unit": "calendar days"}, {"value": 1.5}, {"kind": "commission", "unit": "USD"},
+                                     {"value": 2, "unit": "weeks"}])
+def test_a_trace_rule_that_is_not_a_whole_number_of_business_days_is_refused_by_the_catalog(changes):
+    # the reply, the receipt and the bank view say the same deadline only if it is whole business days: anything else is refused
+    with pytest.raises(ValueError):
+        deadline_rule(**changes)
 
-    [single] = snapshot([deadline_rule(value=1)])
-    [corridos] = snapshot([deadline_rule(value=5, unit="calendar days")])
-    assert one in render.trace_service_text([single], lang)
-    assert calendar in render.trace_service_text([corridos], lang)
-    assert deadline_business_days([corridos]) is None  # only business days fill the receipt's deadline
-    assert render.trace_service_text([{**single, "unit": "weeks"}], lang) == ""  # a unit with no words is not printed raw
+
+def test_a_whole_trace_deadline_written_as_a_decimal_loads_as_that_integer():
+    assert deadline_rule(value=4.0).value == 4 and isinstance(deadline_rule(value=4.0).value, int)
+
+
+@pytest.mark.parametrize("days", [0, 1, 4])
+@pytest.mark.parametrize("lang,yes,one,many", [("es", "sí", "1 día hábil", "días hábiles"), ("pt", "sim", "1 dia útil", "dias úteis")])
+def test_the_reply_and_the_receipt_say_the_same_deadline(monkeypatch, days, lang, yes, one, many):
+    from agent.policy import payment_rules
+
+    monkeypatch.setattr(payment_rules, "load_catalog", lambda: [deadline_rule(value=days)])
+    orch, tok, _ = make(tool_call_response("request_trace", {}))
+    orch.handle_message(tok, ASK[lang])
+    opened = orch.handle_message(tok, yes)
+    said = one if days == 1 else f"{days} {many}"
+    assert f"respaldado: {said}." in opened.response_text
+    assert opened.trace_receipt["sla_business_days"] == days and stored()[0]["sla_business_days"] == days
 
 
 @pytest.mark.parametrize("lang,words", [("es", "1 día hábil"), ("pt", "1 dia útil")])
