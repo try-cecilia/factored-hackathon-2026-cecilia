@@ -15,7 +15,9 @@ export function parseTraces(raw: unknown): DemoTrace[] {
       transaction_id: typeof t.transaction_id === 'string' ? t.transaction_id : '',
       queue: typeof t.queue === 'string' ? t.queue : '',
       status: typeof t.status === 'string' ? t.status : '',
-      sla_business_days: typeof t.sla_business_days === 'number' && Number.isFinite(t.sla_business_days) ? t.sla_business_days : 0,
+      // Absent or malformed is no deadline, never 0 (a deadline of zero days is a value only the API's rule can give).
+      sla_business_days: typeof t.sla_business_days === 'number' && Number.isInteger(t.sla_business_days) && t.sla_business_days >= 0
+        ? t.sla_business_days : null,
       created_at: typeof t.created_at === 'number' && Number.isFinite(t.created_at) ? t.created_at : 0,
     }]
   })

@@ -4,7 +4,9 @@ The one action this workflow takes (D3). A trace request asks operations to foll
 that has not arrived. The challenge forbids live banking actions, so this is a sandbox: requests go to a JSONL file
 next to the human queue (TRACE_REQUESTS_PATH). Opening is idempotent per customer and movement (the trace id is
 derived from both), and the orchestrator reads a request back before telling the customer it exists.
-TRACE_SLA_BUSINESS_DAYS is a synthetic policy, labeled as such.
+A request keeps the deadline that applied when it was opened: a snapshot of the country's source-backed rule
+(agent/policy/payment_rules.py) and, from it, `sla_business_days`, which is None when no rule covers it. Legacy records
+carry a synthetic SLA of 2; it is never shown as a service commitment (readers derive the deadline from the snapshot).
 """
 from __future__ import annotations
 
@@ -16,9 +18,9 @@ import time
 from pathlib import Path
 
 from agent.filelock import append_line, locked
+from agent.policy.payment_rules import deadline_business_days
 from agent.resilience import Deadline, RetryPolicy, Transient, retry_call
 
-TRACE_SLA_BUSINESS_DAYS = 2  # synthetic policy
 TRACE_RETRY = RetryPolicy(max_attempts=3, base_s=0.1, cap_s=0.5)
 
 
@@ -56,14 +58,15 @@ class TraceService:
                      and t["customer_id"] == customer_id and t["transaction_id"] == transaction_id), None)
 
     def open_verified(self, customer_id: str, transaction_id: str, product_id: str, session_ref: str,
-                      deadline: Deadline | None = None, sleep=time.sleep, attempts_log: list[dict] | None = None) -> dict | None:
+                      deadline: Deadline | None = None, sleep=time.sleep, attempts_log: list[dict] | None = None,
+                      service_rules: list[dict] | None = None) -> dict | None:
         """Open the request and read it back, retrying a busy or unreachable service a bounded number of times inside
         the turn's deadline. Safe to repeat: `open` returns the request it already made, and its id comes from customer
         and movement, so a second attempt after a write that landed but did not confirm cannot make a second request.
         None if it still cannot be read back, and the caller then never says it exists."""
         def attempt() -> dict | None:
             try:
-                self.open(customer_id, transaction_id, product_id, session_ref)
+                self.open(customer_id, transaction_id, product_id, session_ref, service_rules)
                 return self.find(customer_id, transaction_id)
             except OSError as exc:
                 raise TraceServiceUnavailable(type(exc).__name__) from exc
@@ -71,7 +74,8 @@ class TraceService:
         return retry_call(attempt, policy=TRACE_RETRY, idempotency_key=self.trace_id(customer_id, transaction_id),
                           deadline=deadline, sleep=sleep, attempts_log=attempts_log)
 
-    def open(self, customer_id: str, transaction_id: str, product_id: str, session_ref: str) -> dict:
+    def open(self, customer_id: str, transaction_id: str, product_id: str, session_ref: str,
+             service_rules: list[dict] | None = None) -> dict:
         """The existing request for this movement, or a new one."""
         with self._lock:
             existing = self.find(customer_id, transaction_id)
@@ -79,8 +83,10 @@ class TraceService:
                 return existing
             request = {"trace_id": self.trace_id(customer_id, transaction_id), "customer_id": customer_id,
                        "transaction_id": transaction_id, "product_id": product_id, "session_ref": session_ref,
-                       "created_at": time.time(), "status": "open", "sla_business_days": TRACE_SLA_BUSINESS_DAYS,
-                       "queue": "payments_ops"}
+                       "created_at": time.time(), "status": "open", "queue": "payments_ops",
+                       "sla_business_days": deadline_business_days(service_rules)}
+            if service_rules:
+                request["service_rules"] = service_rules
             append_line(self.path, json.dumps(request, ensure_ascii=False))  # under the file lock (retention swaps this file)
             return request
 

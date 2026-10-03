@@ -78,6 +78,7 @@ export const cases = {
     trace_unmatched: 'Pago o transferencia que no llegó',
     trace_unverified: 'Rastreo de un movimiento',
     trace_review: 'Rastreo de un movimiento',
+    payment_rule_unavailable: 'Consulta de condiciones de pago',
     pending: 'Consulta pendiente de revisión',
     other: 'Caso pasado a una persona',
   },

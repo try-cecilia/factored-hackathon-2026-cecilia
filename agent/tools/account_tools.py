@@ -25,9 +25,10 @@ from typing import Any, Optional
 
 from agent.llm.privacy import internal_ids, normalize
 from agent.policy.behavior import evidence_for
+from agent.policy import payment_rules
 from agent.tools.audit import default_audit_log
 from agent.tools.db import duckdb_path, get_connection
-from agent.tools.errors import DataUnavailable, InvalidArgument, NotApplicable, PermissionDenied, ResourceNotFound
+from agent.tools.errors import DataUnavailable, InvalidArgument, NotApplicable, PaymentRuleUnavailable, PermissionDenied, ResourceNotFound
 from agent.tools.traces import default_traces
 
 CREDIT_PRODUCT_TYPES = {"Tarjeta Crédito", "Préstamo Personal", "Préstamo Hipotecario"}
@@ -99,13 +100,44 @@ def _last4(number: Any) -> str | None:
 
 
 def _owned_product(customer_id: str, product_id: str) -> dict:
-    rows = _rows("SELECT product_id, customer_id, product_type, product_status FROM products WHERE product_id = ?", [product_id])
+    rows = _rows("SELECT product_id, customer_id, product_type, product_status, currency FROM products WHERE product_id = ?", [product_id])
     if not rows:
         raise ResourceNotFound(f"No product found with id {product_id}.")
     if rows[0]["customer_id"] != customer_id:
         raise PermissionDenied(f"Customer {customer_id} requested product {product_id} owned by another customer.",
                                resource_id=product_id)
     return rows[0]
+
+
+def customer_country(customer_id: str) -> str | None:
+    """The customer's country as the warehouse has it, or None."""
+    rows = _rows("SELECT country FROM customers WHERE customer_id = ?", [customer_id])
+    return rows[0].get("country") or None if rows else None
+
+
+def get_payment_conditions(customer_id: str, product_id: str, operation: str, kind: str,
+                           on_date: Optional[str] = None) -> dict:
+    """The source-backed rule for an authenticated customer's owned product, scoped by the country and currency the warehouse
+    has. Its figures come from the rule catalog, not from SQL, so they are never told to the customer: the orchestrator hands the
+    question to an agent with this result on the ticket (LIMITATIONS.md, "Payment conditions")."""
+    def _run():
+        product = _owned_product(customer_id, product_id)
+        country = customer_country(customer_id)
+        if not country:
+            raise PaymentRuleUnavailable("No se pudo verificar el país del cliente.", field="payment_rule")
+        requested = parse_date(on_date, "on_date") or date.today()
+        rules = payment_rules.resolve_rules(country, operation, kind, product["currency"], requested)
+        if not rules:
+            raise PaymentRuleUnavailable("No hay una condición respaldada vigente para este país, operación y moneda.",
+                                         field="payment_rule")
+        return {"country": payment_rules.country_code(country), "currency": product["currency"],
+                "operation": operation, "kind": kind, "on_date": requested,
+                "rules": [{"rule_id": r.rule_id, "version": r.version, "kind": r.kind, "value": r.value, "unit": r.unit,
+                           "source_issuer": r.source_issuer, "source_url": r.source_url,
+                           "source_checked_at": r.source_checked_at, "valid_from": r.valid_from,
+                           "valid_until": r.valid_until} for r in rules]}
+    return _audited("get_payment_conditions", customer_id,
+                    {"product_id": product_id, "operation": operation, "kind": kind, "on_date": on_date}, _run)
 
 
 def parse_date(value: Optional[str], name: str) -> Optional[date]:

@@ -60,6 +60,24 @@ def test_the_real_fingerprint_covers_templates_traces_and_the_other_inputs_of_th
             "eval/models/intent_clf.joblib", "eval/models/intent_clf.json", "eval/models/intent_clf_meta.json"} <= names
 
 
+def test_changing_a_value_of_the_payment_rule_catalog_changes_the_fingerprint(tmp_path):
+    # the catalog decides which condition and deadline a reply or a trace carries: one changed value must invalidate the reports
+    root = tree(tmp_path, b"x = 1\n")
+    catalog = root / "agent/policy/payment_rules.json"
+    rule = ('{"schema_version": 1, "rules": [{"rule_id": "mx_trace_deadline", "version": 1, "country": "MX", "operation": "Trace", '
+            '"kind": "deadline", "currency": "MXN", "value": %d, "unit": "business days", "valid_from": "2026-01-01", '
+            '"source": {"issuer": "Fixture", "url": "https://example.test", "checked_at": "2026-01-01", "officially_reviewed": true}}]}\n')
+    catalog.write_text(rule % 3, encoding="utf-8")
+    before = fingerprint.policy_fingerprint(root)
+    catalog.write_text(rule % 4, encoding="utf-8")
+    assert fingerprint.policy_fingerprint(root) != before
+
+
+def test_the_real_fingerprint_covers_the_payment_rule_catalog():
+    names = {p.relative_to(fingerprint.ROOT).as_posix() for p in fingerprint.policy_files()}
+    assert "agent/policy/payment_rules.json" in names
+
+
 def test_editing_the_judge_or_the_gold_changes_the_fingerprint(tmp_path):
     # what the evaluation measures also depends on how it judges and on what it expects: not only on the system
     for rel in ("eval/run_system_eval.py", "eval/workload/cases_test.jsonl", "eval/heldout/cases_failures.jsonl",

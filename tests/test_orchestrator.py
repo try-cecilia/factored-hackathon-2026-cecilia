@@ -39,6 +39,40 @@ def test_balance_resolves_with_the_verified_figure_and_the_as_of_date():
     assert "2,455.81" in r.response_text and "16/01/2024" in r.response_text  # as-of line appended
 
 
+def test_unbacked_payment_condition_is_handed_off_without_guessing():
+    orch, tok, _ = make([tool_call_response("get_payment_conditions", {
+        "product_id": "0001", "operation": "Transfer", "kind": "commission", "country": "Brasil", "currency": "BRL"})])
+    r = orch.handle_message(tok, "¿Cuánto cuesta una transferencia?")
+    assert r.disposition == "ESCALATE" and r.category == "payment_rule_unavailable"
+    assert r.ticket_id and "No puedo confirmar esa condición" in r.response_text
+    assert "BRL" not in r.response_text and "Brasil" not in r.response_text
+
+
+@pytest.mark.parametrize("lang,text", [("es", "¿Cuánto cuesta una transferencia?"), ("pt", "Quanto custa uma transferência?")])
+def test_a_covered_payment_condition_goes_to_an_agent_and_the_customer_hears_no_figure(monkeypatch, lang, text):
+    # the rule's figures come from the catalog, not from SQL: the customer is told none, the agent gets the rule on the ticket
+    from datetime import date
+
+    from agent.core import render
+    from agent.policy import payment_rules
+    from agent.policy.payment_rules import PaymentRule
+
+    rule = PaymentRule("mx_transfer_fee", 4, "MX", "Transfer", "commission", "USD", 45678.91, "USD", "Banco Fixture",
+                       "https://example.test/fees", date(2026, 9, 1), date(2026, 1, 1), None)
+    monkeypatch.setattr(payment_rules, "load_catalog", lambda: [rule])
+    orch, tok, fake = make([tool_call_response("get_payment_conditions", {
+        "product_id": "0001", "operation": "Transfer", "kind": "commission"})])
+    r = orch.handle_message(tok, text)
+    assert (r.disposition, r.category, r.policy_rule) == ("ESCALATE", "payment_rule_unavailable", "payment_rule_for_agent")
+    assert r.language == lang and r.response_text == render.MSG["payment_rule_unavailable"][lang] and r.ticket_id
+    assert not any(leak in r.response_text for leak in ("45", "USD", "example.test", "Banco Fixture"))
+    ticket = last_ticket()
+    assert ticket["reason_code"] == {"code": "payment_rule_for_agent", "params": {"rule_id": "mx_transfer_fee", "version": 4}}
+    [fact] = [f for f in ticket["verified_facts"] if f["tool"] == "get_payment_conditions"]
+    assert fact["result"]["rules"][0]["value"] == 45678.91 and fact["result"]["rules"][0]["source_url"] == "https://example.test/fees"
+    assert "45678" not in json.dumps(fake.calls, ensure_ascii=False, default=str)  # nothing of the rule reached the model
+
+
 def test_a_turn_records_the_customers_words_as_the_model_received_them():
     orch, tok, fake = make([tool_call_response("get_payment_status", {"product_id": "0004"}), unavailable()])
     r = orch.handle_message(tok, "¿estoy al día con la tarjeta 5000000004?")

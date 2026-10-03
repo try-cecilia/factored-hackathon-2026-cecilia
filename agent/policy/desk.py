@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from agent.llm.privacy import mask_card_numbers
+from agent.policy import payment_rules
 from agent.policy.escalation import default_queue
 from agent.tools import account_tools
 from agent.tools.traces import default_traces
@@ -180,7 +181,9 @@ class TicketDesk:
         still = account_tools.request_trace(customer, product_id=product, transaction_id=txn)["items"]
         if not still:
             return "no_longer_pending", None
-        default_traces.open(customer, txn, product, ticket["session_ref"])
+        # The same deadline a trace the customer confirmed would carry: the country's source-backed rule, or none.
+        rules = payment_rules.trace_deadline_rules(account_tools.customer_country(customer), still[0].get("currency"))
+        default_traces.open(customer, txn, product, ticket["session_ref"], rules)
         trace = default_traces.find(customer, txn)  # read back before saying it exists
         return ("opened", trace) if trace else ("unverified", None)
 

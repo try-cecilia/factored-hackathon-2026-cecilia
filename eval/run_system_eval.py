@@ -540,7 +540,7 @@ def _windows(text: str, size: int = 6) -> set:
 # A reply may be several of those blocks in a fixed order (the answer to the reads that ran, the question that completes the one that could
 # not, the note of what the turn left unattended): each block is matched on its own, all in one language, and anything between them is free text.
 _LANGS = ("es", "pt")
-_FIXED = ("reauth", "escalate", "escalate_security", "abstain", "clarify_generic", "clarify_dates", "clarify_currency", "trace_cancelled")
+_FIXED = ("reauth", "escalate", "escalate_security", "payment_rule_unavailable", "abstain", "clarify_generic", "clarify_dates", "clarify_currency", "trace_cancelled")
 
 
 def _catalog(customer_id: str) -> list[dict]:
@@ -617,7 +617,9 @@ def _candidates(case: Case, r, traces: dict):
         for t in mine:
             if m := moves.get(t["transaction_id"]):
                 for key in ("trace_opened", "trace_already_open"):
-                    texts[render.MSG[key][lang].format(tid=t["trace_id"], mov=render.movement(m, lang, country), sla=t["sla_business_days"])] = (key, lang)
+                    reply = render.MSG[key][lang].format(tid=t["trace_id"], mov=render.movement(m, lang, country))
+                    reply += render.trace_service_text(t.get("service_rules", []), lang)
+                    texts[reply] = (key, lang)
     yield "trace", texts
     yield "trace_choose", moves  # structural, see reply_template
 
@@ -734,7 +736,8 @@ def reply_template(case: Case, r, tickets: dict, traces: dict | None = None) -> 
 
 def _handoff_claimed_without_a_ticket(key: str | None, r, tickets: dict) -> bool:
     """The reply is the template that tells the customer their case was handed to a person, and the queue holds no ticket for that turn."""
-    return key in ("escalate", "escalate_security", "trace_unmatched", "trace_unmatched_filtered") and not (r.ticket_id is not None and r.ticket_id in tickets)
+    return key in ("escalate", "escalate_security", "payment_rule_unavailable", "trace_unmatched", "trace_unmatched_filtered") and not (
+        r.ticket_id is not None and r.ticket_id in tickets)
 
 
 def _first_dead_turn(case: Case) -> int | None:

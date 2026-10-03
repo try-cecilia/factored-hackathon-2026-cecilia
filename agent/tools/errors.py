@@ -40,6 +40,10 @@ class DataUnavailable(ToolError):
         self.field = field
 
 
+class PaymentRuleUnavailable(DataUnavailable):
+    """No source-backed payment rule applies to the customer's verified scope."""
+
+
 class NotApplicable(ToolError):
     """The question is valid but doesn't apply to this product (e.g. payment
     status of a savings account). Answerable — not a reason to transfer."""

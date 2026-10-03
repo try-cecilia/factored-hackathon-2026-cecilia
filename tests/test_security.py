@@ -51,6 +51,22 @@ def test_the_page_may_run_only_its_own_script_by_hash(client):
     assert "frame-ancestors 'none'" in csp and "connect-src 'self'" in csp and "default-src 'none'" in csp
 
 
+@pytest.mark.parametrize("ending", ["\r\n", "\r"])
+def test_a_page_stored_with_crlf_or_cr_endings_gets_the_hash_the_browser_computes(tmp_path, monkeypatch, ending):
+    # HTML parsing turns CRLF and a lone CR into LF before the script text exists, and the browser hashes that text: hashing the
+    # stored bytes would block every inline script of a checkout with Windows line endings.
+    script_lf = "\nwindow.ran = true;\nconsole.log('ok');\n"
+    page = f"<html><head><script>{script_lf}</script></head></html>\n".replace("\n", ending)
+    expected = base64.b64encode(hashlib.sha256(script_lf.encode()).digest()).decode()
+    stored = tmp_path / "index.html"
+    stored.write_bytes(page.encode("utf-8"))
+    monkeypatch.setattr(security, "STATIC_INDEX", stored)
+    for csp in (security.page_csp(), security.page_csp(page)):
+        assert f"script-src 'sha256-{expected}';" in csp
+    lf_page = page.replace(ending, "\n")
+    assert security.page_csp(lf_page) == security.page_csp(page)
+
+
 def test_strict_transport_security_only_when_asked_for(client):
     assert "strict-transport-security" not in client.get("/livez").headers
     scratch = FastAPI()

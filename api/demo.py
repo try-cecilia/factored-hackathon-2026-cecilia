@@ -29,6 +29,7 @@ from agent.session.identity import IdentityUnavailable, derive_test_pin
 from agent.session.public_accounts import public_customer_ids  # the canonical list (DEMO_PUBLIC_CUSTOMERS)
 from agent.tools import account_tools
 from agent.tools.db import get_connection
+from agent.policy.payment_rules import deadline_business_days
 from agent.tools.traces import default_traces
 from data.contracts import CONTRACT_DEVIATIONS, CONTRACT_VERSION
 from data.pipeline import CHECK_FIELDS, lineage_summary
@@ -122,9 +123,11 @@ def tickets(req: TokenIn) -> list[dict]:
 
 @router.post("/traces")
 def traces(req: TokenIn) -> list[dict]:
-    """Trace requests this session opened, as payments operations receives them."""
+    """Trace requests this session opened, as payments operations receives them. The deadline is the one its rule snapshot
+    gives (None without a rule), never a legacy record's synthetic SLA."""
     _live_session(req.session_token)
-    return _of_session(default_traces.path, req.session_token)
+    return [{**r, "sla_business_days": deadline_business_days(r.get("service_rules"))}
+            for r in _of_session(default_traces.path, req.session_token)]
 
 
 # --- guided scenarios --------------------------------------------------------------------------------------------

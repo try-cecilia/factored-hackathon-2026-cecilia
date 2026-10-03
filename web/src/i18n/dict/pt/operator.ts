@@ -82,6 +82,7 @@ export const operator: Like<typeof es> = {
     trace_unmatched: 'Rastreio sem correspondência',
     trace_unverified: 'Rastreio não confirmado',
     trace_review: 'Revisão de rastreio',
+    payment_rule_unavailable: 'Condição de pagamento',
   },
   errors: {
     expired: 'A sessão expirou ou a chave de leitura não é mais válida. Entrar de novo.',
@@ -406,6 +407,8 @@ export const operator: Like<typeof es> = {
       trace_unmatched: 'O cliente informa uma movimentação que não chegou e nenhuma dele está pendente.',
       trace_unverified: 'O cliente confirmou, mas o serviço de rastreio não confirmou o rastreio.',
       trace_review: 'O cliente confirmou um rastreio, mas a movimentação precisa da aprovação de uma pessoa ({review_reason}).',
+      payment_rule_unavailable: 'O cliente consulta uma condição de pagamento e nenhuma regra vigente e revisada cobre seu país, operação e moeda.',
+      payment_rule_for_agent: 'O cliente consulta uma condição de pagamento; a regra {rule_id} v{version} a cobre, e a assistente não informa condições ao cliente.',
     },
     question: {
       confirm_suspension_reason: 'Confirmar o motivo da suspensão antes de informar dados da conta.',
@@ -421,6 +424,7 @@ export const operator: Like<typeof es> = {
       check_movement: 'Verificar a movimentação com operações de pagamentos ou com o banco de origem.',
       open_trace_manually: 'Abrir o rastreio manualmente e informar o número ao cliente.',
       decide_trace: 'Aprovar ou rejeitar o rastreio: {review_reason}.',
+      confirm_payment_condition: 'Confirmar a condição com a fonte oficial vigente do banco e responder ao cliente.',
       evidence_failed: 'Não foi possível reunir a atividade recente automaticamente ({error_type}).',
       evidence_skipped_budget: 'A evidência não foi reunida: o tempo do repasse acabou.',
       evidence_skipped_slow: 'A evidência não foi reunida: não terminou dentro do tempo do repasse, ou ainda há buscas anteriores demais em andamento.',
@@ -441,6 +445,7 @@ export const operator: Like<typeof es> = {
       trace_unmatched: 'Verificar a movimentação com operações de pagamentos ou com o banco de origem: não há nada pendente do cliente.',
       trace_unverified: 'Abrir o rastreio manualmente e informar o número ao cliente: o serviço de rastreio não o confirmou.',
       trace_review: 'Revisar a movimentação (ver o motivo de revisão) e aprovar ou rejeitar o rastreio que o cliente pediu.',
+      payment_rule_unavailable: 'Responder a condição de pagamento com a fonte oficial vigente do banco; a assistente não informa tarifas, prazos nem limites.',
       default: 'Revisar o caso e responder ao cliente.',
     },
   },
@@ -485,6 +490,7 @@ export const operator: Like<typeof es> = {
       traceUnverified: 'Rastreio: o serviço não o confirmou',
       traceReview: 'Rastreio: quem decide é uma pessoa',
       traceCancelled: 'Rastreio: o cliente recusou',
+      paymentRuleForAgent: 'Condição de pagamento: um atendente confirma',
       handoffUnverified: 'repasse não confirmado',
     },
     attempt: {

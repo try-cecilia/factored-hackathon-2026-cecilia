@@ -52,6 +52,11 @@ organizer's dataset are Pending (1.99%).
 - The tracing service is a sandbox mock (JSONL next to the human queue), and
   the 2-business-day deadline is a synthetic policy. A bank would plug in its
   payments-operations API behind the same `open`/`get` calls.
+  *Superseded 2026-10-03 (country payment rules):* the deadline now comes only
+  from a reviewed country rule that the trace snapshots when it is opened; with
+  none (the catalog ships empty) the trace is opened, read back and announced
+  without a deadline. Records written before keep the synthetic 2, and no
+  reader shows it (LIMITATIONS.md, "Payment conditions").
 - Only a plain yes counts. A customer who answers "sí, ábrelo y además dime mi
   saldo" gets the proposal dropped and has to ask again: stricter than a
   person would be, by design.

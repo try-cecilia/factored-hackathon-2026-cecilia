@@ -5,6 +5,7 @@ import pytest
 
 from agent.tools import account_tools as t
 from agent.tools.errors import DataUnavailable, InvalidArgument, NotApplicable, PermissionDenied
+from agent.policy.payment_rules import PaymentRule
 
 
 def test_numbers_leave_the_tool_layer_masked():
@@ -64,3 +65,30 @@ def test_missing_data_date_is_rejected_even_when_age_check_is_disabled(monkeypat
 
 def test_transaction_limit_is_clamped_in_the_tool_too():
     assert t.list_transactions("CLI-FIX0001", limit=10_000)["limit"] == 50
+
+
+def test_payment_conditions_use_verified_country_and_currency(monkeypatch):
+    from agent.policy import payment_rules
+
+    profile = t.get_customer_profile("CLI-FIX0001")
+    product = profile["products"][0]
+    country = payment_rules.country_code(profile["country"])
+    rule = PaymentRule("transfer_fee", 1, country, "Transfer", "commission", product["currency"], 25,
+                       product["currency"], "Test fixture",
+                       "https://example.test/rules", __import__("datetime").date(2026, 1, 1),
+                       __import__("datetime").date(2026, 1, 1), None)
+    monkeypatch.setattr(payment_rules, "load_catalog", lambda: [rule])
+    result = t.get_payment_conditions("CLI-FIX0001", product["product_id"], "Transfer", "commission", "2026-10-03")
+    assert result["country"] == country
+    assert result["currency"] == product["currency"]
+    assert result["rules"][0]["value"] == 25
+    assert result["rules"][0]["source_url"] == "https://example.test/rules"
+    from agent.core.render import render_result
+    # the figures are for the agent's ticket: the customer-facing renderer has no template for them (they do not come from SQL)
+    assert render_result("get_payment_conditions", result, "es", profile["country"]) == str(result)
+
+
+def test_payment_conditions_without_backed_rule_raise_specific_unavailability():
+    with pytest.raises(DataUnavailable, match="respaldada") as exc:
+        t.get_payment_conditions("CLI-FIX0001", "PRD-FIX0001", "Transfer", "commission", "2026-10-03")
+    assert exc.value.field == "payment_rule"
