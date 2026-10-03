@@ -78,15 +78,20 @@ _PT_WORDS = {
     "preciso", "tenho", "estou", "fiz", "fazer", "ola", "oi", "bom", "boa", "hoje", "ontem", "dinheiro",
     "pagamento", "emprestimo", "cartao", "extrato", "fatura", "cobranca", "movimentacoes", "tambem", "entao",
     "isso", "agora", "sim", "com", "em", "no", "na", "do", "da", "o", "a", "e", "um", "uma", "pra", "para",
-    "conta", "saldo", "atrasado", "cotacao", "cambio", "roubaram", "alguem", "quanto", "posso", "gostaria",
+    "conta", "saldo", "atrasado", "cotacao", "cambio", "roubaram", "alguem", "quanto", "quanta", "quantos",
+    "quantas", "posso", "gostaria", "por",
 }
 _ES_WORDS = {
     "el", "la", "los", "las", "mi", "mis", "cual", "que", "cuanto", "cuanta", "quiero", "necesito", "tengo",
     "hice", "prestamo", "tarjeta", "pago", "cuenta", "hoy", "ayer", "dinero", "gracias", "usted", "estoy",
     "buenos", "buenas", "hola", "movimientos", "si", "con", "en", "del", "al", "un", "una", "por", "para",
     "saldo", "atrasado", "cotizacion", "cambio", "robaron", "alguien", "puedo", "quisiera", "y", "es", "de",
+    "no",
 }
-# Words present in both sets carry no signal.
+# Words present in both sets carry no signal. "no" is Spanish's negation as well as Portuguese's "em + o", so a Spanish
+# "No" (the "Ahora no" button) used to switch the conversation to Portuguese; "por" is as common in "por favor" in either
+# language. Short words that are just as common in the other language ("a", "de", "em", "que"...) stay one-sided: over the
+# repo's labeled messages, making any of them neutral turns more right guesses into ties than it fixes.
 _PT_ONLY = _PT_WORDS - _ES_WORDS
 _ES_ONLY = _ES_WORDS - _PT_WORDS
 

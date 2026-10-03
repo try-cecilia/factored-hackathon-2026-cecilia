@@ -6,16 +6,17 @@ Invariants:
   validated session on every tool call.
 - The system never gives the LLM a customer record. Tool results never go
   back to it, the catalog holds aliases, type, currency and status only,
-  and the history is figure-free. What the customer types is sent with
-  identifiers masked (agent/llm/privacy.py); a name or an amount they type
-  is sent as written.
-- The LLM never writes to the customer. One call per turn chooses tools;
+  and the history keeps the amounts the customer typed but no warehouse
+  figures. What the customer types is sent with identifiers masked
+  (agent/llm/privacy.py); a name or an amount they type is sent as written.
+- The LLM never writes to the customer. One primary model response per turn
+  chooses tools (the client may retry it or fall back to another provider);
   every reply is rendered from verified tool results or fixed templates
   (agent/core/render.py). No figure, and no claimed action, can come from
   model prose.
 - Dispositions come from agent/policy/router.py, never from the model.
-- Bounded everything: one model call and two tool calls per turn, history
-  length, number of live conversations, LLM time budget.
+- Bounded everything: one primary model response and two tool calls per
+  turn, history length, number of live conversations, LLM time budget.
 Every turn writes one trace record (agent/tools/audit.py) with the policy
 rule that fired, LLM attempts/usage, tool calls, cost and the time each stage
 took (agent/observability.py). The turn has a time budget (agent/resilience.py)
@@ -146,7 +147,8 @@ class _Conversation:
 
 class ConversationStore:
     """Bounded LRU of per-session histories: for the model, the customer's
-    masked words and figure-free summaries of our replies; for tickets, the
+    masked words (amounts they typed included) and summaries of our replies
+    without warehouse figures; for tickets, the
     customer's requests with card numbers masked. Each turn is also written to
     SQLite (agent/tools/state.py), so a restart or a refresh resumes the same
     conversation, including a trace proposed and waiting for the customer's yes."""
@@ -332,9 +334,9 @@ def run_tool(name: str, customer_id: str, **args: Any) -> Any:
 
 
 def fit_prompt(messages: list[dict], limit: int = MAX_PROMPT_CHARS) -> list[dict]:
-    """The prompt within the size cap: the oldest history goes first. The two fixed system blocks and the customer's
-    message (at most 1,000 characters, masked) are never cut, so the cap bounds the cost of a turn without changing
-    what the model is asked."""
+    """The history trimmed to the size limit, oldest first. Only history is cut: the two fixed system blocks and the
+    customer's message (at most 1,000 characters, masked) always go whole, so the limit bounds how much history a turn
+    carries, not the prompt; if those parts alone exceed it, the prompt goes out over the limit."""
     head, history, last = messages[:2], list(messages[2:-1]), messages[-1]
     size = lambda ms: sum(len(str(m["content"])) for m in ms)  # noqa: E731
     while history and size(head) + size(history) + size([last]) > limit:
@@ -777,7 +779,8 @@ class Orchestrator:
                     *conv.messages, {"role": "user", "content": model_text}]
         messages = fit_prompt(messages)
 
-        # Understand: one model call chooses the tools. Its prose is never used.
+        # Understand: one primary model response chooses the tools (the client may retry it or fall back to another
+        # provider). Its prose is never used.
         try:
             if self.budget.exhausted():  # past the daily spend cap: the model counts as down
                 raise LLMUnavailable("daily model budget reached", [{"provider": "budget", "outcome": "skipped",

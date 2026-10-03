@@ -12,6 +12,7 @@ import os
 
 import pytest
 
+from agent.core import render
 from agent.core.orchestrator import Orchestrator
 from agent.policy import router
 from agent.session.auth import SessionStore, session_ref
@@ -61,13 +62,25 @@ def test_a_pending_transfer_is_proposed_and_traced_only_after_the_customer_says_
     assert fake.call_count == 1  # the confirmation never reached the model
 
 
-@pytest.mark.parametrize("lang,no", [("es", "no"), ("es", "no, gracias"), ("pt", "não")])
+@pytest.mark.parametrize("lang,no", [("es", "no"), ("es", "No"), ("es", "no, gracias"), ("pt", "não"), ("pt", "Não")])
 def test_a_plain_no_opens_nothing(lang, no):
     orch, tok, _ = make(tool_call_response("request_trace", {}))
     orch.handle_message(tok, ASK[lang])
     r = orch.handle_message(tok, no)
     assert (r.disposition, r.category, r.policy_rule) == ("ABSTAIN", "action_cancelled", "action:trace_cancelled")
+    assert r.language == lang  # a Spanish "no" used to read as Portuguese and switch the conversation
     assert stored() == [] and proposal(orch, tok) is None
+
+
+@pytest.mark.parametrize("lang,no", [("es", "No"), ("pt", "não")])
+def test_declining_a_trace_answers_in_the_conversation_s_language(lang, no):
+    """The "Ahora no" button sends "No". In a Spanish conversation the answer was "Entendido, não abri nenhum
+    pedido…": "no" counted as Portuguese. It carries no signal now, so the conversation keeps its language."""
+    orch, tok, _ = make(tool_call_response("request_trace", {}))
+    assert orch.handle_message(tok, ASK[lang]).language == lang
+    r = orch.handle_message(tok, no)
+    assert (r.policy_rule, r.language, r.response_text) == ("action:trace_cancelled", lang, render.MSG["trace_cancelled"][lang])
+    assert orch.conversations.get(session_ref(tok)).language == lang
 
 
 def test_anything_but_a_plain_answer_drops_the_proposal_and_goes_through_the_usual_checks():
