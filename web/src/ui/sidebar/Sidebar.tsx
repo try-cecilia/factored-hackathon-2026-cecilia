@@ -55,7 +55,8 @@ function Mascot({ size }: { size: number }) {
 }
 
 /** Wordmark and mascot. In the client sidebar it carries the collapse toggle; in the rail the mascot expands it. */
-export function SidebarBrand() {
+/** The mascot and the wordmark; `product` names the side of the app next to it (the operator variant says "Operations" by default). */
+export function SidebarBrand({ product }: { product?: string } = {}) {
   const t = useT()
   const { variant, collapsed, toggle } = useSidebar()
 
@@ -77,7 +78,7 @@ export function SidebarBrand() {
     <div className="ui-sidebar__brand">
       <Mascot size={variant === 'operator' ? 18 : 20} />
       <span className="ui-sidebar__wordmark">cecilai</span>
-      {variant === 'operator' && <span className="ui-sidebar__product">{t('sidebar.brand.operations')}</span>}
+      {(product ?? (variant === 'operator' && t('sidebar.brand.operations'))) && <span className="ui-sidebar__product">{product ?? t('sidebar.brand.operations')}</span>}
       {toggle && (
         <IconButton
           variant="ghost"

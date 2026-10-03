@@ -313,6 +313,14 @@ export const operator: Like<typeof es> = {
       placeholder: 'O que foi feito e o que vem a seguir, em poucas palavras. Sem dados de outros clientes.',
       lockedBy: 'Só {name} pode resolver este caso',
     },
+    outcomePick: {
+      label: 'Resultado para o cliente',
+      hint: 'O que o cliente lê, conforme o tipo de caso. É obrigatório.',
+      messageLabel: 'Mensagem para o cliente (opcional)',
+      messageHint: 'Chega no chat depois do resultado, marcada como escrita por uma pessoa.',
+      none: 'Este caso não tem resultados para escolher.',
+      resultLine: 'Resultado: {result}',
+    },
     footer: {
       notAssigned: 'Sem responsável',
       auditedAs: 'Auditado como {name}',

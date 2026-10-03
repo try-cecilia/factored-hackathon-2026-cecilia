@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthedRouteImport } from './routes/_authed'
+import { Route as DemobancoRouteImport } from './routes/_demobanco'
 import { Route as OperatorRouteImport } from './routes/_operator'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthedChatRouteImport } from './routes/_authed/chat'
@@ -20,15 +21,19 @@ import { Route as OperadorIngresoRouteImport } from './routes/operador.ingreso'
 import { Route as OperadorLoginRouteImport } from './routes/operador.login'
 import { Route as OperadorSalirRouteImport } from './routes/operador.salir'
 import { Route as OperadorSesionRouteImport } from './routes/operador.sesion'
+import { Route as DemobancoDemoBancoRouteImport } from './routes/_demobanco/demo.banco'
 import { Route as OperatorOperadorIndexRouteImport } from './routes/_operator/operador.index'
 import { Route as OperatorOperadorColaRouteImport } from './routes/_operator/operador.cola'
 import { Route as OperatorOperadorMonitoreoRouteImport } from './routes/_operator/operador.monitoreo'
 import { Route as OperatorOperadorTrazasRouteImport } from './routes/_operator/operador.trazas'
 import { Route as ApiAgentHealthRouteImport } from './routes/api.agent.health'
+import { Route as DemobancoDemoBancoIndexRouteImport } from './routes/_demobanco/demo.banco.index'
+import { Route as DemobancoDemoBancoRastreosRouteImport } from './routes/_demobanco/demo.banco_.rastreos'
 import { Route as OperatorOperadorColaIndexRouteImport } from './routes/_operator/operador.cola.index'
 import { Route as OperatorOperadorColaTicketIdRouteImport } from './routes/_operator/operador.cola.$ticketId'
 import { Route as OperatorOperadorTrazasIndexRouteImport } from './routes/_operator/operador.trazas.index'
 import { Route as OperatorOperadorTrazasTraceIdRouteImport } from './routes/_operator/operador.trazas.$traceId'
+import { Route as DemobancoDemoBancoCasoTicketIdRouteImport } from './routes/_demobanco/demo.banco.caso.$ticketId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -37,6 +42,10 @@ const IndexRoute = IndexRouteImport.update({
 } as any)
 const AuthedRoute = AuthedRouteImport.update({
   id: '/_authed',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DemobancoRoute = DemobancoRouteImport.update({
+  id: '/_demobanco',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OperatorRoute = OperatorRouteImport.update({
@@ -83,6 +92,11 @@ const OperadorSesionRoute = OperadorSesionRouteImport.update({
   path: '/operador/sesion',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DemobancoDemoBancoRoute = DemobancoDemoBancoRouteImport.update({
+  id: '/demo/banco',
+  path: '/demo/banco',
+  getParentRoute: () => DemobancoRoute,
+} as any)
 const OperatorOperadorIndexRoute = OperatorOperadorIndexRouteImport.update({
   id: '/operador/',
   path: '/operador/',
@@ -109,6 +123,17 @@ const ApiAgentHealthRoute = ApiAgentHealthRouteImport.update({
   path: '/api/agent/health',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DemobancoDemoBancoIndexRoute = DemobancoDemoBancoIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => DemobancoDemoBancoRoute,
+} as any)
+const DemobancoDemoBancoRastreosRoute =
+  DemobancoDemoBancoRastreosRouteImport.update({
+    id: '/demo/banco_/rastreos',
+    path: '/demo/banco/rastreos',
+    getParentRoute: () => DemobancoRoute,
+  } as any)
 const OperatorOperadorColaIndexRoute =
   OperatorOperadorColaIndexRouteImport.update({
     id: '/',
@@ -133,6 +158,12 @@ const OperatorOperadorTrazasTraceIdRoute =
     path: '/$traceId',
     getParentRoute: () => OperatorOperadorTrazasRoute,
   } as any)
+const DemobancoDemoBancoCasoTicketIdRoute =
+  DemobancoDemoBancoCasoTicketIdRouteImport.update({
+    id: '/caso/$ticketId',
+    path: '/caso/$ticketId',
+    getParentRoute: () => DemobancoDemoBancoRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -144,15 +175,19 @@ export interface FileRoutesByFullPath {
   '/operador/login': typeof OperadorLoginRoute
   '/operador/salir': typeof OperadorSalirRoute
   '/operador/sesion': typeof OperadorSesionRoute
+  '/demo/banco': typeof DemobancoDemoBancoRouteWithChildren
   '/operador/cola': typeof OperatorOperadorColaRouteWithChildren
   '/operador/monitoreo': typeof OperatorOperadorMonitoreoRoute
   '/operador/trazas': typeof OperatorOperadorTrazasRouteWithChildren
   '/api/agent/health': typeof ApiAgentHealthRoute
   '/operador/': typeof OperatorOperadorIndexRoute
+  '/demo/banco/rastreos': typeof DemobancoDemoBancoRastreosRoute
   '/operador/cola/$ticketId': typeof OperatorOperadorColaTicketIdRoute
   '/operador/trazas/$traceId': typeof OperatorOperadorTrazasTraceIdRoute
+  '/demo/banco/': typeof DemobancoDemoBancoIndexRoute
   '/operador/cola/': typeof OperatorOperadorColaIndexRoute
   '/operador/trazas/': typeof OperatorOperadorTrazasIndexRoute
+  '/demo/banco/caso/$ticketId': typeof DemobancoDemoBancoCasoTicketIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -167,15 +202,19 @@ export interface FileRoutesByTo {
   '/operador/monitoreo': typeof OperatorOperadorMonitoreoRoute
   '/api/agent/health': typeof ApiAgentHealthRoute
   '/operador': typeof OperatorOperadorIndexRoute
+  '/demo/banco/rastreos': typeof DemobancoDemoBancoRastreosRoute
   '/operador/cola/$ticketId': typeof OperatorOperadorColaTicketIdRoute
   '/operador/trazas/$traceId': typeof OperatorOperadorTrazasTraceIdRoute
+  '/demo/banco': typeof DemobancoDemoBancoIndexRoute
   '/operador/cola': typeof OperatorOperadorColaIndexRoute
   '/operador/trazas': typeof OperatorOperadorTrazasIndexRoute
+  '/demo/banco/caso/$ticketId': typeof DemobancoDemoBancoCasoTicketIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authed': typeof AuthedRouteWithChildren
+  '/_demobanco': typeof DemobancoRouteWithChildren
   '/_operator': typeof OperatorRouteWithChildren
   '/login': typeof LoginRoute
   '/_authed/chat': typeof AuthedChatRoute
@@ -185,15 +224,19 @@ export interface FileRoutesById {
   '/operador/login': typeof OperadorLoginRoute
   '/operador/salir': typeof OperadorSalirRoute
   '/operador/sesion': typeof OperadorSesionRoute
+  '/_demobanco/demo/banco': typeof DemobancoDemoBancoRouteWithChildren
   '/_operator/operador/cola': typeof OperatorOperadorColaRouteWithChildren
   '/_operator/operador/monitoreo': typeof OperatorOperadorMonitoreoRoute
   '/_operator/operador/trazas': typeof OperatorOperadorTrazasRouteWithChildren
   '/api/agent/health': typeof ApiAgentHealthRoute
   '/_operator/operador/': typeof OperatorOperadorIndexRoute
+  '/_demobanco/demo/banco_/rastreos': typeof DemobancoDemoBancoRastreosRoute
   '/_operator/operador/cola/$ticketId': typeof OperatorOperadorColaTicketIdRoute
   '/_operator/operador/trazas/$traceId': typeof OperatorOperadorTrazasTraceIdRoute
+  '/_demobanco/demo/banco/': typeof DemobancoDemoBancoIndexRoute
   '/_operator/operador/cola/': typeof OperatorOperadorColaIndexRoute
   '/_operator/operador/trazas/': typeof OperatorOperadorTrazasIndexRoute
+  '/_demobanco/demo/banco/caso/$ticketId': typeof DemobancoDemoBancoCasoTicketIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -207,15 +250,19 @@ export interface FileRouteTypes {
     | '/operador/login'
     | '/operador/salir'
     | '/operador/sesion'
+    | '/demo/banco'
     | '/operador/cola'
     | '/operador/monitoreo'
     | '/operador/trazas'
     | '/api/agent/health'
     | '/operador/'
+    | '/demo/banco/rastreos'
     | '/operador/cola/$ticketId'
     | '/operador/trazas/$traceId'
+    | '/demo/banco/'
     | '/operador/cola/'
     | '/operador/trazas/'
+    | '/demo/banco/caso/$ticketId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -230,14 +277,18 @@ export interface FileRouteTypes {
     | '/operador/monitoreo'
     | '/api/agent/health'
     | '/operador'
+    | '/demo/banco/rastreos'
     | '/operador/cola/$ticketId'
     | '/operador/trazas/$traceId'
+    | '/demo/banco'
     | '/operador/cola'
     | '/operador/trazas'
+    | '/demo/banco/caso/$ticketId'
   id:
     | '__root__'
     | '/'
     | '/_authed'
+    | '/_demobanco'
     | '/_operator'
     | '/login'
     | '/_authed/chat'
@@ -247,20 +298,25 @@ export interface FileRouteTypes {
     | '/operador/login'
     | '/operador/salir'
     | '/operador/sesion'
+    | '/_demobanco/demo/banco'
     | '/_operator/operador/cola'
     | '/_operator/operador/monitoreo'
     | '/_operator/operador/trazas'
     | '/api/agent/health'
     | '/_operator/operador/'
+    | '/_demobanco/demo/banco_/rastreos'
     | '/_operator/operador/cola/$ticketId'
     | '/_operator/operador/trazas/$traceId'
+    | '/_demobanco/demo/banco/'
     | '/_operator/operador/cola/'
     | '/_operator/operador/trazas/'
+    | '/_demobanco/demo/banco/caso/$ticketId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthedRoute: typeof AuthedRouteWithChildren
+  DemobancoRoute: typeof DemobancoRouteWithChildren
   OperatorRoute: typeof OperatorRouteWithChildren
   LoginRoute: typeof LoginRoute
   DevUiRoute: typeof DevUiRoute
@@ -286,6 +342,13 @@ declare module '@tanstack/react-router' {
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof AuthedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_demobanco': {
+      id: '/_demobanco'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof DemobancoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_operator': {
@@ -351,6 +414,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OperadorSesionRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_demobanco/demo/banco': {
+      id: '/_demobanco/demo/banco'
+      path: '/demo/banco'
+      fullPath: '/demo/banco'
+      preLoaderRoute: typeof DemobancoDemoBancoRouteImport
+      parentRoute: typeof DemobancoRoute
+    }
     '/_operator/operador/': {
       id: '/_operator/operador/'
       path: '/operador'
@@ -386,6 +456,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAgentHealthRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_demobanco/demo/banco/': {
+      id: '/_demobanco/demo/banco/'
+      path: '/'
+      fullPath: '/demo/banco/'
+      preLoaderRoute: typeof DemobancoDemoBancoIndexRouteImport
+      parentRoute: typeof DemobancoDemoBancoRoute
+    }
+    '/_demobanco/demo/banco_/rastreos': {
+      id: '/_demobanco/demo/banco_/rastreos'
+      path: '/demo/banco/rastreos'
+      fullPath: '/demo/banco/rastreos'
+      preLoaderRoute: typeof DemobancoDemoBancoRastreosRouteImport
+      parentRoute: typeof DemobancoRoute
+    }
     '/_operator/operador/cola/': {
       id: '/_operator/operador/cola/'
       path: '/'
@@ -414,6 +498,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OperatorOperadorTrazasTraceIdRouteImport
       parentRoute: typeof OperatorOperadorTrazasRoute
     }
+    '/_demobanco/demo/banco/caso/$ticketId': {
+      id: '/_demobanco/demo/banco/caso/$ticketId'
+      path: '/caso/$ticketId'
+      fullPath: '/demo/banco/caso/$ticketId'
+      preLoaderRoute: typeof DemobancoDemoBancoCasoTicketIdRouteImport
+      parentRoute: typeof DemobancoDemoBancoRoute
+    }
   }
 }
 
@@ -427,6 +518,33 @@ const AuthedRouteChildren: AuthedRouteChildren = {
 
 const AuthedRouteWithChildren =
   AuthedRoute._addFileChildren(AuthedRouteChildren)
+
+interface DemobancoDemoBancoRouteChildren {
+  DemobancoDemoBancoIndexRoute: typeof DemobancoDemoBancoIndexRoute
+  DemobancoDemoBancoCasoTicketIdRoute: typeof DemobancoDemoBancoCasoTicketIdRoute
+}
+
+const DemobancoDemoBancoRouteChildren: DemobancoDemoBancoRouteChildren = {
+  DemobancoDemoBancoIndexRoute: DemobancoDemoBancoIndexRoute,
+  DemobancoDemoBancoCasoTicketIdRoute: DemobancoDemoBancoCasoTicketIdRoute,
+}
+
+const DemobancoDemoBancoRouteWithChildren =
+  DemobancoDemoBancoRoute._addFileChildren(DemobancoDemoBancoRouteChildren)
+
+interface DemobancoRouteChildren {
+  DemobancoDemoBancoRoute: typeof DemobancoDemoBancoRouteWithChildren
+  DemobancoDemoBancoRastreosRoute: typeof DemobancoDemoBancoRastreosRoute
+}
+
+const DemobancoRouteChildren: DemobancoRouteChildren = {
+  DemobancoDemoBancoRoute: DemobancoDemoBancoRouteWithChildren,
+  DemobancoDemoBancoRastreosRoute: DemobancoDemoBancoRastreosRoute,
+}
+
+const DemobancoRouteWithChildren = DemobancoRoute._addFileChildren(
+  DemobancoRouteChildren,
+)
 
 interface OperatorOperadorColaRouteChildren {
   OperatorOperadorColaTicketIdRoute: typeof OperatorOperadorColaTicketIdRoute
@@ -478,6 +596,7 @@ const OperatorRouteWithChildren = OperatorRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthedRoute: AuthedRouteWithChildren,
+  DemobancoRoute: DemobancoRouteWithChildren,
   OperatorRoute: OperatorRouteWithChildren,
   LoginRoute: LoginRoute,
   DevUiRoute: DevUiRoute,

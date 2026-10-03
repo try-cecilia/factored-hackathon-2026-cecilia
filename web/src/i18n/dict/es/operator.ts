@@ -311,6 +311,15 @@ export const operator = {
       placeholder: 'Qué se hizo y qué sigue, en pocas palabras. Sin datos de otros clientes.',
       lockedBy: 'Solo {name} puede resolver este caso',
     },
+    // A resolution with a predefined result of the case's family and an optional message (the demo's bank side).
+    outcomePick: {
+      label: 'Resultado para el cliente',
+      hint: 'Lo que lee el cliente, según el tipo de caso. Es obligatorio.',
+      messageLabel: 'Mensaje para el cliente (opcional)',
+      messageHint: 'Le llega en el chat después del resultado, marcado como escrito por una persona.',
+      none: 'Este caso no tiene resultados para elegir.',
+      resultLine: 'Resultado: {result}',
+    },
     footer: {
       notAssigned: 'Sin asignar',
       auditedAs: 'Auditado como {name}',

@@ -5,7 +5,7 @@ developed and demoed with no S3 access and no model key.
 
 OFFLINE SIMULATION. Everything after the model is the real code (policy, tools, rendering, tickets, traces, sessions):
 only the choice of tool is a keyword match instead of a model's judgment, like eval/fake_llm.py. It says nothing about
-how a live model behaves. DEMO_MODE=1 unless already set. Each start rebuilds the warehouse and the sandbox logs.
+how a live model behaves. DEMO_MODE=1 and DEMO_CONSOLE=1 unless already set. Each start rebuilds the warehouse and the sandbox logs.
 """
 from __future__ import annotations
 
@@ -26,6 +26,7 @@ os.environ.update({
 })
 os.environ.setdefault("DEMO_IDP_SECRET", "dev-fixture-secret")
 os.environ.setdefault("DEMO_MODE", "1")
+os.environ.setdefault("DEMO_CONSOLE", "1")
 os.environ.pop("STATE_DB_PATH", None)
 
 from data.pipeline import RunConfig, run_pipeline  # noqa: E402

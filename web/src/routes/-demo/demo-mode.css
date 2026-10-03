@@ -1,0 +1,123 @@
+/* The one-click demo, on both sides (Paper "03 · Modo demo sin doble ingreso"): the DEMO bar, the entry dialog and the bridge card. */
+
+/* The bar sits on top of the window; whatever was the whole viewport (the customer's shell, the console) takes the rest. */
+.demo-frame { display: flex; flex-direction: column; height: 100dvh; }
+.demo-frame > .shell, .demo-frame > .op-shell, .demo-frame > .demo-desk { flex: 1 1 0; height: auto; min-height: 0; }
+
+.demo-chip {
+  display: inline-flex; align-items: center; padding: 3px 8px; border-radius: var(--radius-compact); background: var(--color-sky-100);
+  color: var(--color-sky-900); font-size: var(--text-compact-xs); font-weight: var(--font-weight-bold); letter-spacing: 0.04em; line-height: 14px;
+}
+.demo-chip--lg { padding: 4px 9px; font-size: var(--text-xs); line-height: 16px; }
+
+.demo-bar {
+  display: flex; flex: none; align-items: center; justify-content: space-between; gap: 16px; height: 52px; padding: 0 20px;
+  padding-top: env(safe-area-inset-top); background: var(--color-ink); color: var(--color-glass-label); font-size: var(--text-sm); line-height: 18px;
+}
+.demo-bar__lead { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.demo-bar__text { overflow: hidden; color: var(--color-glass-label); text-overflow: ellipsis; white-space: nowrap; }
+.demo-bar__clock { display: inline-flex; align-items: center; gap: 12px; color: var(--color-caution); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.demo-bar[data-clock='over'] .demo-bar__clock { color: var(--color-paper); }
+.demo-bar__tools { display: flex; flex: none; align-items: center; gap: 14px; }
+.demo-bar__exit, .demo-bar__reenter {
+  min-height: 44px; padding: 0 8px; border: 0; background: none; color: var(--color-glass-label); font: inherit; font-size: var(--text-compact-md);
+  font-weight: var(--font-weight-semibold); line-height: 16px; cursor: pointer;
+}
+.demo-bar__exit:hover { color: var(--color-paper); }
+.demo-bar__reenter { padding: 0 14px; border-radius: var(--radius-control); background: var(--color-paper); color: var(--color-ink); }
+.demo-bar__exit:disabled, .demo-bar__reenter:disabled { opacity: 0.6; cursor: default; }
+.demo-bar :focus-visible { outline: 2px solid var(--color-sky-300); outline-offset: 2px; }
+
+.demo-seg { display: flex; padding: 2px; border-radius: 10px; background: #FFFFFF1F; }
+.demo-seg a, .demo-seg [role='link'] {
+  display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border-radius: var(--radius-control); color: var(--color-glass-label); font-size: var(--text-compact-md);
+  font-weight: var(--font-weight-semibold); line-height: 16px; text-decoration: none;
+}
+.demo-seg a:hover { color: var(--color-paper); }
+.demo-seg [aria-disabled='true'] { opacity: 0.55; cursor: not-allowed; }
+.demo-seg a[aria-current='page'] { background: var(--color-paper); color: var(--color-ink); }
+
+@media (max-width: 759px) {
+  .demo-bar { gap: 10px; height: 52px; padding: 0 12px; }
+  .demo-bar__text { display: none; }
+  .demo-bar__tools { gap: 10px; }
+  .demo-seg a, .demo-seg [role='link'] { padding: 0 12px; }
+  .demo-bar__clock { gap: 8px; font-size: var(--text-compact-md); }
+  .demo-bar__reenter { min-height: 44px; padding: 0 10px; }
+  /* The countdown does not fit beside the switch: it takes a second row, under it. */
+  .demo-bar:not([data-clock='running']) { flex-wrap: wrap; height: auto; padding-block: 8px; row-gap: 8px; }
+  .demo-bar:not([data-clock='running']) .demo-bar__tools { width: 100%; justify-content: space-between; }
+  .demo-bar:not([data-clock='running']) .demo-bar__lead { order: 2; width: 100%; }
+  .demo-bar__clock { flex: 1; justify-content: space-between; }
+}
+
+/* The welcome of the one-click demo, in the chat's place for an empty conversation: where the visitor is, and three situations to try. */
+.demo-welcome { display: grid; justify-items: center; gap: 10px; width: 100%; max-width: 720px; margin: 0 auto; padding: 4vh 0 8px; text-align: center; }
+.demo-welcome__avatar { display: block; width: 72px; height: 72px; object-fit: contain; }
+.demo-welcome h2 { margin: 0; font-size: var(--text-2xl); font-weight: var(--font-weight-semibold); letter-spacing: -0.02em; line-height: 30px; }
+.demo-welcome__body { max-width: 520px; margin: 0; color: var(--color-ink-70); font-size: var(--text-base); line-height: 24px; }
+.demo-welcome__cards {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; width: 100%; margin: 12px 0 0; padding: 0; list-style: none;
+}
+.demo-welcome__card {
+  position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; width: 100%; height: 100%; min-height: 96px;
+  padding: 16px 40px 16px 16px; border: 0; border-radius: 16px; background: var(--color-fill-subtle); color: var(--color-ink-app);
+  font: inherit; text-align: left; cursor: pointer;
+}
+.demo-welcome__card:hover { background: var(--color-fill-muted); }
+.demo-welcome__card:focus-visible { outline: 2px solid var(--color-cecil-blue); outline-offset: 2px; }
+.demo-welcome__card:disabled { cursor: default; }
+.demo-welcome__card:disabled:not([aria-busy]) { opacity: 0.6; }
+.demo-welcome__card strong { font-size: var(--text-compact-lg); font-weight: var(--font-weight-semibold); line-height: 20px; }
+.demo-welcome__card span { color: var(--color-ink-70); font-size: var(--text-compact-md); line-height: 18px; }
+.demo-welcome__card .demo-welcome__arrow { position: absolute; top: 16px; right: 16px; color: var(--color-cecil-blue); font-size: var(--text-base); }
+.demo-welcome__note { margin: 4px 0 0; color: #616061; font-size: var(--text-compact-md); line-height: 19px; }
+.demo-welcome__note[role='alert'] { color: var(--color-danger); }
+@media (max-width: 759px) {
+  .demo-welcome { padding-top: 2vh; }
+  .demo-welcome__avatar { width: 56px; height: 56px; }
+  .demo-welcome h2 { font-size: var(--text-xl); line-height: 26px; }
+  .demo-welcome__card { min-height: 0; }
+}
+
+/* What Banco is, the first time on the customer's side: a note under the switch, on paper, over the page. */
+.demo-seg-wrap { position: relative; }
+.demo-hint {
+  position: absolute; top: calc(100% + 12px); right: -8px; z-index: 45; display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+  width: min(280px, calc(100vw - 24px)); padding: 14px 14px 8px 16px; border-radius: 14px; background: var(--color-paper); color: var(--color-ink-app);
+  box-shadow: 0 0 0 1px var(--color-glass-edge), 0 18px 40px -16px #0F0A1499; text-align: left;
+}
+.demo-hint::before {
+  content: ''; position: absolute; top: -6px; right: 44px; width: 12px; height: 12px; background: var(--color-paper); transform: rotate(45deg);
+  box-shadow: -1px -1px 0 0 var(--color-glass-edge);
+}
+.demo-hint p { margin: 0; font-size: var(--text-compact-md); line-height: 19px; }
+.demo-hint__close {
+  align-self: flex-end; min-height: 44px; padding: 0 10px; border: 0; background: none; color: var(--color-cecil-blue); font: inherit;
+  font-size: var(--text-compact-md); font-weight: var(--font-weight-semibold); cursor: pointer;
+}
+@media (max-width: 759px) {
+  /* The switch sits a chip's width from the left edge: the note takes the width of the window from there, its arrow on Banco. */
+  .demo-hint { right: auto; left: -108px; width: min(340px, calc(100vw - 24px)); }
+  .demo-hint::before { right: auto; left: 200px; }
+}
+
+/* "Tu caso ya llegó al banco": the bridge from the customer's chat to the same case on the bank's side. */
+.demo-bridge {
+  display: flex; flex-direction: column; gap: 12px; padding: 18px; border-radius: 16px; color: var(--color-paper);
+  background: linear-gradient(130deg in oklab, oklab(58.1% -0.024 -0.228) 0%, oklab(47.3% -0.020 -0.222) 60%, oklab(35% -0.016 -0.173) 100%);
+}
+.demo-bridge h2 { margin: 0; font-size: var(--text-compact-lg); font-weight: var(--font-weight-semibold); line-height: 21px; }
+.demo-bridge p { margin: 0; color: var(--color-glass-label); font-size: var(--text-compact-md); line-height: 19px; }
+.demo-bridge__action {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 44px; align-self: start; padding: 0 16px; border-radius: 10px; background: var(--color-paper); color: var(--color-ink);
+  font-size: var(--text-compact-md); font-weight: var(--font-weight-semibold); line-height: 16px; text-decoration: none;
+}
+.demo-bridge__action[aria-disabled='true'] { opacity: 0.6; cursor: not-allowed; }
+.demo-bridge__action:focus-visible { outline: 2px solid var(--color-paper); outline-offset: 2px; }
+/* Across the chat's full width, the card is one row: what happened on the left, the way to the bank on the right. */
+@media (min-width: 1000px) {
+  .demo-bridge { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 24px; row-gap: 4px; align-items: center; }
+  .demo-bridge h2, .demo-bridge p { grid-column: 1; }
+  .demo-bridge__action { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+}

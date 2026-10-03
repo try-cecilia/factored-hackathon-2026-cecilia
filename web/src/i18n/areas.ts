@@ -10,17 +10,19 @@ type Namespace = keyof Messages
  * use the very same dictionary. A new namespace goes in the list of every area whose screens use it: `areas.test.ts` follows the
  * imports of each area's routes and fails on a key outside them.
  */
-export type Area = 'landing' | 'customer' | 'operator' | 'monitor' | 'gallery'
+export type Area = 'landing' | 'customer' | 'operator' | 'monitor' | 'gallery' | 'demoBank'
 
 export const areaNamespaces: Record<Area, readonly Namespace[]> = {
-  // The public home alone: its long copy never travels with the customer's other pages.
-  landing: ['common', 'landing'],
-  customer: ['common', 'shell', 'login', 'loaders', 'sidebar', 'chat', 'cases', 'conversation', 'demo'],
+  // The public home alone: its long copy never travels with the customer's other pages. The one-click demo's dialog opens there.
+  landing: ['common', 'landing', 'demoMode'],
+  customer: ['common', 'shell', 'login', 'loaders', 'sidebar', 'chat', 'cases', 'conversation', 'demo', 'demoMode'],
   operator: ['common', 'loaders', 'sidebar', 'table', 'operator'],
   // Only the monitor and the traces, inside the console: the operator's own texts come with the operator area.
   monitor: ['monitor'],
   // The gallery draws the whole kit in both languages with the full dictionaries of its own chunk (`ui/gallery/GalleryPage.tsx`).
   gallery: ['common', 'gallery'],
+  // The bank's side of the one-click demo (/demo/banco): the console's screens, and the demo's bar and shell.
+  demoBank: ['common', 'loaders', 'sidebar', 'table', 'operator', 'demoMode'],
 }
 
 /** The areas a page needs, from its path. */
@@ -29,6 +31,7 @@ export function areasOf(pathname: string): Area[] {
   if (/^\/dev\/ui(\/|$)/.test(pathname)) return ['gallery']
   if (/^\/operador\/(monitoreo|trazas)(\/|$)/.test(pathname)) return ['operator', 'monitor']
   if (/^\/operador(\/|$)/.test(pathname)) return ['operator']
+  if (/^\/demo\/banco(\/|$)/.test(pathname)) return ['demoBank']
   return ['customer']
 }
 
@@ -54,6 +57,7 @@ const sources: Record<Locale, Sources> = {
     cases: () => import('./dict/es/cases.ts').then((m) => m.cases),
     conversation: () => import('./dict/es/conversation.ts').then((m) => m.conversation),
     demo: () => import('./dict/es/demo.ts').then((m) => m.demo),
+    demoMode: () => import('./dict/es/demo-mode.ts').then((m) => m.demoMode),
     operator: () => import('./dict/es/operator.ts').then((m) => m.operator),
     monitor: () => import('./dict/es/monitor.ts').then((m) => m.monitor),
   },
@@ -70,6 +74,7 @@ const sources: Record<Locale, Sources> = {
     cases: () => import('./dict/pt/cases.ts').then((m) => m.cases),
     conversation: () => import('./dict/pt/conversation.ts').then((m) => m.conversation),
     demo: () => import('./dict/pt/demo.ts').then((m) => m.demo),
+    demoMode: () => import('./dict/pt/demo-mode.ts').then((m) => m.demoMode),
     operator: () => import('./dict/pt/operator.ts').then((m) => m.operator),
     monitor: () => import('./dict/pt/monitor.ts').then((m) => m.monitor),
   },

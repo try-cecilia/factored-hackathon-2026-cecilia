@@ -29,6 +29,10 @@ services:
       - fromGroup: bff-client-ip
       - key: DEMO_MODE
         value: "1"
+      # The demo's console: a visitor resolves, as the bank, the cases their own session filed on a public sandbox account
+      # (api/demo_desk.py). Exactly "1", and only with DEMO_MODE=1; the web needs the same value.
+      - key: DEMO_CONSOLE
+        value: "1"
       # Sessions and conversations live on the disk, so a restart or a deploy keeps a customer's case in flight.
       - key: STATE_DB_PATH
         value: /app/data/warehouse/state.sqlite
@@ -113,3 +117,11 @@ services:
       # The end user's address, set by Render's Cloudflare edge and unforgeable (the API reads the same header)
       - key: TRUSTED_CLIENT_IP_HEADER
         value: CF-Connecting-IP
+      # The demo switches, as the API's: said here so that the web's own checks can demand "1" instead of trusting the API's 404
+      - key: DEMO_MODE
+        value: "1"
+      - key: DEMO_CONSOLE
+        value: "1"
+      # One-click entries to the demo per minute per address (web/.env.example), as the API's LOGIN_RATE_PER_MIN: each entry is a login
+      - key: DEMO_ENTER_RATE_PER_MIN
+        value: "30"

@@ -1,0 +1,64 @@
+/* The bank's side of the one-click demo, over the console's styles (operator.css): its sidebar note, the help card under the
+   queue, the end of the session, and the picker of a predefined result in the case. */
+.demo-desk__foot { display: flex; flex-direction: column; gap: 10px; }
+.demo-desk__note { margin: 0; padding: 12px; border-radius: 12px; background: var(--color-paper); color: #43414A; font-size: var(--text-xs); line-height: 18px; }
+.demo-queue { gap: 18px; }
+.demo-help { display: flex; flex-direction: column; gap: 6px; margin-top: auto; padding: 18px; border-radius: 14px; background: #F4F4F5; }
+.demo-help h2 { margin: 0; color: var(--color-ink); font-size: var(--text-sm); font-weight: var(--font-weight-semibold); line-height: 18px; }
+.demo-help p { margin: 0; color: #43414A; font-size: var(--text-compact-md); line-height: 19px; }
+.demo-desk__over { display: grid; place-items: center; height: 100%; padding: 24px; }
+.demo-expired { flex-direction: column; align-items: flex-start; gap: 10px; max-width: 420px; }
+.demo-expired h2 { margin: 0; font-size: var(--text-base); font-weight: var(--font-weight-bold); line-height: 20px; }
+.demo-expired p { margin: 0; }
+.demo-traces { display: flex; flex-direction: column; gap: 14px; }
+
+/* A predefined result of the case's family: one choice, required, as a column of cards. */
+.op-results { display: flex; flex-direction: column; gap: 8px; min-width: 0; margin: 0 0 12px; padding: 0; border: 0; }
+.op-results legend { margin-bottom: 4px; padding: 0; }
+.op-results > p { margin: 0 0 2px; font-size: var(--text-compact-sm); line-height: 16px; }
+.op-results .op-result {
+  display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 10px 12px; border-radius: 12px; box-shadow: inset 0 0 0 1px #00000026;
+  color: var(--color-ink-app); font-size: var(--text-compact-md); line-height: 19px; cursor: pointer;
+}
+.op-results .op-result[data-checked] { box-shadow: inset 0 0 0 2px var(--color-ink); }
+.op-results:disabled .op-result { color: var(--color-ink-70); box-shadow: inset 0 0 0 1px var(--color-line); cursor: default; }
+.op-result input {
+  flex: none; width: 16px; height: 16px; margin: 0; border: 0; border-radius: 50%; background: var(--color-paper);
+  box-shadow: inset 0 0 0 1.5px #00000040; appearance: none; -webkit-appearance: none;
+}
+.op-result input:checked { box-shadow: inset 0 0 0 5px var(--color-ink); }
+.op-result input:focus-visible { outline: 2px solid var(--color-cecil-blue); outline-offset: 2px; }
+.op-results:disabled .op-result input { opacity: 0.5; }
+.op-block > .op-muted { margin: 6px 0 0; font-size: var(--text-compact-sm); line-height: 16px; }
+
+/* Wide screens: the case gets the room of the design (520px), the queue the rest. */
+@media (min-width: 1280px) {
+  .demo-desk .op-detail { flex-basis: 520px; width: 520px; }
+}
+
+/* Every control of the bank's side is at least 44px to touch: buttons, the close and menu buttons, the sidebar rows, the language
+   switch and the back link. Only here: the real console keeps its density. */
+.demo-desk .ui-btn, .demo-desk .ui-lang__option, .demo-desk .ui-sidebar__row { min-height: 44px; }
+.demo-desk .ui-btn--icon { min-width: 44px; }
+.demo-desk .op-back a { display: inline-flex; align-items: center; min-height: 44px; }
+/* Out of the grid, at the corner of the window: the link stays hidden above it until focused, as everywhere else. */
+.demo-skip { position: fixed; top: 0; left: 0; z-index: 60; }
+
+/* Rastreos: a table on a wide screen, a card per trace with its four fields on a phone (the console's table needs 720px). */
+.demo-traces__cards { display: none; margin: 0; padding: 0; list-style: none; }
+.demo-traces__field { display: contents; }
+@media (max-width: 760px) {
+  .demo-traces--cards .op-table { display: none; }
+  .demo-traces__cards { display: flex; flex-direction: column; gap: 8px; }
+  .demo-traces__cards li { padding: 12px 14px; border-radius: 12px; background: var(--color-fill-subtle); }
+  .demo-traces__cards dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 12px; margin: 0; }
+  .demo-traces__cards dt { color: var(--color-ink-70); font-size: var(--text-compact-sm); line-height: 18px; }
+  .demo-traces__cards dd { margin: 0; overflow-wrap: anywhere; font-size: var(--text-compact-md); line-height: 18px; }
+  .demo-traces__cards .op-mono { line-height: 18px; }
+}
+
+/* The console's dense tables keep 720px under 900px and scroll inside their box; the demo's have four columns, which fit the
+   space there is at every width (with the request cut), so they never scroll sideways. Its phone cards start at 700px as the console's. */
+@media (max-width: 900px) {
+  .demo-desk .op-table .ui-dt__table { min-width: 0; }
+}

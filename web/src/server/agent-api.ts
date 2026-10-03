@@ -1,5 +1,6 @@
 import '@tanstack/react-start/server-only'
 import { getRequestHeader, getRequestIP } from '@tanstack/react-start/server'
+import { demoConsoleOn } from './demo-gate.ts'
 
 export class AgentApiError extends Error {
   // `timeout` means the request may have been processed; `network` means it never reached the API.
@@ -16,7 +17,8 @@ type RequestOptions = {
   headers?: Record<string, string>
 }
 
-function clientIp() {
+/** The address of the person behind this request: the trusted proxy's header when one is configured, the socket's otherwise. */
+export function clientIp() {
   const trusted = process.env.TRUSTED_CLIENT_IP_HEADER
   return (trusted && getRequestHeader(trusted)) || getRequestIP()
 }
@@ -24,6 +26,8 @@ function clientIp() {
 export async function agentFetch(path: string, { method = 'GET', body, token, timeoutMs = 5_000, headers: extra }: RequestOptions = {}) {
   // DEMO_MODE=0 given to the web: its demo functions do nothing, so none reaches the API's sandbox, whoever calls it.
   if (process.env.DEMO_MODE === '0' && path.startsWith('/demo/')) throw new AgentApiError(404)
+  // The demo's console is off unless DEMO_CONSOLE is exactly '1' (fail-closed, unlike DEMO_MODE): nothing reaches its routes otherwise.
+  if (path.startsWith('/demo/desk') && !demoConsoleOn()) throw new AgentApiError(404)
   const headers = new Headers({ Accept: 'application/json', ...extra })
   const ip = clientIp()
   if (ip) headers.set('X-Client-IP', ip)

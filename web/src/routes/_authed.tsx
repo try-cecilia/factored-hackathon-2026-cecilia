@@ -25,6 +25,9 @@ export const Route = createFileRoute('/_authed')({
     if (!history.ok && history.failure === 'session_expired') throw redirect({ to: '/login', search: { redirect: location.href } })
     return { sessionRef: context.session.session_ref, history, kit }
   },
+  // Leaving the chat (the demo's bank side is another tree) drops this data: coming back reads the conversation again instead of
+  // drawing the copy cached on the way out, which the conversation would keep (it starts from `initial` only once per session).
+  gcTime: 0,
   pendingComponent: Loading,
   errorComponent: Unavailable,
   component: AuthedLayout,
