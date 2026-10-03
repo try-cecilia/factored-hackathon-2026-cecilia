@@ -214,6 +214,60 @@ def test_case_news_follows_the_customer_after_login_and_conversation_cleanup(tmp
     assert "Novedad" not in restarted.handle_message(newest, "hola").response_text
 
 
+@pytest.mark.parametrize("public", [True, False])
+def test_on_a_public_sandbox_account_a_case_is_news_only_to_the_session_that_filed_it(monkeypatch, public):
+    """Many visitors share a public account, each in a session of their own: one visitor must not read in their chat what a
+    person wrote about another's case. A real customer's cases still follow them to their next session (the test above)."""
+    monkeypatch.setenv("DEMO_PUBLIC_CUSTOMERS", "CLI-FIX0004" if public else "CLI-FIX0009")
+    ticket_id, orch, filer = file_ticket_in_session()
+    other = orch.session_store.issue("CLI-FIX0004", {"segment": "Student", "country": "México", "customer_status": "Active"}).token
+    default_desk.act(ticket_id, "claim", "demo")
+    default_desk.act(ticket_id, "reject", "demo", reason="interno")
+
+    heard = orch.handle_message(other, "hola").response_text  # the other session writes first
+    assert ("no pudo abrir el rastreo" in heard) is not public
+    assert (orch.case_status(other, ticket_id) is None) is public
+    if public:
+        assert "no pudo abrir el rastreo" in orch.handle_message(filer, "hola").response_text
+        assert orch.case_status(filer, ticket_id)["status"] == "rejected"
+
+
+def test_a_resolution_with_a_predefined_result_reads_it_and_the_message_only_after_it():
+    ticket_id, orch, tok = file_plain_ticket_in_session()
+    default_desk.act(ticket_id, "claim", "ana")
+    state = default_desk.act(ticket_id, "resolve", "ana", result="card_blocked", message="Llega en 5 días.")
+    assert (state["result"], state["message"]) == ("card_blocked", "Llega en 5 días.")
+    assert state["history"][-1]["detail"] == {"message": "Llega en 5 días.", "result": "card_blocked"}
+    said = orch.handle_message(tok, "gracias").response_text
+    assert said.startswith(f"Novedad de tu caso: un agente lo resolvió. {render.RESOLVE_RESULT['card_blocked']['es']} "
+                           "Mensaje del agente: «Llega en 5 días.»")
+    assert orch.case_status(tok, ticket_id)["message"] == render.case_update("resolved", "es", None, "Llega en 5 días.", False,
+                                                                             "card_blocked")
+    assert render.case_update("resolved", "pt", None, None, False, "card_blocked") == (
+        f"Novidade do seu caso: um atendente resolveu. {render.RESOLVE_RESULT['card_blocked']['pt']}")
+
+
+def test_a_result_must_be_one_of_the_tickets_family_and_never_settles_a_ticket_that_carries_an_action():
+    from agent.policy import desk
+
+    plain = file_plain_ticket_in_session()[0]  # a theft: the fraud family
+    default_desk.act(plain, "claim", "ana")
+    for result in ("trace_opened", "referred", "nope"):
+        with pytest.raises(DeskError):
+            default_desk.act(plain, "resolve", "ana", result=result)
+    with pytest.raises(DeskError):
+        default_desk.act(plain, "resolve", "ana", result="dispute_opened", message="x" * 501)
+    assert default_desk.act(plain, "resolve", "ana", result="dispute_opened", message="  ")["message"] is None
+
+    traced = file_ticket()
+    assert desk.results_for(default_queue.get(traced)) == ()
+    default_desk.act(traced, "claim", "ana")
+    with pytest.raises(DeskError):
+        default_desk.act(traced, "resolve", "ana", result="trace_opened")
+    assert set(render.RESOLVE_RESULT) == {code for codes in desk.RESULTS.values() for code in codes}
+    assert all(set(texts) == {"es", "pt"} for texts in render.RESOLVE_RESULT.values())
+
+
 def file_plain_ticket_in_session():
     """A theft report: the lexicon hands it to a person before the model runs, and the ticket carries no action."""
     fake = FakeLLMClient([text_response("ok")] * 10)

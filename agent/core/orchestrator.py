@@ -48,6 +48,7 @@ from agent.policy.desk import default_desk
 from agent.policy.router import Decision, Disposition
 from agent.policy.signals import detect_language, normalize
 from agent.resilience import RetryPolicy, current_deadline, handoff_deadline, retry_call, run_bounded, turn_deadline
+from agent.session import public_accounts
 from agent.session.auth import ExpiredSession, InvalidSession, SessionStore, default_store, session_ref
 from agent.tools import account_tools, state
 from agent.observability import stage
@@ -495,8 +496,17 @@ class Orchestrator:
             return TurnResult(trace_id, Disposition.ESCALATE.value, render.MSG["escalate_unverified"][lang].format(code=trace_id[:8]),
                               lang, "tool_failure", "unexpected_failure|handoff_unverified")
 
+    @staticmethod
+    def _visible_to(session, ticket: dict) -> bool:
+        """Whether this session may hear of this ticket. A customer's cases follow them from session to session; on a public
+        sandbox account every session is another visitor, so only the session that filed a ticket hears of it."""
+        if ticket.get("customer_id") != session.customer_id:
+            return False
+        return not public_accounts.is_shared(session.customer_id) or ticket.get("session_ref") == session.ref
+
     def _with_case_news(self, session_token: str, result: TurnResult) -> TurnResult:
-        """What a person did with this customer's tickets since they last heard: said once, by code, ahead of the reply."""
+        """What a person did with this customer's tickets since they last heard: said once, by code, ahead of the reply.
+        On a public sandbox account, only of the tickets this session filed (`_visible_to`)."""
         try:
             session = self.session_store.validate(session_token)
         except (InvalidSession, ExpiredSession):
@@ -504,7 +514,7 @@ class Orchestrator:
         conv = self.conversations.get(session.ref)
         news = []
         try:
-            tickets = escalation.default_queue.for_customer(session.customer_id)
+            tickets = [t for t in escalation.default_queue.for_customer(session.customer_id) if self._visible_to(session, t)]
         except Exception as exc:  # noqa: BLE001 - the notices are a courtesy: with the queue unreadable, the answer still goes out
             self._record_failed("case_news", result.trace_id, exc)
             return result
@@ -513,7 +523,7 @@ class Orchestrator:
             state = default_desk.state(ticket_id)
             # In the language of the reply it goes ahead of (the turn's, which is the session's once the customer has written).
             line = render.case_update(state["status"], result.language, default_traces.get(state["trace_id"] or ""),
-                                      state["message"], bool(ticket.get("pending_action")))
+                                      state["message"], bool(ticket.get("pending_action")), state["result"])
             if line and self.conversations.mark_case_notified(session.customer_id, ticket_id, state["status"]):
                 # Seed notices already delivered by the earlier, session-scoped implementation without repeating them.
                 if conv.cases.get(ticket_id) == state["status"]:
@@ -524,19 +534,20 @@ class Orchestrator:
         return result
 
     def case_status(self, session_token: str, ticket_id: str) -> dict | None:
-        """The status of one of this customer's tickets, worded as the chat would; None if it is not theirs.
+        """The status of one of this customer's tickets, worded as the chat would; None if it is not theirs (on a public sandbox
+        account, if this session did not file it).
         The language is the session's (the one the customer last wrote in, as for the news in the chat), not the ticket's;
         a session whose customer has not yet written anything that shows a language falls back to the ticket's.
         Raises InvalidSession/ExpiredSession for a bad token."""
         session = self.session_store.validate(session_token)
         ticket = escalation.default_queue.get(ticket_id)
-        if ticket is None or ticket["customer_id"] != session.customer_id:
+        if ticket is None or not self._visible_to(session, ticket):
             return None
         state = default_desk.state(ticket_id)
         conv = self.conversations.get(session.ref)
         lang = conv.language if conv.language_set else ticket.get("language") or conv.language
         text = render.case_update(state["status"], lang, default_traces.get(state["trace_id"] or ""), state["message"],
-                                  bool(ticket.get("pending_action")))
+                                  bool(ticket.get("pending_action")), state["result"])
         return {"ticket_id": ticket_id, "status": state["status"], "message": text}
 
     # -- helpers --

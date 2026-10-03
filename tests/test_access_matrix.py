@@ -38,6 +38,7 @@ def world(tmp_path, monkeypatch):
     monkeypatch.setenv("OPERATOR_KEYS", f"ana={OPERATOR_KEY}")
     monkeypatch.setenv("DEMO_PUBLIC_CUSTOMERS", CUSTOMER)
     monkeypatch.delenv("DEMO_MODE", raising=False)
+    monkeypatch.delenv("DEMO_CONSOLE", raising=False)
     monkeypatch.delenv("METRICS_TOKEN", raising=False)
     identity.default_identity._failures.clear()
     for limiter in ("login_limiter", "chat_limiter", "operator_fail_limiter"):
@@ -63,6 +64,7 @@ def call(world, role: Role, method: str, template: str):
         "/demo/tickets": {"session_token": session},
         "/demo/traces": {"session_token": session},
         "/admin/tickets/{ticket_id}/{action}": {},
+        "/demo/desk/tickets/{ticket_id}/{action}": {},
     }.get(template)
     if method == "GET" and template == "/auth/session" and role is not Role.CUSTOMER:
         headers = {**headers, "X-Session-Token": DEAD_TOKEN}
@@ -82,6 +84,8 @@ def test_each_route_lets_in_exactly_the_roles_the_matrix_says(world, monkeypatch
     method, template = key
     if row.demo_only:
         monkeypatch.setenv("DEMO_MODE", "1")
+    if row.demo_console:
+        monkeypatch.setenv("DEMO_CONSOLE", "1")
     response = call(world, role, method, template)
     assert refused(template, response) == (role not in row.roles), (
         f"{method} {template} as {role.value}: HTTP {response.status_code} {response.text[:120]}; matrix allows {sorted(r.value for r in row.roles)}")
@@ -96,6 +100,41 @@ def test_demo_surfaces_do_not_exist_without_demo_mode(world, key, row):
     for role in ROLES:  # not even the right credential finds them
         response = call(world, role, method, template)
         assert response.status_code == 404 and response.json() == {"detail": "Not Found"}, f"{method} {template} as {role.value}"
+
+
+CONSOLE_ROWS = [(k, r) for k, r in ROWS if r.demo_console]
+
+
+@pytest.mark.parametrize("demo_mode, console", [("1", None), ("1", "0"), ("1", ""), ("1", "true"), ("1", "yes"), ("1", " 1"),
+                                                ("1", "01"), (None, "1"), ("0", "1"), ("true", "1")])
+@pytest.mark.parametrize("key,row", CONSOLE_ROWS, ids=[f"{m} {p}" for (m, p), _ in CONSOLE_ROWS])
+def test_the_demo_console_exists_only_with_both_switches_exactly_1(world, monkeypatch, key, row, demo_mode, console):
+    """Fail-closed: any value but "1" in either switch, unset included, is the 404 of a route that does not exist, for every role."""
+    assert CONSOLE_ROWS and all(r.demo_only for _, r in CONSOLE_ROWS)
+    for name, value in (("DEMO_MODE", demo_mode), ("DEMO_CONSOLE", console)):
+        if value is None:
+            monkeypatch.delenv(name, raising=False)
+        else:
+            monkeypatch.setenv(name, value)
+    method, template = key
+    for role in ROLES:
+        response = call(world, role, method, template)
+        assert response.status_code == 404 and response.json() == {"detail": "Not Found"}, f"{method} {template} as {role.value}"
+
+
+def test_a_demo_console_row_whose_route_lacks_either_switch_is_caught():
+    from api import demo, demo_desk
+
+    row = {("GET", "/x"): access.Policy(access.CUSTOMER, "session", demo_only=True, demo_console=True)}
+    bare = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+    bare.get("/x", dependencies=[Depends(demo.require_demo)])(lambda: {})
+    assert any("does not depend on require_demo_console" in p for p in access.problems(bare, row))
+    no_demo = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+    no_demo.get("/x", dependencies=[Depends(demo_desk.require_demo_console)])(lambda: {})
+    assert any("does not depend on require_demo" in p for p in access.problems(no_demo, row))
+    both = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+    both.get("/x", dependencies=[Depends(demo.require_demo), Depends(demo_desk.require_demo_console)])(lambda: {})
+    assert access.problems(both, row) == []
 
 
 def test_every_route_of_the_app_has_a_row_and_every_row_a_route():

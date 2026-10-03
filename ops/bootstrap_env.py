@@ -4,8 +4,8 @@
     python -m ops.bootstrap_env --force    # replaces it
     python -m ops.bootstrap_env --out /tmp/x.env --free-ports   # a throwaway settings file on ports nothing is using (the e2e check)
 
-Local settings, not production ones: the fixture warehouse (no bucket needed) and DEMO_MODE=1, so the guided
-scenarios and the test PINs work. Every secret is random per machine and never printed. Stdlib only.
+Local settings, not production ones: the fixture warehouse (no bucket needed), DEMO_MODE=1 and DEMO_CONSOLE=1, so the guided
+scenarios, the test PINs and the demo's console work. Every secret is random per machine and never printed. Stdlib only.
 """
 from __future__ import annotations
 
@@ -39,7 +39,7 @@ def free_ports(n: int) -> list[int]:
 def local_values(use_free_ports: bool = False) -> dict[str, str]:
     values = {**{name: secrets.token_urlsafe(32) for name in SECRETS},
               "OPERATOR_KEYS": f"operator1={secrets.token_urlsafe(32)}",
-              "DEMO_MODE": "1", "INGEST_ARGS": FIXTURE_INGEST}
+              "DEMO_MODE": "1", "DEMO_CONSOLE": "1", "INGEST_ARGS": FIXTURE_INGEST}
     if use_free_ports:
         values.update({name: str(port) for name, port in zip(PORTS, free_ports(len(PORTS)))})
     return values

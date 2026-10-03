@@ -51,6 +51,7 @@ services:
       - OPERATOR_KEYS=${OPERATOR_KEYS:-}
       - METRICS_TOKEN=${METRICS_TOKEN:-}
       - DEMO_MODE=${DEMO_MODE:-0}
+      - DEMO_CONSOLE=${DEMO_CONSOLE:-0}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-}
       - RETENTION_INTERVAL_HOURS=${RETENTION_INTERVAL_HOURS:-24}
       - STATE_DB_PATH=/app/data/warehouse/state.sqlite
@@ -67,6 +68,8 @@ services:
       - OPERATOR_AUTH_FAILS_PER_MIN
       - CHAT_CUSTOMER_RATE_PER_MIN
       - CHAT_IP_RATE_PER_MIN
+      - DEMO_DESK_RATE_PER_MIN
+      - DEMO_DESK_CUSTOMER_RATE_PER_MIN
       - MAX_CONCURRENT_CHATS
       - CHAT_QUEUE_MAX
       - CHAT_QUEUE_WAIT_SECONDS
@@ -138,8 +141,9 @@ services:
       - BFF_CLIENT_IP_SECRET
       - OPERATOR_IDLE_SECONDS
       - UI_GALLERY
-      # The API's own switch: with 0 the web never asks it for the demo kit.
+      # The API's own switches: with 0 the web never asks it for the demo kit, nor for the demo's console.
       - DEMO_MODE=${DEMO_MODE:-0}
+      - DEMO_CONSOLE=${DEMO_CONSOLE:-0}
     depends_on:
       api:
         condition: service_healthy
