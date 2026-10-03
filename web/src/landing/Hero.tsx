@@ -23,9 +23,9 @@ export function Hero() {
         </div>
         <p className="land-hero__note">{t('landing.hero.disclaimer')}</p>
         <ul className="land-strip" aria-label={t('landing.hero.strip.label')}>
-          <li><strong>{f.n(F.offlineUnsafe)}/{f.n(F.offlineCases)}</strong> <span>{t('landing.hero.strip.unsafeOffline')}</span></li>
+          <li><strong>{f.n(F.idealUnsafe)}/{f.n(F.offlineCases)}</strong> <span>{t('landing.hero.strip.unsafeOffline')}</span></li>
           <li><strong>{f.n(F.sonnetUnsafe)}/{f.n(F.liveCases)}</strong> <span>{t('landing.hero.strip.unsafeLive', { runs: f.n(F.liveRuns) })}</span></li>
-          <li><strong>{f.pct(F.sonnetSafe)}</strong> <span>{t('landing.hero.strip.safeResolution')}</span></li>
+          <li><strong>{f.pct(F.sonnetSafe)}</strong> <span>{t('landing.hero.strip.safeResolution', { resolved: f.n(F.sonnetSafeResolved), eligible: f.n(F.liveEligible) })}</span></li>
           <li><strong>{f.n(F.sonnetP50)} s</strong> <span>{t('landing.hero.strip.latency')}</span></li>
         </ul>
       </div>

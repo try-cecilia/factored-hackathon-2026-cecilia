@@ -29,8 +29,8 @@ export function Ablation() {
         <div className="land-ablation__more">
           <h2 className="land-eyebrow">{t('landing.evidence.eyebrow')}</h2>
           <ul className="land-evidence">
-            <li className="land-evidence__wide"><strong>{f.n(F.heldoutCases)} · {f.n(F.heldoutUnsafe)}</strong> <span>{t('landing.evidence.heldoutText')}</span></li>
-            <li><strong>{f.n(F.offlineRecordsToModel)} / {f.n(F.offlineCases)}</strong> <span>{t('landing.evidence.recordsText', { liveRecords: f.n(F.liveRecordsToModel), live: f.n(F.liveCases) })}</span></li>
+            <li className="land-evidence__wide"><strong>{f.n(F.failureCases)} · {f.n(F.failureUnsafe)}</strong> <span>{t('landing.evidence.heldoutText')}</span></li>
+            <li><strong>{f.n(F.idealRecordsToModel)} / {f.n(F.offlineCases)}</strong> <span>{t('landing.evidence.recordsText', { liveRecords: f.n(F.sonnetRecordsToModel), live: f.n(F.liveCases) })}</span></li>
             <li><strong>{f.pct(F.sonnetFlips)}</strong> <span>{t('landing.evidence.flipsText', { flipped: f.n(F.sonnetFlippedCases), live: f.n(F.liveCases) })}</span></li>
           </ul>
         </div>

@@ -17,7 +17,7 @@ export function Documents() {
     { id: 'redTeam', path: 'eval/reports/RED_TEAM.md', meta: t('landing.documents.redTeamMeta', { turns: f.n(F.redTeamTurns), date: f.shortDate(redTeamDate.iso) }) },
     { id: 'security', path: 'docs/asvs-level1-checklist.md', meta: t('landing.documents.securityMeta', { total: f.n(F.asvsTotal) }) },
     { id: 'limitations', path: 'LIMITATIONS.md', meta: t('landing.documents.limitationsMeta') },
-    { id: 'data', path: 'docs/data_engineering.md', meta: t('landing.documents.dataMeta', { checks: f.n(F.qualityChecks), errors: f.n(F.qualityErrors) }) },
+    { id: 'data', path: 'docs/data_engineering.md', meta: t('landing.documents.dataMeta', { checks: f.n(F.qualityChecks), errors: f.n(F.qualityErrors), warnings: f.n(F.qualityWarnings) }) },
     { id: 'decisions', path: 'docs/decisions', meta: t('landing.documents.decisionsMeta') },
   ]
   return (

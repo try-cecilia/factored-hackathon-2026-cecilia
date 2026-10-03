@@ -38,7 +38,7 @@ export function RedTeam() {
             </ul>
             <dl className="land-panel__rows" aria-label={t('landing.redTeam.failuresLabel')}>
               {failures.map((id) => (
-                <div key={id}><dt>{t(`landing.redTeam.${id}` as MessageKey)}</dt><dd>{f.n(F.redTeamFailures)}</dd></div>
+                <div key={id}><dt>{t(`landing.redTeam.${id}` as MessageKey, { chats: f.n(F.redTeamMaxChats) })}</dt><dd>{f.n(F.redTeamFailures)}</dd></div>
               ))}
             </dl>
             <p className="land-panel__note">{t('landing.redTeam.note', { open: f.n(F.redTeamOpen) })}</p>

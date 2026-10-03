@@ -21,7 +21,7 @@ export function Science() {
       rows: [
         [t('landing.science.data.customers'), f.n(F.customers)],
         [t('landing.science.data.products'), f.n(F.products)],
-        [t('landing.science.data.checks'), `${f.n(F.qualityChecks)} · ${f.n(F.qualityErrors)}`],
+        [t('landing.science.data.checks'), `${f.n(F.qualityChecks)} · ${f.n(F.qualityErrors)} · ${f.n(F.qualityWarnings)}`],
       ],
       conclusion: t('landing.science.data.conclusion', { threshold: f.n(F.rollbackThreshold) }),
     },
@@ -44,7 +44,7 @@ export function Science() {
       label: t('landing.science.fraud.label'),
       value: f.n(F.fraudAuc),
       line: t('landing.science.fraud.line'),
-      trace: t('landing.science.fraud.trace', { millions: f.millions(F.transactions) }),
+      trace: t('landing.science.fraud.trace', { frauds: f.n(F.fraudRows), negatives: f.n(F.fraudNegatives) }),
       rows: [
         [t('landing.science.fraud.model'), t('landing.science.fraud.modelValue')],
         [t('landing.science.fraud.split'), `${f.n(F.fraudTrainShare)} / ${f.n(F.fraudTestShare)}`],
@@ -57,12 +57,12 @@ export function Science() {
       label: t('landing.science.llm.label'),
       value: f.pct(F.sonnetSafe),
       line: t('landing.science.llm.line', { haiku: f.n(F.haikuSafe) }),
-      trace: t('landing.science.llm.trace', { cases: f.n(F.liveCases), runs: f.n(F.liveRuns), date: f.shortDate(liveRunDate.iso) }),
+      trace: t('landing.science.llm.trace', { resolved: f.n(F.sonnetSafeResolved), eligible: f.n(F.liveEligible), cases: f.n(F.liveCases), date: f.shortDate(liveRunDate.iso) }),
       rows: [
         [t('landing.science.llm.recall'), t('landing.science.llm.recallValue', { sonnet: f.n(F.sonnetRecall), haiku: f.n(F.haikuRecall) })],
         [t('landing.science.llm.cost'), t('landing.science.llm.costValue', { sonnet: f.n(F.sonnetCost), haiku: f.n(F.haikuCost) })],
-        // One model call per turn: ADR-001, "One model call per turn."
-        [t('landing.science.llm.calls'), '1'],
+        // One logical model call per turn (ADR-001), with up to two attempts per provider (docs/operations.md).
+        [t('landing.science.llm.calls'), t('landing.science.llm.callsValue')],
       ],
       conclusion: t('landing.science.llm.conclusion'),
     },
@@ -92,7 +92,7 @@ export function Science() {
           <h3 className="land-eyebrow land-eyebrow--muted">{t('landing.science.method.title')}</h3>
           <ul className="land-method__list">
             <li><strong>{t('landing.science.method.judge')}</strong> <span>{t('landing.science.method.judgeText')}</span></li>
-            <li><strong>{t('landing.science.method.heldout')}</strong> <span>{t('landing.science.method.heldoutText', { cases: f.n(F.heldoutCases) })}</span></li>
+            <li><strong>{t('landing.science.method.heldout')}</strong> <span>{t('landing.science.method.heldoutText', { cases: f.n(F.failureCases) })}</span></li>
             <li><strong>{t('landing.science.method.stats')}</strong> <span>{t('landing.science.method.statsText', { runs: f.n(F.liveRuns) })}</span></li>
             <li><strong>{t('landing.science.method.tracing')}</strong> <span>{t('landing.science.method.tracingText')}</span></li>
             <li><strong>{t('landing.science.method.monitoring')}</strong> <span>{t('landing.science.method.monitoringText')}</span></li>

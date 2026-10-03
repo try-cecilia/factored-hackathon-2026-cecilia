@@ -10,7 +10,7 @@ export function Limits() {
   const f = useFigures()
   const items = [
     [t('landing.limits.zero'), t('landing.limits.zeroText', { live: f.n(F.liveCases), liveBound: f.n(F.liveUpperBound), offline: f.n(F.offlineCases), offlineBound: f.n(F.offlineUpperBound) })],
-    [t('landing.limits.sample'), t('landing.limits.sampleText', { live: f.n(F.liveCases), offline: f.n(F.offlineCases), runs: f.n(F.liveRuns), safe: f.n(F.sonnetSafe), low: f.n(F.sonnetSafeLow), high: f.n(F.sonnetSafeHigh) })],
+    [t('landing.limits.sample'), t('landing.limits.sampleText', { live: f.n(F.liveCases), offline: f.n(F.offlineCases), runs: f.n(F.liveRuns), eligible: f.n(F.liveEligible), resolved: f.n(F.sonnetSafeResolved), safe: f.n(F.sonnetSafe), low: f.n(F.sonnetSafeLow), high: f.n(F.sonnetSafeHigh) })],
     [t('landing.limits.synthetic'), t('landing.limits.syntheticText')],
     [t('landing.limits.sandbox'), t('landing.limits.sandboxText')],
     [t('landing.limits.security'), t('landing.limits.securityText', { missing: f.n(F.asvsMissing) })],
