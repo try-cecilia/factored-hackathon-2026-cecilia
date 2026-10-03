@@ -39,7 +39,7 @@ function known<T extends string>(list: readonly T[], value: string): value is T 
 // so), so an unrelated message does not move the scenario. Each reply says which message it answers (`to`), because a retry's
 // reply comes late, after other messages.
 
-export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations, open, ended, send, onSend, retry, overlay, copy, onSessionChanged, onClose }: {
+export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations, open, ended, send, onSend, retry, overlay, copy, onSessionChanged, onClose, onReady }: {
   scenarios: DemoScenario[]
   sessionRef: string
   entries: Entry[]
@@ -61,6 +61,11 @@ export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations
   copy: ConversationCopy
   onSessionChanged: () => Promise<void>
   onClose: () => void
+  /**
+   * Hands out the panel's way to load a scenario by its id (the same as its card's button: new session, then its first message), for
+   * the one-click demo's welcome in the chat. True when the scenario's session started.
+   */
+  onReady?: (run: (id: string) => Promise<boolean>) => void
 }) {
   const t = useT()
   const { locale } = useI18n()
@@ -99,21 +104,36 @@ export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations
 
   useEffect(() => { if (seen) void refreshBank() }, [seen, refreshBank, sessionRef, escalations, replies])
 
-  async function run(scenario: DemoScenario) {
+  async function run(scenario: DemoScenario): Promise<boolean> {
     setBusy(true)
     setNote(null)
     try {
       const result = await startScenario({ data: { id: scenario.id } })
-      if (!result.ok) return setNote('demo.scenarios.failed')
+      if (!result.ok) {
+        setNote('demo.scenarios.failed')
+        return false
+      }
       setActive({ scenario, from: sessionRef, base: null, steps: [] })
       setModelDown(scenario.fault === 'llm_outage')
       await onSessionChanged()
+      return true
     } catch {
       setNote('demo.scenarios.failed')
+      return false
     } finally {
       setBusy(false)
     }
   }
+
+  // The welcome's cards load a scenario exactly as its card here does: through the latest `run`, found by id among the API's scenarios.
+  const runRef = useRef(run)
+  runRef.current = run
+  useEffect(() => {
+    onReady?.(async (id) => {
+      const scenario = scenarios.find((s) => s.id === id)
+      return scenario ? runRef.current(scenario) : false
+    })
+  }, [onReady, scenarios])
 
   async function fault(kind: DemoFault) {
     setNote(null)

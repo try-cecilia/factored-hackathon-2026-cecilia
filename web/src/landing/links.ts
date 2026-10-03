@@ -1,7 +1,8 @@
 /**
- * Where the landing's links go, in one place. "Probar la demo" and "Entrar a la demo" take `demoEntry`: the one-click entry
- * is being designed, so for now it is the sign-in, which lists the demo accounts when the API runs with DEMO_MODE. When the
- * one-click entry exists, only this constant changes.
+ * Where the landing's links go, in one place. "Probar la demo" and "Entrar a la demo" are the one-click entry when the demo console
+ * is on (DemoEntryCta, demo-entry.tsx: one click signs in as the default test customer and lands in the chat). Their address is
+ * `demoEntry`, the sign-in, which lists the demo accounts when the API runs with DEMO_MODE: where they go with the console off, or
+ * before the page has its script.
  */
 export const demoEntry = { to: '/login' } as const
 export const signInEntry = { to: '/login' } as const

@@ -1,13 +1,18 @@
 import { Link, useNavigate, useRouter } from '@tanstack/react-router'
 import { lazy, Suspense, use, useCallback, useEffect, useId, useRef, useState, type ReactNode, type RefObject } from 'react'
 import type { DemoScenario } from '../chat/types'
-import { useConversation } from '../chat/ConversationProvider'
+import { useConversation, type CaseRow } from '../chat/ConversationProvider'
+import { isOpenCase } from '../chat/conversation'
 import { CopyConversation, useConversationCopy } from '../chat/CopyConversation'
 import { useSessionNotice } from '../chat/useSessionNotice'
 import { LockIcon } from '../chat/icons'
 import { useT } from '../i18n/context'
 import { logout, type Session } from '../server/auth.functions'
 import type { DemoKit } from '../server/demo.functions'
+import { demoEntries } from '../server/demo-entry'
+import { BankBridgeCard } from '../routes/-demo/BankBridgeCard'
+import { DemoBar } from '../routes/-demo/DemoBar'
+import { DemoWelcome } from '../routes/-demo/DemoWelcome'
 import {
   Button,
   IconButton,
@@ -60,8 +65,19 @@ export function AppShell({ session, kit, children }: { session: Session; kit: Pr
   // Wide screens show the demo panel from the start; narrow ones keep it behind its button until the reader asks. Without the
   // sandbox there is neither panel nor button, so on a narrow screen it can never be opened.
   const [demoChoice, setDemoChoice] = useState<boolean | null>(null)
-  const demoOpen = demoChoice ?? !narrow
-  const setDemoOpen = useCallback((next: boolean | ((open: boolean) => boolean)) => setDemoChoice((current) => (typeof next === 'function' ? next(current ?? !narrow) : next)), [narrow])
+  // The one-click demo (the kit's console): its welcome in the chat is the way in, so the panel of guided scenarios starts closed
+  // there too, behind its button. The welcome's cards run the panel's own scenarios (`runScenario`, handed out by the panel).
+  const [entriesOfKit, setEntriesOfKit] = useState<ReturnType<typeof demoEntries>>([])
+  useEffect(() => {
+    let live = true
+    void kit.then((resolved) => live && setEntriesOfKit(demoEntries(resolved)), () => undefined)
+    return () => void (live = false)
+  }, [kit])
+  const oneClick = entriesOfKit.length > 0
+  const [runScenario, setRunScenario] = useState<((id: string) => Promise<boolean>) | null>(null)
+  const onPanelReady = useCallback((run: (id: string) => Promise<boolean>) => setRunScenario(() => run), [])
+  const demoOpen = demoChoice ?? (!narrow && !oneClick)
+  const setDemoOpen = useCallback((next: boolean | ((open: boolean) => boolean)) => setDemoChoice((current) => (typeof next === 'function' ? next(current ?? (!narrow && !oneClick)) : next)), [narrow, oneClick])
   const [loggingOut, setLoggingOut] = useState(false)
   const [logoutFailed, setLogoutFailed] = useState(false)
   // The case being looked at. `open` slides the view in; the case stays while it slides out, and `seen` counts the openings, so
@@ -127,9 +143,15 @@ export function AppShell({ session, kit, children }: { session: Session; kit: Pr
   const escalations = entries.filter((e) => e.role === 'assistant' && e.reply.disposition === 'ESCALATE').length
   const detail = [session.segment, session.country].filter(Boolean).join(' · ')
 
+  const bridge = <Suspense fallback={null}><DemoBridge kit={kit} cases={cases} waiting={sending} /></Suspense>
+
   return (
-    <ShellProvider value={{ showCase, copied: copy.state }}>
+    <ShellProvider value={{ showCase, copied: copy.state, bridge, welcome: oneClick ? <DemoWelcome entries={entriesOfKit} run={runScenario} /> : undefined }}>
       <a className="skip" href="#main" inert={behind ? true : undefined}>{t('common.skipToContent')}</a>
+      <div className="demo-frame">
+      <Suspense fallback={null}>
+        <CustomerDemoBar kit={kit} session={session} over={over} holdBank={sending} inert={behind} />
+      </Suspense>
       <div className="shell" data-menu={menuOpen ? 'open' : undefined} data-demo={demoOpen ? 'open' : undefined} data-case={caseOpen ? 'open' : undefined}>
         <div
           id="shell-side"
@@ -221,6 +243,7 @@ export function AppShell({ session, kit, children }: { session: Session; kit: Pr
                 copy={copy}
                 onSessionChanged={() => router.invalidate()}
                 onClose={() => setDemoOpen(false)}
+                onReady={onPanelReady}
               />
             )}
           </DemoColumn>
@@ -250,9 +273,31 @@ export function AppShell({ session, kit, children }: { session: Session; kit: Pr
           )}
         </div>
       </div>
+      </div>
       <ToastRegion>{logoutFailed && <Toast variant="error" onClose={() => setLogoutFailed(false)}>{t('shell.signOutFailed')}</Toast>}</ToastRegion>
     </ShellProvider>
   )
+}
+
+/** The DEMO bar of the one-click demo over the customer's window: only with the demo console on (DEMO_CONSOLE=1, getDemoKit). */
+// `over`: the end the chat already knows (the API said the session is gone, or its countdown reached 0), which the bar shows at once
+// instead of counting on from the first reading. `holdBank`: a message on its way, whose answer the chat must be mounted to receive.
+function CustomerDemoBar({ kit, session, over, holdBank, inert }: { kit: Promise<DemoKit>; session: Session; over: boolean; holdBank: boolean; inert: boolean }) {
+  const resolved = use(kit)
+  if (!resolved.enabled || resolved.console !== true) return null
+  const role = demoEntries(resolved).find((e) => e.customer_id === session.customer_id)?.role ?? null
+  return <DemoBar view="customer" sessionRef={session.session_ref} expiresIn={session.expires_in} ended={over} role={role} holdBank={holdBank} inert={inert} />
+}
+
+/** "Tu caso ya llegó al banco", for the newest case of the conversation while it is open (no person has decided it). */
+function DemoBridge({ kit, cases, waiting }: { kit: Promise<DemoKit>; cases: CaseRow[]; waiting: boolean }) {
+  const resolved = use(kit)
+  const newest = cases[0]
+  if (!resolved.enabled || resolved.console !== true || !newest) return null
+  // Only once its state is read: a decided case must not flash the card while the read is on its way.
+  const { state } = newest
+  if (state.state !== 'ready' || !isOpenCase(state.status)) return null
+  return <BankBridgeCard ticketId={newest.ref.ticketId} waiting={waiting} />
 }
 
 function DemoToggle({ kit, open, onToggle }: { kit: Promise<DemoKit>; open: boolean; onToggle: () => void }) {

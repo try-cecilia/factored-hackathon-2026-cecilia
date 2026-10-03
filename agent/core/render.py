@@ -60,10 +60,35 @@ MSG = {
                             "pt": "Novidade do seu caso: um atendente analisou e não pode resolvê-lo por este canal. Se precisar de mais ajuda, entre em contato com a central de atendimento do banco."},
     "case_resolved": {"es": "Novedad de tu caso: un agente lo resolvió. Mensaje del agente: «{message}»",
                       "pt": "Novidade do seu caso: um atendente resolveu. Mensagem do atendente: «{message}»"},
+    # Resolved with a predefined result (RESOLVE_RESULT): the bank's fixed words, and the person's own, if any, in the same quote.
+    "case_resolved_result": {"es": "Novedad de tu caso: un agente lo resolvió. {result}",
+                             "pt": "Novidade do seu caso: um atendente resolveu. {result}"},
+    "case_resolved_result_message": {"es": "Novedad de tu caso: un agente lo resolvió. {result} Mensaje del agente: «{message}»",
+                                     "pt": "Novidade do seu caso: um atendente resolveu. {result} Mensagem do atendente: «{message}»"},
     "case_handed_back": {"es": "Novedad de tu caso: un agente lo devolvió al asistente. Cuéntame en qué más puedo ayudarte.",
                          "pt": "Novidade do seu caso: um atendente devolveu ao assistente. Conte como posso ajudar."},
     "case_stale": {"es": "Novedad de tu caso: al revisarlo, el movimiento ya no figura como pendiente, así que no hizo falta abrir un rastreo.",
                    "pt": "Novidade do seu caso: ao revisar, a movimentação já não consta como pendente, então não foi preciso abrir um rastreamento."},
+}
+# The predefined results of a resolution (agent/policy/desk.py RESULTS), as the customer reads them: what a person found and
+# what comes next, never an action done (resolving does none; tests/test_desk.py holds every text to that).
+RESOLVE_RESULT = {
+    "charge_confirmed": {"es": "Revisamos el movimiento y corresponde a una operación válida de tu cuenta.",
+                         "pt": "Analisamos a movimentação e ela corresponde a uma operação válida da sua conta."},
+    "movement_settled": {"es": "Revisamos el movimiento y ya figura como completado.",
+                         "pt": "Analisamos a movimentação e ela já consta como concluída."},
+    "trace_not_possible": {"es": "Revisamos el movimiento y no se puede rastrear por este canal. Te contactaremos al número registrado.",
+                           "pt": "Analisamos a movimentação e não é possível rastreá-la por este canal. Entraremos em contato pelo número cadastrado."},
+    "needs_specialist": {"es": "Revisamos tu caso y necesita un área especializada del banco. Te contactaremos al número registrado.",
+                         "pt": "Analisamos o seu caso e ele precisa de uma área especializada do banco. Entraremos em contato pelo número cadastrado."},
+    "info_checked": {"es": "Revisamos tu consulta en el sistema del banco y los datos de tu cuenta están en orden.",
+                     "pt": "Analisamos a sua consulta no sistema do banco e os dados da sua conta estão em ordem."},
+    "no_action_needed": {"es": "Revisamos tu caso y no hace falta ninguna acción de tu parte.",
+                         "pt": "Analisamos o seu caso e não é necessária nenhuma ação da sua parte."},
+    "will_contact": {"es": "Revisamos tu caso. Te contactaremos al número registrado.",
+                     "pt": "Analisamos o seu caso. Entraremos em contato pelo número cadastrado."},
+    "call_the_bank": {"es": "Revisamos tu caso. Para continuar, puedes comunicarte con la línea de atención del banco.",
+                      "pt": "Analisamos o seu caso. Para continuar, entre em contato com a central de atendimento do banco."},
 }
 TXN_TYPE = {"es": {"Transfer": "transferencia", "Payment": "operación de pago", "Deposit": "operación de depósito"},
             "pt": {"Transfer": "transferência", "Payment": "operação de pagamento", "Deposit": "operação de depósito"}}
@@ -78,14 +103,19 @@ STATUS = {"es": {"Active": "activa", "Blocked": "bloqueada", "Closed": "cerrada"
 
 
 def case_update(status: str, lang: str, trace: dict | None = None, message: str | None = None,
-                had_action: bool = True) -> str | None:
+                had_action: bool = True, result: str | None = None) -> str | None:
     """The customer-facing line for what a person did with their ticket, or None for a status with nothing to say.
-    `message` is a resolution's words to the customer; `had_action` says whether the ticket carried a trace to decide."""
-    entry = MSG.get("case_rejected_plain" if status == "rejected" and not had_action else f"case_{status}")
+    `message` is a resolution's words to the customer; `had_action` says whether the ticket carried a trace to decide;
+    `result` is the predefined result a resolution named, said before the message, which never replaces it."""
+    key = "case_rejected_plain" if status == "rejected" and not had_action else f"case_{status}"
+    if status == "resolved" and result in RESOLVE_RESULT:
+        key = "case_resolved_result_message" if message else "case_resolved_result"
+    entry = MSG.get(key)
     if entry is None:
         return None
-    result = entry[lang].format(tid=(trace or {}).get("trace_id", ""), message=message or "")
-    return result + trace_service_text(trace.get("service_rules", []), lang) if trace and status == "approved" else result
+    line = entry[lang].format(tid=(trace or {}).get("trace_id", ""), message=message or "",
+                              result=RESOLVE_RESULT[result][lang] if key.startswith("case_resolved_result") else "")
+    return line + trace_service_text(trace.get("service_rules", []), lang) if trace and status == "approved" else line
 
 
 # The day units a deadline rule may have (agent/policy/payment_rules.DAY_UNITS), in words: (singular, plural) per language.

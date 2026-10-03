@@ -31,6 +31,7 @@ promise about response time: this is a prototype with no on-call.
 | Sessions bound to a credential check; 192-bit tokens, stored hashed; logout, revoke and expiry | Implemented | `agent/session/`, `tests/test_api.py` |
 | Access matrix: one row per route, four separate credentials, startup refuses an unguarded route | Implemented | `api/access.py`, `tests/test_access_matrix.py` |
 | Operator actions attributed to a named key, never to a field the operator sends | Implemented, no MFA | `agent/session/operators.py` |
+| The jury demo's console (`/demo/desk/*`): a visitor resolves, as the bank, the cases their own session filed. Only with `DEMO_MODE=1` and `DEMO_CONSOLE=1`, each exactly `1` (any other value is the 404 of a route that does not exist, and startup refuses a console route without both switches); the credential is the customer's live session of an account in `DEMO_PUBLIC_CUSTOMERS`, with no operator key or session on the path; every ticket must have been filed by the caller's session, checked in the API (another visitor's is the same 404 as none); the customer's context, the chat's news of a case and `/case/{id}` are limited to that session on a public account; the actor is always `demo`, never a field of the body, and no real operator may be named `demo`; with a switch off, any request under `/demo/desk` is the 404 of a missing route; per-session and per-account rate limits | Implemented, for the sandbox only; limits below (gap 10) | `api/demo_desk.py`, `api/access.py`, `agent/core/orchestrator.py`, `tests/test_demo_desk.py`, `tests/test_access_matrix.py`, `tests/test_desk.py` |
 | Model never decides or acts; replies are templates or verified facts | Implemented | ADR-001, `agent/core/render.py` |
 | One confirmed action, idempotent, read back | Implemented | ADR-002, `api/idempotency.py` |
 | Masking of customer text before a model | Implemented, with known holes | `agent/llm/privacy.py`, `LIMITATIONS.md` |
@@ -62,7 +63,8 @@ promise about response time: this is a prototype with no on-call.
 3. **Operators have no MFA.** Keys are named and static, held in the environment, rotated by hand (V4.3.1). The admin
    role is one shared read-only key.
 4. **The jury deployment runs with `DEMO_MODE=1`** (`render.yaml`), so the demo-only routes, including the one that
-   hands out test PINs, exist there. They answer 404 everywhere else.
+   hands out test PINs, exist there. They answer 404 everywhere else. It also runs with `DEMO_CONSOLE=1`, so anyone can act
+   as the bank on the cases their own sandbox session filed (gap 10).
 5. **The team's console keys sit in a tracked file of the private repository** (`CLAVES_CONSOLA.md`). The public export
    removes it from every commit, and the keys must be rotated if access to the private repository ever widens.
 6. **CSRF on the customer's web login and chat has no token and no check of our own** (V4.2.2). It rests on `SameSite=Lax` and on the framework's CSRF middleware, which `web/src/start.ts` registers for every server function and which answers 403 to a cross-site call. `web/src/start.test.ts` pins that it is registered and `web/tests/http/csrf-customer.test.ts` that the sign-in function answers 403, so an upgrade or a change to the start instance that dropped it would be caught. The rules are the framework's: for instance, it lets a call through when `Sec-Fetch-Site` says `same-origin` whatever `Origin` says, which a browser never sends. The operator's decisions and forms add our own origin check, which is stricter.
@@ -70,6 +72,14 @@ promise about response time: this is a prototype with no on-call.
    (`LIMITATIONS.md`).
 8. **No self-service data export or removal, and no privacy notice** in the web (V8.3.2, V8.3.3).
 9. **Traces and tickets keep customer data**, with no redaction before they are exported anywhere (V7.1.2). Also, when the lookup of a customer's recent activity fails while a ticket is filed, the ticket's evidence note keeps the exception's text, not only its type (`agent/policy/escalation.py`); the fix is a separate change.
+10. **The demo's console trusts the public sandbox accounts' design, not a person.** Their PINs are published, so the
+    console's only barrier between visitors is the session: a visitor can never reach another's case, but anyone can sign in
+    and decide their own, and so write up to 500 characters that their own session reads back as "Mensaje del agente". The
+    visitor's words are sanitized as an operator's (one line, card numbers masked, no «») and always follow a fixed result of
+    the case's family, but they are not reviewed. What visitors share on a public account is still shared: the per-account
+    rate limits, the trace of a movement (one per customer and movement), and the trace reset of the "pending transfer"
+    scenario, which clears it for every visitor. A case a visitor claims and leaves stays claimed by `demo` in the team's
+    console until the retention purge. Signing in again is a new session, which no longer sees the earlier cases.
 
 ## What this document does not show
 

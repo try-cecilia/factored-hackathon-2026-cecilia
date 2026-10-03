@@ -26,6 +26,7 @@ from agent.llm.client import LLMUnavailable
 from agent.policy.escalation import default_queue
 from agent.session.auth import SessionError, default_store, session_ref
 from agent.session.identity import IdentityUnavailable, derive_test_pin
+from agent.session.public_accounts import public_customer_ids  # the canonical list (DEMO_PUBLIC_CUSTOMERS)
 from agent.tools import account_tools
 from agent.tools.db import get_connection
 from agent.policy.payment_rules import deadline_business_days
@@ -39,13 +40,6 @@ MAX_FLAGGED_SESSIONS = 10_000
 
 def enabled() -> bool:
     return os.environ.get("DEMO_MODE") == "1"
-
-
-def public_customer_ids() -> list[str]:
-    """The sandbox accounts whose test credentials the demo may publish or use, in the order configured: the single canonical
-    list (DEMO_PUBLIC_CUSTOMERS, which ops/entrypoint.sh fills with the demo roles in the sandbox). Read on each call, so
-    nothing cached outlives a change; empty or unset means no public account at all."""
-    return list(dict.fromkeys(c.strip() for c in os.environ.get("DEMO_PUBLIC_CUSTOMERS", "").split(",") if c.strip()))
 
 
 def require_demo() -> None:

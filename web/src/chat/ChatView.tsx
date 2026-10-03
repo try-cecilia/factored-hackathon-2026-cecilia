@@ -31,7 +31,7 @@ export function ChatView({ session }: { session: Session }) {
   const navigate = useNavigate()
   const { href } = useLocation()
   const { entries, cases, sending, ended, historyFailed, send, retry, reload } = useConversation()
-  const { showCase, copied } = useShell()
+  const { showCase, copied, bridge, welcome } = useShell()
   const composer = useRef<ComposerHandle>(null)
   const end = useRef<HTMLDivElement>(null)
   const content = useRef<HTMLDivElement>(null)
@@ -96,7 +96,8 @@ export function ChatView({ session }: { session: Session }) {
               <Button variant="ghost" size="sm" tinted loading={reloading} onClick={() => void reloadHistory()}>{t('conversation.history.retry')}</Button>
             </div>
           )}
-          {empty && (
+          {empty && welcome}
+          {empty && !welcome && (
             <div className="chat__empty">
               <img src="/cecilia-avatar.png" alt="" width={112} height={112} />
               <h2>{t('conversation.empty.title')}</h2>
@@ -119,6 +120,7 @@ export function ChatView({ session }: { session: Session }) {
         <div ref={end} />
       </div>
       <div className="chat__foot">
+        {bridge}
         <div className="chat__notices" role="status">
           {/* How "copy conversation" went: here, where it covers no message, and the button says it to the screen reader. */}
           {copied && <SystemNote tone={copied === 'ok' ? 'success' : 'neutral'}><CopyNotice state={copied} /></SystemNote>}
@@ -137,7 +139,7 @@ export function ChatView({ session }: { session: Session }) {
           disabled={over || !online}
           pending={sending}
           hint={over ? t('conversation.composer.sessionEnded') : t('conversation.composer.offline')}
-          showSuggestions={entries.length === 0}
+          showSuggestions={entries.length === 0 && !welcome}
           onSend={sendText}
         />
       </div>

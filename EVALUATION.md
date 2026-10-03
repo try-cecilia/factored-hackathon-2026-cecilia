@@ -17,7 +17,7 @@ projections are labeled as such and never mixed.
 | | Human agents (measured, bank data) | Keyword bot (baseline) | This system |
 |---|---|---|---|
 | Queue wait | 120 s | 0 s | 0 s |
-| Handling time | 221 s (≈3.7 min) | 14.4 ms per case (p95 78.0 ms) | 25.9 ms per case (p95 110.0 ms) **excluding the LLM** |
+| Handling time | 221 s (≈3.7 min) | 2.4 ms per case (p95 8.9 ms) | 5.0 ms per case (p95 17.9 ms) **excluding the LLM** |
 | Total per inquiry | **≈341 s (≈5.7 min)** | milliseconds | **1.2 s p50, 2.6 s p95 per case with Claude Sonnet 5** (held-out live run) |
 | Resolved | 91.5% first-contact | 70.2% safe automated | **95.0% with Sonnet 5 (live)** · 99.2% ideal model (upper bound) · 60.5% adversarial model |
 | Required escalations missed | not in the data | 72 / 168 | 0 / 168 offline · 1 / 42 live (Sonnet 5, in runs 1 and 2 of 3; 0 in run 3) |
@@ -371,7 +371,7 @@ The three round alike, and so does that test: the shortest decimal form of the r
 | **Unsafe outcomes** | **0 / 548** | **0 / 548** | **0 / 548** |
 | Cases that sent a customer record to the model | n/a | 0 / 548 | 0 / 548 |
 | Incorrect, not unsafe | 26 | 0 | 0 |
-| Latency p50 / p95 per case (non-LLM, local) | 14.4 / 78.0 ms | 25.9 / 110.0 ms | 35.9 / 109.6 ms |
+| Latency p50 / p95 per case (non-LLM, local) | 2.4 / 8.9 ms | 5.0 / 17.9 ms | 5.4 / 17.7 ms |
 
 The latencies were measured on the machine that regenerated the reports and are not comparable to the previous run's;
 `make sync-eval-latencies` copies them here and into the landing, and `make check-readme` fails if they are left behind.
@@ -418,7 +418,7 @@ and country (MX/CO/AR) is reported per cell in `SYSTEM_EVAL.md`.
   attribute enters any decision.
 - n = 60–120 per cell, so these are small-sample comparisons.
 
-> Live figures measured on other code: measured fingerprint `ad2212c4c416`; current fingerprint `ef46dd15c428` (formatting amounts by the customer's country, telling the customer why a trace request that matched nothing goes to a person, the judge's check of that reply, the verified receipt of an opened trace, several payments traced in one conversation, the payment provenance shown for the account, and language detection that keeps a Spanish "no" and a tie in the conversation's language changed the measured code after the live run; the offline reports are regenerated on the current one).
+> Live figures measured on other code: measured fingerprint `ad2212c4c416`; current fingerprint `e0270070ce9b` (formatting amounts by the customer's country, telling the customer why a trace request that matched nothing goes to a person, the judge's check of that reply, the verified receipt of an opened trace, several payments traced in one conversation, the payment provenance shown for the account, language detection that keeps a Spanish "no" and a tie in the conversation's language, and the demo console's case notices and predefined results changed the measured code after the live run; the offline reports are regenerated on the current one).
 
 **Live models (test split, the 138-case sample, 3 runs each), measured on 2026-10-03 on the code this evaluation describes
 (prompt 3.2.1, policy fingerprint `ad2212c4c416`, commit `8578e450`).** `make eval-live` →

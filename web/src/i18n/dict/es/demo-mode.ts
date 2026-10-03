@@ -1,0 +1,96 @@
+/** The one-click demo (DEMO_MODE and DEMO_CONSOLE only): the welcome in the chat, the DEMO bar, the bridge card and the bank's side. */
+export const demoMode = {
+  badge: 'DEMO',
+  entry: {
+    entering: 'Entrando a la demo…',
+    errors: {
+      failed: 'No se pudo entrar a la demo. Intentar de nuevo.',
+      limited: 'Demasiados intentos seguidos. Intentar de nuevo en {seconds} s.',
+    },
+  },
+  welcome: {
+    title: 'Estás en la demo como un cliente de prueba.',
+    body: 'Puedes probar una de estas situaciones o escribir lo que quieras. Después, en «Banco», verás lo que ve el banco: los casos que pasan a una persona y los rastreos que abriste.',
+    label: 'Situaciones para probar',
+    cards: {
+      cuentas: { title: 'Consultar saldos y reclamar un cargo', body: 'Varias cuentas y una tarjeta de crédito' },
+      pendiente: { title: 'Rastrear una transferencia que no llegó', body: 'Cecilia propone el rastreo y lo abre con tu «sí»' },
+      portugues: { title: 'Hablar en portugués', body: 'Un cliente que escribe en portugués, y Cecilia le responde igual' },
+    },
+    starting: 'Preparando la situación…',
+    failed: 'No se pudo preparar esa situación. Intentar de nuevo.',
+    note: 'Son cuentas inventadas que comparten todos los visitantes: no escribir datos reales.',
+  },
+  bar: {
+    label: 'Modo demo',
+    customer: 'Estás viendo la app como un cliente de prueba',
+    bank: 'Estás viendo la consola del banco. Solo aparecen los casos que abriste.',
+    switch: 'Ver como',
+    asCustomer: 'Cliente',
+    bankHint: 'Banco: atiende tu caso como lo haría una persona del banco.',
+    bankHintClose: 'Entendido',
+    asBank: 'Banco',
+    waiting: 'Esperando la respuesta de Cecilia',
+    exit: 'Salir de la demo',
+    exiting: 'Saliendo…',
+    endsIn: 'La demo termina en {time}',
+    endsInMinutes: 'Quedan menos de {n} minutos de demo',
+    ended: 'La demo terminó',
+    reenter: 'Entrar otra vez',
+    reentering: 'Entrando…',
+    reenterFailed: 'No se pudo entrar otra vez.',
+  },
+  bridge: {
+    title: 'Tu caso ya llegó al banco',
+    body: 'Puedes ver cómo lo recibe una persona y resolverlo tú.',
+    action: 'Verlo del lado del banco',
+  },
+  desk: {
+    pageTitle: {
+      queue: 'Tus casos · Banco demo · Cecilai',
+      ticket: 'Caso · Banco demo · Cecilai',
+      traces: 'Rastreos · Banco demo · Cecilai',
+    },
+    brand: 'Banco',
+    nav: { skip: 'Atajos', label: 'Banco demo', cases: 'Tus casos', traces: 'Rastreos', menu: 'Abrir el menú', closeMenu: 'Cerrar el menú' },
+    note: 'En la demo no hay monitoreo ni registros de otros visitantes.',
+    queue: {
+      title: 'Tus casos',
+      caption: 'Casos que abrió esta sesión',
+      columns: { priority: 'Prioridad', ticket: 'Caso', request: 'Pedido', status: 'Estado' },
+      emptyTitle: 'Todavía no hay casos',
+      emptyBody: 'Los casos que Cecilia pase a una persona en esta sesión aparecen aquí.',
+    },
+    help: {
+      title: '¿Ver otro caso?',
+      body: 'En «Cliente», pedirle a Cecilia algo que necesite una persona, como un cargo que no reconoces. Aparece aquí al momento.',
+    },
+    choose: { title: 'Ningún caso abierto', body: 'Al elegir un caso de la lista, su detalle aparece aquí.' },
+    back: 'Tus casos',
+    takenByOther: 'Otra persona del banco tomó este caso.',
+    mine: 'Lo tomaste tú',
+    traces: {
+      title: 'Rastreos',
+      caption: 'Rastreos que pidió esta sesión',
+      columns: { trace: 'Rastreo', movement: 'Movimiento', status: 'Estado', sla: 'Plazo' },
+      sla: '{days} días hábiles',
+      empty: 'Esta sesión todavía no pidió rastreos.',
+    },
+    expired: {
+      title: 'La demo terminó',
+      body: 'La sesión de prueba dura 15 minutos desde que se entra. Al entrar otra vez empieza una sesión nueva, sin casos.',
+    },
+  },
+  // Labels of the predefined results the API offers for each family of case (GET /demo/desk/tickets/{id}, resolve_results), by
+  // code. A code with no label here is shown as it comes.
+  results: {
+    charge_confirmed: 'El cargo es una operación válida',
+    movement_settled: 'El movimiento ya figura completado',
+    trace_not_possible: 'No se puede rastrear por este canal',
+    needs_specialist: 'Necesita un área especializada',
+    info_checked: 'Los datos de la cuenta están en orden',
+    no_action_needed: 'No hace falta ninguna acción',
+    will_contact: 'El banco contactará al cliente',
+    call_the_bank: 'Comunicarse con la línea del banco',
+  } as Record<string, string>,
+}

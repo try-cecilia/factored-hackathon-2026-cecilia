@@ -48,7 +48,8 @@ before(async () => {
   base = `http://127.0.0.1:${port}`
   server = spawn(process.execPath, ['serve.mjs'], {
     cwd: web,
-    env: { ...process.env, PORT: String(port), HOST: '127.0.0.1', NODE_ENV: 'production', WEB_PUBLIC_ORIGIN: base, AGENT_API_URL: `http://127.0.0.1:${(api.address() as AddressInfo).port}` },
+    // The one-click demo on, so its server functions below run for real (its bank side reads the customer's own data).
+    env: { ...process.env, PORT: String(port), HOST: '127.0.0.1', NODE_ENV: 'production', WEB_PUBLIC_ORIGIN: base, AGENT_API_URL: `http://127.0.0.1:${(api.address() as AddressInfo).port}`, DEMO_MODE: '1', DEMO_CONSOLE: '1' },
     stdio: 'ignore',
   })
   for (let i = 0; i < 100; i++) {
@@ -103,6 +104,10 @@ describe('everything the BFF answers with a person\'s data forbids a cache', () 
     ['a ticket', 'loadTicket', { ticket_id: 'TKT-0001-ABCD' }, asOperator],
     ['a customer\'s context', 'loadCustomerContext', { ticket_id: 'TKT-0001-ABCD' }, asOperator],
     ['a read that fails validation', 'loadTicket', { ticket_id: '!' }, asOperator],
+    ['the demo\'s bank view', 'getDemoDeskView', undefined, () => customer],
+    ['the demo\'s cases', 'loadDemoQueue', undefined, () => customer],
+    ['a case of the demo', 'loadDemoTicket', { ticket_id: 'b99d8390-4d20' }, () => customer],
+    ['a customer\'s context in the demo', 'loadDemoCustomerContext', { ticket_id: 'b99d8390-4d20' }, () => customer],
   ]
   for (const [label, name, data, headers] of reads) {
     test(`the server function that reads ${label} (GET ${name})`, async () => {
@@ -116,6 +121,10 @@ describe('everything the BFF answers with a person\'s data forbids a cache', () 
   test('a server function that writes (the operator\'s decision) and a form post answer the same way', async () => {
     const decision = await call('actOnTicket', { data: { ticket_id: 'TKT-0001-ABCD', action: 'claim' }, headers: { Cookie: operator } })
     assert.equal(decision.headers.get('cache-control'), PRIVATE)
+    const demoDecision = await call('actOnDemoTicket', { data: { ticket_id: 'b99d8390-4d20', action: 'claim' }, headers: customer })
+    assert.equal(demoDecision.headers.get('cache-control'), PRIVATE)
+    const entry = await call('enterDemo', { data: { role: 'cuentas' } })
+    assert.equal(entry.headers.get('cache-control'), PRIVATE)
     const form = await fetch(`${base}/operador/salir`, { method: 'POST', redirect: 'manual', headers: { Origin: base, 'Sec-Fetch-Site': 'same-origin', Cookie: operator } })
     assert.equal(form.headers.get('cache-control'), PRIVATE)
   })

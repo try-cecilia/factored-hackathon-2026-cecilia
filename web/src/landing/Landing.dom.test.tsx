@@ -1,15 +1,23 @@
-import { cleanup, screen, within } from '@testing-library/react'
+import { cleanup, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renderWithI18n } from '../test/render'
 import { figures as F, formatDate, formatFigure, offlineRunDate } from './figures'
+import { DemoEntryProvider } from './demo-entry'
 import { Landing } from './Landing'
 import { consoleEntry, demoEntry, sections, signInEntry } from './links'
 
+const navigate = vi.hoisted(() => vi.fn(async () => {}))
+const enterDemo = vi.hoisted(() => vi.fn())
 vi.mock('@tanstack/react-router', () => ({
-  Link: ({ to, children, ...rest }: { to: string; children?: ReactNode }) => <a href={to} {...rest}>{children}</a>,
+  Link: ({ to, search, children, ...rest }: { to: string; search?: Record<string, string>; children?: ReactNode }) => (
+    <a href={search ? `${to}?${new URLSearchParams(search)}` : to} {...rest}>{children}</a>
+  ),
   useRouter: () => ({ invalidate: async () => {} }),
+  useNavigate: () => navigate,
 }))
+vi.mock('../server/demo.functions', () => ({ enterDemo }))
 vi.mock('../server/locale.functions', () => ({ setLocale: vi.fn() }))
 
 afterEach(cleanup)
@@ -96,12 +104,36 @@ describe('the landing', () => {
 
   it('takes the visitor to the demo, the sign-in and the console, and never to the private repository', () => {
     renderWithI18n(<Landing />)
-    expect(screen.getByRole('link', { name: /Probar la demo/ }).getAttribute('href')).toBe(demoEntry.to)
-    expect(screen.getByRole('link', { name: /Entrar a la demo/ }).getAttribute('href')).toBe(demoEntry.to)
+    // The demo console off (no provider says otherwise): every way into the demo is the sign-in.
+    expect(screen.getByRole('link', { name: /Probar la demo/ }).getAttribute('href')).toBe(signInEntry.to)
+    expect(screen.getByRole('link', { name: /Entrar a la demo/ }).getAttribute('href')).toBe(signInEntry.to)
     expect(screen.getByRole('link', { name: 'Ingresar con PIN' }).getAttribute('href')).toBe(signInEntry.to)
     expect(screen.getByRole('link', { name: 'Consola con clave' }).getAttribute('href')).toBe(consoleEntry.to)
     expect(screen.getByRole('link', { name: 'Ver la evaluación' }).getAttribute('href')).toBe(`#${sections.results}`)
     for (const link of screen.getAllByRole('link')) expect(link.getAttribute('href') ?? '').not.toMatch(/github\.com/)
+  })
+
+  it('with the demo console on, "Probar la demo" enters with one click as the default customer and lands in the chat; the sign-in stays the sign-in', async () => {
+    enterDemo.mockReset().mockResolvedValue({ ok: true, language: 'es' })
+    navigate.mockClear()
+    renderWithI18n(<DemoEntryProvider value><Landing /></DemoEntryProvider>)
+    const hero = screen.getByRole('link', { name: /Probar la demo/ })
+    // Still a link to the sign-in: a click with a modifier, or the page before its script, goes there.
+    expect(hero.getAttribute('href')).toBe(demoEntry.to)
+    await userEvent.setup().click(hero)
+    expect(enterDemo).toHaveBeenCalledWith({ data: { role: 'cuentas' } })
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: '/chat' }))
+    expect(screen.getByRole('link', { name: 'Ingresar con PIN' }).getAttribute('href')).toBe(signInEntry.to)
+    expect(screen.getAllByRole('link', { name: 'Ingresar' }).every((a) => a.getAttribute('href') === signInEntry.to)).toBe(true)
+  })
+
+  it('the closing\'s "Entrar a la demo" does the same, and a refused entry is said under it without leaving the page', async () => {
+    enterDemo.mockReset().mockResolvedValue({ ok: false, reason: 'limited', retryAfter: 30 })
+    navigate.mockClear()
+    renderWithI18n(<DemoEntryProvider value><Landing /></DemoEntryProvider>)
+    await userEvent.setup().click(screen.getByRole('link', { name: /Entrar a la demo/ }))
+    expect((await screen.findByRole('alert')).textContent).toBe('Demasiados intentos seguidos. Intentar de nuevo en 30 s.')
+    expect(navigate).not.toHaveBeenCalled()
   })
 
   it('marks the projection as one, the queue as a mock, and traces the big figures to their n and date', () => {

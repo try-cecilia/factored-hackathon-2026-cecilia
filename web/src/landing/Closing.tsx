@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import { useT } from '../i18n/context'
-import { consoleEntry, demoEntry, signInEntry } from './links'
+import { DemoEntryCta } from './demo-entry'
+import { consoleEntry, signInEntry } from './links'
 
 /** The way in, once more: Cecilia in her circle, the demo, and the sign-in for whoever has an account or a console key. */
 export function Closing() {
@@ -14,10 +15,10 @@ export function Closing() {
           <p className="land-closing__lead">{t('landing.closing.lead')}</p>
         </div>
         <div className="land-closing__actions">
-          <Link className="ui-btn ui-btn--primary ui-btn--lg land-cta land-cta--block" {...demoEntry}>
+          <DemoEntryCta className="ui-btn ui-btn--primary ui-btn--lg land-cta land-cta--block">
             <span>{t('landing.closing.enter')}</span>
             <span className="land-cta__arrow" aria-hidden="true">→</span>
-          </Link>
+          </DemoEntryCta>
           <p className="land-closing__links">
             {t('landing.closing.haveAccount')} <Link {...signInEntry}>{t('landing.closing.pinSignIn')}</Link>
             <span aria-hidden="true"> · </span>

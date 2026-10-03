@@ -3,6 +3,8 @@
 `OPERATOR_KEYS` es una lista `nombre=clave` separada por comas. El nombre de quien actúa sale de la clave que presentó,
 nunca de un campo que él mismo envíe. Un nombre o una clave repetidos, una clave corta o un nombre mal formado hacen
 que la configuración se rechace (el servicio no arranca): dos personas con la misma clave romperían la atribución.
+El nombre `demo` está reservado para la consola de la demo del jurado (api/demo_desk.py), que actúa con ese nombre sin clave:
+un operador real con ese nombre compartiría su identidad con cualquier visitante, así que la configuración se rechaza.
 Vacía, el directorio queda deshabilitado y los endpoints de operador fallan cerrados.
 
 Solo se guarda el hash de cada clave, y los mensajes de error nombran el problema sin imprimir ninguna clave.
@@ -17,6 +19,8 @@ import re
 
 MIN_KEY_LENGTH = 24
 NAME_RE = re.compile(r"[a-z0-9_.-]{1,40}")
+DEMO_ACTOR = "demo"  # the demo console's actor (api/demo_desk.py); no real operator may carry it
+RESERVED_NAMES = frozenset({DEMO_ACTOR})
 
 
 class OperatorConfigError(ValueError):
@@ -42,6 +46,8 @@ class OperatorDirectory:
                 raise OperatorConfigError(f"OPERATOR_KEYS: la entrada {position} no tiene la forma nombre=clave")
             if not NAME_RE.fullmatch(name):
                 raise OperatorConfigError(f"OPERATOR_KEYS: nombre inválido {name!r} (permitido: [a-z0-9_.-], 1 a 40 caracteres)")
+            if name in RESERVED_NAMES:
+                raise OperatorConfigError(f"OPERATOR_KEYS: el nombre {name!r} está reservado para la consola de la demo")
             if len(key) < MIN_KEY_LENGTH:
                 raise OperatorConfigError(f"OPERATOR_KEYS: la clave de {name!r} tiene menos de {MIN_KEY_LENGTH} caracteres")
             if name in hashes:

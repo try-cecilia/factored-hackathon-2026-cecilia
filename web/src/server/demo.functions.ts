@@ -1,7 +1,12 @@
 import { createServerFn } from '@tanstack/react-start'
 import type { DemoFault, DemoScenario, DemoTicket, DemoTrace } from '../chat/types'
 import { parseTraces } from './demo-core'
-import { AgentApiError, agentApi, agentFetch } from './agent-api'
+import { entriesOf, parseRole, SCENARIO_OF, type DemoEntry } from './demo-entry'
+import { demoConsoleOn } from './demo-gate'
+import { demoConsoleOnly } from './demo-console-only'
+import { createLimiter, perMinuteFromEnv } from './demo-limit'
+import { AgentApiError, agentApi, agentFetch, clientIp } from './agent-api'
+import { sameOriginOnly } from './same-origin'
 import { getSessionToken, setSessionToken } from './session-cookie'
 
 // Everything here is the API's DEMO_MODE surface (api/demo.py). Outside the sandbox it answers 404 and the
@@ -31,14 +36,19 @@ async function isPublicAccount(customerId: string): Promise<boolean> {
   }
 }
 
-export type DemoKit = { enabled: false } | { enabled: true; scenarios: DemoScenario[] }
+/**
+ * `console` is the one-click demo (the DEMO bar, the entry dialog and the bank's side): only with DEMO_CONSOLE=1 on the web, and
+ * then `entries` are the test customers the dialog offers. Left out, there is no console (fail-closed).
+ */
+export type DemoKit = { enabled: false } | { enabled: true; scenarios: DemoScenario[]; console?: boolean; entries?: DemoEntry[] }
 
 export const getDemoKit = createServerFn({ method: 'GET' }).handler(
   async (): Promise<DemoKit> => {
     const all = await scenarios()
     if (!all) return { enabled: false }
+    const desk = demoConsoleOn()
     // The sandbox PINs stay on the server: starting a scenario signs in there.
-    return { enabled: true, scenarios: all.map(({ test_pin: _pin, ...scenario }) => scenario) }
+    return { enabled: true, scenarios: all.map(({ test_pin: _pin, ...scenario }) => scenario), console: desk, entries: desk ? entriesOf(all) : [] }
   },
 )
 
@@ -48,27 +58,61 @@ function parseScenarioId(input: unknown): { id: string } {
   return { id }
 }
 
+/**
+ * Signs in on the server as a scenario's customer, with the PIN the API gave the server (it never reaches the browser): the previous
+ * session is revoked first, the cookie gets the new token, and the scenario's fault is applied. False when any step failed.
+ */
+async function signInAs(found: ApiScenario): Promise<boolean> {
+  try {
+    const previous = getSessionToken()
+    if (previous) await agentFetch('/auth/session', { method: 'DELETE', token: previous }).catch(() => undefined)
+    const session = await agentApi<{ token: string; expires_in: number }>('/auth/session', {
+      method: 'POST',
+      body: { customer_id: found.customer_id, pin: found.test_pin },
+    })
+    setSessionToken(session.token, session.expires_in)
+    if (found.fault) {
+      await agentApi('/demo/fault', { method: 'POST', body: { session_token: session.token, fault: found.fault } })
+    }
+    return true
+  } catch {
+    return false
+  }
+}
+
+// A sign-in is a state change: only from the app's own page (origin-check.ts), on top of the framework's CSRF middleware.
 export const startScenario = createServerFn({ method: 'POST' })
+  .middleware([sameOriginOnly])
   .validator(parseScenarioId)
   .handler(async ({ data }): Promise<{ ok: true; scenario: DemoScenario } | { ok: false }> => {
     const found = (await scenarios())?.find((s) => s.id === data.id)
     if (!found || !(await isPublicAccount(found.customer_id))) return { ok: false }
-    try {
-      const previous = getSessionToken()
-      if (previous) await agentFetch('/auth/session', { method: 'DELETE', token: previous }).catch(() => undefined)
-      const session = await agentApi<{ token: string; expires_in: number }>('/auth/session', {
-        method: 'POST',
-        body: { customer_id: found.customer_id, pin: found.test_pin },
-      })
-      setSessionToken(session.token, session.expires_in)
-      if (found.fault) {
-        await agentApi('/demo/fault', { method: 'POST', body: { session_token: session.token, fault: found.fault } })
-      }
-      const { test_pin: _pin, ...scenario } = found
-      return { ok: true, scenario }
-    } catch {
-      return { ok: false }
-    }
+    if (!(await signInAs(found))) return { ok: false }
+    const { test_pin: _pin, ...scenario } = found
+    return { ok: true, scenario }
+  })
+
+const entryLimiter = createLimiter(() => perMinuteFromEnv(process.env.DEMO_ENTER_RATE_PER_MIN))
+
+export type EnterDemoResult = { ok: true; language: string } | { ok: false; reason: 'limited' | 'failed'; retryAfter?: number }
+
+/**
+ * The one-click entry: signs in as the role's test customer and leaves the session cookie, so the visitor lands in the chat with no
+ * PIN typed. The console demo has no credential of its own: this same cookie is what the bank's side reads with (demo-desk.functions.ts).
+ * An HTTP 404 (no API call at all) unless the demo console is on; limited by address before anything reaches the API.
+ */
+export const enterDemo = createServerFn({ method: 'POST' })
+  .middleware([demoConsoleOnly, sameOriginOnly])
+  .validator(parseRole)
+  .handler(async ({ data }): Promise<EnterDemoResult> => {
+    const allowed = entryLimiter.take(clientIp() ?? 'unknown')
+    if (!allowed.ok) return { ok: false, reason: 'limited', retryAfter: allowed.retryAfter }
+    const found = (await scenarios())?.find((s) => s.id === SCENARIO_OF[data.role])
+    if (!found || !(await isPublicAccount(found.customer_id))) return { ok: false, reason: 'failed' }
+    if (!(await signInAs(found))) return { ok: false, reason: 'failed' }
+    // The interface keeps its language whoever the customer is (the Portuguese one included, also on entering again): only the
+    // language switcher sets it.
+    return { ok: true, language: found.language }
   })
 
 function parseFault(input: unknown): { fault: DemoFault } {

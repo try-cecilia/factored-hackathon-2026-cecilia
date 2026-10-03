@@ -21,7 +21,7 @@ export type TicketPanelProps = {
   /** Who is looking: `canAct` is a session with an operator key, and `operator` is the name that key carries. */
   view: { canAct: boolean; operator: string | null }
   /** Sends one action. The panel always passes the version it is showing. */
-  act: (action: DeskAction, input: { expectedVersion: number; reason?: string; message?: string }) => Promise<Result<DeskState>>
+  act: (action: DeskAction, input: { expectedVersion: number; reason?: string; message?: string; resultCode?: string }) => Promise<Result<DeskState>>
   /** Reads the ticket again from the server. `true` only when the case was read and is now on screen. */
   reload: (minVersion: number) => Promise<boolean>
   /** Status of the last read of this case when it failed: the panel keeps what it has and says it is not fresh. */
@@ -36,6 +36,13 @@ export type TicketPanelProps = {
   loadContext?: (ticketId: string) => Promise<Result<CustomerContext>>
   /** Wraps the label of another case of the customer in the link that opens it. Left out, the id is plain text. */
   caseLink?: CaseLink
+  /**
+   * The predefined results the case may be resolved with (the demo's bank side). Given, resolving takes one of them, required, and
+   * the message becomes optional: the customer reads it after the result. Left out, the console's free message, required, as always.
+   */
+  resolveOptions?: { code: string; label: string }[]
+  /** What the footer says of the person who holds the case, in place of "audited as {name}". */
+  auditNote?: string
 }
 
 type Flash = { tone: 'ok' | 'error'; title?: string; text: string; detail?: string }
@@ -48,13 +55,15 @@ const MESSAGE_MAX = 500
 const tones: Record<DeskState['status'], StatusTone> = { open: 'open', claimed: 'info', approved: 'success', rejected: 'danger', handed_back: 'neutral', stale: 'caution', resolved: 'success' }
 
 /** The ticket desk of the operator console: what the case is, what the assistant did, and what the operator can do next. */
-export function TicketPanel({ ticket, view, act, reload, loadError, onClose, keyForm, traceLink, loadContext, caseLink }: TicketPanelProps) {
+export function TicketPanel({ ticket, view, act, reload, loadError, onClose, keyForm, traceLink, loadContext, caseLink, resolveOptions, auditNote }: TicketPanelProps) {
   const t = useT()
   const { locale } = useI18n()
   const customer = useCustomerContext(ticket.ticket_id, loadContext)
   const customerData = customer.result?.ok ? customer.result.data : null
   const [reason, setReason] = useState('')
   const [message, setMessage] = useState('')
+  const [resultCode, setResultCode] = useState<string | null>(null)
+  const picking = resolveOptions !== undefined
   const [pending, setPending] = useState<DeskAction | 'reload' | null>(null)
   const [flash, setFlash] = useState<Flash | null>(null)
   const [conflict, setConflictNow] = useState<Conflict | null>(() => conflictOf(ticket.ticket_id))
@@ -86,12 +95,14 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
       const result = await act(action, {
         expectedVersion: desk.version,
         reason: action === 'reject' ? reason.trim() || undefined : undefined,
-        message: action === 'resolve' ? message.trim() : undefined,
+        message: action === 'resolve' ? (picking ? message.trim() || undefined : message.trim()) : undefined,
+        resultCode: action === 'resolve' && picking ? resultCode ?? undefined : undefined,
       })
       if (result.ok) {
         setConflict(null)
         setReason('')
         setMessage('')
+        setResultCode(null)
         setFlash({ tone: 'ok', text: t(`operator.ticket.result.${action}` as MessageKey) })
       } else if (result.status === 409) {
         setConflict({ seen: desk.version, detail: result.message })
@@ -191,7 +202,7 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
               </div>
             )}
           </div>
-          {!conflict && closed && <Outcome ticket={ticket} />}
+          {!conflict && closed && <Outcome ticket={ticket} resolveOptions={resolveOptions} />}
           <div className="op-sheet__rule" />
           <div className="op-summary__block">
             <h2 className="op-label">{t('operator.ticket.nextStep')}</h2>
@@ -219,7 +230,38 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
           </section>
         )}
 
-        {!closed && !pendingAction && (
+        {!closed && !pendingAction && picking && (
+          <section className="op-block">
+            <fieldset className="op-results" disabled={!mine || locked} aria-describedby="op-results-hint">
+              <legend><h2>{t('operator.ticket.outcomePick.label')}</h2></legend>
+              <p id="op-results-hint" className="op-muted">{resolveOptions.length ? t('operator.ticket.outcomePick.hint') : t('operator.ticket.outcomePick.none')}</p>
+              {resolveOptions.map((option) => (
+                <label key={option.code} className="op-result" data-checked={resultCode === option.code ? '' : undefined}>
+                  <input type="radio" name="op-result" value={option.code} checked={resultCode === option.code} onChange={() => setResultCode(option.code)} />
+                  <span>{option.label}</span>
+                </label>
+              ))}
+            </fieldset>
+            <div className="op-block__head">
+              <label htmlFor="op-message"><h2>{t('operator.ticket.outcomePick.messageLabel')}</h2></label>
+              <span id="op-message-count" className="op-mono op-muted">{`${message.length}/${MESSAGE_MAX}`}</span>
+            </div>
+            <textarea
+              id="op-message"
+              className="op-input"
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              maxLength={MESSAGE_MAX}
+              rows={2}
+              disabled={!mine || locked}
+              placeholder={hint('message')}
+              aria-describedby="op-message-count op-message-hint"
+            />
+            <p id="op-message-hint" className="op-muted">{t('operator.ticket.outcomePick.messageHint')}</p>
+          </section>
+        )}
+
+        {!closed && !pendingAction && !picking && (
           <section className="op-block">
             <div className="op-block__head">
               <label htmlFor="op-message"><h2>{t('operator.ticket.message.label')}</h2></label>
@@ -409,7 +451,7 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
                   <Button size="sm" variant="ghost" tinted onClick={() => void run('reject')} loading={pending === 'reject'} disabled={busy}>{pending === 'reject' ? t('operator.ticket.actions.sending.reject') : t('operator.ticket.actions.reject')}</Button>
                 </>
               ) : (
-                <Button size="sm" onClick={() => void run('resolve')} loading={pending === 'resolve'} disabled={busy || !message.trim()}>{pending === 'resolve' ? t('operator.ticket.actions.sending.resolve') : t('operator.ticket.actions.resolve')}</Button>
+                <Button size="sm" onClick={() => void run('resolve')} loading={pending === 'resolve'} disabled={busy || (picking ? !resultCode : !message.trim())}>{pending === 'resolve' ? t('operator.ticket.actions.sending.resolve') : t('operator.ticket.actions.resolve')}</Button>
               )}
               <span className="op-head__spacer" />
               <Button size="sm" variant="ghost" muted onClick={() => void run('release')} loading={pending === 'release'} disabled={busy}>{pending === 'release' ? t('operator.ticket.actions.sending.release') : t('operator.ticket.actions.release')}</Button>
@@ -418,7 +460,7 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
         </div>
         {(mine || closed) && (
           <div className="op-audit">
-            <span className="op-muted">{mine && view.operator ? t('operator.ticket.footer.auditedAs', { name: view.operator }) : ''}</span>
+            <span className="op-muted">{mine && view.operator ? auditNote ?? t('operator.ticket.footer.auditedAs', { name: view.operator }) : ''}</span>
             <Button variant="ghost" size="sm" muted onClick={() => void copySummary()}>{t('operator.ticket.actions.copy')}</Button>
             <span className="sr-only" role="status">{copied === 'ok' ? t('operator.ticket.actions.copied') : copied === 'error' ? t('operator.ticket.actions.copyFailed') : ''}</span>
             {copied && <span className="op-copied" aria-hidden="true">{copied === 'ok' ? t('operator.ticket.actions.copied') : t('operator.ticket.actions.copyFailed')}</span>}
@@ -459,10 +501,13 @@ function ConflictBanner({ conflict, ticket }: { conflict: Conflict; ticket: Tick
 }
 
 /** How a closed case ended, inside the summary card: a mark, the name of the result and, when it has one, the message the customer got. */
-function Outcome({ ticket }: { ticket: Ticket }) {
+function Outcome({ ticket, resolveOptions }: { ticket: Ticket; resolveOptions?: { code: string; label: string }[] }) {
   const t = useT()
   const { desk } = ticket
   const message = resolutionMessage(desk)
+  // The predefined result a resolution named, when the screen knows its name (only the demo resolves with one).
+  const resultCode = (desk as { result?: unknown }).result
+  const result = typeof resultCode === 'string' ? resolveOptions?.find((o) => o.code === resultCode)?.label ?? resultCode : null
   const by = desk.history.at(-1)?.operator ?? desk.operator ?? ''
   const { title, body, tone } =
     desk.status === 'approved' ? { title: t('operator.ticket.banner.traceOpened'), body: desk.trace_id ? t('operator.ticket.banner.traceOpenedBody', { id: desk.trace_id }) : undefined, tone: 'success' as const }
@@ -476,6 +521,7 @@ function Outcome({ ticket }: { ticket: Ticket }) {
       <span className="op-outcome__mark"><Icon size={tone === 'success' ? 10 : 14} /></span>
       <div>
         <strong>{title}</strong>
+        {result && <p>{t('operator.ticket.outcomePick.resultLine', { result })}</p>}
         {body && <p>{body}</p>}
       </div>
     </div>
