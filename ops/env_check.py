@@ -141,6 +141,9 @@ def report(example: str, env: str) -> list[str]:
     if ingests_from_s3(env):
         lines.append("INGEST_ARGS has no `--source local`: the first boot would ingest from S3 and needs AWS_* and DATASET_BUCKET. "
                      "For the fixture warehouse use: --profile serving --source local --raw-dir /app/tests/fixtures/raw")
+    values = parse(env)
+    if values.get("DEMO_CONSOLE") == "1" and values.get("DEMO_MODE") != "1":
+        lines.append("DEMO_CONSOLE=1 without DEMO_MODE=1: the demo's console stays off (both must be exactly 1)")
     return lines
 
 
