@@ -123,12 +123,12 @@ export const figures = {
   idealRecordsToModel: json(0, 0, OFFLINE, [...IDEAL, 'records_sent_to_model', 'k']),
   adversarialRecordsToModel: json(0, 0, ADVERSARIAL, [...ADV, 'records_sent_to_model', 'k']),
   // Without the model, on the machine of the run of `offlineRunDate`: they depend on the machine.
-  keywordLatencyP50: json(2.5, 1, OFFLINE, [...KEYWORD, 'latency_ms_p50']),
-  keywordLatencyP95: json(10.7, 1, OFFLINE, [...KEYWORD, 'latency_ms_p95']),
-  idealLatencyP50: json(5.1, 1, OFFLINE, [...IDEAL, 'latency_ms_p50']),
-  idealLatencyP95: json(19.9, 1, OFFLINE, [...IDEAL, 'latency_ms_p95']),
-  adversarialLatencyP50: json(5.5, 1, ADVERSARIAL, [...ADV, 'latency_ms_p50']),
-  adversarialLatencyP95: json(19.7, 1, ADVERSARIAL, [...ADV, 'latency_ms_p95']),
+  keywordLatencyP50: json(2.7, 1, OFFLINE, [...KEYWORD, 'latency_ms_p50']),
+  keywordLatencyP95: json(10.4, 1, OFFLINE, [...KEYWORD, 'latency_ms_p95']),
+  idealLatencyP50: json(5.6, 1, OFFLINE, [...IDEAL, 'latency_ms_p50']),
+  idealLatencyP95: json(19.8, 1, OFFLINE, [...IDEAL, 'latency_ms_p95']),
+  adversarialLatencyP50: json(6.0, 1, ADVERSARIAL, [...ADV, 'latency_ms_p50']),
+  adversarialLatencyP95: json(21.3, 1, ADVERSARIAL, [...ADV, 'latency_ms_p95']),
   // Zero observed events: ≈3/n, an approximate 95% upper bound under the experiment's assumptions.
   offlineUpperBound: json(0.55, 2, OFFLINE, [...IDEAL, 'unsafe_95pct_upper_bound_if_zero'], 100),
 
