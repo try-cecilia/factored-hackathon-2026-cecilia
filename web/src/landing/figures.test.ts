@@ -4,6 +4,7 @@ import { resolve } from 'node:path'
 import { test } from 'node:test'
 import { es } from '../i18n/es.ts'
 import { pt } from '../i18n/pt.ts'
+import { powerOfTen, roundHalfUp } from './rounding.ts'
 import { classifierDate, figures, formatDate, formatFigure, formatMillions, formatNumber, formatShortDate, liveRunDate, offlineRunDate, redTeamDate, type Day, type Figure } from './figures.ts'
 
 const root = resolve(import.meta.dirname, '../../..')
@@ -20,10 +21,10 @@ function field(path: string, at: ReadonlyArray<string | number>): unknown {
 
 const words: Record<string, string> = { none: '0', one: '1', two: '2', three: '3', four: '4', five: '5' }
 
-/** The numbers a quote holds, in order: thousands separators dropped, number words read as digits. */
-function numbers(quote: string): number[] {
+/** The numbers a quote holds, in order and as written: thousands separators dropped, number words read as digits. */
+function numbers(quote: string): string[] {
   const plain = quote.replace(/\b(none|one|two|three|four|five)\b/gi, (w) => words[w.toLowerCase()]).replace(/(\d),(?=\d{3}\b)/g, '$1')
-  return [...plain.matchAll(/\d+(?:\.\d+)?/g)].map((m) => Number(m[0]))
+  return [...plain.matchAll(/\d+(?:\.\d+)?/g)].map((m) => m[0])
 }
 
 /** Figures the source gives as a span, not as a number: the landing shows the length. */
@@ -36,11 +37,13 @@ const derived: Record<string, (figure: Figure) => number> = {
 
 /** Why `figure` does not match the one value it is bound to, or null when it does. */
 function mismatch(name: string, figure: Figure): string | null {
-  const shown = figure.value.toFixed(figure.digits)
+  // Both sides go through the shared rounding (rounding.ts, eval/check_readme.py's _fixed): decimal text, half up.
+  const shown = roundHalfUp(figure.value, figure.digits)
   // A quote must be in its file, derived or not: otherwise any made-up quote would back any figure.
   if ('quote' in figure && !read(figure.source).includes(figure.quote)) return `${name}: "${figure.quote}" is no longer in ${figure.source}`
   if (name in derived) return derived[name](figure) === figure.value ? null : `${name}: derived ${derived[name](figure)}, shown ${shown}`
-  let source: number
+  let source: number | string
+  let shift = 0
   if ('rows' in figure) {
     const list = field(figure.source, figure.rows)
     if (!Array.isArray(list)) return `${name}: ${figure.source} has no rows at ${figure.rows.join(' › ')}`
@@ -51,15 +54,19 @@ function mismatch(name: string, figure: Figure): string | null {
     const value = field(figure.source, figure.at)
     if (figure.count) source = value && typeof value === 'object' ? Object.keys(value).length : NaN
     else if (typeof value !== 'number') return `${name}: ${figure.source} has no number at ${figure.at.join(' › ')}`
-    else source = value * (figure.scale ?? 1)
+    else {
+      source = value
+      shift = powerOfTen(figure.scale ?? 1)
+    }
   } else {
     const found = numbers(figure.quote)
     if (found.length > 1 && figure.pick === undefined) return `${name}: "${figure.quote}" holds ${found.length} numbers, say which one`
     const picked = found[figure.pick ?? 0]
     if (picked === undefined) return `${name}: "${figure.quote}" has no number ${figure.pick ?? 0}`
-    source = picked * (figure.scale ?? 1)
+    source = picked
+    shift = powerOfTen(figure.scale ?? 1)
   }
-  const rounded = Number(source.toPrecision(12)).toFixed(figure.digits)
+  const rounded = roundHalfUp(source, figure.digits, shift)
   return rounded === shown ? null : `${name}: the landing shows ${shown}, ${figure.source} says ${rounded}`
 }
 
