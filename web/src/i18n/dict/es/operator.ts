@@ -32,6 +32,12 @@ export const operator = {
     signOut: 'Salir',
     addKey: 'Agregar clave de operador',
   },
+  environment: {
+    demoTitle: 'Demo · datos sintéticos',
+    demoDescription: 'La API está configurada en modo demo. Los datos pueden ser sintéticos.',
+    unknownTitle: 'Entorno sin verificar',
+    unknownDescription: 'No se pudo confirmar si estos datos son de demostración.',
+  },
   keyForm: {
     label: 'Clave de operador',
     submit: 'Agregar',

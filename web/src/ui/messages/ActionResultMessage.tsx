@@ -11,20 +11,26 @@ export type ActionResultMessageProps = {
   title?: string
   /** Service reference, drawn in DM Mono ("trace_6f3a91c2"). */
   reference?: string
+  /** Optional label that makes the service reference explicit in a customer receipt. */
+  referenceLabel?: string
   /** The detail after the reference ("status open · you'll hear back within 2 business days"). Already in the customer's language. */
   children?: ReactNode
+  /** Structured facts for a confirmed action, presented as a compact receipt. */
+  facts?: readonly { label: string; value: ReactNode }[]
+  /** The customer's next step, already translated. */
+  nextStep?: ReactNode
   time?: string
   dateTime?: string
   className?: string
 }
 
 /** Result of the trace, announced only once the service confirms it. */
-export function ActionResultMessage({ status, title, reference, children, time, dateTime, className }: ActionResultMessageProps) {
+export function ActionResultMessage({ status, title, reference, referenceLabel, children, facts, nextStep, time, dateTime, className }: ActionResultMessageProps) {
   const t = useT()
   const ok = status === 'ok'
   return (
     <AssistantFrame time={time} dateTime={dateTime} className={className}>
-      <div className={`ui-msg-tint ${ok ? 'ui-msg-tint--success' : 'ui-msg-tint--danger'} ui-result`}>
+      <div className={`ui-msg-tint ${ok ? 'ui-msg-tint--success' : 'ui-msg-tint--danger'} ui-result`} role={facts ? 'status' : undefined}>
         <span className={`ui-result__badge ${ok ? 'ui-result__badge--ok' : 'ui-result__badge--failed'}`} aria-hidden="true">
           {ok ? <CheckIcon /> : <CrossIcon />}
         </span>
@@ -32,11 +38,18 @@ export function ActionResultMessage({ status, title, reference, children, time, 
           <span className="ui-result__title">{title ?? t(ok ? 'chat.actionResult.okTitle' : 'chat.actionResult.failedTitle')}</span>
           {(reference || children) && (
             <p className="ui-result__detail">
+              {reference && referenceLabel && <span className="ui-result__reference-label">{referenceLabel}</span>}
               {reference && <span className="ui-result__ref">{reference}</span>}
               {reference && children ? ' · ' : null}
               {children}
             </p>
           )}
+          {facts && (
+            <dl className="ui-result__facts">
+              {facts.map((fact) => <div key={fact.label}><dt>{fact.label}</dt><dd>{fact.value}</dd></div>)}
+            </dl>
+          )}
+          {nextStep && <p className="ui-result__next">{nextStep}</p>}
         </div>
       </div>
     </AssistantFrame>
