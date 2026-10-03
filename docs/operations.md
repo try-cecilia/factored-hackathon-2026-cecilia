@@ -220,6 +220,10 @@ then serves on `$PORT`.
   entrypoint picks the sandbox customers only then. `DEMO_PUBLIC_CUSTOMERS` is the one list of public accounts: the login list,
   the guided scenarios and the trace reset read it, and a scenario whose customer is not on it is not offered (unset, none is). Outside
   the container, with `DEMO_MODE=1`, set it yourself: `DEMO_PUBLIC_CUSTOMERS="$(python -m ops.demo_customers)"`.
+- The demo's console (`/demo/desk/*`, `api/demo_desk.py`) needs `DEMO_MODE=1` **and** `DEMO_CONSOLE=1`, each exactly `1`:
+  any other value, unset included, is the 404 of a route that does not exist. A visitor signed in as a public sandbox account
+  resolves, as the bank, the cases that same session filed; there is no operator key and no operator session. See "Access
+  control", "The demo's console".
 - A retention loop runs beside the API (`python -m ops.retention --loop`, every `RETENTION_INTERVAL_HOURS`, 24 by default,
   0 = off): see "Data retention".
 - The app runs as a non-root user. The container starts as root only so the
@@ -244,12 +248,13 @@ boot would (a partial build, a stale WAL) and checks the next boot loads again.
 `render.yaml` is the Blueprint, with two Docker web services. Render is one place to run the images, not a requirement:
 `make up` runs the same images locally.
 - **The API** (`x-payments-agent`): a paid instance (`0.5c-512mb`; the free one sleeps and has no disk), a 1 GB disk at
-  `/app/data/warehouse`, `DEMO_MODE=1`, generated secrets for the test IdP, the admin key and the metrics token, its health
+  `/app/data/warehouse`, `DEMO_MODE=1` and `DEMO_CONSOLE=1`, generated secrets for the test IdP, the admin key and the metrics token, its health
   check on `/readyz`, HSTS on, one DuckDB thread and a 192MB cap for the first boot's load (see "Deploy (container)"), and the
   caps below.
 - **The web** (`cecil-ai`): `ops/Dockerfile.web` with `web/` as its context, the same instance type, its health check on
   `/_healthz`. It calls the API at its public URL (`AGENT_API_URL`) and `WEB_PUBLIC_ORIGIN` is its own public URL: both are
-  fixed in `render.yaml` (neither is a secret), so renaming either service means updating them. Its users reach the API
+  fixed in `render.yaml` (neither is a secret), so renaming either service means updating them. It also gets `DEMO_MODE=1`
+  and `DEMO_CONSOLE=1`, the API's values, so that its own demo checks can demand `1` instead of relying on the API's 404. Its users reach the API
   from the web's address, so the API's per-client limits (logins, failed keys) count them together.
 1. In Render: New > Blueprint, pick the repository and branch. When asked, fill
    `ANTHROPIC_API_KEY` (a key with a spend limit set at the provider), optionally
@@ -507,6 +512,7 @@ concurrency, so a limit that is too tight or a flood shows up without reading lo
 | chat rate per customer, across sessions | 40/min | `CHAT_CUSTOMER_RATE_PER_MIN` | 429 + `Retry-After` |
 | chat rate per client address | 120/min (see below) | `CHAT_IP_RATE_PER_MIN` | 429 + `Retry-After` |
 | login rate per client address | 10/min | `LOGIN_RATE_PER_MIN` | 429 + `Retry-After` |
+| demo console calls per visitor's session; for all visitors of one public account | 60/min; 300/min | `DEMO_DESK_RATE_PER_MIN`, `DEMO_DESK_CUSTOMER_RATE_PER_MIN` | 429 + `Retry-After` |
 | turn time | 30 s | `TURN_BUDGET_SECONDS` | handoff |
 | handoff time (evidence, lock, write, read-back) | 3 s | `HANDOFF_BUDGET_SECONDS` | unverified message with a code |
 | model output per call | 4,096 tokens | `LLM_MAX_OUTPUT_TOKENS` | a cut-off answer is never acted on |
@@ -676,6 +682,10 @@ whether the door held with the row; it fails the moment a route is added without
 | `POST /demo/tickets` | - | yes | - | - | demo only. the session's own tickets |
 | `POST /demo/traces` | - | yes | - | - | demo only. the session's own trace requests |
 | `GET /admin/demo_pin/{customer_id}` | - | - | - | yes | demo only. derives any customer's test PIN |
+| `GET /demo/desk/tickets` | - | yes | - | - | demo console only (DEMO_CONSOLE=1). a public sandbox account only; the session's own tickets, with their desk state |
+| `GET /demo/desk/tickets/{ticket_id}` | - | yes | - | - | demo console only (DEMO_CONSOLE=1). the session's own ticket; anyone else's is the same 404 as none |
+| `GET /demo/desk/tickets/{ticket_id}/customer_context` | - | yes | - | - | demo console only (DEMO_CONSOLE=1). as the admin's, with the other cases and traces of this session only |
+| `POST /demo/desk/tickets/{ticket_id}/{action}` | - | yes | - | - | demo console only (DEMO_CONSOLE=1). claim, approve, reject, release, resolve on the session's own ticket; the actor is always `demo` |
 | `GET /openapi.json` | yes | yes | yes | yes | with EXPOSE_API_DOCS=1. EXPOSE_API_DOCS=1 |
 | `GET /docs` | yes | yes | yes | yes | with EXPOSE_API_DOCS=1. EXPOSE_API_DOCS=1 |
 | `GET /docs/oauth2-redirect` | yes | yes | yes | yes | with EXPOSE_API_DOCS=1. EXPOSE_API_DOCS=1 |
@@ -689,6 +699,7 @@ Other controls:
 | admin, metrics and operator keys | failed attempts count per client address (10 a minute, `OPERATOR_AUTH_FAILS_PER_MIN`): past that even the right key is refused with 429 until the window passes, and each failure is an audit event (`admin_auth_failed`, `metrics_auth_failed`, `operator_auth_failed`) |
 | secrets | every comparison (admin key, metrics token, PIN) goes through one constant-time function (`agent/session/secure_compare.py`). The old `hmac.compare_digest` on `str` raised on non-ASCII input, so a header or a PIN of Unicode digits was a 500; both are a 401 now (tested) |
 | demo surfaces | `/demo/*`, `/admin/demo_pin` and the sandbox's published test PINs exist only with `DEMO_MODE=1` (a 404 to every role otherwise, tested for every row); `/chat` shows no policy rule outside it; `/demo/tickets` and `/demo/traces` now require a live session |
+| demo console | `/demo/desk/*` exist only with `DEMO_MODE=1` and `DEMO_CONSOLE=1`, each exactly `1` (tested for every row, role and nine other values); see "The demo's console" below |
 | API schema | `/openapi.json`, `/docs` and `/redoc` are off unless `EXPOSE_API_DOCS=1` |
 | headers | on every answer: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Permissions-Policy`, `Cache-Control: no-store`, a `Content-Security-Policy` (`default-src 'none'` for the API; the chat page may run only its own inline script, pinned by hash) and, with `SECURITY_HSTS=1` (Render), `Strict-Transport-Security` |
 | CORS | none by default: the frontend calls the API from its server. `CORS_ALLOWED_ORIGINS` lists exact origins for GET, POST and DELETE with `X-Session-Token`; a wildcard or a loose value stops the service from starting; the admin and operator keys are never an allowed header |
@@ -704,9 +715,41 @@ Other controls:
 |---|---|---|---|
 | Endpoint x role matrix, applied at startup | `api/access.py` (`POLICY`, `check_app`), called at the end of `api/main.py` | `tests/test_access_matrix.py`: one test per row and role, a scratch app proving a route without a row stops the service, the guard check, key separation | `pytest tests/test_access_matrix.py` |
 | Demo surfaces off by default | `require_demo` in `api/demo.py`, the gates in `api/main.py`, the entrypoint | `test_demo_surfaces_do_not_exist_without_demo_mode` (every demo row, every role), `tests/test_security.py` | `pytest tests/test_security.py` |
+| Demo console: both switches, own session's tickets only, actor `demo` | `api/demo_desk.py`, `demo_console` rows and `SWITCHES` in `api/access.py`, `_visible_to` in `agent/core/orchestrator.py` | `test_the_demo_console_exists_only_with_both_switches_exactly_1`, `tests/test_demo_desk.py`, `test_on_a_public_sandbox_account_a_case_is_news_only_to_the_session_that_filed_it` | `pytest tests/test_demo_desk.py` |
 | CORS and security headers | `api/security.py` | `tests/test_security.py` (headers on success, refusal and unknown routes; CSP hash equals the page's script; CORS allows only listed origins and never the keys; loose origins refused) | `curl -sI http://127.0.0.1:8000/livez` |
 | Constant-time comparison | `agent/session/secure_compare.py`, used by `require_admin`, `require_metrics` and `IdentityService.login` | `test_secrets_are_compared_with_a_constant_time_function`, the non-ASCII tests | `pytest tests/test_access_matrix.py -k secret` |
 | Guessing limits | `_refuse_if_guessing` in `api/main.py` | `test_guessing_an_admin_key_is_limited_and_audited`, `tests/test_operator_auth.py` | `pytest tests/test_operator_auth.py` |
+
+### The demo's console
+
+A visitor of the jury sandbox signs in with one click as a public sandbox customer, talks to the assistant, and then
+resolves that same case as the bank, without an operator key (`api/demo_desk.py`; the web's `/demo/banco`). What holds it:
+
+- **Off unless both switches are exactly `1`.** `DEMO_MODE=1` and `DEMO_CONSOLE=1`; anything else is the same 404 as a route
+  that does not exist. `api/access.py` refuses to start if a `demo_console` row's route lacks `require_demo` or
+  `require_demo_console`.
+- **The credential is the customer's session.** `X-Session-Token`, live (401 otherwise), of an account in
+  `DEMO_PUBLIC_CUSTOMERS`, read again on every call (403 otherwise). There is no operator session or key on this path, so
+  nothing in it can reach a real one; it ends when the customer's session ends (15 minutes from sign-in).
+- **Isolation in the API.** The public accounts' PINs are published, so anyone can call these routes with curl: every ticket
+  is looked up and must have been filed by the caller's session (`session_ref`); another visitor's answers the same
+  `404 {"detail":"ticket not found"}` as one that does not exist. The customer's context beside a case lists that session's
+  other cases and traces only. On a public account the chat's news of a case, and `/case/{id}`, reach only the session that
+  filed it (`_visible_to` in `agent/core/orchestrator.py`); a real customer's still follow them from session to session.
+- **The real desk, as `demo`.** Claim, approve, reject, release and resolve are `TicketDesk.act`, with its versions and its
+  409s; the actor is always `demo`, set by the API (`extra="forbid"`: the body cannot name one). A conflict that names another
+  operator reaches the visitor as "another person took this case". Approving a trace opens it in the sandbox's tracing
+  service once (idempotent per customer and movement), with the ticket's `session_ref`.
+- **Resolving.** A predefined result of the ticket's family is required (`result_code`; the family comes from the ticket's
+  category, `RESULTS` in `agent/policy/desk.py`), and a message of up to 500 characters may follow it. The customer reads the
+  result's fixed template (`RESOLVE_RESULT` in `agent/core/render.py`) and, after it, the message in the fixed quote
+  ("Mensaje del agente: «…»"), sanitized as the console's (one line, card numbers masked, no «»).
+- **Limits.** 60 calls a minute per visitor's session and 300 for all the visitors of one public account
+  (`DEMO_DESK_RATE_PER_MIN`, `DEMO_DESK_CUSTOMER_RATE_PER_MIN`); in memory, per process, like the other limiters.
+
+What it does not hold: a visitor who signs in again gets a new session and no longer sees their earlier cases; the cases a
+visitor claimed and left stay claimed by `demo` in the team's console until the retention purge; the trace reset of the
+"pending transfer" scenario clears that test customer's traces for every visitor, as the guided scenario already does.
 
 ## Data retention
 
