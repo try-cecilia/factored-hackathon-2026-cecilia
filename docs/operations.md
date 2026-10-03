@@ -726,19 +726,20 @@ A visitor of the jury sandbox signs in with one click as a public sandbox custom
 resolves that same case as the bank, without an operator key (`api/demo_desk.py`; the web's `/demo/banco`). What holds it:
 
 - **Off unless both switches are exactly `1`.** `DEMO_MODE=1` and `DEMO_CONSOLE=1`; anything else is the same 404 as a route
-  that does not exist. `api/access.py` refuses to start if a `demo_console` row's route lacks `require_demo` or
+  that does not exist, for any method and any body: a guard (`ConsoleSwitch`) answers under `/demo/desk` before routing and
+  before the body is parsed. `api/access.py` refuses to start if a `demo_console` row's route lacks `require_demo` or
   `require_demo_console`.
 - **The credential is the customer's session.** `X-Session-Token`, live (401 otherwise), of an account in
   `DEMO_PUBLIC_CUSTOMERS`, read again on every call (403 otherwise). There is no operator session or key on this path, so
   nothing in it can reach a real one; it ends when the customer's session ends (15 minutes from sign-in).
 - **Isolation in the API.** The public accounts' PINs are published, so anyone can call these routes with curl: every ticket
-  is looked up and must have been filed by the caller's session (`session_ref`); another visitor's answers the same
-  `404 {"detail":"ticket not found"}` as one that does not exist. The customer's context beside a case lists that session's
+  is looked up among the caller's session's own (`session_ref`), reading the whole queue every time, so another visitor's
+  answers the same `404 {"detail":"ticket not found"}` as one that does not exist, in the same time. The customer's context beside a case lists that session's
   other cases and traces only. On a public account the chat's news of a case, and `/case/{id}`, reach only the session that
   filed it (`_visible_to` in `agent/core/orchestrator.py`); a real customer's still follow them from session to session.
 - **The real desk, as `demo`.** Claim, approve, reject, release and resolve are `TicketDesk.act`, with its versions and its
-  409s; the actor is always `demo`, set by the API (`extra="forbid"`: the body cannot name one). A conflict that names another
-  operator reaches the visitor as "another person took this case". Approving a trace opens it in the sandbox's tracing
+  409s; the actor is always `demo`, set by the API (`extra="forbid"`: the body cannot name one), and `OPERATOR_KEYS` refuses a
+  real operator by that name. A case a real operator holds is, for any move, `409 {"detail":"another person took this case"}`. Approving a trace opens it in the sandbox's tracing
   service once (idempotent per customer and movement), with the ticket's `session_ref`.
 - **Resolving.** A predefined result of the ticket's family is required (`result_code`; the family comes from the ticket's
   category, `RESULTS` in `agent/policy/desk.py`), and a message of up to 500 characters may follow it. The customer reads the
