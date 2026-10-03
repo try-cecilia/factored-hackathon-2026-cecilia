@@ -13,7 +13,7 @@ export function Hero() {
       <div className="land-hero__copy">
         <p className="land-hero__eyebrow"><span className="land-dot" aria-hidden="true" />{t('landing.hero.eyebrow')}</p>
         <h1 id="land-title" className="land-hero__title">{t('landing.hero.title')}</h1>
-        <p className="land-hero__lead">{t('landing.hero.lead')}</p>
+        <p className="land-hero__lead">{t('landing.hero.lead', { attempts: f.n(F.attemptsPerProvider) })}</p>
         <div className="land-hero__actions">
           <Link className="ui-btn ui-btn--primary ui-btn--lg land-cta" {...demoEntry}>
             <span>{t('landing.hero.tryDemo')}</span>

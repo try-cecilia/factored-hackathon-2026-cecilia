@@ -17,7 +17,7 @@ export const landing = {
   hero: {
     eyebrow: 'Factored Hackathon 2026 · cuentas y pagos · MX · CO · AR · ES/PT',
     title: 'El modelo elige la consulta. El código escribe la respuesta.',
-    lead: 'Una consulta al modelo por turno, con hasta dos intentos, que nunca recibe registros del cliente. Las respuestas salen de plantillas ES/PT con datos verificados en SQL. Una sola acción con efecto: rastrear un movimiento pendiente, con el «sí» evaluado en código y el pedido releído antes de anunciarse.',
+    lead: 'Una consulta al modelo por turno, con hasta {attempts} intentos por proveedor y respaldo en otro proveedor, que nunca recibe registros del cliente. Las respuestas salen de plantillas ES/PT con datos verificados en SQL. Una sola acción con efecto: rastrear un movimiento pendiente, con el «sí» evaluado en código y el pedido releído antes de anunciarse.',
     tryDemo: 'Probar la demo',
     seeEvaluation: 'Ver la evaluación',
     disclaimer: 'Datos sintéticos del organizador. No mueve dinero ni bloquea tarjetas.',
@@ -89,8 +89,8 @@ export const landing = {
       cost: 'US$ / resolución segura',
       costValue: '{sonnet} vs {haiku}',
       calls: 'Consultas al modelo por turno',
-      callsValue: '1 · hasta 2 intentos',
-      conclusion: 'Una consulta lógica por turno, con hasta dos intentos. Si el modelo cae, responde Groq o el modo degradado.',
+      callsValue: '1 · hasta {attempts} intentos por proveedor',
+      conclusion: 'Una consulta lógica por turno, con hasta {attempts} intentos por proveedor. Si el modelo cae, responde Groq o el modo degradado.',
     },
     method: {
       title: 'Cómo se midió',
@@ -115,7 +115,7 @@ export const landing = {
     steps: {
       session: { tag: '01 · ingreso', title: 'Cliente identificado', text: 'Solo se consultan los datos del cliente que ingresó.' },
       guards: { tag: '02 · antes del modelo', title: 'Guardas pre-LLM', text: 'Léxico de riesgo, clasificador de intención y detección de productos de otro cliente. Fraude, robo o cuenta suspendida van a una persona.' },
-      model: { tag: '03 · modelo', title: '1 consulta: elegir herramientas', text: 'Recibe texto enmascarado y alias P1…Pn (tipo, moneda, estado). Declara hasta 2 lecturas, con hasta dos intentos. Su texto se descarta.' },
+      model: { tag: '03 · modelo', title: '1 consulta: elegir herramientas', text: 'Recibe texto enmascarado y alias P1…Pn (tipo, moneda, estado). Declara hasta 2 lecturas. Hasta {attempts} intentos por proveedor, con respaldo en otro. Su texto se descarta.' },
       tools: { tag: '04 · herramientas', title: 'Lecturas en DuckDB', text: 'Titularidad chequeada en SQL contra la sesión y números a últimos 4. Control de frescura configurable, apagado en la demo de datos estáticos.' },
       reply: { tag: '05 · respuesta', title: 'Plantilla ES/PT', text: 'Disposición AUTO_RESOLVE · CLARIFY · ABSTAIN · ESCALATE. Un ticket se anuncia solo si se releyó.' },
     },
@@ -253,7 +253,7 @@ export const landing = {
     failures: 'Si algo falla',
     failuresText: 'Cubierto por tests. El modelo caído, además, se probó en vivo durante el red team.',
     provider: '1 · el proveedor no responde',
-    providerText: 'Dos intentos y pasa al siguiente: Groq, con gpt-oss-120b.',
+    providerText: '{attempts} intentos y pasa al siguiente: Groq, con gpt-oss-120b.',
     degraded: '2 · no hay modelo, o se pasó el tope',
     degradedText: 'Modo degradado: los saldos salen de los datos verificados; el resto, a una persona.',
     drift: '3 · algo se desvía',

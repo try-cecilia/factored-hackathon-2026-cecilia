@@ -31,7 +31,7 @@ export function Operation() {
             <p>{t('landing.operation.failuresText')}</p>
           </div>
           <ol className="land-failover__steps">
-            <li><span className="land-failover__tag">{t('landing.operation.provider')}</span> <span>{t('landing.operation.providerText')}</span></li>
+            <li><span className="land-failover__tag">{t('landing.operation.provider')}</span> <span>{t('landing.operation.providerText', { attempts: f.n(F.attemptsPerProvider) })}</span></li>
             <li><span className="land-failover__tag">{t('landing.operation.degraded')}</span> <span>{t('landing.operation.degradedText')}</span></li>
             <li><span className="land-failover__tag">{t('landing.operation.drift')}</span> <span>{t('landing.operation.driftText')}</span></li>
           </ol>

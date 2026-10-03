@@ -37,6 +37,8 @@ const derived: Record<string, (figure: Figure) => number> = {
 /** Why `figure` does not match the one value it is bound to, or null when it does. */
 function mismatch(name: string, figure: Figure): string | null {
   const shown = figure.value.toFixed(figure.digits)
+  // A quote must be in its file, derived or not: otherwise any made-up quote would back any figure.
+  if ('quote' in figure && !read(figure.source).includes(figure.quote)) return `${name}: "${figure.quote}" is no longer in ${figure.source}`
   if (name in derived) return derived[name](figure) === figure.value ? null : `${name}: derived ${derived[name](figure)}, shown ${shown}`
   let source: number
   if ('at' in figure) {
@@ -45,7 +47,6 @@ function mismatch(name: string, figure: Figure): string | null {
     else if (typeof value !== 'number') return `${name}: ${figure.source} has no number at ${figure.at.join(' › ')}`
     else source = value * (figure.scale ?? 1)
   } else {
-    if (!read(figure.source).includes(figure.quote)) return `${name}: "${figure.quote}" is no longer in ${figure.source}`
     const found = numbers(figure.quote)
     if (found.length > 1 && figure.pick === undefined) return `${name}: "${figure.quote}" holds ${found.length} numbers, say which one`
     const picked = found[figure.pick ?? 0]
@@ -70,8 +71,12 @@ test('a figure taken from the wrong column, percentile, unit or row is rejected'
     ['ablationNoneBad', 17.5], // the ideal model's column
     ['redTeamSessions', 224], // the turns
     ['guardRecall', 0], // the false escalations
+    ['attemptsPerProvider', 4], // two providers × two attempts is not the per-provider constant
   ]
   for (const [name, value] of wrong) assert.notEqual(mismatch(name, { ...figures[name], value }), null, `${name} = ${value} passed`)
+  // A derived figure needs its quote too: a made-up span that says 120 minutes is not in RED_TEAM.md.
+  assert.notEqual(mismatch('redTeamMinutes', { ...figures.redTeamMinutes, value: 120, quote: '30/09/2026, from 20:00 to 22:00' }), null)
+  assert.notEqual(mismatch('redTeamMinutes', { ...figures.redTeamMinutes, value: 120 }), null)
   assert.notEqual(mismatch('ambiguous', { value: 70.2, digits: 1, source: 'README.md', quote: '| Safe automated resolution | 70.2% [64.1–75.6] |' }), null)
 })
 

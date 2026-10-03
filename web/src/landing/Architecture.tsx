@@ -11,7 +11,8 @@ const steps = ['session', 'guards', 'model', 'tools', 'reply'] as const
 export function Architecture() {
   const t = useT()
   const f = useFigures()
-  const step = (id: (typeof steps)[number], part: 'tag' | 'title' | 'text') => t(`landing.architecture.steps.${id}.${part}` as MessageKey)
+  const step = (id: (typeof steps)[number], part: 'tag' | 'title' | 'text') =>
+    t(`landing.architecture.steps.${id}.${part}` as MessageKey, { attempts: f.n(F.attemptsPerProvider) })
   return (
     <section id={sections.architecture} className="land-sec land-architecture" aria-labelledby="land-architecture">
       <div className="land-in">

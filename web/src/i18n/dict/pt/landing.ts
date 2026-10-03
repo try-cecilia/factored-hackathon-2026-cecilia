@@ -16,7 +16,7 @@ export const landing: Like<typeof esLanding> = {
   hero: {
     eyebrow: 'Factored Hackathon 2026 · contas e pagamentos · MX · CO · AR · ES/PT',
     title: 'O modelo escolhe a consulta. O código escreve a resposta.',
-    lead: 'Uma consulta ao modelo por turno, com até duas tentativas, que nunca recebe registros do cliente. As respostas saem de modelos de texto ES/PT com dados verificados em SQL. Uma única ação com efeito: rastrear uma movimentação pendente, com o «sim» avaliado no código e o pedido relido antes de ser anunciado.',
+    lead: 'Uma consulta ao modelo por turno, com até {attempts} tentativas por provedor e reserva em outro provedor, que nunca recebe registros do cliente. As respostas saem de modelos de texto ES/PT com dados verificados em SQL. Uma única ação com efeito: rastrear uma movimentação pendente, com o «sim» avaliado no código e o pedido relido antes de ser anunciado.',
     tryDemo: 'Testar a demo',
     seeEvaluation: 'Ver a avaliação',
     disclaimer: 'Dados sintéticos do organizador. Não movimenta dinheiro nem bloqueia cartões.',
@@ -88,8 +88,8 @@ export const landing: Like<typeof esLanding> = {
       cost: 'US$ / resolução segura',
       costValue: '{sonnet} vs {haiku}',
       calls: 'Consultas ao modelo por turno',
-      callsValue: '1 · até 2 tentativas',
-      conclusion: 'Uma consulta lógica por turno, com até duas tentativas. Se o modelo cair, responde o Groq ou o modo degradado.',
+      callsValue: '1 · até {attempts} tentativas por provedor',
+      conclusion: 'Uma consulta lógica por turno, com até {attempts} tentativas por provedor. Se o modelo cair, responde o Groq ou o modo degradado.',
     },
     method: {
       title: 'Como foi medido',
@@ -114,7 +114,7 @@ export const landing: Like<typeof esLanding> = {
     steps: {
       session: { tag: '01 · acesso', title: 'Cliente identificado', text: 'Só são consultados os dados do cliente que entrou.' },
       guards: { tag: '02 · antes do modelo', title: 'Guardas pré-LLM', text: 'Léxico de risco, classificador de intenção e detecção de produtos de outro cliente. Fraude, roubo ou conta suspensa vão para uma pessoa.' },
-      model: { tag: '03 · modelo', title: '1 consulta: escolher ferramentas', text: 'Recebe texto mascarado e apelidos P1…Pn (tipo, moeda, situação). Declara até 2 leituras, com até duas tentativas. O texto dele é descartado.' },
+      model: { tag: '03 · modelo', title: '1 consulta: escolher ferramentas', text: 'Recebe texto mascarado e apelidos P1…Pn (tipo, moeda, situação). Declara até 2 leituras. Até {attempts} tentativas por provedor, com reserva em outro. O texto dele é descartado.' },
       tools: { tag: '04 · ferramentas', title: 'Leituras no DuckDB', text: 'Titularidade verificada em SQL contra a sessão e números nos 4 últimos dígitos. Controle de atualidade configurável, desligado na demo de dados estáticos.' },
       reply: { tag: '05 · resposta', title: 'Modelo de texto ES/PT', text: 'Disposição AUTO_RESOLVE · CLARIFY · ABSTAIN · ESCALATE. Um ticket só é anunciado depois de relido.' },
     },
@@ -252,7 +252,7 @@ export const landing: Like<typeof esLanding> = {
     failures: 'Se algo falhar',
     failuresText: 'Coberto por testes. O modelo fora do ar, além disso, foi testado ao vivo durante o red team.',
     provider: '1 · o provedor não responde',
-    providerText: 'Duas tentativas e passa para o seguinte: Groq, com gpt-oss-120b.',
+    providerText: '{attempts} tentativas e passa para o seguinte: Groq, com gpt-oss-120b.',
     degraded: '2 · não há modelo, ou o teto foi atingido',
     degradedText: 'Modo degradado: os saldos saem dos dados verificados; o resto, para uma pessoa.',
     drift: '3 · algo se desvia',

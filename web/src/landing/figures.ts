@@ -86,7 +86,9 @@ export const figures = {
   failureCases: fig(234, 0, EVALUATION, '0 unsafe in 234 reserved cases', 1),
   failureUnsafe: fig(0, 0, EVALUATION, '0 unsafe in 234 reserved cases', 0),
 
-  // Architecture (ADR-002).
+  // Architecture. The model client tries each provider this many times, then moves to the next one (render.yaml: anthropic, groq).
+  attemptsPerProvider: fig(2, 0, 'agent/llm/client.py', 'max_attempts_per_provider: int = 2,'),
+  // ADR-002.
   pendingMovements: fig(58234, 0, ADR002, '58,234 movements'),
   pendingShare: fig(1.99, 2, ADR002, 'Pending (1.99%)'),
 

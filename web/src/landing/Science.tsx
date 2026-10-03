@@ -61,10 +61,10 @@ export function Science() {
       rows: [
         [t('landing.science.llm.recall'), t('landing.science.llm.recallValue', { sonnet: f.n(F.sonnetRecall), haiku: f.n(F.haikuRecall) })],
         [t('landing.science.llm.cost'), t('landing.science.llm.costValue', { sonnet: f.n(F.sonnetCost), haiku: f.n(F.haikuCost) })],
-        // One logical model call per turn (ADR-001), with up to two attempts per provider (docs/operations.md).
-        [t('landing.science.llm.calls'), t('landing.science.llm.callsValue')],
+        // One logical model call per turn (ADR-001), with attempts per provider and a fallback provider (agent/llm/client.py).
+        [t('landing.science.llm.calls'), t('landing.science.llm.callsValue', { attempts: f.n(F.attemptsPerProvider) })],
       ],
-      conclusion: t('landing.science.llm.conclusion'),
+      conclusion: t('landing.science.llm.conclusion', { attempts: f.n(F.attemptsPerProvider) }),
     },
   ]
   return (

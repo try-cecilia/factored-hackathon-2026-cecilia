@@ -128,6 +128,10 @@ describe('the landing', () => {
     expect(screen.getByText(/Control de frescura configurable, apagado en la demo de datos estáticos/)).toBeTruthy()
     expect(screen.getByText('muestra: 4.316 fraudes + 300.000 legítimos · ADR-005')).toBeTruthy()
     expect(screen.getByText('Demo inutilizada por carga (máximo 2 chats simultáneos; no es una prueba de saturación)')).toBeTruthy()
+    // Retries are per provider, with a fallback provider: no promise of a total maximum.
+    expect(screen.getByText(/^Una consulta al modelo por turno, con hasta 2 intentos por proveedor y respaldo en otro proveedor,/)).toBeTruthy()
+    expect(screen.getByText('1 · hasta 2 intentos por proveedor')).toBeTruthy()
+    expect(screen.getByText(/Hasta 2 intentos por proveedor, con respaldo en otro\./)).toBeTruthy()
     // Offline latencies say which run they are.
     expect(screen.getByText(/‡ Corrida local del 2 de octubre de 2026: las latencias dependen de la máquina\./)).toBeTruthy()
     const offline = screen.getAllByRole('table')[0]
