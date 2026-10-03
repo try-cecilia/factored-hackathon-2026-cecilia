@@ -235,16 +235,16 @@ def test_on_a_public_sandbox_account_a_case_is_news_only_to_the_session_that_fil
 def test_a_resolution_with_a_predefined_result_reads_it_and_the_message_only_after_it():
     ticket_id, orch, tok = file_plain_ticket_in_session()
     default_desk.act(ticket_id, "claim", "ana")
-    state = default_desk.act(ticket_id, "resolve", "ana", result="card_blocked", message="Llega en 5 días.")
-    assert (state["result"], state["message"]) == ("card_blocked", "Llega en 5 días.")
-    assert state["history"][-1]["detail"] == {"message": "Llega en 5 días.", "result": "card_blocked"}
+    state = default_desk.act(ticket_id, "resolve", "ana", result="call_the_bank", message="Llega en 5 días.")
+    assert (state["result"], state["message"]) == ("call_the_bank", "Llega en 5 días.")
+    assert state["history"][-1]["detail"] == {"message": "Llega en 5 días.", "result": "call_the_bank"}
     said = orch.handle_message(tok, "gracias").response_text
-    assert said.startswith(f"Novedad de tu caso: un agente lo resolvió. {render.RESOLVE_RESULT['card_blocked']['es']} "
+    assert said.startswith(f"Novedad de tu caso: un agente lo resolvió. {render.RESOLVE_RESULT['call_the_bank']['es']} "
                            "Mensaje del agente: «Llega en 5 días.»")
     assert orch.case_status(tok, ticket_id)["message"] == render.case_update("resolved", "es", None, "Llega en 5 días.", False,
-                                                                             "card_blocked")
-    assert render.case_update("resolved", "pt", None, None, False, "card_blocked") == (
-        f"Novidade do seu caso: um atendente resolveu. {render.RESOLVE_RESULT['card_blocked']['pt']}")
+                                                                             "call_the_bank")
+    assert render.case_update("resolved", "pt", None, None, False, "call_the_bank") == (
+        f"Novidade do seu caso: um atendente resolveu. {render.RESOLVE_RESULT['call_the_bank']['pt']}")
 
 
 def test_a_result_must_be_one_of_the_tickets_family_and_never_settles_a_ticket_that_carries_an_action():
@@ -252,20 +252,49 @@ def test_a_result_must_be_one_of_the_tickets_family_and_never_settles_a_ticket_t
 
     plain = file_plain_ticket_in_session()[0]  # a theft: the fraud family
     default_desk.act(plain, "claim", "ana")
-    for result in ("trace_opened", "referred", "nope"):
+    for result in ("trace_not_possible", "needs_specialist", "nope"):
         with pytest.raises(DeskError):
             default_desk.act(plain, "resolve", "ana", result=result)
     with pytest.raises(DeskError):
-        default_desk.act(plain, "resolve", "ana", result="dispute_opened", message="x" * 501)
-    assert default_desk.act(plain, "resolve", "ana", result="dispute_opened", message="  ")["message"] is None
+        default_desk.act(plain, "resolve", "ana", result="charge_confirmed", message="x" * 501)
+    assert default_desk.act(plain, "resolve", "ana", result="charge_confirmed", message="  ")["message"] is None
 
     traced = file_ticket()
     assert desk.results_for(default_queue.get(traced)) == ()
     default_desk.act(traced, "claim", "ana")
     with pytest.raises(DeskError):
-        default_desk.act(traced, "resolve", "ana", result="trace_opened")
+        default_desk.act(traced, "resolve", "ana", result="trace_not_possible")
     assert set(render.RESOLVE_RESULT) == {code for codes in desk.RESULTS.values() for code in codes}
     assert all(set(texts) == {"es", "pt"} for texts in render.RESOLVE_RESULT.values())
+
+
+# Every predefined result, reviewed one by one: what a person found or what comes next, never an action done. Resolving executes
+# nothing (no block, no dispute, no trace: the one action, a trace, is opened by approving the ticket that carries it), so a
+# result that announced one would be the assistant claiming an action that did not happen. A new code must be added here, after
+# that review, before its test passes.
+REVIEWED_RESULTS = {
+    "charge_confirmed": "a person's finding about the movement",
+    "movement_settled": "a person's finding about the movement",
+    "trace_not_possible": "says it cannot be traced here, and that someone will call",
+    "needs_specialist": "a person's finding, and that someone will call",
+    "info_checked": "a person's finding about the data",
+    "no_action_needed": "a person's finding",
+    "will_contact": "that someone will call",
+    "call_the_bank": "where the customer can go next",
+}
+ACTION_WORDS = ("bloque", "disput", "contesta", "abri", "abert", "pedimos", "solicit", "deriv", "encaminh", "marc", "quedó registr", "ficou registr", "registramos", "quedará",
+                "envi", "cancel", "reembols", "estorn", "devolv", "reemplaz", "substitu", "acredit", "credit", "rastreamos")
+
+
+def test_no_predefined_result_announces_an_action_the_system_did_not_take():
+    from agent.policy import desk
+
+    assert set(render.RESOLVE_RESULT) == set(REVIEWED_RESULTS)
+    assert {code for codes in desk.RESULTS.values() for code in codes} == set(REVIEWED_RESULTS)
+    for code, texts in render.RESOLVE_RESULT.items():
+        for lang, text in texts.items():
+            words = text.lower()
+            assert not [w for w in ACTION_WORDS if w in words], (code, lang, text)
 
 
 def file_plain_ticket_in_session():
