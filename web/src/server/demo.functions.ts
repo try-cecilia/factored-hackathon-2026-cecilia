@@ -1,8 +1,5 @@
 import { createServerFn } from '@tanstack/react-start'
-import { setCookie } from '@tanstack/react-start/server'
 import type { DemoFault, DemoScenario, DemoTicket, DemoTrace } from '../chat/types'
-import { localeCookie, localeCookieMaxAge } from '../i18n/locales'
-import { cookiePolicy } from './cookie-policy'
 import { parseTraces } from './demo-core'
 import { entriesOf, parseRole, SCENARIO_OF, type DemoEntry } from './demo-entry'
 import { demoConsoleOn } from './demo-gate'
@@ -113,8 +110,8 @@ export const enterDemo = createServerFn({ method: 'POST' })
     const found = (await scenarios())?.find((s) => s.id === SCENARIO_OF[data.role])
     if (!found || !(await isPublicAccount(found.customer_id))) return { ok: false, reason: 'failed' }
     if (!(await signInAs(found))) return { ok: false, reason: 'failed' }
-    // The customer who speaks Portuguese is seen in Portuguese: the interface follows, like the language switcher would.
-    if (found.language === 'pt') setCookie(localeCookie, 'pt', { path: '/', maxAge: localeCookieMaxAge, sameSite: 'lax', secure: cookiePolicy().secure })
+    // The interface keeps its language whoever the customer is (the Portuguese one included, also on entering again): only the
+    // language switcher sets it.
     return { ok: true, language: found.language }
   })
 

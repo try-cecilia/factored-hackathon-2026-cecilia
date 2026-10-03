@@ -147,13 +147,26 @@ describe('entering the demo with one click', () => {
     assert.deepEqual((kit.result as { entries: { role: string }[] }).entries.map((e) => e.role), ['cuentas', 'pendiente', 'portugues'])
   })
 
-  test('the pending transfer starts with no earlier traces, and the Portuguese customer switches the interface to Portuguese', async () => {
+  test('the pending transfer starts with no earlier traces, and the Portuguese customer leaves the interface\'s language alone', async () => {
     await call('enterDemo', { data: { role: 'pendiente' }, headers: fromNewAddress() })
     assert.ok(heard.some((r) => r.url === '/demo/fault' && JSON.parse(r.body || '{}').fault === 'clear_traces'))
     const pt = await call('enterDemo', { data: { role: 'portugues' }, headers: fromNewAddress() })
     assert.deepEqual(pt.result, { ok: true, language: 'pt' })
-    assert.ok(pt.res.headers.getSetCookie().some((c) => c.startsWith('cecilai_lang=pt')))
+    assert.ok(sessionCookieOf(pt.res), 'signed in as the Portuguese customer')
+    assert.ok(!pt.res.headers.getSetCookie().some((c) => c.startsWith('cecilai_lang=')), 'only the language switcher sets the language')
     assert.ok(!pt.text.includes(PT_PIN))
+  })
+
+  test('entering again as the Portuguese customer, a different one from the accounts\' (CLI-FIX0005), keeps the interface in Spanish', async () => {
+    const first = await call('enterDemo', { data: { role: 'portugues' }, headers: { Cookie: 'cecilai_lang=es', ...fromNewAddress() } })
+    const cookie = sessionCookieOf(first.res)
+    assert.ok(cookie)
+    const before = app.seen.length
+    const again = await call('enterDemo', { data: { role: 'portugues' }, headers: { Cookie: `${cookie.split(';')[0]}; cecilai_lang=es`, ...fromNewAddress() } })
+    assert.deepEqual(again.result, { ok: true, language: 'pt' })
+    assert.ok(app.seen.slice(before).some((r) => r.url === '/auth/session' && r.method === 'DELETE'), 'the expired session is revoked first')
+    assert.ok(sessionCookieOf(again.res), 'a new session')
+    assert.ok(!again.res.headers.getSetCookie().some((c) => c.startsWith('cecilai_lang=')), 'the language cookie is not touched')
   })
 
   test('an account the API no longer lists as public is not signed in with', async () => {
