@@ -345,7 +345,7 @@ describe('the deviation of a movement', () => {
 
   it('marks in "Movimientos" the ones that "Evidencia" already shows, and only those', async () => {
     const context: CustomerContext = {
-      warehouse: { available: true, as_of: null }, products: [], pending_omitted: 0, cases: [], traces: [],
+      warehouse: { available: true, source: 'account_warehouse', as_of: null, queried_at: null, freshness: 'current' }, products: [], pending_omitted: 0, cases: [], traces: [],
       movements: ['tx1', 'tx9'].map((id) => ({ transaction_id: id, date: '2026-09-28T14:02:00', product_id: 'P', type: 'Purchase', amount: 199, currency: 'USD', merchant: id, status: 'Approved', pending: false })),
     }
     setup(withBehavior('elevated'), undefined, { loadContext: async () => ({ ok: true, data: context }) })
@@ -526,7 +526,7 @@ describe('the customer segment in the header', () => {
 // The drawer reads summary first: the request and what to do, what needs attention, and the rest folded away with a line each.
 describe('the drawer, summary first', () => {
   const customer = (over: Partial<CustomerContext> = {}): CustomerContext => ({
-    warehouse: { available: true, as_of: '2026-06-01' },
+    warehouse: { available: true, source: 'account_warehouse', as_of: '2026-06-01', queried_at: '2026-06-01T12:34:56+00:00', freshness: 'current' },
     products: [
       { product_id: 'PRD-1', type: 'Cuenta Ahorro', currency: 'USD', status: 'Blocked', last4: '7547' },
       { product_id: 'PRD-2', type: 'Tarjeta Débito', currency: 'USD', status: 'Active', last4: '0002' },
@@ -658,7 +658,7 @@ describe('the drawer, summary first', () => {
   })
 
   it('"Requiere atención" is not drawn when the warehouse is down: it does not guess what it cannot read', async () => {
-    setup(ticket('open'), undefined, loading(customer({ warehouse: { available: false, as_of: null }, products: [], movements: [] })))
+    setup(ticket('open'), undefined, loading(customer({ warehouse: { available: false, source: 'account_warehouse', as_of: null, queried_at: null, freshness: 'unavailable' }, products: [], movements: [] })))
     await screen.findByText('Los productos y movimientos del cliente no están disponibles ahora.')
     expect(attention()).toBeNull()
   })

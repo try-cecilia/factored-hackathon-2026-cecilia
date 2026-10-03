@@ -14,7 +14,8 @@ import pytest
 
 from agent.core import orchestrator as orch_mod
 from agent.core.orchestrator import ConversationStore, Orchestrator
-from agent.session.auth import SessionStore
+from agent.policy.signals import detect_language
+from agent.session.auth import SessionStore, session_ref
 from eval.fake_llm import FakeLLMClient, text_response, tool_call_response, unavailable
 
 
@@ -253,6 +254,34 @@ def test_invalid_or_expired_session_requires_reauth_in_the_right_language(text, 
     for t in (tok, "not-a-token"):
         r = orch.handle_message(t, text)
         assert (r.disposition, r.language, fake.call_count) == ("REAUTH_REQUIRED", lang, 0)
+
+
+@pytest.mark.parametrize("first,lang", [("Qual é o meu saldo?", "pt"), ("¿Cuál es mi saldo?", "es")])
+@pytest.mark.parametrize("tie", ["no dia de hoje", "no final de hoje"])
+def test_a_tie_between_the_languages_keeps_the_conversation_s(first, lang, tie):
+    """"no dia de hoje" scores one word for each language ("no" for neither): a tie is no reason to switch."""
+    assert detect_language(tie).pt_score == detect_language(tie).es_score > 0
+    orch, tok, _ = make([tool_call_response("get_account_summary", {})] * 2)
+    assert orch.handle_message(tok, first).language == lang
+    assert orch.handle_message(tok, tie).language == lang
+    assert orch.conversations.get(session_ref(tok)).language == lang
+
+
+@pytest.mark.parametrize("first,lang,answer", [
+    ("¿Cuál es mi saldo?", "es", "por transferencia a terceros"), ("¿Cuál es mi saldo?", "es", "por transferencia a 1234"),
+    ("Qual é o meu saldo?", "pt", "sim, por favor"), ("Qual é o meu saldo?", "pt", "me passa meus saldos por favor"),
+])
+def test_a_short_answer_that_ties_stays_in_the_conversation_s_language(first, lang, answer):
+    orch, tok, _ = make([tool_call_response("get_account_summary", {})] * 2)
+    assert orch.handle_message(tok, first).language == lang
+    assert orch.handle_message(tok, answer).language == lang
+
+
+def test_a_tie_on_the_first_message_takes_the_default_and_leaves_the_language_unlearned():
+    orch, tok, _ = make([tool_call_response("get_account_summary", {})])
+    assert orch.handle_message(tok, "no dia de hoje").language == "es"
+    conv = orch.conversations.get(session_ref(tok))
+    assert (conv.language, conv.language_set) == ("es", False)
 
 
 def test_out_of_scope_without_tool_call_abstains_with_canned_message():

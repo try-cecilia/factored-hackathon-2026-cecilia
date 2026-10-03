@@ -22,6 +22,7 @@ import {
 } from '../ui'
 import { Blocks } from './Blocks'
 import { useTimeParts } from './clock'
+import { traceReceiptFacts } from './trace-receipt'
 import type { CaseRow } from './ConversationProvider'
 import {
   caseCategoryKey,
@@ -184,7 +185,12 @@ function AssistantView({ entry, entries, index, cases, time, active, sending, on
       )
       break
     case 'actionResult':
-      message = <ActionResultMessage {...frame} status="ok">{body}</ActionResultMessage>
+      if (reply.trace_receipt?.read_back) {
+        const { facts, nextStep } = traceReceiptFacts(reply.trace_receipt, locale, t)
+        message = <ActionResultMessage {...frame} status="ok" reference={reply.trace_receipt.trace_id} referenceLabel={t('chat.traceReceipt.traceId')} facts={facts} nextStep={nextStep} />
+      } else {
+        message = <ActionResultMessage {...frame} status="ok">{body}</ActionResultMessage>
+      }
       break
     case 'decline':
       message = (

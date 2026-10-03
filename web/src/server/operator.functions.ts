@@ -2,6 +2,7 @@ import { createServerFn } from '@tanstack/react-start'
 import { toCustomerContext, type CustomerContext } from './customer-context'
 import { parseDeskAction } from './desk-action'
 import { adminRead, operatorAct, type Result } from './operator-api'
+import { agentFetch } from './agent-api'
 import { publicOrigins } from './origin-check'
 import { PublicError } from './rpc-guard'
 import { sameOriginOnly } from './same-origin'
@@ -70,7 +71,7 @@ export type Ticket = {
 }
 
 export type OperatorView =
-  | { status: 'active'; operator: string | null; canAct: boolean; flash: string | null }
+  | { status: 'active'; operator: string | null; canAct: boolean; flash: string | null; demoMode: boolean | null }
   | { status: 'expired' } // there was a session and it is gone: idle too long, over its cap, or the server restarted
   | { status: 'anonymous' }
 
@@ -80,12 +81,20 @@ const clean = (value: unknown) => (typeof value === 'string' ? value.trim() : ''
 // there, so an abandoned tab lets its session expire. Clicks, navigation and actions leave it out.
 const autoOf = (input: { auto?: boolean } | undefined) => Boolean(input?.auto)
 
+async function readDemoMode(): Promise<boolean | null> {
+  const response = await agentFetch('/health').catch(() => null)
+  if (!response?.ok) return null
+  const health = await response.json().catch(() => null) as { demo_mode?: unknown } | null
+  return typeof health?.demo_mode === 'boolean' ? health.demo_mode : null
+}
+
 export const getOperatorView = createServerFn({ method: 'GET' })
   .validator(autoOf)
   .handler(async ({ data: auto }): Promise<OperatorView> => {
     const state = operatorSessionState(!auto)
     if (state.status !== 'active') return { status: state.status }
-    return { status: 'active', operator: state.session.operator ?? null, canAct: Boolean(state.session.operatorKey), flash: takeFlash() }
+    const demoMode = await readDemoMode()
+    return { status: 'active', operator: state.session.operator ?? null, canAct: Boolean(state.session.operatorKey), flash: takeFlash(), demoMode }
   })
 
 /** The one-shot message a form post left for the login page. */

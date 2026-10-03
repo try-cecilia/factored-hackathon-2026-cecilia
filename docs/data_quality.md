@@ -147,7 +147,8 @@ coverage. Non-null values are checked only when interactions are present.
   in whole days of 24 h, exactly at the limit is still fresh, and a warehouse
   with no as-of date is never fresh. The customer profile and the exchange
   rate (which says the date it used) are not gated. It is off by default only
-  because this dataset is a static 2023–2026 snapshot. Tested in
+  because this dataset is a static 2023–2026 snapshot; a warehouse with no
+  as-of date is unavailable either way. Tested in
   `tests/test_data_ml_validation.py` (`test_freshness_*`), including the
   end-to-end turn.
 

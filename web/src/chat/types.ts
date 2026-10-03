@@ -31,7 +31,22 @@ export type Reply = {
   degraded?: boolean
   /** What the numbered options of a clarification are: a product (answered by name) or a pending movement (answered by number). */
   choice?: 'product' | 'movement'
+  trace_receipt?: TraceReceipt
   why?: Why
+}
+
+/** Safe, customer-facing facts from a movement revalidated and a trace request read back by the service. */
+export type TraceReceipt = {
+  transaction_id: string
+  transaction_type: string
+  transaction_date: string
+  amount: number
+  currency: string
+  movement_status: string
+  trace_id: string
+  trace_status: string
+  read_back: true
+  sla_business_days: number
 }
 
 /** One turn of the conversation as the API kept it: what the customer wrote and what was rendered for them. `at` is ms since the epoch. */

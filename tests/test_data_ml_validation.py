@@ -482,7 +482,8 @@ def _fixed_today(monkeypatch, day: str):
     monkeypatch.setattr(tools, "datetime", Clock)
 
 
-def test_freshness_the_documented_defaults_and_the_as_of_date(record_property):
+def test_freshness_the_documented_defaults_and_the_as_of_date(monkeypatch, record_property):
+    monkeypatch.delenv("FRESHNESS_ENFORCE", raising=False)
     assert tools.freshness_enforced() is False and tools.freshness_slo_hours() == 36.0
     assert "`FRESHNESS_SLO_HOURS` (default 36)" in DATA_QUALITY_DOC and "off by default" in DATA_QUALITY_DOC
     summary = tools.get_account_summary("CLI-FIX0004")  # 2024 data, served: the policy is off
@@ -535,6 +536,14 @@ def test_freshness_a_stale_warehouse_ends_in_an_escalation_not_an_answer(monkeyp
     assert stale.disposition == "ESCALATE" and stale.category == "data_unavailable" and stale.ticket_id
     assert "2,455.81" not in stale.response_text  # the stale figure is not shown
     record_property("evidence", "the same question: without the policy, AUTO_RESOLVE with 'al 16/01/2024'; with stale data, ESCALATE/data_unavailable with a ticket and without the figure")
+
+
+def test_stale_warehouse_is_handed_off_when_freshness_is_enforced(monkeypatch):
+    monkeypatch.setenv("FRESHNESS_ENFORCE", "1")
+    orch, token, _ = make([tool_call_response("get_account_summary", {"product_id": "PRD-FIX0001"})])
+    stale = orch.handle_message(token, "balance de mi cuenta terminada en 0001")
+    assert stale.disposition == "ESCALATE" and stale.category == "data_unavailable" and stale.ticket_id
+    assert "2,455.81" not in stale.response_text
 
 
 # ---------------------------------------------------------------- 5. Componente aprendido contra una línea base

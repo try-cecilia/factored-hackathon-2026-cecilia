@@ -203,6 +203,20 @@ class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=1000)
 
 
+class TraceReceipt(BaseModel):
+    """Only the revalidated movement and the trace service's matching read-back leave the API."""
+    transaction_id: str
+    transaction_type: str
+    transaction_date: str
+    amount: float
+    currency: str
+    movement_status: str
+    trace_id: str
+    trace_status: str
+    read_back: Literal[True]
+    sla_business_days: int
+
+
 class ChatResponse(BaseModel):
     trace_id: str
     disposition: str
@@ -214,6 +228,7 @@ class ChatResponse(BaseModel):
     latency_ms: float
     degraded: bool = False  # limited mode: the model was unavailable, so the code answered alone (the screen says so)
     choice: Literal["product", "movement"] | None = None  # what the numbered options of a CLARIFY are: the screen sends a name or a number
+    trace_receipt: TraceReceipt | None = None  # present only when the confirmed trace was read back for this movement
     why: dict | None = None  # DEMO_MODE only: the rule, what the model received and chose, what the code verified
 
 
@@ -338,6 +353,7 @@ def health() -> dict:
     except Exception as exc:  # noqa: BLE001
         as_of = f"unavailable: {type(exc).__name__}"
     return {"status": "ok", "data_as_of": as_of,
+            "demo_mode": demo.enabled(),
             "llm_providers_configured": [p.name for p in default_providers() if p.configured()],
             "llm_budget_exhausted": default_budget.exhausted(),
             "intent_classifier_loaded": intent_guard.read("hola").model_available}
@@ -483,6 +499,7 @@ def _run_turn(req: ChatRequest) -> ChatResponse:
     return ChatResponse(trace_id=r.trace_id, disposition=r.disposition, response_text=r.response_text,
                         language=r.language, category=r.category, policy_rule=r.policy_rule if shown else "",
                         ticket_id=r.ticket_id, latency_ms=round(r.latency_ms, 1), degraded=r.degraded, choice=r.choice,
+                        trace_receipt=r.trace_receipt,
                         why=demo.explain(r, req.session_token) if shown else None)
 
 
@@ -497,6 +514,7 @@ class HistoryTurn(BaseModel):
     ticket_id: str | None = None
     degraded: bool = False
     choice: Literal["product", "movement"] | None = None
+    trace_receipt: TraceReceipt | None = None
 
 
 class HistoryCase(BaseModel):

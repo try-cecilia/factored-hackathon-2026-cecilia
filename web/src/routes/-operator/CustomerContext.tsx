@@ -54,15 +54,32 @@ export function ContextNotice({ result, onRetry }: { result: Result<CustomerCont
   }
   const down = result.ok && !result.data.warehouse.available
   if (result.ok && !down) return null
-  const message = !result.ok ? (result.status === 401 || result.status === 0 ? t(explainKey(result.status)) : t('operator.context.unavailable')) : t('operator.context.warehouseDown')
+  const freshness = result.ok ? result.data.warehouse.freshness : 'unavailable'
+  const asOf = result.ok ? result.data.warehouse.as_of : null
+  const message = !result.ok
+    ? (result.status === 401 || result.status === 0 ? t(explainKey(result.status)) : t('operator.context.unavailable'))
+    : freshness === 'stale' ? t('operator.context.warehouseStale', { date: asOf ?? '—' })
+      : freshness === 'missing' ? t('operator.context.warehouseMissing') : t('operator.context.warehouseDown')
   const retry = result.ok || (result.status !== 401 && result.status !== 0)
   return (
     <div className="op-fold op-fold--note">
       <div className="op-ctx__off" role="status">
         <p>{message}</p>
+        {result.ok && <WarehouseProvenance warehouse={result.data.warehouse} />}
         {retry && <Button variant="ghost" tinted size="xs" onClick={onRetry}>{t('operator.retry')}</Button>}
       </div>
     </div>
+  )
+}
+
+function WarehouseProvenance({ warehouse }: { warehouse: CustomerContext['warehouse'] }) {
+  const t = useT()
+  return (
+    <p className="op-muted op-ctx__more">
+      {t('operator.context.warehouseSource')}
+      {warehouse.queried_at && <> · {t('operator.context.queriedAt', { date: warehouse.queried_at })}</>}
+      {warehouse.as_of && <> · {t('operator.context.asOf', { date: warehouse.as_of })}</>}
+    </p>
   )
 }
 
@@ -79,6 +96,7 @@ export function ProductsFold({ data }: { data: CustomerContext }) {
   return (
     <Fold id="products" title={t('operator.context.products')} summary={products.length ? summary : t('operator.ticket.sections.none')} empty={products.length === 0}>
       <p className="op-muted op-ctx__note">{t('operator.context.note')}</p>
+      <WarehouseProvenance warehouse={data.warehouse} />
       <ul className="op-plain op-ctx__list">
         {products.map((p) => (
           <li key={p.product_id} data-inactive={isInactive(p) ? '' : undefined}>
@@ -86,7 +104,7 @@ export function ProductsFold({ data }: { data: CustomerContext }) {
             <span className="op-mono op-muted">
               <span aria-hidden="true">{maskOf(p.last4)}</span>
               {p.last4 && <span className="sr-only">{t('operator.context.endsIn', { last4: p.last4 })}</span>}
-              {p.currency ? ` · ${p.currency}` : ''}
+              {p.currency ? ` · ${t('operator.context.originalCurrency')}: ${p.currency}` : ''}
             </span>
             <span className="op-muted">{productStatusName(t, p.status)}</span>
           </li>
@@ -117,7 +135,7 @@ export function MovementsFold({ data, inEvidence, country }: { data: CustomerCon
               {(m.pending || (m.status && m.status !== 'Approved')) && <span className="op-tag op-tag--neutral">{movementStatusName(t, m.status)}</span>}
               {inEvidence?.has(m.transaction_id) && <span className="op-tag op-tag--info" title={t('operator.context.inEvidenceHint')}>{t('operator.context.inEvidence')}</span>}
             </span>
-            <span className="op-mono">{money(m.amount, m.currency, country)}</span>
+            <span className="op-mono">{money(m.amount, m.currency, country)}{m.currency ? ` · ${t('operator.context.originalCurrency')}: ${m.currency}` : ''}</span>
           </li>
         ))}
       </ul>

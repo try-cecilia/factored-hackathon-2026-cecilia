@@ -4,6 +4,7 @@ import { htmlLang, type Locale } from '../i18n/locales.ts'
 import type { Translate } from '../i18n/translate.ts'
 import { caseCategoryKey, caseStatusText, classifyReply, deliveryDetailKey, proposalState, splitCaseNews, type Entry, type UserEntry } from './conversation.ts'
 import type { CaseRow } from './ConversationProvider.tsx'
+import { traceReceiptFacts } from './trace-receipt.ts'
 import { toBlocks } from './format.ts'
 
 export type TranscriptOptions = {
@@ -43,7 +44,7 @@ function userLines(entry: UserEntry, t: Translate): string[] {
  * the title of an opened trace, the outcome of a proposal, the case and where it stands). Buttons (yes, no, retry, view the case,
  * the suggestions of a refusal) are not text of the conversation and are left out.
  */
-function assistantLines(entries: readonly Entry[], index: number, { t, cases }: Pick<TranscriptOptions, 't' | 'cases'>): string[] {
+function assistantLines(entries: readonly Entry[], index: number, { t, cases, locale }: Pick<TranscriptOptions, 't' | 'cases' | 'locale'>): string[] {
   const entry = entries[index]
   if (entry.role !== 'assistant') return []
   const { reply } = entry
@@ -57,7 +58,13 @@ function assistantLines(entries: readonly Entry[], index: number, { t, cases }: 
       else out.push(...lines(body))
       break
     case 'actionResult':
-      out.push(t('chat.actionResult.okTitle'), ...lines(body))
+      if (reply.trace_receipt?.read_back) {
+        const { facts, nextStep } = traceReceiptFacts(reply.trace_receipt, locale, t)
+        out.push(t('chat.actionResult.okTitle'), `${t('chat.traceReceipt.traceId')}: ${reply.trace_receipt.trace_id}`,
+          ...facts.map((fact) => `${fact.label}: ${fact.value}`), nextStep)
+      } else {
+        out.push(t('chat.actionResult.okTitle'), ...lines(body))
+      }
       break
     case 'confirmTrace': {
       out.push(...lines(body))
@@ -95,7 +102,7 @@ export function conversationTranscript(entries: readonly Entry[], { locale, t, c
   const out = [`${t('conversation.copy.title')} · ${day.format(shown[0].at)}`]
   entries.forEach((entry, index) => {
     if (entry.role === 'note') return
-    const body = entry.role === 'user' ? userLines(entry, t) : assistantLines(entries, index, { t, cases })
+    const body = entry.role === 'user' ? userLines(entry, t) : assistantLines(entries, index, { t, cases, locale })
     if (body.join('') === '') return
     const who = entry.role === 'user' ? t('chat.you') : t('chat.assistant')
     const head = `[${hour.format(entry.at)}] ${who}:`

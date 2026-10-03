@@ -1,4 +1,5 @@
 import { htmlLang, type Locale } from '../i18n/locales.ts'
+import { roundHalfUp } from './rounding.ts'
 
 /**
  * Every measured figure the landing shows, bound to the one value it comes from; `figures.test.ts` reads each source and fails
@@ -122,12 +123,12 @@ export const figures = {
   idealRecordsToModel: json(0, 0, OFFLINE, [...IDEAL, 'records_sent_to_model', 'k']),
   adversarialRecordsToModel: json(0, 0, ADVERSARIAL, [...ADV, 'records_sent_to_model', 'k']),
   // Without the model, on the machine of the run of `offlineRunDate`: they depend on the machine.
-  keywordLatencyP50: json(2.4, 1, OFFLINE, [...KEYWORD, 'latency_ms_p50']),
-  keywordLatencyP95: json(8.5, 1, OFFLINE, [...KEYWORD, 'latency_ms_p95']),
-  idealLatencyP50: json(5.0, 1, OFFLINE, [...IDEAL, 'latency_ms_p50']),
-  idealLatencyP95: json(17.5, 1, OFFLINE, [...IDEAL, 'latency_ms_p95']),
-  adversarialLatencyP50: json(5.2, 1, ADVERSARIAL, [...ADV, 'latency_ms_p50']),
-  adversarialLatencyP95: json(21.7, 1, ADVERSARIAL, [...ADV, 'latency_ms_p95']),
+  keywordLatencyP50: json(14.4, 1, OFFLINE, [...KEYWORD, 'latency_ms_p50']),
+  keywordLatencyP95: json(78.0, 1, OFFLINE, [...KEYWORD, 'latency_ms_p95']),
+  idealLatencyP50: json(25.9, 1, OFFLINE, [...IDEAL, 'latency_ms_p50']),
+  idealLatencyP95: json(110.0, 1, OFFLINE, [...IDEAL, 'latency_ms_p95']),
+  adversarialLatencyP50: json(35.9, 1, ADVERSARIAL, [...ADV, 'latency_ms_p50']),
+  adversarialLatencyP95: json(109.6, 1, ADVERSARIAL, [...ADV, 'latency_ms_p95']),
   // Zero observed events: ≈3/n, an approximate 95% upper bound under the experiment's assumptions.
   offlineUpperBound: json(0.55, 2, OFFLINE, [...IDEAL, 'unsafe_95pct_upper_bound_if_zero'], 100),
 
@@ -214,7 +215,7 @@ export const figures = {
   loadSlots: fig(32, 0, LOADTEST, 'max_concurrent_chats=32'),
   loadModelMs: fig(1800, 0, LOADTEST, 'model simulated at 1800 ms'),
   instanceMemoryMb: fig(512, 0, LIMITATIONS, 'each (512 MB). What that leaves out: no replicas'),
-  demoCustomers: fig(5000, 0, LIMITATIONS, 'no replicas, the API loads a 5,000-customer sample'),
+  demoCustomers: fig(5000, 0, LIMITATIONS, 'the API loads a 5,000-customer sample'),
 
   // Security (SECURITY.md).
   sessionTokenBits: fig(192, 0, SECURITY, '192-bit tokens, stored hashed'),
@@ -237,7 +238,7 @@ const separators: Record<Locale, { decimal: string; group: string }> = {
 /** `value` with `digits` decimals in the notation of `locale`, grouping thousands always ("4.316", not "4316"). */
 export function formatNumber(value: number, digits: number, locale: Locale): string {
   const { decimal, group } = separators[locale]
-  const [whole, fraction] = Math.abs(value).toFixed(digits).split('.')
+  const [whole, fraction] = roundHalfUp(Math.abs(value), digits).split('.')
   const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, group)
   return `${value < 0 ? '−' : ''}${grouped}${fraction ? decimal + fraction : ''}`
 }
@@ -246,7 +247,7 @@ export function formatNumber(value: number, digits: number, locale: Locale): str
 export const formatFigure = (figure: Figure, locale: Locale): string => formatNumber(figure.value, figure.digits, locale)
 
 /** Millions with one decimal: 4,425,008 is "4,4". */
-export const formatMillions = (figure: Figure, locale: Locale): string => formatNumber(figure.value / 1e6, 1, locale)
+export const formatMillions = (figure: Figure, locale: Locale): string => formatNumber(Number(roundHalfUp(figure.value, 1, -6)), 1, locale)
 
 /** The day in figures, as a trace line under a number writes it: "02/10/2026". */
 export function formatShortDate(iso: string, locale: Locale): string {

@@ -8,9 +8,12 @@ function, in code:
    exist; otherwise DataUnavailable. Questions that don't apply to a product
    raise NotApplicable, which the policy layer answers rather than escalates.
 3. Data minimization: account/card numbers leave this layer as last-4 only.
-4. Freshness: every result carries `as_of` (the warehouse's data date). With
-   FRESHNESS_ENFORCE=1, a warehouse older than FRESHNESS_SLO_HOURS makes
-   balance/transaction answers DataUnavailable instead of silently stale.
+4. Freshness: every result carries `as_of` (the warehouse's data date).
+   Configurable and off by default, because the demo serves a static snapshot
+   and every answer states its date: with FRESHNESS_ENFORCE=1, a warehouse
+   older than FRESHNESS_SLO_HOURS makes balance/transaction answers
+   DataUnavailable instead of silently stale. A warehouse with no data date
+   is unavailable either way.
 All calls are written to the audit log with the current trace id.
 """
 from __future__ import annotations
@@ -81,11 +84,13 @@ def freshness_slo_hours() -> float:
 
 
 def _check_freshness() -> None:
+    as_of = data_as_of()
+    if as_of is None:
+        raise DataUnavailable("warehouse has no data date", field="as_of")
     if not freshness_enforced():
         return
-    as_of = data_as_of()
     slo_h = freshness_slo_hours()
-    age_h = (datetime.now(timezone.utc).date() - as_of).days * 24 if as_of else float("inf")
+    age_h = (datetime.now(timezone.utc).date() - as_of).days * 24
     if age_h > slo_h:
         raise DataUnavailable(f"warehouse data as of {as_of} exceeds freshness SLO of {slo_h:.0f}h", field="as_of")
 
@@ -339,7 +344,7 @@ def request_trace(customer_id: str, product_id: Optional[str] = None, amount: An
         if day:
             clauses.append("CAST(t.transaction_date AS DATE) = ?"); params.append(day)
         items = _rows(
-            f"""SELECT t.transaction_id, t.transaction_date, t.transaction_type, t.amount, t.currency, t.product_id,
+            f"""SELECT t.transaction_id, t.transaction_date, t.transaction_type, t.amount, t.currency, t.transaction_status, t.product_id,
                        p.product_type, p.product_number, p.opening_date, cu.registration_date
                 FROM transactions t JOIN products p ON p.product_id = t.product_id
                 JOIN customers cu ON cu.customer_id = t.customer_id
