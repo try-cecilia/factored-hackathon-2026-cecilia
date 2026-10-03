@@ -2,8 +2,13 @@
 
 - **Status:** accepted, recorded 2026-09-29.
 - **Context:** the language model only interprets (ADR-001): it picks the tool and its arguments and nothing it writes
-  reaches the customer. The choice of model therefore moves how many requests the system can resolve without a
-  person, and not whether the outcome is safe. We measured two candidates on the same held-out sample.
+  reaches the customer. The controls checked offline (the ownership check, replies written by code, never sending a
+  customer record to the model) hold whatever the model does, so the choice of model mostly moves how many requests the
+  system can resolve without a person. It is not irrelevant to safety: a product the model names by its alias is taken
+  as given (`resolve_product_ref` in `agent/core/orchestrator.py` does not compare it with the digits the customer
+  wrote), so a model that picks the wrong one of the customer's own products gets a correct answer about the wrong
+  product (Haiku 4.5, 2026-10-03, below). We measured two candidates on the same
+  held-out sample.
 
 ## Decision
 
@@ -61,12 +66,13 @@ first it has had in these runs.
 
 ## Trade-offs
 
-- **The sample is 132 of the test cases, not all.** Zero unsafe in 132 bounds the true rate only below about 2.3%. The
-  intervals on resolution are wide (a country by segment cell holds 15 to 20 in-scope cases). The offline runs with
-  scripted models cover the whole workload, and they show that safety does not depend on the model
-  (`SYSTEM_EVAL_ADVERSARIAL.md`, `ABLATION.md`).
-- **Haiku is faster** at the median, not at p95. A person's average inquiry takes about 341 s, so 0.6 s does not
-  decide anything at this workload.
+- **The sample is 138 of the test cases, not all.** Zero unsafe in 138 bounds the true rate only below about 2.2%. The
+  intervals on resolution are wide (a segment or country cell holds 12 to 20 in-scope cases). The offline runs with
+  scripted models cover the whole workload, and they show that the controls checked offline hold with a deliberately
+  bad model (`SYSTEM_EVAL_ADVERSARIAL.md`, `ABLATION.md`). They do not show that the model's choice of product
+  cannot matter: the scripted models do not pick the wrong one of the customer's own products, and Haiku 4.5 did once.
+- **Haiku is faster** at the median (1.0 s against 1.2 s on 2026-10-03), not at p95 (3.8 s against 2.6 s). A
+  person's average inquiry takes about 341 s, so ≈0.2 s does not decide anything at this workload.
 - **The vendor is a dependency.** The fallbacks above (Groq, local, limited mode) exist for that, and each is measured
   or reported as not yet measured in `LIMITATIONS.md`.
 - The Groq model ran only on a small sample (42 of the 226 reserved failure cases), with 3 not handled as the policy

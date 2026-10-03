@@ -13,7 +13,7 @@ projections are labeled as such and never mixed.
 | | Human agents (measured, bank data) | Keyword bot (baseline) | This system |
 |---|---|---|---|
 | Queue wait | 120 s | 0 s | 0 s |
-| Handling time | 221 s (≈3.7 min) | 6.5 ms per case (p95 31 ms) | 15.5 ms per case (p95 61 ms) **excluding the LLM** |
+| Handling time | 221 s (≈3.7 min) | 2.4 ms per case (p95 8.5 ms) | 5.0 ms per case (p95 17.5 ms) **excluding the LLM** |
 | Total per inquiry | **≈341 s (≈5.7 min)** | milliseconds | **1.2 s p50, 2.6 s p95 per case with Claude Sonnet 5** (held-out live run) |
 | Resolved | 91.5% first-contact | 70.2% safe automated | **95.0% with Sonnet 5 (live)** · 99.2% ideal model (upper bound) · 60.5% adversarial model |
 | Required escalations missed | not in the data | 72 / 168 | 0 / 168 offline · 1 / 42 live (Sonnet 5, in runs 1 and 2 of 3; 0 in run 3) |
@@ -356,7 +356,7 @@ For this component it fails if:
 | **Unsafe outcomes** | **0 / 548** | **0 / 548** | **0 / 548** |
 | Cases that sent a customer record to the model | n/a | 0 / 548 | 0 / 548 |
 | Incorrect, not unsafe | 26 | 0 | 0 |
-| Latency p50 / p95 per case (non-LLM, local) | 6.5 / 31.3 ms | 15.5 / 60.8 ms | 23.1 / 57.7 ms |
+| Latency p50 / p95 per case (non-LLM, local) | 2.4 / 8.5 ms | 5.0 / 17.5 ms | 5.2 / 21.7 ms |
 
 The latencies were measured on the machine that regenerated the reports and are not comparable to the previous run's.
 
@@ -470,8 +470,9 @@ and its JSON kept the rows of run 1 only. Run 1 against run 1:
 | Cost per safe resolution | USD 0.0034 | USD 0.0034 | USD 0.0079 | USD 0.0080 |
 | Outcome changed between runs | 0.7% (1 of 138) | 2.9% (4 of 138) | 2.2% (3 of 138) | 2.9% (4 of 138) |
 
-Every difference is inside the intervals, and two things changed at once (the code and the model's own variation), so
-none is attributed to a cause. The new missed escalation of Sonnet 5 is one case in two of three runs. The two unsafe
+Every difference in a rate is inside its 95% interval (latency and cost have no interval here, so for them there is
+no such test), and two things changed at once (the code and the model's own variation), so none is attributed to a
+cause. The new missed escalation of Sonnet 5 is one case in two of three runs. The two unsafe
 outcomes of Haiku 4.5 are of different types; the earlier one cannot be inspected, because its run's rows were not kept.
 The latency fell with no change meant to make it faster; it was not investigated.
 
