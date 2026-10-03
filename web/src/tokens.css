@@ -154,4 +154,15 @@
   /* Paper's focus ring: 2px gap in paper color, then 2px cecil-blue. The only stroke besides the outline button. */
   --ring-focus: 0 0 0 2px var(--color-paper), 0 0 0 4px var(--color-cecil-blue);
   --shadow-window: 0 0 0 1px var(--color-glass), 0 1px 1px #0F0A1414, 0 24px 50px -24px #0F0A148C;
+
+  /* The landing (Paper "01 · Landing", variant A): its tonal surfaces, the text on its black blocks and the sky window. */
+  --color-surface-tonal: #F4F4F5; /* cards, steps and the gray band */
+  --color-surface-strip: #F7F7F8; /* the hero's row of figures */
+  --color-bubble: #F2F2F3; /* the customer's bubble in the hero window */
+  --color-divider: #DCDCDF; /* rules inside a tonal card */
+  --color-on-ink-label: #9DB8FF; /* a card's label on black */
+  --color-on-ink-muted: #C9C9CE; /* secondary text on black */
+  --color-on-ink-divider: #333336; /* rules on black */
+  --color-on-ink-success: #7EE2A8; /* "0 unsafe" on black: --color-success has no contrast there */
+  --gradient-sky: linear-gradient(in oklab 160deg, oklab(73.8% -0.015 -0.134) 0%, oklab(58.1% -0.024 -0.228) 45%, oklab(47.3% -0.020 -0.222) 75%, oklab(35% -0.016 -0.173) 100%);
 }

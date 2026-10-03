@@ -1,12 +1,5 @@
 import type { Like } from '../../types.ts'
-import type { home as esHome, login as esLogin } from '../es/auth.ts'
-
-export const home: Like<typeof esHome> = {
-  titleLine1: 'Conheça a Cecilia,',
-  titleLine2: 'sua assistente bancária.',
-  lead: 'Consulte saldos, movimentações e pagamentos em linguagem simples. Se for preciso uma pessoa, a Cecilia passa o seu caso completo.',
-  signIn: 'Entrar',
-}
+import type { login as esLogin } from '../es/auth.ts'
 
 export const login: Like<typeof esLogin> = {
   pageTitle: 'Entrar · Cecilai',

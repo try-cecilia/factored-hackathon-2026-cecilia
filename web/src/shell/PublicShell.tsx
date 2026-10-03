@@ -20,15 +20,28 @@ export function Brand({ plain }: { plain?: boolean }) {
   )
 }
 
+type Props = {
+  children: ReactNode
+  /** Links to the sections of the page, between the wordmark and the switcher (the landing's). */
+  nav?: ReactNode
+  /** After the switcher: the landing's "Sign in". */
+  actions?: ReactNode
+  className?: string
+}
+
 /** The frame of the pages before the customer signs in: the wordmark and the language switcher on top, the page below. */
-export function PublicShell({ children }: { children: ReactNode }) {
+export function PublicShell({ children, nav, actions, className }: Props) {
   const t = useT()
   return (
-    <div className="pub">
+    <div className={className ? `pub ${className}` : 'pub'}>
       <a className="skip" href="#main">{t('common.skipToContent')}</a>
       <header className="pub__bar">
         <Brand />
-        <LanguageSwitcher />
+        {nav}
+        <div className="pub__actions">
+          <LanguageSwitcher />
+          {actions}
+        </div>
       </header>
       {children}
     </div>
