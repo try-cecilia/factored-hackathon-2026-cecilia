@@ -18,9 +18,12 @@ test('rounding works on the decimal text, not on the binary float that toFixed r
   assert.equal(roundHalfUp(2.449999999999, 1), '2.4')
 })
 
-test('a scale is a power of ten, or it is refused', () => {
-  assert.equal(powerOfTen(100), 2)
-  assert.equal(powerOfTen(0.001), -3)
-  assert.equal(powerOfTen(1), 0)
-  assert.throws(() => powerOfTen(3))
+test('a scale is exactly a power of ten, or it is refused', () => {
+  for (const [scale, power] of [[1, 0], [10, 1], [100, 2], [0.1, -1], [0.01, -2], [0.001, -3], [1e-13, -13], [1e21, 21]] as const) {
+    assert.equal(powerOfTen(scale), power, String(scale))
+  }
+  // Close to a power of ten is not one: rounding the scale first would have read these as 10**-13, -12, -20 and -2.
+  for (const scale of [3, 3e-13, 1.3e-12, 2e-20, 0.1 * 0.1, 0.010000000000000002, 0.0099999999999, 20, 1.5]) {
+    assert.throws(() => powerOfTen(scale), String(scale))
+  }
 })

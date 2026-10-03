@@ -19,7 +19,7 @@ import argparse
 import json
 import re
 import sys
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_HALF_UP, Decimal, localcontext
 from pathlib import Path
 
 REPORTS = Path("eval/reports")
@@ -106,8 +106,14 @@ def _fixed(value: float, digits: int, shift: int = 0) -> str:
     """The rounding every written figure shares (EVALUATION.md, the slides, the landing and the landing's own test): the
     shortest decimal form of `value` that reads back as the same float (`repr`, what JavaScript's String also gives), times
     10**shift, rounded half up to `digits` decimals. Decimal arithmetic on that string, never the binary float: 2.25 → 2.3,
-    2.55 → 2.6, 2.449999999999 → 2.4, 1.005 → 1.01 (web/src/landing/rounding-cases.json holds the shared cases)."""
-    return format(Decimal(repr(value)).scaleb(shift).quantize(Decimal(1).scaleb(-digits), rounding=ROUND_HALF_UP), "f")
+    2.55 → 2.6, 2.449999999999 → 2.4, 1.005 → 1.01. Any size (the precision follows the number, as JavaScript's BigInt does),
+    and no negative zero: what rounds to zero is written unsigned (-0.01 → 0.0). web/src/landing/rounding-cases.json holds the
+    cases both sides test."""
+    number = Decimal(repr(value)).scaleb(shift)
+    with localcontext() as ctx:
+        ctx.prec = max(number.adjusted(), 0) + digits + 2  # every digit of the integer part and the decimals kept, none rounded away
+        rounded = number.quantize(Decimal(1).scaleb(-digits), rounding=ROUND_HALF_UP)
+    return format(rounded.copy_abs() if rounded == 0 else rounded, "f")
 
 
 def _read(path: Path) -> str:

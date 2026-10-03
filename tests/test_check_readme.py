@@ -201,7 +201,8 @@ def _with_latency(monkeypatch, value: float) -> None:
 
 
 @LANDING_HERE
-@pytest.mark.parametrize("case", [c for c in ROUNDING if c["digits"] == 1 and not c.get("shift")], ids=lambda c: str(c["value"]))
+# Latencies are never negative: the sign is the shared cases' business, not the documents'.
+@pytest.mark.parametrize("case", [c for c in ROUNDING if c["digits"] == 1 and not c.get("shift") and c["value"] >= 0], ids=lambda c: str(c["value"]))
 def test_evaluation_the_slides_and_the_landing_round_a_latency_the_same(tmp_path, monkeypatch, case):
     root = _docs(tmp_path)
     _with_latency(monkeypatch, case["value"])
