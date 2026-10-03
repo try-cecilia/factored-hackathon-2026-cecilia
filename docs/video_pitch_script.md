@@ -16,8 +16,8 @@ report is regenerated, copy them again from it, never from memory.
 2. **The problem, measured (20 s).** The contact-reason and CSAT tables from `docs/evidence/baseline_metrics.md`:
    35% of 686K contacts, 91.5% first-contact resolution, 120 s wait plus 221 s call, CSAT 2.91.
 
-3. **The design in one sentence (25 s).** "The model interprets; the code speaks." One model call per turn only
-   chooses which lookup to run. It never receives a customer record (the evaluation checks every request it
+3. **The design in one sentence (25 s).** "The model interprets; the code speaks." One primary model response per turn
+   only chooses which lookup to run. It never receives a customer record (the evaluation checks every request it
    was sent) and never writes a reply: every answer is rendered from verified data or a fixed template. The
    one action it takes happens only on the customer's own yes, judged in code.
 

@@ -160,9 +160,9 @@ customer text ─► session check ─► pre-LLM policy ───────�
    (ES/PT)       (token only)     (lexicon + classifier guard +            fraud, theft, legal, another
                                    foreign-product reference)              customer's product)
                                         │
-                                        ▼  masked text + product aliases + figure-free history
-                 LLM, one call (Claude / Groq gpt-oss-120b / Together): chooses tools and arguments
-                                        │   never sees records, never writes the reply
+                                        ▼  masked text + product aliases + history (customer amounts included; no warehouse figures)
+                 LLM, one primary response (Claude / Groq gpt-oss-120b / Together): chooses tools and arguments
+                                        │   never sees warehouse records, never writes the reply
                                         ▼
                  tools (DuckDB): ownership check, masking, as-of, freshness ─► the policy
                                         │                                      assigns a disposition to each result

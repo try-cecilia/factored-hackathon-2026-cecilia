@@ -22,8 +22,9 @@ regenerated, copy the numbers again from it. Speaker notes follow `docs/video_pi
 - *(chart: contact reasons; handle time vs CSAT by reason, `docs/evidence/baseline_metrics.md`)*
 
 ## 2. The model interprets; the code speaks
-- One model call per turn chooses the lookup. It never receives a customer record: identifiers the customer
-  types are masked, products are aliases, and the history holds no figures.
+- One primary model response per turn chooses the lookup. It never receives a customer record: identifiers the
+  customer types are masked, products are aliases, and our replies stay in its history without figures (what the
+  customer typed, amounts included, stays as written).
 - Every reply comes from verified tool results or a fixed template, so no invented figure can reach a customer.
 - Ownership is checked in SQL; fraud, compliance holds and another customer's product are caught before the model.
 - **One action**: tracing a pending movement, opened only on the customer's plain yes (judged in code), and
