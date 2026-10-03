@@ -36,6 +36,8 @@ a { color: inherit; }
    is 16px there, whatever its component draws on a desktop; the one !important here, so no component rule can undercut it. */
 @media (pointer: coarse) {
   input:not([type='checkbox'], [type='radio'], [type='hidden']), textarea, select { font-size: max(16px, 1em) !important; }
+  /* The skip link is a 44px target too, like every other control. */
+  .skip { display: inline-flex; align-items: center; min-height: 44px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
