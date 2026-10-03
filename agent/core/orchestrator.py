@@ -715,9 +715,12 @@ class Orchestrator:
                               "session", f"session:{type(exc).__name__}")
 
         conv = self.conversations.get(session.ref)
-        lang = guess.language if (guess.pt_score or guess.es_score) else conv.language
+        # Only a message where one language wins changes it: no signal, or a tie ("no dia de hoje" scores 1 to 1), keeps
+        # the conversation's, which is the default until a message shows one.
+        decisive = guess.pt_score != guess.es_score
+        lang = guess.language if decisive else conv.language
         conv.language = lang
-        conv.language_set = conv.language_set or bool(guess.pt_score or guess.es_score)
+        conv.language_set = conv.language_set or decisive
         # The raw text only feeds local policy checks. The model gets `model_text` (identifiers masked, own product
         # ids as aliases); a human agent's ticket gets `ticket_text` (card numbers masked, amounts kept).
         model_text, ticket_text = redact(text), mask_card_numbers(text)
