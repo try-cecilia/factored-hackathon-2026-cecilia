@@ -372,9 +372,18 @@ service, and as our own roadmap.
 - **The local model is wired, not measured.** The compose stack can start Ollama and pass the API `LLM_PROVIDERS=local`, and the
   profile was verified with a 0.5 GB model. No evaluation has run against any local model (`gpt-oss:20b` or a smaller one),
   and on macOS Docker runs models on CPU only.
-- **The operator screen is tested in pieces, never driven whole.** Its API and components pass their tests
-  ([`docs/operator_screen_eval.md`](docs/operator_screen_eval.md)), but nobody has walked queue, claim, approve in a
-  browser, and it has had no keyboard or screen-reader pass.
+- **The operator screen was walked once in a browser, by keyboard; a screen reader, other browsers and two operators
+  at once were not.** Its API and components pass their tests, and on 2026-09-30 Chromium drove the deployed console with
+  Tab and Enter only: sign in, queue, take, approve, reject with a reason, resolve with a message and hand back, each
+  followed by what the customer read next, and the lock of a stale second screen
+  ([`docs/operator_screen_eval.md`](docs/operator_screen_eval.md#walked-on-the-deployed-demo-2026-09-30)). Taking a case
+  took 64 Tab presses from the top of the page. The console's skip link (`web/src/routes/-operator/OperatorShell.tsx`)
+  jumps past the top bar and the menu, but on the case page the queue is part of that main content and comes before the
+  case, so it is still tabbed through; the count was not taken again. Not tried: a screen reader (the walk checked roles
+  and names, not what a reader announces), the console's actions in browsers other than Chromium (only its login was
+  also tried in WebKit, above) or on a real phone, and two operators acting at once in a browser: the stale-screen lock
+  was walked with one operator in two tabs. That a second operator is refused is tested through the API
+  (`tests/test_operator_auth.py:test_two_operators_cannot_act_on_each_others_ticket_end_to_end`).
 - **Voice is not built.** 85% of account/payment contacts are phone calls; this
   system serves the 15% on text channels until speech-to-text and
   text-to-speech are added.
