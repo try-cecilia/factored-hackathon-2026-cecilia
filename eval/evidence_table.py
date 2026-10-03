@@ -10,16 +10,19 @@ fingerprint is shown as the report carries it and compared with the one this che
 report measured on other code says so in its row instead of passing for current. The caveats are fixed text, taken from
 EVALUATION.md and LIMITATIONS.md.
 
-The page's links to code are written as [`symbol`](../path.py#L123). The check finds where `symbol` is defined in that file
-(a def, a class or an assignment; `Class.method` looks for the method after the class) and fails if the line number is not
-that one, or if any relative link points to a file that does not exist. `--write` moves the line numbers to where the
-definitions are now.
+The page's links to code are written as [`symbol`](../path.py#L123). The check parses that file and finds where `symbol` is
+defined in its own scope (a def, a class or an assignment at the top of the module; `Class.method` only inside that class),
+and fails if the line number is not that one or the symbol is not there. Any other relative link must point to a file that
+exists, except the files the public export removes (`ops/export_public.py`, `REMOVE_GLOBS`): the per-case reports. `--write`
+moves the line numbers to where the definitions are now, and exits 1 only if something it cannot fix is left.
 
 This module is not part of what the evaluation measures: it only reads reports, and it is outside the fingerprint.
 """
 from __future__ import annotations
 
 import argparse
+import ast
+import fnmatch
 import json
 import re
 import sys
@@ -201,27 +204,34 @@ def table(reports: Path = REPORTS, current: str | None = None) -> str:
 
 # --- the page ---------------------------------------------------------------------------------------------------------------
 
+def _defines(node: ast.AST, name: str) -> bool:
+    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+        return node.name == name
+    if isinstance(node, ast.Assign):
+        return any(isinstance(t, ast.Name) and t.id == name for t in node.targets)
+    if isinstance(node, ast.AnnAssign):
+        return isinstance(node.target, ast.Name) and node.target.id == name
+    return False
+
+
 def definition_line(path: Path, symbol: str) -> int | None:
-    """The 1-based line where `symbol` is defined in `path`; for `A.b`, the first `b` defined after `A`. The first part is
-    looked for at the top level of the module before anywhere else, so `run` is the module's function and not a method of
-    that name. A leading part that is the module's own name (`router.pre_llm` in router.py) is only a label."""
-    lines = path.read_text(encoding="utf-8").splitlines()
+    """The 1-based line where `symbol` is defined in `path`, scope by scope: the first part at the top of the module, each
+    next part directly in the body of the class the previous one names (`A.run` is never `B.run`). A leading part that is
+    the module's own name (`router.pre_llm` in router.py) is only a label. None if it is not defined there."""
     parts = symbol.split(".")
     if len(parts) > 1 and parts[0] == path.stem:
         parts = parts[1:]
-    start = 0
-    for depth, part in enumerate(parts):
-        name = re.escape(part)
-        found = None
-        for indent in ((r"", r"\s*") if depth == 0 else (r"\s*",)):
-            pattern = re.compile(rf"^{indent}(?:(?:async\s+)?def|class)\s+{name}\b|^{indent}{name}\s*(?::[^=]*)?=(?!=)")
-            found = next((i for i in range(start, len(lines)) if pattern.match(lines[i])), None)
-            if found is not None:
-                break
+    if path.suffix != ".py":
+        return None
+    node: ast.AST = ast.parse(path.read_text(encoding="utf-8"))
+    for i, part in enumerate(parts):
+        if i and not isinstance(node, ast.ClassDef):
+            return None
+        found = next((child for child in node.body if _defines(child, part)), None)
         if found is None:
             return None
-        start = found
-    return start + 1
+        node = found
+    return node.lineno
 
 
 def _fix_code_links(text: str, page: Path, problems: list[str]) -> str:
@@ -241,9 +251,24 @@ def _fix_code_links(text: str, page: Path, problems: list[str]) -> str:
     return CODE_LINK.sub(fix, text)
 
 
-def _missing_files(text: str, page: Path) -> list[str]:
-    return [f"link to {rel}: no such file" for rel in dict.fromkeys(FILE_LINK.findall(text))
-            if "://" not in rel and not (page.parent / rel).resolve().exists()]
+def _removed_by_export(path: Path, root: Path = ROOT) -> bool:
+    """Whether the public export removes this file (it is then missing there by design, and only there)."""
+    from ops.export_public import REMOVE_GLOBS
+    try:
+        rel = path.relative_to(root).as_posix()
+    except ValueError:
+        return False
+    return any(fnmatch.fnmatch(rel, glob) for glob in REMOVE_GLOBS)
+
+
+def _missing_files(text: str, page: Path, root: Path = ROOT) -> list[str]:
+    """Relative links to nothing, other than the reports the export removes. `root` is the tree the page belongs to."""
+    missing = []
+    for rel in dict.fromkeys(FILE_LINK.findall(text)):
+        target = (page.parent / rel).resolve()
+        if "://" not in rel and not target.exists() and not _removed_by_export(target, root.resolve()):
+            missing.append(f"link to {rel}: no such file")
+    return missing
 
 
 def render_page(text: str, reports: Path = REPORTS, page: Path = PAGE, current: str | None = None) -> tuple[str, list[str]]:
@@ -262,8 +287,17 @@ def check(page: Path = PAGE, reports: Path = REPORTS, current: str | None = None
     text = page.read_text(encoding="utf-8")
     new, problems = render_page(text, reports, page, current)
     if new != text:
-        problems.append(f"{page.relative_to(ROOT)} differs from what the reports and the code give: run `python -m eval.evidence_table --write`")
+        problems.append(f"{page.name} differs from what the reports and the code give: run `python -m eval.evidence_table --write`")
     return problems
+
+
+def write(page: Path | None = None, reports: Path = REPORTS, current: str | None = None) -> list[str]:
+    """Rewrite the page; what is still wrong after that (a symbol or a file that is not there) is returned. A line number
+    that moved is fixed, not a problem."""
+    page = page or PAGE
+    new, _ = render_page(page.read_text(encoding="utf-8"), reports, page, current)
+    page.write_text(new, encoding="utf-8")
+    return render_page(new, reports, page, current)[1]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -273,13 +307,12 @@ def main(argv: list[str] | None = None) -> int:
     group.add_argument("--check", action="store_true", help="exit 1 if the page differs from the reports or the code")
     args = ap.parse_args(argv)
     if args.write:
-        new, problems = render_page(PAGE.read_text(encoding="utf-8"))
-        PAGE.write_text(new, encoding="utf-8")
-        print("\n".join(problems) if problems else f"wrote {PAGE.relative_to(ROOT)}")
+        problems = write(PAGE)
+        print("\n".join(problems) if problems else f"wrote {PAGE.name}")
         return 1 if problems else 0
     if args.check:
-        problems = check()
-        print("\n".join(problems) if problems else f"{PAGE.relative_to(ROOT)} matches the reports and the code")
+        problems = check(PAGE)
+        print("\n".join(problems) if problems else f"{PAGE.name} matches the reports and the code")
         return 1 if problems else 0
     print(table())
     return 0
