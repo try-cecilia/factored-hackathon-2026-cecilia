@@ -12,7 +12,7 @@ AGENT_API_URL ?= http://127.0.0.1:$(API_PORT)
 RAW_DATA_DIR ?= data/raw
 QUALITY_REPORT ?= data/reports/quality_report.json
 
-.PHONY: gate label-scan real-speech tracking-report model-study model-card unit-economics validate-data-ml lineage gold pipeline ingest-local lake operator-labels retention test-resilience loadtest loadtest-fixture loadtest-http setup ingest ingest-demo analysis label-signal train-eval workload eval eval-adversarial eval-ablation check-readme sync-eval-latencies eval-failures eval-failures-live eval-live-sample eval-live-sample-report eval-failures-local eval-live live-smoke test serve docker-build all mlflow-ui
+.PHONY: gate label-scan real-speech tracking-report model-study model-card unit-economics validate-data-ml lineage gold pipeline ingest-local lake operator-labels retention test-resilience loadtest loadtest-fixture loadtest-http setup ingest ingest-demo analysis label-signal train-eval workload eval eval-adversarial eval-ablation check-readme sync-eval-latencies evidence-table eval-failures eval-failures-live eval-live-sample eval-live-sample-report eval-failures-local eval-live live-smoke test serve docker-build all mlflow-ui
 .PHONY: web-setup serve-web web-build web-typecheck web-test serve-fixture serve-all-fixture serve-all
 .PHONY: env env-check env-fill evidence up down clean-volumes monitoring-up up-llm-local up-llm-host up-dataset lock lock-check alerts-check compose-e2e
 .PHONY: human-set-export human-set-sheet human-set-pages human-set-agreement human-set-cases human-set-eval human-set-report
@@ -164,6 +164,9 @@ check-readme:    ## the README's headline figures and the latencies EVALUATION.m
 
 sync-eval-latencies: ## copy the regenerated reports' latencies per case into EVALUATION.md and the slides (only those cells), then check
 	$(PY) -m eval.check_readme --write-latencies
+
+evidence-table:   ## docs/EVIDENCE.md: rewrite its evidence table from the reports and its code links' line numbers (the test fails until it is run)
+	$(PY) -m eval.evidence_table --write
 
 eval-failures:    ## calidad y fallos por categoría e idioma: set reservado en el warehouse de prueba (sin S3 ni claves) + filas del workload de test
 	$(PY) -m eval.heldout

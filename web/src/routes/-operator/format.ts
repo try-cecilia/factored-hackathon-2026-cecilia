@@ -93,10 +93,18 @@ export const usd = (n: number | null | undefined, digits = 4) => (n == null ? '�
 export const ms = (n: number | null | undefined) => (n == null ? '—' : n >= 1000 ? `${(n / 1000).toFixed(1)} s` : `${Math.round(n)} ms`)
 export const short = (id: string | null | undefined) => (id ? id.slice(0, 8) : '—')
 
-/** `8450 MXN` → `8,450.00 MXN`; leaves what is not a number alone. */
-export function money(amount: unknown, currency: unknown) {
+const NUMBER_LOCALE_BY_COUNTRY: Record<string, string> = {
+  ar: 'es-AR', argentina: 'es-AR',
+  co: 'es-CO', colombia: 'es-CO',
+  br: 'pt-BR', brasil: 'pt-BR', brazil: 'pt-BR',
+  mx: 'es-MX', mexico: 'es-MX', méxico: 'es-MX',
+}
+
+/** Amount formatting follows the customer's country, while retaining the currency code. */
+export function money(amount: unknown, currency: unknown, country?: string | null) {
   const n = typeof amount === 'number' ? amount : typeof amount === 'string' && amount.trim() !== '' ? Number(amount) : NaN
-  const value = Number.isFinite(n) ? n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'
+  const locale = NUMBER_LOCALE_BY_COUNTRY[country?.trim().toLocaleLowerCase() ?? ''] ?? 'en-US'
+  const value = Number.isFinite(n) ? n.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'
   return currency ? `${value} ${String(currency)}` : value
 }
 

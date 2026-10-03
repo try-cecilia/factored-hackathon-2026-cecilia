@@ -107,8 +107,20 @@ def case_update(status: str, lang: str, trace: dict | None = None, message: str 
                               message=message or "", result=RESOLVE_RESULT[result][lang] if key.startswith("case_resolved_result") else "")
 
 
-def money(v: Any, cur: str) -> str:
-    return f"{float(v):,.2f} {cur}"
+_COUNTRY_NUMBER_FORMAT = {
+    "argentina": "comma_decimal", "ar": "comma_decimal",
+    "colombia": "comma_decimal", "co": "comma_decimal",
+    "brasil": "comma_decimal", "brazil": "comma_decimal", "br": "comma_decimal",
+    "méxico": "dot_decimal", "mexico": "dot_decimal", "mx": "dot_decimal",
+}
+
+
+def money(v: Any, cur: str, country: str | None = None) -> str:
+    """Format amounts for the customer's country; unknown countries keep the historical en-US style."""
+    value = f"{float(v):,.2f}"
+    if _COUNTRY_NUMBER_FORMAT.get((country or "").strip().casefold()) == "comma_decimal":
+        value = value.replace(",", "\0").replace(".", ",").replace("\0", ".")
+    return f"{value} {cur}"
 
 
 def fmt_date(d: Any) -> str:
@@ -122,11 +134,11 @@ def product_label(p: dict, lang: str) -> str:
     return f"{TYPE_PT.get(t, t) if lang == 'pt' else t} ···{p.get('last4') or '????'}"
 
 
-def movement(m: dict, lang: str) -> str:
+def movement(m: dict, lang: str, country: str | None = None) -> str:
     """A pending movement as the customer knows it: kind, amount, date and product (type and last 4)."""
     kind = TXN_TYPE[lang].get(m["transaction_type"], m["transaction_type"])
     on = "del" if lang == "es" else "de"
-    return f"{kind} de {money(m['amount'], m['currency'])} {on} {fmt_date(m['transaction_date'])} ({product_label(m, lang)})"
+    return f"{kind} de {money(m['amount'], m['currency'], country)} {on} {fmt_date(m['transaction_date'])} ({product_label(m, lang)})"
 
 
 def as_of_line(as_of: Any, lang: str) -> str:
@@ -144,7 +156,7 @@ def clarify(missing: list[str], catalog: list[dict], lang: str) -> str:
     return MSG["clarify_generic"][lang]
 
 
-def render_result(tool: str, result: dict, lang: str) -> str:
+def render_result(tool: str, result: dict, lang: str, country: str | None = None) -> str:
     es = lang == "es"
     if result.get("not_applicable"):
         t = result.get("product_type", "")
@@ -154,12 +166,12 @@ def render_result(tool: str, result: dict, lang: str) -> str:
         lines = []
         for it in result["items"]:
             st = STATUS[lang].get(it["product_status"], it["product_status"])
-            lines.append(f"- {product_label(it, lang)}: {'saldo' if es else 'saldo'} {money(it['current_balance'], it['currency'])} ({st})")
+            lines.append(f"- {product_label(it, lang)}: {'saldo' if es else 'saldo'} {money(it['current_balance'], it['currency'], country)} ({st})")
         return "\n".join(lines)
     if tool == "list_transactions":
         if not result["items"]:
             return "No encontré movimientos con esos filtros." if es else "Não encontrei movimentações com esses filtros."
-        lines = [f"- {fmt_date(t['transaction_date'])}: {t['transaction_type']} {money(t['amount'], t['currency'])}"
+        lines = [f"- {fmt_date(t['transaction_date'])}: {t['transaction_type']} {money(t['amount'], t['currency'], country)}"
                  f"{' · ' + t['merchant_name'] if t.get('merchant_name') else ''} ({STATUS[lang].get(t['transaction_status'], t['transaction_status'])})"
                  for t in result["items"]]
         return "\n".join(lines)
@@ -169,9 +181,9 @@ def render_result(tool: str, result: dict, lang: str) -> str:
                (f"Seu {TYPE_PT.get(result['product_type'])} tem {dpd} dias de atraso." if dpd else f"Seu {TYPE_PT.get(result['product_type'])} está em dia.")
         extra = []
         if result.get("current_balance") is not None:
-            extra.append(("Saldo utilizado: " if es else "Saldo utilizado: ") + money(result["current_balance"], cur) + ".")
+            extra.append(("Saldo utilizado: " if es else "Saldo utilizado: ") + money(result["current_balance"], cur, country) + ".")
         if result.get("available_credit") is not None:
-            extra.append(("Crédito disponible: " if es else "Crédito disponível: ") + money(result["available_credit"], cur) + ".")
+            extra.append(("Crédito disponible: " if es else "Crédito disponível: ") + money(result["available_credit"], cur, country) + ".")
         return " ".join([head] + extra)
     if tool == "get_exchange_rate":
         s = (f"1 {result['source_currency']} = {float(result['exchange_rate']):.6f} {result['target_currency']} "
@@ -268,14 +280,14 @@ def unattended_notice(parts: list[str], lang: str) -> str:
     return READ_MSG["unattended"][lang].format(parts=", ".join(dict.fromkeys(parts)))
 
 
-def render_answer(results: list[dict], lang: str, catalog: list[dict] | None = None) -> str:
+def render_answer(results: list[dict], lang: str, catalog: list[dict] | None = None, country: str | None = None) -> str:
     """Verified facts as text. Every product-specific answer is headed by its product (two cards never blur
     together), and a filtered transaction list says which dates it covers."""
     labels = {p["product_id"]: product_label(p, lang) for p in catalog or []}
     parts = []
     for r in results:
         res = r["result"]
-        body = render_result(r["tool"], res, lang)
+        body = render_result(r["tool"], res, lang, country)
         label = labels.get(res.get("product_id") or (res.get("filters") or {}).get("product_id"), "")
         if r["tool"] == "list_transactions":
             label = _list_label(res, label, lang)

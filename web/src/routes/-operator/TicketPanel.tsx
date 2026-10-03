@@ -286,7 +286,7 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
           {customerData?.warehouse.available && (
             <>
               <ProductsFold data={customerData} />
-              <MovementsFold data={customerData} inEvidence={evidenceIds} />
+              <MovementsFold data={customerData} inEvidence={evidenceIds} country={ticket.country} />
             </>
           )}
 
@@ -306,7 +306,7 @@ export function TicketPanel({ ticket, view, act, reload, loadError, onClose, key
                       <li key={e.id ?? shortStamp(e.detail.transaction_date)} data-flagged={hot ? '' : undefined}>
                         <span className="op-mono op-evrows__date" title={e.id ?? undefined}>{shortStamp(e.detail.transaction_date)}</span>
                         <span className="op-evrows__who">{merchantOf(e) || '—'}</span>
-                        <span className="op-mono op-evrows__amount">{money(e.detail.amount, e.detail.currency)}</span>
+                        <span className="op-mono op-evrows__amount">{money(e.detail.amount, e.detail.currency, ticket.country)}</span>
                         <span className="op-evrows__meta">
                           <span className="op-mono">
                             {hot && (
@@ -543,7 +543,7 @@ function PendingCard({ ticket }: { ticket: Ticket }) {
   const rows: [string, ReactNode][] = [
     [t('operator.ticket.pending.movement'), <span className="op-mono">{p.transaction_id}</span>],
     [t('operator.ticket.pending.product'), <span className="op-mono">{p.product_id}</span>],
-    [t('operator.ticket.pending.amount'), <span className="op-mono op-strong">{p.movement ? money(p.movement.amount, p.movement.currency) : '—'}</span>],
+    [t('operator.ticket.pending.amount'), <span className="op-mono op-strong">{p.movement ? money(p.movement.amount, p.movement.currency, ticket.country) : '—'}</span>],
     ...(p.age_days != null ? [[t('operator.ticket.pending.date'), t('operator.ticket.pending.dateValue', { days: p.age_days })] as [string, ReactNode]] : []),
     ...(p.review_reason ? [[t('operator.ticket.pending.reviewReason'), <span title={p.review_reason}>{reviewReasonName(t, p.review_reason)}</span>] as [string, ReactNode]] : []),
     ...(!CLOSED.includes(status) ? [[t('operator.ticket.pending.ifApproved'), t('operator.ticket.pending.ifApprovedValue')] as [string, ReactNode]] : []),
