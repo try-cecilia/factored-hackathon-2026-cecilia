@@ -3,6 +3,17 @@
 Written as the honest gap between this 10-day prototype and a live banking
 service, and as our own roadmap.
 
+## Payment conditions
+
+The versioned country-rule catalog supports Argentina, Brazil, Colombia and
+Mexico, but ships empty: this repository does not establish official current
+commissions, deadlines or thresholds. A condition is shown only when country,
+operation, rule kind, product currency and query date all match a validated
+entry with issuer, HTTPS source, check date and validity. Missing coverage is
+handed to an agent; it never means zero or borrows a nearby country's value.
+Trace records no longer create or display the legacy synthetic two-business-day
+SLA. Adding real rules requires a source review and a dated catalog change.
+
 ## Not yet measured
 
 1. **The live models, beyond a sample.** Claude Sonnet 5 and Haiku 4.5 ran on

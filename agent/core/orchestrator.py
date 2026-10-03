@@ -33,9 +33,11 @@ import time
 import uuid
 from collections import OrderedDict
 from dataclasses import asdict, dataclass, field, replace
+from datetime import date
 from typing import Any, Callable
 
 from agent.core import render
+from agent.policy import payment_rules
 from agent.core.experiments import Experiments
 from agent.llm import prompts
 from agent import observability
@@ -59,9 +61,24 @@ TOOL_FUNCTIONS: dict[str, Callable[..., Any]] = {
     "get_account_summary": account_tools.get_account_summary,
     "list_transactions": account_tools.list_transactions,
     "get_payment_status": account_tools.get_payment_status,
+    "get_payment_conditions": account_tools.get_payment_conditions,
     "get_exchange_rate": account_tools.get_exchange_rate,
     "request_trace": account_tools.request_trace,
 }
+
+
+def _trace_deadline_rules(country: str | None, currency: str | None) -> list[dict]:
+    """Snapshot exact, current, source-backed trace deadlines; uncertainty means no promised SLA."""
+    if not currency:
+        return []
+    try:
+        rules = payment_rules.resolve_rules(country, "Trace", "deadline", currency, date.today())
+    except Exception:  # a broken catalog must not block opening a trace or create an unsupported promise
+        return []
+    return [{"rule_id": r.rule_id, "version": r.version, "value": r.value, "unit": r.unit,
+             "source_issuer": r.source_issuer, "source_url": r.source_url,
+             "source_checked_at": r.source_checked_at.isoformat(), "valid_from": r.valid_from.isoformat(),
+             "valid_until": r.valid_until.isoformat() if r.valid_until else None} for r in rules]
 _SCHEMAS = {s["function"]["name"]: s["function"]["parameters"] for s in prompts.TOOL_SCHEMAS}
 # What the model's history keeps of our replies: fixed text, no figures, no identifiers.
 MODEL_VIEW = {
@@ -76,7 +93,7 @@ MODEL_VIEW = {
     "repeated": "[Se le dijo al cliente que esa consulta ya estaba respondida arriba y se le pidió que dijera qué otra cosa necesitaba]",
 }
 # What a read's arguments say about the request, kept in the history the model gets (no records: filters the customer asked for).
-VIEW_ARGS = ("transaction_type", "status", "limit", "start_date", "end_date", "on_date", "source_currency", "target_currency")
+VIEW_ARGS = ("transaction_type", "status", "limit", "start_date", "end_date", "on_date", "source_currency", "target_currency", "operation", "kind")
 READ_ANSWERS = ("verified_tool_results", "degraded:deterministic_balance")  # the rules whose reply is a read: two in a row are never the same
 
 MAX_TOOL_CALLS_PER_TURN = 2
@@ -308,10 +325,11 @@ def sanitize_args(tool: str, raw: dict, catalog: list[dict], require: bool = Tru
                 args.pop(k)
     if "product_id" in args:
         args["product_id"] = resolve_product_ref(args["product_id"], catalog)
-    elif "product_id" in required and tool == "get_payment_status":
-        credit = [p for p in catalog if p["product_type"] in account_tools.CREDIT_PRODUCT_TYPES and p["product_status"] != "Closed"]
-        if len(credit) == 1:  # unambiguous: fill the slot instead of asking
-            args["product_id"] = credit[0]["product_id"]
+    elif "product_id" in required and tool in {"get_payment_status", "get_payment_conditions"}:
+        candidates = ([p for p in catalog if p["product_status"] != "Closed"] if tool == "get_payment_conditions" else
+                      [p for p in catalog if p["product_type"] in account_tools.CREDIT_PRODUCT_TYPES and p["product_status"] != "Closed"])
+        if len(candidates) == 1:  # unambiguous: fill the slot instead of asking
+            args["product_id"] = candidates[0]["product_id"]
     missing = [k for k in required if k not in args]
     if missing and require:
         raise MissingSlot(f"{tool} needs {missing}", missing_slots=missing)
@@ -587,7 +605,8 @@ class Orchestrator:
         if not filed:
             return TurnResult(trace_id, Disposition.ESCALATE.value, render.MSG["escalate_unverified"][lang].format(code=trace_id[:8]),
                               lang, decision.category, f"{decision.rule}|handoff_unverified", None, facts, actions, **llm_meta)
-        msg = render.MSG["escalate_security" if decision.category == "security" else "escalate"][lang]
+        msg = render.MSG["payment_rule_unavailable" if decision.category == "payment_rule_unavailable" else
+                         "escalate_security" if decision.category == "security" else "escalate"][lang]
         return TurnResult(trace_id, Disposition.ESCALATE.value, msg, lang, decision.category, decision.rule,
                           ticket.ticket_id, facts, actions, **llm_meta)
 
@@ -607,8 +626,8 @@ class Orchestrator:
         m = items[0]
         if decision.rule == "action:trace_already_open":
             opened = m["open_trace"]
-            text = render.MSG["trace_already_open"][lang].format(tid=opened["trace_id"], mov=render.movement(m, lang, country),
-                                                                  sla=opened["sla_business_days"])
+            text = (render.MSG["trace_already_open"][lang].format(tid=opened["trace_id"], mov=render.movement(m, lang, country)) +
+                    render.trace_service_text(opened.get("service_rules", []), lang))
             return done(TurnResult(trace_id, decision.disposition.value, text, lang, decision.category, decision.rule, None,
                                    [{"tool": "request_trace", "args": {"product_id": m["product_id"]}, "result": opened}], actions,
                                    **meta, model_view=MODEL_VIEW["trace_already_open"]))
@@ -647,8 +666,10 @@ class Orchestrator:
                 with stage("trace_service") as info:
                     log: list[dict] = []
                     try:
+                        service_rules = _trace_deadline_rules(session.attributes.get("country"), proposal["movement"].get("currency"))
                         verified = default_traces.open_verified(session.customer_id, proposal["transaction_id"],
-                                                                proposal["product_id"], session.ref, attempts_log=log)
+                                                                proposal["product_id"], session.ref, attempts_log=log,
+                                                                service_rules=service_rules)
                     finally:
                         info["attempts"] = len(log)
         except Exception:  # noqa: BLE001 - an unwritable service is an unverified action, never a crash
@@ -665,8 +686,8 @@ class Orchestrator:
         if not verified:
             return escalate(router.trace_unverified(), [{**action, "success": False, "error_type": "TraceNotReadBack"}], [])
         decision = router.trace_opened()
-        text = render.MSG["trace_opened"][lang].format(tid=verified["trace_id"], mov=render.movement(proposal["movement"], lang, session.attributes.get("country")),
-                                                       sla=verified["sla_business_days"])
+        text = (render.MSG["trace_opened"][lang].format(tid=verified["trace_id"], mov=render.movement(proposal["movement"], lang, session.attributes.get("country"))) +
+                render.trace_service_text(verified.get("service_rules", []), lang))
         return done(TurnResult(trace_id, decision.disposition.value, text, lang, decision.category, decision.rule, None,
                                [{"tool": "request_trace", "args": {"product_id": proposal["product_id"]}, "result": verified}],
                                [{**action, "success": True}], model_view=MODEL_VIEW["trace_opened"]))

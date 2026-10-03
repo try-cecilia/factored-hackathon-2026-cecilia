@@ -420,6 +420,7 @@ tests/       hermetic suite (`make test`) + fixtures
   - it answers simple balance questions deterministically;
   - it abstains on clearly out-of-scope requests;
   - it escalates the rest.
+- Live report measured on other code: ad2212c4c416 → 38562492f852.
 - Deployed on Render since 2026-09-29: the web app at https://cecil-ai.onrender.com and the API at
   https://x-payments-agent.onrender.com. `render.yaml` is the Blueprint (two paid 512 MB instances, a
   1 GB disk for the API, demo mode, a daily model budget). The API ingests a sample of 5 thousand customers on

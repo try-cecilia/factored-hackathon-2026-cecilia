@@ -17,12 +17,14 @@ MSG = {
                  "pt": "Entendo. Vou transferir seu caso para um atendente especializado com todos os detalhes, para você não precisar repetir."},
     "escalate_security": {"es": "Por seguridad no puedo mostrar esa información. Un agente revisará tu solicitud y te contactará.",
                           "pt": "Por segurança não posso mostrar essa informação. Um atendente vai revisar sua solicitação e entrar em contato."},
+    "payment_rule_unavailable": {"es": "No puedo confirmar esa condición con una regla vigente y respaldada. Ya derivé tu consulta a un agente.",
+                                 "pt": "Não posso confirmar essa condição com uma regra vigente e respaldada. Encaminhei sua consulta a um atendente."},
     "escalate_unverified": {"es": "No pude registrar tu caso en este momento, así que no quedó derivado. Por favor comunícate con la línea de atención del banco y menciona el código {code}.",
                             "pt": "Não consegui registrar seu caso agora, então ele não foi encaminhado. Por favor, entre em contato com a central de atendimento do banco e informe o código {code}."},
     "abstain": {"es": "Eso está fuera de lo que puedo resolver en consultas de cuenta y pagos (saldos, movimientos, estado de pago y tipo de cambio). Te oriento al área correspondiente.",
                 "pt": "Isso está fora do que posso resolver em consultas de conta e pagamentos (saldos, movimentações, situação de pagamento e câmbio). Vou te orientar para a área correta."},
-    "clarify_generic": {"es": "¿Me cuentas un poco más qué necesitas? Puedo ayudarte con saldos, movimientos, estado de pago o tipo de cambio.",
-                        "pt": "Pode me contar um pouco mais do que precisa? Posso ajudar com saldos, movimentações, situação de pagamento ou câmbio."},
+    "clarify_generic": {"es": "¿Me cuentas un poco más qué necesitas? Puedo ayudarte con saldos, movimientos, condiciones y estado de pago o tipo de cambio.",
+                        "pt": "Pode me contar um pouco mais do que precisa? Posso ajudar com saldos, movimentações, condições e situação de pagamento ou câmbio."},
     "clarify_dates": {"es": "¿Para qué fechas? Indícalas como AAAA-MM-DD.", "pt": "Para quais datas? Informe como AAAA-MM-DD."},
     "clarify_currency": {"es": "¿Qué monedas quieres convertir? (MXN, COP, ARS o USD)", "pt": "Quais moedas você quer converter? (MXN, COP, ARS ou USD)"},
     "clarify_product": {"es": "¿Sobre cuál de tus productos?", "pt": "Sobre qual dos seus produtos?"},
@@ -31,18 +33,18 @@ MSG = {
                       "pt": "Encontrei esta movimentação pendente: {mov}. Quer que eu abra um pedido de rastreamento? Responda sim ou não."},
     "trace_choose": {"es": "Tienes varios movimientos pendientes: {opts}. ¿Cuál quieres rastrear? Responde con su número, o dime el monto o la fecha.",
                      "pt": "Você tem várias movimentações pendentes: {opts}. Qual quer rastrear? Responda com o número, ou me diga o valor ou a data."},
-    "trace_opened": {"es": "Listo: abrí el pedido de rastreo {tid} para la {mov}. Operaciones responde en hasta {sla} días hábiles; si te lo piden, el número es {tid}.",
-                     "pt": "Pronto: abri o pedido de rastreamento {tid} para a {mov}. A equipe de operações responde em até {sla} dias úteis; se pedirem, o número é {tid}."},
-    "trace_already_open": {"es": "Ya tienes abierto el pedido de rastreo {tid} para la {mov}. Operaciones responde en hasta {sla} días hábiles desde que se abrió.",
-                           "pt": "Você já tem aberto o pedido de rastreamento {tid} para a {mov}. A equipe de operações responde em até {sla} dias úteis desde a abertura."},
+    "trace_opened": {"es": "Listo: abrí el pedido de rastreo {tid} para la {mov}. Si te lo piden, el número es {tid}.",
+                     "pt": "Pronto: abri o pedido de rastreamento {tid} para a {mov}. Se pedirem, o número é {tid}."},
+    "trace_already_open": {"es": "Ya tienes abierto el pedido de rastreo {tid} para la {mov}.",
+                           "pt": "Você já tem aberto o pedido de rastreamento {tid} para a {mov}."},
     "trace_cancelled": {"es": "Entendido, no abrí ningún pedido. Si más adelante lo necesitas, pídemelo.",
                         "pt": "Entendido, não abri nenhum pedido. Se precisar depois, é só pedir."},
     # What the customer is told when a person acts on their case (agent/policy/desk.py). Never the operator's name or a
     # rejection's note, which are internal; a resolution's message is the one text a person writes for the customer.
     "case_claimed": {"es": "Novedad de tu caso: un agente ya lo tomó y lo está revisando.",
                      "pt": "Novidade do seu caso: um atendente já assumiu e está analisando."},
-    "case_approved": {"es": "Novedad de tu caso: un agente aprobó el rastreo y abrió el pedido {tid}. Operaciones responde en hasta {sla} días hábiles.",
-                      "pt": "Novidade do seu caso: um atendente aprovou o rastreamento e abriu o pedido {tid}. A equipe de operações responde em até {sla} dias úteis."},
+    "case_approved": {"es": "Novedad de tu caso: un agente aprobó el rastreo y abrió el pedido {tid}.",
+                      "pt": "Novidade do seu caso: um atendente aprovou o rastreamento e abriu o pedido {tid}."},
     "case_rejected": {"es": "Novedad de tu caso: un agente lo revisó y no pudo abrir el rastreo. Si necesitas más ayuda, puedes comunicarte con la línea de atención del banco.",
                       "pt": "Novidade do seu caso: um atendente analisou e não conseguiu abrir o rastreamento. Se precisar de mais ajuda, entre em contato com a central de atendimento do banco."},
     # A rejected ticket that carried no trace: nothing was asked to be opened, so nothing is said about one.
@@ -74,8 +76,25 @@ def case_update(status: str, lang: str, trace: dict | None = None, message: str 
     entry = MSG.get("case_rejected_plain" if status == "rejected" and not had_action else f"case_{status}")
     if entry is None:
         return None
-    return entry[lang].format(tid=(trace or {}).get("trace_id", ""), sla=(trace or {}).get("sla_business_days", ""),
-                              message=message or "")
+    result = entry[lang].format(tid=(trace or {}).get("trace_id", ""), message=message or "")
+    return result + trace_service_text(trace.get("service_rules", []), lang) if trace and status == "approved" else result
+
+
+def trace_service_text(rules: list[dict], lang: str) -> str:
+    """Customer-facing trace deadline only from a versioned snapshot with source metadata."""
+    es = lang == "es"
+    lines = []
+    for rule in rules or []:
+        if not all(rule.get(k) for k in ("value", "unit", "version", "source_issuer", "source_url", "source_checked_at", "valid_from")):
+            continue
+        start, checked = fmt_date(rule["valid_from"]), fmt_date(rule["source_checked_at"])
+        if es:
+            lines.append(f"Plazo respaldado: {rule['value']} {rule['unit']}. Regla v{rule['version']}, vigente desde {start}; "
+                         f"fuente {rule['source_issuer']} (consultada {checked}): {rule['source_url']}.")
+        else:
+            lines.append(f"Prazo respaldado: {rule['value']} {rule['unit']}. Regra v{rule['version']}, vigente desde {start}; "
+                         f"fonte {rule['source_issuer']} (consultada {checked}): {rule['source_url']}.")
+    return "\n" + "\n".join(lines) if lines else ""
 
 
 _COUNTRY_NUMBER_FORMAT = {
@@ -164,6 +183,21 @@ def render_result(tool: str, result: dict, lang: str, country: str | None = None
         if result.get("derived_from_inverse"):
             s += " Calculado a partir del par inverso." if es else " Calculado a partir do par inverso."
         return s
+    if tool == "get_payment_conditions":
+        lines = []
+        for rule in result["rules"]:
+            currency = result["currency"]
+            val = (money(rule["value"], currency, country) if rule["unit"] == currency
+                   else f"{rule['value']} {rule['unit']} ({'moneda' if es else 'moeda'}: {currency})")
+            until = f"; hasta {fmt_date(rule['valid_until'])}" if rule.get("valid_until") else ""
+            kinds = ({"commission": "comisión", "deadline": "plazo", "threshold": "umbral"} if es else
+                     {"commission": "comissão", "deadline": "prazo", "threshold": "limite"})
+            kind = kinds.get(rule.get("kind"), rule.get("kind", "condición"))
+            lines.append((f"{kind} de {result['operation']}: {val}. Regla v{rule['version']}, vigente desde {fmt_date(rule['valid_from'])}{until}. "
+                          f"Fuente: {rule['source_issuer']}, consultada {fmt_date(rule['source_checked_at'])}: {rule['source_url']}." if es else
+                          f"{kind} de {result['operation']}: {val}. Regra v{rule['version']}, vigente desde {fmt_date(rule['valid_from'])}{until}. "
+                          f"Fonte: {rule['source_issuer']}, consultada {fmt_date(rule['source_checked_at'])}: {rule['source_url']}."))
+        return "\n".join(lines)
     return str(result)
 
 

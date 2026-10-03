@@ -8,7 +8,8 @@ projections are labeled as such and never mixed.
 > ([ADR-001](docs/decisions/ADR-001-model-interprets-code-speaks.md)): the model only interprets and picks tools, in one
 > primary response per turn, and never writes replies. It sees no record or figure from the warehouse; it does see the
 > customer's own words, masked by pattern, amounts they typed included. Each report records the prompt version it ran with: 3.2.1
-> for the current offline, adversarial, failure and live reports, 3.1.0 for the dev split and the reserved set before its
+> for the historical offline, adversarial, failure and live reports (runtime prompt is now 3.3.0; these measurements predate
+> the country-rule tool), 3.1.0 for the dev split and the reserved set before its
 > fixes. The system evaluation runs on the organizer's warehouse; the reserved failure set runs on the hand-made fixture
 > warehouse (section 3).
 
@@ -411,8 +412,9 @@ and country (MX/CO/AR) is reported per cell in `SYSTEM_EVAL.md`.
   attribute enters any decision.
 - n = 60–120 per cell, so these are small-sample comparisons.
 
-**Live models (test split, the 138-case sample, 3 runs each), measured on 2026-10-03 on the code this evaluation describes
-(prompt 3.2.1, policy fingerprint `ad2212c4c416`, commit `8578e450`).** `make eval-live` →
+**Live models (test split, the 138-case sample, 3 runs each).** The available report was measured on 2026-10-03 with prompt
+3.2.1 and fingerprint `ad2212c4c416` (commit `8578e450`). Live report measured on other code: ad2212c4c416 → 38562492f852.
+`make eval-live` →
 [`eval/reports/SYSTEM_EVAL_LIVE.md`](eval/reports/SYSTEM_EVAL_LIVE.md). The sample is 3 cases of every case type in each
 language (23 types × 2 languages, `--limit 138`; the 132 of the earlier runs gives 2 per group since the trace-review type
 was added). Only Anthropic was configured, with no fallback to another provider. The table shows run 1, as the report does;

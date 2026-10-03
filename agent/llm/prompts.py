@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import json
 
-PROMPT_VERSION = "3.2.1"
+PROMPT_VERSION = "3.3.0"
 
 SYSTEM_PROMPT = """Eres el módulo de comprensión del asistente de un banco en LATAM (clientes de México, Colombia y Argentina, que escriben en español o portugués). Solo se atienden consultas de CUENTA y PAGOS: saldos, movimientos, estado de pago de tarjetas de crédito y préstamos, y tipo de cambio.
 
@@ -73,6 +73,14 @@ TOOL_SCHEMAS = [
         "description": "Días de atraso, saldo utilizado y crédito disponible de una tarjeta de crédito o préstamo del cliente.",
         "parameters": {"type": "object", "properties": {"product_id": PRODUCT_ID}, "required": ["product_id"]}}},
     {"type": "function", "function": {
+        "name": "get_payment_conditions",
+        "description": "Consulta comisiones, plazos o umbrales de una operación usando solo reglas vigentes con fuente; país y moneda se verifican desde el perfil y producto del cliente.",
+        "parameters": {"type": "object", "properties": {
+            "product_id": PRODUCT_ID,
+            "operation": {"type": "string", "enum": ["Transfer", "Payment", "Deposit", "Withdrawal", "Purchase"]},
+            "kind": {"type": "string", "enum": ["commission", "deadline", "threshold"]},
+            "on_date": DATE}, "required": ["product_id", "operation", "kind"]}}},
+    {"type": "function", "function": {
         "name": "get_exchange_rate",
         "description": "Tipo de cambio entre dos monedas (por defecto a la fecha de los datos).",
         "parameters": {"type": "object", "properties": {
@@ -91,6 +99,7 @@ TOOL_INTENT = {
     "get_account_summary": "balance_inquiry",
     "list_transactions": "transaction_lookup",
     "get_payment_status": "payment_status",
+    "get_payment_conditions": "payment_status",
     "get_exchange_rate": "exchange_rate_inquiry",
     "request_trace": "transaction_lookup",
 }

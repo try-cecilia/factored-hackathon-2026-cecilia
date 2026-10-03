@@ -13,10 +13,35 @@ import os
 import pytest
 
 from agent.core.orchestrator import Orchestrator
+from agent.core import render
 from agent.policy import router
 from agent.session.auth import SessionStore, session_ref
 from agent.tools import traces
 from eval.fake_llm import FakeLLMClient, text_response, tool_call_response
+
+
+def test_legacy_trace_sla_is_never_repeated_in_a_customer_update():
+    update = render.case_update("approved", "es", trace={"trace_id": "TR-1", "sla_business_days": 2})
+    assert update == "Novedad de tu caso: un agente aprobó el rastreo y abrió el pedido TR-1."
+
+
+def test_a_trace_snapshots_and_shows_only_a_country_rule_for_its_deadline(monkeypatch):
+    from datetime import date
+
+    from agent.policy.payment_rules import PaymentRule
+    from agent.core import orchestrator as orchestrator_module
+
+    rule = PaymentRule("trace_deadline", 2, "MX", "Trace", "deadline", "USD", 3, "business days",
+                       "Payments regulator", "https://example.test/trace", date(2026, 10, 1),
+                       date(2026, 10, 1), None)
+    monkeypatch.setattr(orchestrator_module.payment_rules, "resolve_rules", lambda *args, **kwargs: [rule])
+    orch, tok, _ = make(tool_call_response("request_trace", {}))
+    orch.handle_message(tok, "hice una transferencia que todavía no llega")
+    opened = orch.handle_message(tok, "sí")
+    trace = stored()[0]
+    assert trace["service_rules"][0]["rule_id"] == "trace_deadline"
+    assert "3 business days" in opened.response_text
+    assert "Payments regulator" in opened.response_text and "https://example.test/trace" in opened.response_text
 
 ASK = {"es": "hice una transferencia que todavía no llega", "pt": "fiz uma transferência que ainda não chegou"}
 
@@ -44,8 +69,8 @@ def proposal(orch, tok) -> dict | None:
     return orch.conversations.get(session_ref(tok)).pending_action
 
 
-@pytest.mark.parametrize("lang,yes,sla", [("es", "sí", "2 días hábiles"), ("pt", "sim", "2 dias úteis")])
-def test_a_pending_transfer_is_proposed_and_traced_only_after_the_customer_says_yes(lang, yes, sla):
+@pytest.mark.parametrize("lang,yes", [("es", "sí"), ("pt", "sim")])
+def test_a_pending_transfer_is_proposed_and_traced_only_after_the_customer_says_yes(lang, yes):
     orch, tok, fake = make(tool_call_response("request_trace", {}))
     r1 = orch.handle_message(tok, ASK[lang])
     assert (r1.disposition, r1.category, r1.policy_rule) == ("CLARIFY", "confirm_action", "action:trace_proposed")
@@ -57,7 +82,8 @@ def test_a_pending_transfer_is_proposed_and_traced_only_after_the_customer_says_
     assert (r2.disposition, r2.policy_rule, r2.llm_calls, r2.language) == ("AUTO_RESOLVE", "action:trace_opened", 0, lang)
     [trace] = stored()
     assert trace["transaction_id"] == "TXN-FIX0006" and trace["trace_id"] in r2.response_text
-    assert sla in r2.response_text and r2.verified_facts[0]["tool"] == "request_trace"
+    assert "hábiles" not in r2.response_text and "úteis" not in r2.response_text
+    assert r2.verified_facts[0]["tool"] == "request_trace"
     assert fake.call_count == 1  # the confirmation never reached the model
 
 

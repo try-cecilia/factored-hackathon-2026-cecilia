@@ -251,7 +251,7 @@ const T = {
     bankHint: "What this session sent to the bank's teams, as they receive it: trace requests for payments operations, and handoffs with the request, verified facts, evidence and open questions. No transcript, no session token.",
     noTickets: "No handoffs or actions yet. Try \"Unrecognized charge\", the trace scenario or the attacks.",
     tracesTitle: "Payments operations · trace requests", ticketsTitle: "Human agents · handoffs",
-    tr: { movement: "Movement", product: "Product", sla: "Answer within", slaText: n => `${n} business days (synthetic policy)`, ids: "Codes" },
+    tr: { movement: "Movement", product: "Product", deadline: "Verified deadline", ids: "Codes" },
     footer: "Prototype for the Factored AI & Data Hackathon 2026. Synthetic data only; test PINs are public on purpose. Not a real bank.",
     run: "Run", running: "Running", playAll: "Play all", close: "Close", sendStep: "Send", expected: "expected", any: "any safe outcome",
     got: "got", langES: "ES", langPT: "PT",
@@ -309,7 +309,7 @@ const T = {
     bankHint: "Lo que esta sesión mandó a los equipos del banco, tal como lo reciben: pedidos de rastreo para operaciones de pagos, y derivaciones con el pedido, hechos verificados, evidencia y preguntas abiertas. Sin transcripción y sin el token de sesión.",
     noTickets: "Todavía no hay derivaciones ni acciones. Prueba \"Cargo no reconocido\", el rastreo o los ataques.",
     tracesTitle: "Operaciones de pagos · pedidos de rastreo", ticketsTitle: "Agentes humanos · derivaciones",
-    tr: { movement: "Movimiento", product: "Producto", sla: "Responde en", slaText: n => `${n} días hábiles (política sintética)`, ids: "Códigos" },
+    tr: { movement: "Movimiento", product: "Producto", deadline: "Plazo respaldado", ids: "Códigos" },
     footer: "Prototipo para el Factored AI & Data Hackathon 2026. Solo datos sintéticos; los PIN de prueba son públicos a propósito. No es un banco real.",
     run: "Ejecutar", running: "En curso", playAll: "Enviar todo", close: "Cerrar", sendStep: "Enviar", expected: "esperado", any: "cualquier resultado seguro",
     got: "obtuvo", langES: "ES", langPT: "PT",
@@ -607,7 +607,8 @@ function traceCard(tr, fresh) {
     h("dl", {},
       h("dt", {}, L.movement), h("dd", { class: "mono" }, tr.transaction_id),
       h("dt", {}, L.product), h("dd", { class: "mono" }, tr.product_id),
-      h("dt", {}, L.sla), h("dd", {}, L.slaText(tr.sla_business_days)),
+      ...(tr.service_rules?.length ? [h("dt", {}, L.deadline),
+        h("dd", {}, tr.service_rules.map(r => [r.value, r.unit, r.source_issuer, r.source_url].join(" ")).join("\n"))] : []),
       h("dt", {}, L.ids), h("dd", { class: "mono" }, `${t().sessionRef} ${tr.session_ref}`)));
 }
 function ticketCard(tk, fresh) {

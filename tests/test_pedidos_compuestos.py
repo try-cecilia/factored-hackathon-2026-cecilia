@@ -425,14 +425,14 @@ def test_requiring_the_mandatory_arguments_is_unchanged_and_a_bad_date_is_still_
     assert r.disposition == "CLARIFY" and r.verified_facts == []  # the tool rejects it: a question, as before
 
 
-# --- prompt 3.2.1: ejemplos de pedidos de dos cosas, en español y en portugués (sin tocar esquemas ni ejecutor) ------------------
+# --- prompt 3.3.0: compound requests and source-backed payment conditions --------------------------------------------------
 
-def test_the_prompt_teaches_two_requests_with_examples_in_both_languages_and_keeps_the_tools_as_they_were():
+def test_the_prompt_teaches_two_requests_and_registers_conditions_without_changing_existing_tools():
     from agent.llm import prompts
 
-    assert prompts.PROMPT_VERSION == "3.2.1"
+    assert prompts.PROMPT_VERSION == "3.3.0"
     assert [t["function"]["name"] for t in prompts.TOOL_SCHEMAS] == ["get_account_summary", "list_transactions", "get_payment_status",
-                                                                     "get_exchange_rate", "request_trace"]
+                                                                     "get_payment_conditions", "get_exchange_rate", "request_trace"]
     for fragment in ("cuánto tengo y mis últimas 4 transferencias", "muéstrame los pagos pendientes y mis 3 últimas transferencias",
                      "quiero ver lo pendiente y las 6 últimas transferencias", "mis saldos, mis 4 últimas transferencias y si mi tarjeta está en mora",
                      "quanto eu tenho e minhas 4 últimas transferências", "mostre os pagamentos pendentes e as 3 últimas transferências",

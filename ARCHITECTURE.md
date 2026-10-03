@@ -60,7 +60,12 @@ operator's message when they resolve a case, shown as the agent's.
    The orchestrator sanitizes arguments before any tool runs: unknown keys are
    dropped, enums and limits clamped, and product references resolved against
    the catalog ("P2", "0002", "Cuenta Ahorro" → an id, or a clarification if
-   it is ambiguous). It allows at most 2 tool calls per turn.
+   it is ambiguous). It allows at most 2 tool calls per turn. Payment commissions,
+   deadlines and thresholds use a versioned country-rule catalog: country and
+   product currency come from verified records, and matching is exact by
+   operation, kind and date. Replies include the source and validity; absent
+   coverage is handed off instead of estimated. The production catalog stays
+   empty until an official source is reviewed.
    **The one action: tracing a pending movement** ([ADR-002](docs/decisions/ADR-002-one-action-confirmed-in-code.md)).
    When the customer says a transfer, payment or deposit did not arrive, the
    model picks `request_trace`. The tool only finds the customer's pending
@@ -70,7 +75,7 @@ operator's message when they resolve a case, shown as the agent's.
    - The next message is judged in code, never by the model
      (`router.confirmation`): a plain yes opens the trace in the tracing
      service (`agent/tools/traces.py`, a sandbox mock), **reads it back**, and
-     only then gives its number and deadline. A trace that does not read back
+     only then gives its number. A trace that does not read back
      is never announced: a person opens it. A plain no opens nothing. Any
      other message lets the proposal lapse and goes through every check above.
    - Asking again returns the same trace (idempotent per customer and
@@ -82,6 +87,7 @@ operator's message when they resolve a case, shown as the agent's.
    - `MissingSlot`/`InvalidArgument`/`ResourceNotFound` → CLARIFY (listing the customer's own products).
    - `NotApplicable` → answered (e.g. "payment status doesn't apply to a savings account").
    - `PermissionDenied` → security escalation.
+   - `PaymentRuleUnavailable` → a source-rule handoff.
    - `DataUnavailable` → data escalation.
    - Anything else → tool-failure escalation.
 6. **Verify and reply** (`agent/core/render.py`). The reply is rendered in

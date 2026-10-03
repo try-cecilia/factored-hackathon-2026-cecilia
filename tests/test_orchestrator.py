@@ -38,6 +38,15 @@ def test_balance_resolves_with_the_verified_figure_and_the_as_of_date():
     assert "2,455.81" in r.response_text and "16/01/2024" in r.response_text  # as-of line appended
 
 
+def test_unbacked_payment_condition_is_handed_off_without_guessing():
+    orch, tok, _ = make([tool_call_response("get_payment_conditions", {
+        "product_id": "0001", "operation": "Transfer", "kind": "commission", "country": "Brasil", "currency": "BRL"})])
+    r = orch.handle_message(tok, "¿Cuánto cuesta una transferencia?")
+    assert r.disposition == "ESCALATE" and r.category == "payment_rule_unavailable"
+    assert r.ticket_id and "No puedo confirmar esa condición" in r.response_text
+    assert "BRL" not in r.response_text and "Brasil" not in r.response_text
+
+
 def test_a_turn_records_the_customers_words_as_the_model_received_them():
     orch, tok, fake = make([tool_call_response("get_payment_status", {"product_id": "0004"}), unavailable()])
     r = orch.handle_message(tok, "¿estoy al día con la tarjeta 5000000004?")

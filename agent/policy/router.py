@@ -20,6 +20,7 @@ from agent.tools.errors import (
     MissingSlot,
     NotApplicable,
     PermissionDenied,
+    PaymentRuleUnavailable,
     ResourceNotFound,
 )
 
@@ -94,6 +95,10 @@ def after_tool(error: Exception | None) -> Decision | None:
         return Decision(Disposition.ESCALATE, reason("ownership_check_failed"),
                         "security", open_questions=[question("review_unauthorized_access")],
                         rule="tool_error:PermissionDenied")
+    if isinstance(error, PaymentRuleUnavailable):
+        return Decision(Disposition.ESCALATE, "No source-backed payment rule applies to this verified country, operation, currency and date.",
+                        "payment_rule_unavailable", open_questions=[question("lookup_missing_field")],
+                        rule="tool_error:PaymentRuleUnavailable")
     if isinstance(error, DataUnavailable):
         unavailable = reason("data_unavailable", str(error), field=error.field) if error.field else reason("data_unavailable_unspecified", str(error))
         return Decision(Disposition.ESCALATE, unavailable, "data_unavailable",
