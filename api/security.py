@@ -29,9 +29,10 @@ ALLOWED_CORS_METHODS = ["GET", "POST", "DELETE"]
 def page_csp(html: str | None = None) -> str:
     """The policy for the HTML page: its inline scripts are allowed by hash, nothing else runs. Inline styles stay allowed
     (the page styles elements with style attributes); they cannot run code."""
-    # FileResponse sends the stored bytes unchanged; preserve CRLF too so the
-    # CSP hash is identical to the inline script the browser receives.
+    # The browser hashes a script's text after HTML parsing turns every CRLF and lone CR into LF, so the hash is taken on that
+    # text, not on the stored bytes: a checkout with CRLF endings serves the same scripts and they must still run.
     html = STATIC_INDEX.read_bytes().decode("utf-8") if html is None else html
+    html = html.replace("\r\n", "\n").replace("\r", "\n")
     hashes = " ".join(f"'sha256-{base64.b64encode(hashlib.sha256(s.encode()).digest()).decode()}'"
                       for s in re.findall(r"<script>(.*?)</script>", html, re.S))
     return ("default-src 'none'; script-src %s; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; "

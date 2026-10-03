@@ -22,7 +22,7 @@ How to read it:
 | Human message set | **Real**, from people outside the team | With consent, no personal data (`docs/human_set.md`). Collection is in progress. |
 | Customer identity | **Simulated** | Test IdP, see boundary 1. |
 | Operator identity | **Simulated** | Named keys, see boundary 2. |
-| Trace service | **Simulated** | JSONL file, with an SLA of 2 business days that is a synthetic policy. |
+| Trace service | **Simulated** | JSONL file. Its deadline comes only from a reviewed country rule (`agent/policy/payment_rules.json`, empty today); records written before keep a synthetic 2 that no reader shows. |
 | Case queue | **Simulated** | JSONL file. |
 | Trace review rule (90 days) | **Synthetic policy** | Constant `TRACE_REVIEW_AFTER_DAYS`; the final decision is made by a person. |
 | Language models | **Real external services** | They only receive masked text, see boundary 6. |
@@ -310,8 +310,11 @@ action** (ADR-002) and simulates the payment operations service.
 
 **Current contract.**
 
-- *Open:* `open(customer_id, transaction_id, product_id, session_ref)` returns the existing request or a new one, with
-  `trace_id`, `status: "open"`, `sla_business_days: 2` (a **synthetic** policy) and `queue: "payments_ops"`.
+- *Open:* `open(customer_id, transaction_id, product_id, session_ref, service_rules)` returns the existing request or a new
+  one, with `trace_id`, `status: "open"`, `queue: "payments_ops"`, the snapshot of the country's deadline rule
+  (`service_rules`, only when one applies) and `sla_business_days`, derived from that snapshot: an integer, or `null` when
+  no rule covers it. Readers (receipt, bank view) derive it from the snapshot again, so the synthetic 2 of older records
+  is never shown, and `null` is never shown as 0.
 - *Idempotency:* the `trace_id` is `TR-` plus 16 hex characters of `sha256(cliente|movimiento)` (customer|movement): asking for the same thing twice returns the
   same request, without duplicating it. `find` compares field by field and does not trust an identifier to be unique.
 - *Read-back:* the orchestrator reads the request again before telling the customer it exists. If it cannot be read, it does not

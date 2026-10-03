@@ -109,20 +109,28 @@ def _owned_product(customer_id: str, product_id: str) -> dict:
     return rows[0]
 
 
+def customer_country(customer_id: str) -> str | None:
+    """The customer's country as the warehouse has it, or None."""
+    rows = _rows("SELECT country FROM customers WHERE customer_id = ?", [customer_id])
+    return rows[0].get("country") or None if rows else None
+
+
 def get_payment_conditions(customer_id: str, product_id: str, operation: str, kind: str,
                            on_date: Optional[str] = None) -> dict:
-    """Look up source-backed conditions for an authenticated customer's owned product."""
+    """The source-backed rule for an authenticated customer's owned product, scoped by the country and currency the warehouse
+    has. Its figures come from the rule catalog, not from SQL, so they are never told to the customer: the orchestrator hands the
+    question to an agent with this result on the ticket (LIMITATIONS.md, "Payment conditions")."""
     def _run():
         product = _owned_product(customer_id, product_id)
-        customer = _rows("SELECT country FROM customers WHERE customer_id = ?", [customer_id])
-        if not customer or not customer[0].get("country"):
+        country = customer_country(customer_id)
+        if not country:
             raise PaymentRuleUnavailable("No se pudo verificar el país del cliente.", field="payment_rule")
         requested = parse_date(on_date, "on_date") or date.today()
-        rules = payment_rules.resolve_rules(customer[0]["country"], operation, kind, product["currency"], requested)
+        rules = payment_rules.resolve_rules(country, operation, kind, product["currency"], requested)
         if not rules:
             raise PaymentRuleUnavailable("No hay una condición respaldada vigente para este país, operación y moneda.",
                                          field="payment_rule")
-        return {"country": payment_rules.country_code(customer[0]["country"]), "currency": product["currency"],
+        return {"country": payment_rules.country_code(country), "currency": product["currency"],
                 "operation": operation, "kind": kind, "on_date": requested,
                 "rules": [{"rule_id": r.rule_id, "version": r.version, "kind": r.kind, "value": r.value, "unit": r.unit,
                            "source_issuer": r.source_issuer, "source_url": r.source_url,

@@ -85,33 +85,12 @@ class BaselineBot:
             elif intent == "transaction_lookup":
                 tool, args = "list_transactions", ({"product_id": product} if product else {})
             elif intent == "payment_status":
-                norm = normalize(text)
-                is_condition = any(re.search(p, norm) for p in
-                                   (r"\bcomision", r"\bcomissao", r"\btarifa", r"\bcuanto cuesta\b", r"\bquanto custa\b",
-                                    r"\bplazo\b", r"\bprazo\b", r"\bumbral\b", r"\blimite de transferencia\b"))
-                if is_condition:
-                    if product is None:
-                        active = [p for p in catalog if p["product_status"] != "Closed"]
-                        if len(active) != 1:
-                            raise MissingSlot("which product", missing_slots=["product_id"])
-                        product = active[0]["product_id"]
-                    operation = next((name for name, pats in {
-                        "Transfer": (r"transfer",), "Payment": (r"pago", r"pagamento"),
-                        "Deposit": (r"deposit",), "Withdrawal": (r"retiro", r"saque"),
-                        "Purchase": (r"compra", r"purchase")}.items() if any(re.search(p, norm) for p in pats)), None)
-                    kind = ("commission" if any(re.search(p, norm) for p in (r"comision", r"comissao", r"tarifa", r"cuesta", r"custa"))
-                            else "deadline" if any(re.search(p, norm) for p in (r"plazo", r"prazo", r"dias", r"dias uteis"))
-                            else "threshold")
-                    if operation is None:
-                        raise MissingSlot("which payment operation", missing_slots=["operation"])
-                    tool, args = "get_payment_conditions", {"product_id": product, "operation": operation, "kind": kind}
-                else:
-                    if product is None:
-                        credit = [p for p in catalog if p["product_type"] in account_tools.CREDIT_PRODUCT_TYPES and p["product_status"] != "Closed"]
-                        if len(credit) != 1:
-                            raise MissingSlot("which credit product", missing_slots=["product_id"])
-                        product = credit[0]["product_id"]
-                    tool, args = "get_payment_status", {"product_id": product}
+                if product is None:
+                    credit = [p for p in catalog if p["product_type"] in account_tools.CREDIT_PRODUCT_TYPES and p["product_status"] != "Closed"]
+                    if len(credit) != 1:
+                        raise MissingSlot("which credit product", missing_slots=["product_id"])
+                    product = credit[0]["product_id"]
+                tool, args = "get_payment_status", {"product_id": product}
             else:
                 norm = normalize(text)
                 found = [c for c, pats in CURRENCY_WORDS.items() if any(re.search(p, norm) for p in pats)]
@@ -119,8 +98,7 @@ class BaselineBot:
                 pair = found[:2] if len(found) >= 2 else ([found[0], local] if found and found[0] != local else ["USD", local])
                 tool, args = "get_exchange_rate", {"source_currency": pair[0], "target_currency": pair[1]}
             fn = {"get_account_summary": account_tools.get_account_summary, "list_transactions": account_tools.list_transactions,
-                  "get_payment_status": account_tools.get_payment_status, "get_payment_conditions": account_tools.get_payment_conditions,
-                  "get_exchange_rate": account_tools.get_exchange_rate}[tool]
+                  "get_payment_status": account_tools.get_payment_status, "get_exchange_rate": account_tools.get_exchange_rate}[tool]
             result, error = fn(session.customer_id, **args), None
         except NotApplicable as exc:
             result, error = {"not_applicable": True, **exc.payload}, None

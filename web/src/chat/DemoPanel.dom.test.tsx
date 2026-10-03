@@ -121,6 +121,18 @@ describe('DemoPanel', () => {
       expect(screen.getByText('Pedidos de rastreamento')).toBeTruthy()
     })
 
+    it.each([
+      ['es', 'Sin plazo respaldado', /0 días hábiles/],
+      ['pt', 'Sem prazo respaldado', /0 dias úteis/],
+    ] as const)('in %s, a trace without a source-backed deadline says so and never shows 0 days', async (lang, none, zero) => {
+      tickets.list = []
+      tickets.traces = [{ ...trace, sla_business_days: null }]
+      await drawAsCustomer(lang)
+      const card = within((await screen.findByText('TR-15B5F466D9D65B60')).closest('article') as HTMLElement)
+      expect(card.getByText(none)).toBeTruthy()
+      expect(card.queryByText(zero)).toBeNull()
+    })
+
     it('with neither a ticket nor a trace the bank view says there is nothing yet', async () => {
       tickets.list = []
       tickets.traces = []

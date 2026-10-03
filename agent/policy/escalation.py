@@ -191,6 +191,7 @@ NEXT_STEP = {  # by category; the category is the code of the text (`DEFAULT_NEX
     "trace_unmatched": "Check the movement with payments operations or the sending bank: nothing of the customer's is pending.",
     "trace_unverified": "Open the trace manually and give the customer its number: the tracing service did not confirm it.",
     "trace_review": "Review the movement (see pending_action.review_reason) and approve or reject the trace the customer asked for.",
+    "payment_rule_unavailable": "Answer the payment condition from the bank's current official source; the assistant gives no commissions, deadlines or thresholds.",
 }
 DEFAULT_NEXT_STEP = "Review and respond to the customer."
 QUEUE = {"fraud": "fraud_ops", "theft": "fraud_ops", "account_takeover": "fraud_ops", "safety": "priority_care",

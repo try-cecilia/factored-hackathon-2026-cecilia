@@ -35,7 +35,6 @@ import time
 import uuid
 from collections import OrderedDict
 from dataclasses import asdict, dataclass, field, replace
-from datetime import date
 from typing import Any, Callable
 
 from agent.core import render
@@ -68,19 +67,6 @@ TOOL_FUNCTIONS: dict[str, Callable[..., Any]] = {
     "request_trace": account_tools.request_trace,
 }
 
-
-def _trace_deadline_rules(country: str | None, currency: str | None) -> list[dict]:
-    """Snapshot exact, current, source-backed trace deadlines; uncertainty means no promised SLA."""
-    if not currency:
-        return []
-    try:
-        rules = payment_rules.resolve_rules(country, "Trace", "deadline", currency, date.today())
-    except Exception:  # a broken catalog must not block opening a trace or create an unsupported promise
-        return []
-    return [{"rule_id": r.rule_id, "version": r.version, "value": r.value, "unit": r.unit,
-             "source_issuer": r.source_issuer, "source_url": r.source_url,
-             "source_checked_at": r.source_checked_at.isoformat(), "valid_from": r.valid_from.isoformat(),
-             "valid_until": r.valid_until.isoformat() if r.valid_until else None} for r in rules]
 _SCHEMAS = {s["function"]["name"]: s["function"]["parameters"] for s in prompts.TOOL_SCHEMAS}
 # What the model's history keeps of our replies: fixed text, no figures, no identifiers.
 MODEL_VIEW = {
@@ -148,7 +134,7 @@ def _trace_receipt_for(movement: dict, request: dict, customer_id: str) -> dict[
     try:
         transaction_date = movement["transaction_date"]
         amount = float(movement["amount"])
-        sla = int(request["sla_business_days"])
+        sla = payment_rules.deadline_business_days(request.get("service_rules"))  # from the rule snapshot; None when none applied
         date_value = transaction_date.isoformat() if hasattr(transaction_date, "isoformat") else str(transaction_date)
         date_value = date_value[:10] if len(date_value) >= 10 and date_value[4:5] == "-" and date_value[7:8] == "-" else date_value
         receipt = {
@@ -165,7 +151,7 @@ def _trace_receipt_for(movement: dict, request: dict, customer_id: str) -> dict[
         }
     except (KeyError, TypeError, ValueError, OverflowError):
         return None
-    if not receipt["trace_status"] or not math.isfinite(amount) or sla < 0:
+    if not receipt["trace_status"] or not math.isfinite(amount):
         return None
     return receipt
 
@@ -739,7 +725,7 @@ class Orchestrator:
                 with stage("trace_service") as info:
                     log: list[dict] = []
                     try:
-                        service_rules = _trace_deadline_rules(session.attributes.get("country"), proposal["movement"].get("currency"))
+                        service_rules = payment_rules.trace_deadline_rules(session.attributes.get("country"), proposal["movement"].get("currency"))
                         verified = default_traces.open_verified(session.customer_id, proposal["transaction_id"],
                                                                 proposal["product_id"], session.ref, attempts_log=log,
                                                                 service_rules=service_rules)
@@ -975,6 +961,8 @@ class Orchestrator:
                         left.append(call)  # one question per turn: this read is named as unattended, with its filters in the history
                     continue
                 return escalate(decision, actions, facts)
+            if name == "get_payment_conditions":  # figures from the catalog, not SQL: an agent confirms them, the customer hears none
+                return escalate(router.payment_rule_for_agent(result), actions, [*facts, {"tool": name, "args": action["args"], "result": result}])
             if name == "request_trace":
                 return self._trace_step(result, conv, lang, session.attributes.get("country"), session.customer_id, trace_id, actions, lambda res: done(with_unattended(res)), escalate, llm_meta())
             facts.append({"tool": name, "args": action["args"], "result": result})

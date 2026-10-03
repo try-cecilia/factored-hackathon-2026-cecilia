@@ -13,6 +13,11 @@ from urllib.parse import urlparse
 
 CATALOG_PATH = Path(__file__).with_name("payment_rules.json")
 _CURRENCY = re.compile(r"^[A-Z]{3}$")
+# Closed vocabularies: every value a reply or a receipt may carry has an ES/PT word in agent/core/render.py, so nothing
+# internal ("Transfer", "business days") is printed to the customer as it is stored.
+OPERATIONS = ("Transfer", "Payment", "Deposit", "Withdrawal", "Purchase", "Trace")
+KINDS = ("commission", "deadline", "threshold")
+DAY_UNITS = ("business days", "calendar days")
 _COUNTRIES = {
     "ar": "AR", "argentina": "AR",
     "br": "BR", "brasil": "BR", "brazil": "BR",
@@ -87,12 +92,20 @@ def validate_catalog(raw: dict) -> list[PaymentRule]:
         currency = _required_text(record, "currency").upper()
         if not _CURRENCY.fullmatch(currency):
             raise ValueError("currency must be a three-letter ISO 4217 code")
-        operation = _required_text(record, "operation")
+        operation = next((op for op in OPERATIONS if op.casefold() == _required_text(record, "operation").casefold()), None)
+        if operation is None:
+            raise ValueError(f"operation must be one of {', '.join(OPERATIONS)}")
         kind = _required_text(record, "kind").casefold()
+        if kind not in KINDS:
+            raise ValueError(f"kind must be one of {', '.join(KINDS)}")
         value = record.get("value")
         if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value) or value < 0:
             raise ValueError("rule value must be a finite, non-negative number")
-        unit = _required_text(record, "unit")
+        unit = " ".join(_required_text(record, "unit").replace("_", " ").split())
+        unit = currency if unit.upper() == currency else unit.casefold()
+        allowed = DAY_UNITS if kind == "deadline" else (currency, "percent") if kind == "commission" else (currency,)
+        if unit not in allowed:
+            raise ValueError(f"a {kind} rule's unit must be one of {', '.join(allowed)}")
 
         source = record.get("source")
         if not isinstance(source, dict):
@@ -158,3 +171,33 @@ def resolve_rules(country: str | None, operation: str, kind: str, currency: str,
                and rule.currency == cur and rule.valid_from <= on_date
                and (rule.valid_until is None or on_date < rule.valid_until)]
     return matches if len(matches) == 1 else []
+
+
+def snapshot(rules: Sequence[PaymentRule]) -> list[dict]:
+    """The rules as a trace record keeps them: what applied when it was opened, with its source and validity."""
+    return [{"rule_id": r.rule_id, "version": r.version, "value": r.value, "unit": r.unit,
+             "source_issuer": r.source_issuer, "source_url": r.source_url,
+             "source_checked_at": r.source_checked_at.isoformat(), "valid_from": r.valid_from.isoformat(),
+             "valid_until": r.valid_until.isoformat() if r.valid_until else None} for r in rules]
+
+
+def trace_deadline_rules(country: str | None, currency: str | None, on_date: date | None = None) -> list[dict]:
+    """The country's source-backed deadline for tracing a movement in this currency, as a snapshot; any doubt (no currency, no
+    exact rule, a broken catalog) means no deadline, never a guessed one, and never blocks opening the trace."""
+    if not currency:
+        return []
+    try:
+        return snapshot(resolve_rules(country, "Trace", "deadline", currency, on_date or date.today()))
+    except Exception:  # noqa: BLE001 - a broken catalog must not block opening a trace or create an unsupported promise
+        return []
+
+
+def deadline_business_days(rules: Sequence[dict] | None) -> int | None:
+    """A trace's deadline in whole business days, only from its rule snapshot: None when there is no single rule in business days
+    (zero is a deadline, absence is not). Never read from a record's own field, so a legacy synthetic SLA is never revived."""
+    if not rules or len(rules) != 1 or not isinstance(rules[0], dict) or rules[0].get("unit") != "business days":
+        return None
+    value = rules[0].get("value")
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0 or value != int(value):
+        return None
+    return int(value)

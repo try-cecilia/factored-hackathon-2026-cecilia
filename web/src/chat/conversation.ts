@@ -200,7 +200,7 @@ export function caseTone(status: string): CaseTone {
 
 const KNOWN_CATEGORIES = new Set([
   'fraud', 'theft', 'account_takeover', 'safety', 'legal_or_regulator', 'classifier_escalation', 'compliance_hold', 'security',
-  'trace_unmatched', 'trace_unverified', 'trace_review',
+  'trace_unmatched', 'trace_unverified', 'trace_review', 'payment_rule_unavailable',
 ])
 // The turn failed or ran out of time before it could answer: the customer only needs to know it is with a person.
 const PENDING = new Set(['data_unavailable', 'tool_failure', 'llm_unavailable', 'turn_timeout'])

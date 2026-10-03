@@ -48,6 +48,7 @@ export const chat: Like<typeof es> = {
     readBackConfirmed: 'Pedido relido e confirmado',
     nextStepOne: 'Próximo passo: Operações responderá em até 1 dia útil.',
     nextStepMany: 'Próximo passo: Operações responderá em até {n} dias úteis.',
+    nextStepNoDeadline: 'Próximo passo: Operações vai analisar o pedido. Não há um prazo de resposta respaldado por uma regra vigente para informar.',
     types: { payment: 'Pagamento', transfer: 'Transferência', deposit: 'Depósito' },
     status: { pending: 'Pendente' },
     traceState: { open: 'Aberto' },

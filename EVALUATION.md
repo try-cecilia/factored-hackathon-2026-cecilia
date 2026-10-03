@@ -7,10 +7,9 @@ projections are labeled as such and never mixed.
 > **Design version.** Every table here is measured on design v3
 > ([ADR-001](docs/decisions/ADR-001-model-interprets-code-speaks.md)): the model only interprets and picks tools, in one
 > primary response per turn, and never writes replies. It sees no record or figure from the warehouse; it does see the
-> customer's own words, masked by pattern, amounts they typed included. Each report records the prompt version it ran with: 3.2.1
-> for the historical offline, adversarial, failure and live reports (runtime prompt is now 3.3.0; these measurements predate
-> the country-rule tool), 3.1.0 for the dev split and the reserved set before its
-> fixes. The system evaluation runs on the organizer's warehouse; the reserved failure set runs on the hand-made fixture
+> customer's own words, masked by pattern, amounts they typed included. Each report records the prompt version it ran with: 3.3.0
+> (3.2.1 plus the payment-conditions tool) for the current offline, adversarial and failure reports, 3.2.1 for the live
+> reports, measured on earlier code, and 3.1.0 for the dev split and the reserved set before its fixes. The system evaluation runs on the organizer's warehouse; the reserved failure set runs on the hand-made fixture
 > warehouse (section 3).
 
 ## Summary: human agents vs keyword bot vs this system

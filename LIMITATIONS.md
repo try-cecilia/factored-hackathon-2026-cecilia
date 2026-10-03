@@ -5,14 +5,29 @@ service, and as our own roadmap.
 
 ## Payment conditions
 
-The versioned country-rule catalog supports Argentina, Brazil, Colombia and
-Mexico, but ships empty: this repository does not establish official current
-commissions, deadlines or thresholds. A condition is shown only when country,
-operation, rule kind, product currency and query date all match a validated
-entry with issuer, HTTPS source, check date and validity. Missing coverage is
-handed to an agent; it never means zero or borrows a nearby country's value.
-Trace records no longer create or display the legacy synthetic two-business-day
-SLA. Adding real rules requires a source review and a dated catalog change.
+The versioned country-rule catalog (`agent/policy/payment_rules.json`) supports
+Argentina, Brazil, Colombia and Mexico, but ships empty: this repository does not
+establish official current commissions, deadlines or thresholds. A rule applies
+only when country, operation, rule kind, product currency and date all match a
+validated entry with issuer, HTTPS source, check date and validity; country and
+currency come from the warehouse. The catalog is an input of the evaluation
+fingerprint, so changing a value invalidates the reports.
+
+- **Commissions, deadlines and thresholds are not told to the customer.** The
+  figures customers hear come from SQL, and a rule's figures come from the
+  catalog file. So a question about them is handed to an agent with the same
+  reply whether a rule covers it or not; when one does, the ticket carries it
+  with its source for the agent to confirm. Telling them in the channel needs
+  the approved rules in a table the tools read with SQL.
+- **The trace deadline is the one exception, and only with a rule.** A trace
+  keeps a snapshot of the country's `Trace`/`deadline` rule when it is opened
+  and, from it, `sla_business_days`; the reply, the receipt and the bank view
+  say that deadline with its source. With no rule (today, always) the trace
+  is still opened and read back, `sla_business_days` is null and nothing
+  promises a deadline: the receipt says there is none, and no screen shows 0.
+  This replaces the synthetic two-business-day SLA of ADR-002, which records
+  written before still carry and no reader repeats.
+- Adding real rules requires a source review and a dated catalog change.
 
 ## Not yet measured
 
@@ -408,8 +423,9 @@ SLA. Adding real rules requires a source review and a dated catalog change.
 
 - The one action, tracing a pending movement
   ([ADR-002](docs/decisions/ADR-002-one-action-confirmed-in-code.md)), runs
-  against a **sandbox tracing service**: JSONL next to the human queue. The
-  2-business-day deadline is a synthetic policy. A bank plugs its
+  against a **sandbox tracing service**: JSONL next to the human queue. Its
+  deadline comes only from a reviewed country rule, and none is loaded, so no
+  deadline is promised ("Payment conditions" above). A bank plugs its
   payments-operations API behind the same `open` and `get` calls.
 - Only pending transfers, payments and deposits are traced; a pending card
   purchase just posts.

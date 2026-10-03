@@ -79,6 +79,7 @@ export const cases: Like<typeof es> = {
     trace_unmatched: 'Pagamento ou transferência que não chegou',
     trace_unverified: 'Rastreamento de uma movimentação',
     trace_review: 'Rastreamento de uma movimentação',
+    payment_rule_unavailable: 'Consulta de condições de pagamento',
     pending: 'Consulta pendente de revisão',
     other: 'Caso passado a uma pessoa',
   },

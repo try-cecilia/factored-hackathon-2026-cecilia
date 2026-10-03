@@ -329,7 +329,9 @@ export function DemoPanel({ scenarios, sessionRef, entries, pending, escalations
               <dl className="demo__facts">
                 <dt>{t('demo.bank.traceId')}</dt><dd><code>{trace.trace_id}</code></dd>
                 <dt>{t('demo.bank.movement')}</dt><dd><code>{trace.transaction_id}</code></dd>
-                <dt>{t('demo.bank.sla')}</dt><dd>{t(trace.sla_business_days === 1 ? 'demo.bank.slaOne' : 'demo.bank.slaMany', { n: trace.sla_business_days })}</dd>
+                <dt>{t('demo.bank.sla')}</dt>
+                <dd>{trace.sla_business_days === null ? t('demo.bank.slaNone')
+                  : t(trace.sla_business_days === 1 ? 'demo.bank.slaOne' : 'demo.bank.slaMany', { n: trace.sla_business_days })}</dd>
               </dl>
             </article>
           ))}

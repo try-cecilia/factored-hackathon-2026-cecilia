@@ -80,6 +80,7 @@ export const operator = {
     trace_unmatched: 'Rastreo sin coincidencia',
     trace_unverified: 'Rastreo sin confirmar',
     trace_review: 'Revisión de rastreo',
+    payment_rule_unavailable: 'Condición de pago',
   },
   errors: {
     expired: 'La sesión venció o la clave de lectura ya no es válida. Ingresar de nuevo.',
@@ -399,6 +400,8 @@ export const operator = {
       trace_unmatched: 'El cliente informa un movimiento que no llegó y ninguno suyo está pendiente.',
       trace_unverified: 'El cliente confirmó, pero el servicio de rastreo no confirmó el rastreo.',
       trace_review: 'El cliente confirmó un rastreo, pero el movimiento necesita la aprobación de una persona ({review_reason}).',
+      payment_rule_unavailable: 'El cliente consulta una condición de pago y ninguna regla vigente y revisada cubre su país, operación y moneda.',
+      payment_rule_for_agent: 'El cliente consulta una condición de pago; la cubre la regla {rule_id} v{version}, y la asistente no le informa condiciones al cliente.',
     },
     question: {
       confirm_suspension_reason: 'Confirmar el motivo de la suspensión antes de dar datos de la cuenta.',
@@ -414,6 +417,7 @@ export const operator = {
       check_movement: 'Revisar el movimiento con operaciones de pagos o con el banco emisor.',
       open_trace_manually: 'Abrir el rastreo manualmente y darle el número al cliente.',
       decide_trace: 'Aprobar o rechazar el rastreo: {review_reason}.',
+      confirm_payment_condition: 'Confirmar la condición con la fuente oficial vigente del banco y responder al cliente.',
       evidence_failed: 'No se pudo reunir la actividad reciente automáticamente ({error_type}).',
       evidence_skipped_budget: 'No se reunió evidencia: se agotó el tiempo del traspaso.',
       evidence_skipped_slow: 'No se reunió evidencia: no terminó dentro del tiempo del traspaso, o todavía hay demasiadas búsquedas anteriores en curso.',
@@ -434,6 +438,7 @@ export const operator = {
       trace_unmatched: 'Revisar el movimiento con operaciones de pagos o con el banco emisor: no hay nada pendiente del cliente.',
       trace_unverified: 'Abrir el rastreo manualmente y darle el número al cliente: el servicio de rastreo no lo confirmó.',
       trace_review: 'Revisar el movimiento (ver el motivo de revisión) y aprobar o rechazar el rastreo que pidió el cliente.',
+      payment_rule_unavailable: 'Responder la condición de pago con la fuente oficial vigente del banco; la asistente no informa comisiones, plazos ni umbrales.',
       default: 'Revisar el caso y responder al cliente.',
     },
   },
@@ -479,6 +484,7 @@ export const operator = {
       traceUnverified: 'Rastreo: el servicio no lo confirmó',
       traceReview: 'Rastreo: lo decide una persona',
       traceCancelled: 'Rastreo: el cliente lo rechazó',
+      paymentRuleForAgent: 'Condición de pago: la confirma un agente',
       handoffUnverified: 'traspaso sin confirmar',
     },
     attempt: {

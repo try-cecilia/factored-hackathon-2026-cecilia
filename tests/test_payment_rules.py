@@ -97,3 +97,24 @@ def test_catalog_requires_explicit_official_source_review():
 
 def test_production_catalog_loads_with_no_unverified_live_rules():
     assert load_catalog() == []
+
+
+@pytest.mark.parametrize("changes", [
+    {"operation": "Wire"},                                   # an operation with no words for the customer
+    {"kind": "fee"},
+    {"kind": "deadline", "unit": "ARS"},                     # a deadline in money
+    {"kind": "deadline", "unit": "weeks"},
+    {"kind": "commission", "unit": "USD"},                   # a commission in another currency than the rule's
+    {"kind": "threshold", "unit": "percent"},
+])
+def test_catalog_accepts_only_units_operations_and_kinds_that_have_words(changes):
+    with pytest.raises(ValueError):
+        validate_catalog(catalog(sample_rule(**changes)))
+
+
+def test_catalog_units_are_stored_in_one_canonical_form():
+    [deadline] = validate_catalog(catalog(sample_rule(kind="deadline", unit="Business_Days", operation="trace")))
+    [percent] = validate_catalog(catalog(sample_rule(unit="Percent")))
+    [money] = validate_catalog(catalog(sample_rule(unit="ars")))
+    assert (deadline.unit, deadline.operation) == ("business days", "Trace")
+    assert percent.unit == "percent" and money.unit == "ARS"

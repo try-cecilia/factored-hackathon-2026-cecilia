@@ -109,8 +109,8 @@ Turn 2, "sí":
 6. [`TraceService.open_verified`](../agent/tools/traces.py#L58) opens the request and reads it back for this customer and
    this movement, with bounded retries. Without a read-back, [`router.trace_unverified`](../agent/policy/router.py#L186)
    sends it to a person and the customer is not told a trace exists.
-7. [`router.trace_opened`](../agent/policy/router.py#L181): the `trace_opened` template gives the trace number and the
-   deadline.
+7. [`router.trace_opened`](../agent/policy/router.py#L181): the `trace_opened` template gives the trace number; a deadline
+   only from the country rule the trace snapshotted, and none is loaded today.
 
 Tests: [`test_a_pending_transfer_is_proposed_and_traced_only_after_the_customer_says_yes`](../tests/test_trace.py#L50) and
 [`test_a_movement_that_settled_after_the_proposal_is_not_traced`](../tests/test_trace.py#L275).
@@ -171,8 +171,8 @@ Fingerprint of the code in this checkout: `ef46dd15c428` (first 12 of 64 hex dig
   A set written by people outside the team has not yet reached the 60 messages from 8 people
   it needs ([`docs/human_set.md`](human_set.md)).
 - **The action runs in a sandbox.** The tracing service is a JSONL file with the same `open` and `get` calls a bank's
-  API would have, and the 2-business-day deadline is a synthetic policy. The demo's identity provider and PINs are for
-  testing.
+  API would have. Its deadline comes only from a reviewed country rule, and the catalog ships empty, so no deadline is
+  promised. The demo's identity provider and PINs are for testing.
 - **The live evaluation is a sample.** 138 of the 548 test cases, 3 runs per model; the report keeps the rows of every run.
   Groq's `gpt-oss-120b` has not run on it.
 - **The scripted models are not a language model.** The ideal model is an upper bound on understanding; the adversarial
