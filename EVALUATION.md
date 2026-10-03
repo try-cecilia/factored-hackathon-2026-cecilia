@@ -413,6 +413,7 @@ and country (MX/CO/AR) is reported per cell in `SYSTEM_EVAL.md`.
 
 **Live models (test split, the 138-case sample, 3 runs each), measured on 2026-10-03 on the code this evaluation describes
 (prompt 3.2.1, policy fingerprint `ad2212c4c416`, commit `8578e450`).** `make eval-live` →
+Live report measured on other code: ad2212c4c416 → b9cfd902bd32.
 [`eval/reports/SYSTEM_EVAL_LIVE.md`](eval/reports/SYSTEM_EVAL_LIVE.md). The sample is 3 cases of every case type in each
 language (23 types × 2 languages, `--limit 138`; the 132 of the earlier runs gives 2 per group since the trace-review type
 was added). Only Anthropic was configured, with no fallback to another provider. The table shows run 1, as the report does;

@@ -105,6 +105,7 @@ With live models, on a stratified sample of 138 of those cases (every case type 
 languages, 3 of each), three runs each, measured on 2026-10-03 on the code this evaluation describes (policy fingerprint
 `ad2212c4c416`, commit `8578e450`; the report keeps the per-case rows of every run, and `make gate` fails if the
 measured code changes and the docs do not say so)
+Live report measured on other code: ad2212c4c416 → b9cfd902bd32.
 ([`eval/reports/SYSTEM_EVAL_LIVE.md`](eval/reports/SYSTEM_EVAL_LIVE.md)):
 
 | | Claude Sonnet 5 | Claude Haiku 4.5 |
