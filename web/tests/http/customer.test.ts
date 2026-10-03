@@ -81,7 +81,7 @@ describe('the customer chat page', () => {
     assert.match(portuguese, /Nada é feito sem a sua confirmação/)
     assert.ok(!portuguese.includes('Conversación retomada'))
     // A key outside the loaded areas would be drawn as itself.
-    for (const html of [spanish, portuguese]) assert.doesNotMatch(html, />\s*(common|shell|home|login|loaders|sidebar|chat|cases|conversation|demo)\.[a-z][\w.]*\s*</)
+    for (const html of [spanish, portuguese]) assert.doesNotMatch(html, />\s*(common|shell|landing|login|loaders|sidebar|chat|cases|conversation|demo)\.[a-z][\w.]*\s*</)
   })
 
   test('the session token stays on the server: the page never contains it, and the API got it only in the header', async () => {

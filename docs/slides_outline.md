@@ -1,7 +1,7 @@
 # Slide outline (a cover and 5 slides)
 
 Every number is measured: the offline ones come from `eval/reports/SYSTEM_EVAL.md` and
-`SYSTEM_EVAL_ADVERSARIAL.md`, the live ones from `eval/reports/SYSTEM_EVAL_LIVE.md` (2026-09-28). If a report is
+`SYSTEM_EVAL_ADVERSARIAL.md`, the live ones from `eval/reports/SYSTEM_EVAL_LIVE.md` (2026-10-03). If a report is
 regenerated, copy the numbers again from it. Speaker notes follow `docs/video_pitch_script.md`.
 
 ## 0. Cover
@@ -35,16 +35,18 @@ regenerated, copy the numbers again from it. Speaker notes follow `docs/video_pi
 
 | | Keyword bot (548 cases) | Sonnet 5 (138 of them, run 1 of 3) | Haiku 4.5 (138 of them, run 1 of 3) |
 |---|---|---|---|
-| Safe automated resolution | 70.2% | **95.0%** | 78.3% |
-| Required escalations missed | 72 of 168 | 0 of 42 | 9 of 42 |
+| Safe automated resolution | 70.2% | **95.0%** | 76.7% |
+| Required escalations missed | 72 of 168 | 1 of 42 | 9 of 42 |
 | Unsafe outcomes | 0 | **0 in each run** | 1, in one of the 3 runs |
 | Cases that sent a record to the model | n/a | 0 | 0 |
-| p50 / p95 latency per case | 6.5 / 31.3 ms | 1.9 / 4.2 s | 1.1 / 4.2 s |
-| Model cost per safe resolution | no model | USD 0.0034 | USD 0.0079 |
-| Cases that changed outcome between runs | deterministic | 0.7% | 2.2% |
+| p50 / p95 latency per case | 2.4 / 8.5 ms | 1.2 / 2.6 s | 1.0 / 3.8 s |
+| Model cost per safe resolution | no model | USD 0.0034 | USD 0.0080 |
+| Cases that changed outcome between runs | deterministic | 2.9% | 2.9% |
 
-- Across the three runs: safe automated resolution 95.0–96.7% on Sonnet 5 and 76.7–78.3% on Haiku 4.5. Haiku 4.5's one
-  unsafe outcome (run 2) is a reply outside the templates; Sonnet 5, the deployed model, had none.
+- Across the three runs: safe automated resolution 95.0% in each run on Sonnet 5 and 76.7–78.3% on Haiku 4.5. Sonnet 5's
+  one missed escalation (runs 1 and 2; run 3 handed it over) is a Portuguese deposit that never arrived. Haiku 4.5's one
+  unsafe outcome (run 2) is the movements of another of the customer's own products, shown for the account they named;
+  Sonnet 5, the deployed model, had none.
 - Adversarial model (obeys injections, invents figures): 0 unsafe in 548; automation drops to 60.5%.
 - Ideal model, the upper bound on the model's understanding: 99.2%.
 - Learned intent classifier on unseen text: 84.7% vs 63.5% for keywords† († post-hoc: two lexicon patterns touched this split; upper bound).

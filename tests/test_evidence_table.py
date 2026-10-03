@@ -134,3 +134,47 @@ def test_a_changed_report_breaks_the_check_until_the_page_is_written_again(tmp_p
     assert len(problems) == 1 and "--write" in problems[0]
     new, problems = evidence_table.render_page(_page_text(), reports, evidence_table.PAGE)
     assert problems == [] and "`ffffffffffff`" in new
+
+
+def _live_caveats(reports: Path) -> dict[str, str]:
+    return {r["result"]: r["caveat"] for r in evidence_table._live_rows(reports)}
+
+
+@PER_CASE_REPORTS
+def test_each_live_caveat_names_the_unsafe_outcomes_and_the_runs_the_report_keeps():
+    """What a live row says about its runs is read from system_eval_live.json, so it cannot outlive the report."""
+    live = json.loads((evidence_table.REPORTS / "system_eval_live.json").read_text(encoding="utf-8"))
+    caveats = _live_caveats(evidence_table.REPORTS)
+    assert len(caveats) == len(live["systems"])
+    for name, system in live["systems"].items():
+        (caveat,) = [c for result, c in caveats.items() if result.endswith(next(iter(system["served_by"])).split("/")[-1])]
+        runs = [r["repeat"] for r in system["repeats"]]
+        rows = live["cases"][name]
+        assert sorted({r["repeat"] for r in rows}) == runs and f"keeps the per-case rows of all {len(runs)} runs" in caveat
+        assert "Only run" not in caveat
+        unsafe = [r for r in rows if r["unsafe"]]
+        assert caveat.count("case `") == len(unsafe)
+        for r in unsafe:
+            assert f"run {r['repeat']}, case `{r['case_id']}`" in caveat and all(f"`{t}`" in caveat for t in r["unsafe"])
+        for run in system["repeats"]:  # the per-run counts and the rows agree on what is cited
+            assert sum(run["unsafe_by_type"].values()) == sum(len(r["unsafe"]) for r in unsafe if r["repeat"] == run["repeat"])
+        assert ("No unsafe outcome in any run." in caveat) == (not unsafe)
+
+
+@PER_CASE_REPORTS
+def test_a_live_caveat_follows_the_report_when_its_rows_or_its_findings_change(tmp_path):
+    reports = tmp_path / "reports"
+    shutil.copytree(evidence_table.REPORTS, reports, ignore=shutil.ignore_patterns("*.md"))
+    path = reports / "system_eval_live.json"
+    live = json.loads(path.read_text(encoding="utf-8"))
+    name = next(iter(live["systems"]))
+    first = next(r for r in live["cases"][name] if r["repeat"] == 1)
+    first["unsafe"] = ["text_outside_the_templates"]
+    live["systems"][name]["repeats"][1]["unsafe_by_type"] = {"hallucinated_number_shown": 2}
+    live["cases"][name] = [r for r in live["cases"][name] if r["repeat"] == 1]  # only run 1 keeps its rows
+    path.write_text(json.dumps(live), encoding="utf-8")
+    caveat = _live_caveats(reports)[f"Live, {next(iter(live['systems'][name]['served_by'])).split('/')[-1]}"]
+    assert "Only run 1 keeps per-case rows" in caveat and "all 3 runs" not in caveat
+    assert f"run 1, case `{first['case_id']}` ({first['template']}, {first['language']}), `text_outside_the_templates`" in caveat
+    assert "run 2, 2 × `hallucinated_number_shown`" in caveat and "No unsafe outcome" not in caveat
+    assert any("--write" in p for p in evidence_table.check(reports=reports))

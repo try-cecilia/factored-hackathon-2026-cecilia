@@ -12,7 +12,7 @@ AGENT_API_URL ?= http://127.0.0.1:$(API_PORT)
 RAW_DATA_DIR ?= data/raw
 QUALITY_REPORT ?= data/reports/quality_report.json
 
-.PHONY: gate label-scan real-speech tracking-report model-study model-card unit-economics validate-data-ml lineage gold pipeline ingest-local lake operator-labels retention test-resilience loadtest loadtest-fixture loadtest-http setup ingest ingest-demo analysis label-signal train-eval workload eval eval-adversarial eval-ablation check-readme evidence-table eval-failures eval-failures-live eval-live-sample eval-live-sample-report eval-failures-local eval-live live-smoke test serve docker-build all mlflow-ui
+.PHONY: gate label-scan real-speech tracking-report model-study model-card unit-economics validate-data-ml lineage gold pipeline ingest-local lake operator-labels retention test-resilience loadtest loadtest-fixture loadtest-http setup ingest ingest-demo analysis label-signal train-eval workload eval eval-adversarial eval-ablation check-readme sync-eval-latencies evidence-table eval-failures eval-failures-live eval-live-sample eval-live-sample-report eval-failures-local eval-live live-smoke test serve docker-build all mlflow-ui
 .PHONY: web-setup serve-web web-build web-typecheck web-test serve-fixture serve-all-fixture serve-all
 .PHONY: env env-check env-fill evidence up down clean-volumes monitoring-up up-llm-local up-llm-host up-dataset lock lock-check alerts-check compose-e2e
 .PHONY: human-set-export human-set-sheet human-set-pages human-set-agreement human-set-cases human-set-eval human-set-report
@@ -159,8 +159,11 @@ eval-adversarial: ## same workload with a deliberately bad model: safety must no
 eval-ablation:    ## what each group of safety controls buys: the same models with the groups taken off, cumulatively -> eval/reports/ABLATION.md
 	$(PY) -m eval.ablation
 
-check-readme:    ## the README's headline figures against the generated reports (fails on a mismatch)
+check-readme:    ## the README's headline figures and the latencies EVALUATION.md and the slides cite, against the generated reports (fails on a mismatch)
 	$(PY) -m eval.check_readme
+
+sync-eval-latencies: ## copy the regenerated reports' latencies per case into EVALUATION.md and the slides (only those cells), then check
+	$(PY) -m eval.check_readme --write-latencies
 
 evidence-table:   ## docs/EVIDENCE.md: rewrite its evidence table from the reports and its code links' line numbers (the test fails until it is run)
 	$(PY) -m eval.evidence_table --write
@@ -264,7 +267,7 @@ serve:
 docker-build:
 	docker build -f ops/Dockerfile -t latam-bank-agent .
 
-all: ingest analysis train-eval workload eval eval-adversarial test
+all: ingest analysis train-eval workload eval eval-adversarial sync-eval-latencies test
 
 retention:        ## apply the retention policy to every record store (docs/operations.md, "Data retention")
 	$(PY) -m ops.retention

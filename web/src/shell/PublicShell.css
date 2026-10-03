@@ -15,13 +15,6 @@
 .pub__lead { margin: 0; color: var(--color-ink-70); font-size: var(--text-base); line-height: 26px; text-align: center; }
 .pub__mascot { display: block; width: 96px; height: 96px; object-fit: contain; }
 
-/* Home: the copy on the left, Cecilia on the right. */
-.hero { display: grid; flex: 1; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 48px; width: 100%; max-width: 1120px; margin: 0 auto; padding: 16px 32px 64px; }
-.hero__copy { display: flex; flex-direction: column; align-items: flex-start; gap: 24px; }
-.hero__copy h1 { margin: 0; font-size: clamp(40px, 5vw, var(--text-6xl)); font-weight: var(--font-weight-semibold); letter-spacing: var(--tracking-tighter); line-height: 1.02; }
-.hero__copy .pub__lead { max-width: 460px; font-size: var(--text-lg); text-align: left; }
-.hero__art { display: block; width: 100%; max-width: 480px; height: auto; margin-inline: auto; }
-
 /* The form: tonal fields, the focus ring is the only line. */
 .auth-form { display: grid; gap: 16px; width: 100%; }
 .auth-form label { display: grid; gap: 6px; font-size: var(--text-compact-md); font-weight: var(--font-weight-semibold); }
@@ -39,14 +32,9 @@
   padding: 2px 6px; border-radius: var(--radius-sm); background: var(--color-sky-100); color: var(--color-sky-900);
   font-size: var(--text-compact-2xs); font-weight: var(--font-weight-bold); letter-spacing: 0.06em; line-height: 12px; text-transform: uppercase;
 }
+.pub__actions { display: flex; flex-shrink: 0; align-items: center; gap: 12px; }
 .pub .ui-lang { flex-shrink: 0; }
 
-@media (max-width: 859px) {
-  .hero { grid-template-columns: minmax(0, 1fr); gap: 24px; padding-inline: 24px; }
-  .hero__art { order: -1; max-width: 240px; }
-  .hero__copy { align-items: center; text-align: center; }
-  .hero__copy .pub__lead { text-align: center; }
-}
 @media (max-width: 559px) {
   .pub__bar { padding: 14px 16px; }
   .pub__main { padding: 8px 16px 40px; }

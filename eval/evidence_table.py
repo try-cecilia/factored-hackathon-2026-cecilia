@@ -8,7 +8,8 @@ Every cell of the table is read from a field of a report in `eval/reports/` (cou
 fingerprint each report carries), so regenerating a report and running `--write` is all it takes to update the page. The
 fingerprint is shown as the report carries it and compared with the one this checkout computes (eval/fingerprint.py): a
 report measured on other code says so in its row instead of passing for current. The caveats are fixed text, taken from
-EVALUATION.md and LIMITATIONS.md.
+EVALUATION.md and LIMITATIONS.md, except what a live row says about its runs: which runs keep per-case rows and each unsafe
+outcome (run, case, type) are read from the report (`_live_runs`).
 
 The page's links to code are written as [`symbol`](../path.py#L123). The check parses that file and finds where `symbol` is
 defined in its own scope (a def, a class or an assignment at the top of the module; `Class.method` only inside that class),
@@ -48,10 +49,7 @@ CAVEATS = {
     "reserved": "Team-written cases on 5 fixture customers. Batch 2 was written after seeing batch 1's failures and batch 3 after "
                 "the judge was fixed; the fixes came after seeing them, so post-fix figures are regression evidence, not held out. "
                 "The records sent to the model are the lowercase, split product id (\"prd fix 0006\"), a documented masking limit.",
-    "live": "Stratified sample of the test split (3 cases per case type and language), not all of it. The headline is run 1; "
-            "only run 1 keeps per-case rows, so a finding of runs 2 and 3 is known by its count and type, not its case.",
-    "live_haiku": "Its one unsafe outcome (run 2) is `text_outside_the_templates`, judged before the judge learned replies of "
-                  "several reads; it could not be inspected.",
+    "live": "Stratified sample of the test split (3 cases per case type and language), not all of it. The headline is run 1.",
     "ablation": "Offline, scripted models. Cumulative ladder by groups of controls: no effect is attributed to one control. The "
                 "naive variants were built by the team and never open a trace, so the confirmation of the action is not measured.",
     "classifier": "Test utterances written by the team (same-author bias). The keyword baseline and the lexicon-only guard are "
@@ -128,6 +126,25 @@ def _worst(system: dict, metric: str) -> str:
     return f"{round(spread['max'] * n)}/{n}" if spread else _kn(system[metric])
 
 
+def _live_runs(report: dict, name: str) -> str:
+    """What the report holds of each run of `name`: whose per-case rows it keeps, and every unsafe outcome by run, case and
+    type (from the rows; from the run's counts for a run without rows)."""
+    runs = [r["repeat"] for r in report["systems"][name].get("repeats") or []] or [1]
+    rows = report["cases"][name]
+    kept = sorted({r.get("repeat", 1) for r in rows})
+    if kept == runs:
+        text = f"The report keeps the per-case rows of all {len(runs)} runs." if len(runs) > 1 else ""
+    else:
+        which = f"run {kept[0]} keeps" if len(kept) == 1 else f"runs {', '.join(map(str, kept))} keep"
+        text = f"Only {which} per-case rows, so a finding of another run is known by its count and type, not its case."
+    found = [f"run {r.get('repeat', 1)}, case `{r['case_id']}` ({r['template']}, {r['language']}), "
+             + ", ".join(f"`{t}`" for t in r["unsafe"]) for r in rows if r["unsafe"]]
+    found += [f"run {r['repeat']}, {k} × `{t}`" for r in report["systems"][name].get("repeats") or [] if r["repeat"] not in kept
+              for t, k in (r.get("unsafe_by_type") or {}).items()]
+    unsafe = f"Unsafe outcome{'s' if len(found) > 1 else ''}: {'; '.join(found)}." if found else "No unsafe outcome in any run."
+    return f"{text} {unsafe}".strip()
+
+
 def _live_rows(reports: Path) -> list[dict]:
     report, rows = _load("system_eval_live.json", reports), []
     for name, s in report["systems"].items():
@@ -137,7 +154,7 @@ def _live_rows(reports: Path) -> list[dict]:
                            ("records to the model, worst run", _worst(s, "records_sent_to_model")),
                            ("safe automated resolution, run 1", _kn(s["safe_automated_resolution"])),
                            ("escalation recall, run 1", _kn(s["escalation_recall"])))
-        caveat = CAVEATS["live"] + (" " + CAVEATS["live_haiku"] if "haiku" in name else "")
+        caveat = f"{CAVEATS['live']} {_live_runs(report, name)}"
         rows.append(_row(f"Live, {served.split('/')[-1]}", f"{served}, prompt {report['prompt_version']}", report["generated_at"],
                          report.get("policy_sha256"), f"{s['n_cases']} cases × {runs} runs ({report['split']} split)", figures,
                          "SYSTEM_EVAL_LIVE.md, system_eval_live.json", caveat))

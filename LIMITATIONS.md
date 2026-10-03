@@ -6,14 +6,18 @@ service, and as our own roadmap.
 ## Not yet measured
 
 1. **The live models, beyond a sample.** Claude Sonnet 5 and Haiku 4.5 ran on
-   138 of the 548 held-out test cases (3 of every case type in each language), three runs each, on 2026-10-02
-   ([`eval/reports/SYSTEM_EVAL_LIVE.md`](eval/reports/SYSTEM_EVAL_LIVE.md)).
+   138 of the 548 held-out test cases (3 of every case type in each language), three runs each, on 2026-10-03
+   ([`eval/reports/SYSTEM_EVAL_LIVE.md`](eval/reports/SYSTEM_EVAL_LIVE.md)), on the code the other reports measure
+   (policy fingerprint `ad2212c4c416`).
    The intervals are wide (Sonnet 5's safe automated resolution is 95.0%
    [86.3–98.3]), a segment or country cell holds 12–20 in-scope cases, and
    0 unsafe outcomes in 138 bounds the true rate only below ≈2.2%. Sonnet 5, the deployed model, had none in any run;
-   Haiku 4.5 had one in its second run (1 of 138, `text_outside_the_templates`, item 5). The report keeps the per-case
-   rows of run 1 only, so an outcome of runs 2 and 3 is known by its count and type (the report's spread and the MLflow
-   child runs), not by its case. Groq ran only
+   Haiku 4.5 had one in its second run (1 of 138, `wrong_account_or_figure`: asked for the savings account ending 3862, it
+   listed the movements of another of the customer's products). Sonnet 5 missed one required escalation in two of its
+   three runs (a Portuguese deposit that never arrived, which it asked about instead of handing over). The report keeps
+   the per-case rows of every run. A live run costs money and a key the CI does not have, so the gate does not require
+   it after every change: it requires that a change to the measured code be declared next to the live figures in
+   README.md and EVALUATION.md until the live run is repeated. Groq ran only
    the small sample of item 3; more needs a key. Its default is the open-weights
    `openai/gpt-oss-120b`, because Llama 3.3 70B left Groq's self-serve tiers
    on 2026-08-16.
@@ -68,7 +72,7 @@ service, and as our own roadmap.
      set at each place that builds a reply (about 15 `TurnResult(...)` calls in `agent/core/orchestrator.py`, and `eval/baseline_bot.py`), never
      serialised by the API; the judge would compare the text to `render.MSG[key][lang].format(**params)` and check each param against the turn's
      data, instead of enumerating candidates. Impact: editing `agent/core/orchestrator.py` changes the policy fingerprint
-     (`eval/fingerprint.py`), so `make eval eval-adversarial eval-failures` must be re-run and the three committed reports regenerated; no
+     (`eval/fingerprint.py`), so `make eval eval-adversarial eval-failures eval-ablation sync-eval-latencies` must be re-run and the committed reports regenerated; no
      behaviour and no prompt change.
    - *Any free text is unsafe, honest or not.* "No pude registrar tu caso. Comunícate con un agente especializado por teléfono." and
      "O encaminhamento falhou. Seu caso não foi encaminhado." are safe to say and are flagged, like "Ya transferí tu caso". The system never
@@ -84,9 +88,9 @@ service, and as our own roadmap.
    templates, trace replies included. Until the fix that taught the judge the replies of several reads, it called every such reply text outside the
    templates, and neither the 548 generated cases (none has a turn with several reads) nor the reserved set before batch 3 had one to show it:
    the gate was green and did not measure that edge. In the live run of 2026-10-02, one reply of Haiku 4.5 (run 2 of 3, 1 of 138) was text outside the
-   templates, judged by that older judge. Only run 1 keeps its rows, so it could not be inspected: either model text reached a reply, or it was one
-   of these compositions the judge did not rebuild (the two-request notices of prompt 3.2.1). The live reports were not judged again. Sonnet 5 had none in any run. Keeping
-   every run's rows is the next fix; it changes `eval/run_system_eval.py`, which is in the fingerprint, so every report would be measured again.
+   templates, judged by that older judge. That run kept the rows of run 1 only, so it could not be inspected: either model text reached a reply, or it
+   was one of these compositions the judge did not rebuild (the two-request notices of prompt 3.2.1), and it stays unknown. The evaluation now keeps
+   every run's rows, and the live run of 2026-10-03, judged by the current judge, had no reply outside the templates in any run of either model.
 ## Data and ML
 
 - **The behavioral deviation shown to the operator does not detect the fraud labels.** Its AUC against `is_fraud` is
@@ -373,9 +377,18 @@ service, and as our own roadmap.
 - **The local model is wired, not measured.** The compose stack can start Ollama and pass the API `LLM_PROVIDERS=local`, and the
   profile was verified with a 0.5 GB model. No evaluation has run against any local model (`gpt-oss:20b` or a smaller one),
   and on macOS Docker runs models on CPU only.
-- **The operator screen is tested in pieces, never driven whole.** Its API and components pass their tests
-  ([`docs/operator_screen_eval.md`](docs/operator_screen_eval.md)), but nobody has walked queue, claim, approve in a
-  browser, and it has had no keyboard or screen-reader pass.
+- **The operator screen was walked once in a browser, by keyboard; a screen reader, other browsers and two operators
+  at once were not.** Its API and components pass their tests, and on 2026-09-30 Chromium drove the deployed console with
+  Tab and Enter only: sign in, queue, take, approve, reject with a reason, resolve with a message and hand back, each
+  followed by what the customer read next, and the lock of a stale second screen
+  ([`docs/operator_screen_eval.md`](docs/operator_screen_eval.md#walked-on-the-deployed-demo-2026-09-30)). Taking a case
+  took 64 Tab presses from the top of the page. The console's skip link (`web/src/routes/-operator/OperatorShell.tsx`)
+  jumps past the top bar and the menu, but on the case page the queue is part of that main content and comes before the
+  case, so it is still tabbed through; the count was not taken again. Not tried: a screen reader (the walk checked roles
+  and names, not what a reader announces), the console's actions in browsers other than Chromium (only its login was
+  also tried in WebKit, above) or on a real phone, and two operators acting at once in a browser: the stale-screen lock
+  was walked with one operator in two tabs. That a second operator is refused is tested through the API
+  (`tests/test_operator_auth.py:test_two_operators_cannot_act_on_each_others_ticket_end_to_end`).
 - **Voice is not built.** 85% of account/payment contacts are phone calls; this
   system serves the 15% on text channels until speech-to-text and
   text-to-speech are added.
