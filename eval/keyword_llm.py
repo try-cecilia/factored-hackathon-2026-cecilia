@@ -11,10 +11,14 @@ from agent.llm.client import LLMResponse
 from eval.fake_llm import text_response, tool_call_response
 
 RULES: list[tuple[str, str, dict]] = [
-    # A movement that did not arrive: "no (le) llegó", "nunca llegó", "nunca chegou", or a transfer, payment or deposit followed by
-    # a "no"/"não". First, so a negation still asks for the trace and not for the list of that kind.
-    (r"rastre|rastrea|(no|nunca) (me |le )?lleg|(n[aã]o|nunca) (me |lhe )?chegou"
-     r"|(transfer[eê]ncia|pago|pagamento|dep[oó]sito).*\bn(o|[aã]o)\b|pendiente|pendente", "request_trace", {}),
+    # A movement that did not arrive: "no (le) llegó", "nunca llegó", "nunca chegou", a transfer followed by a "no"/"não", or a
+    # payment or deposit that did not arrive, show up or post ("no aparece", "no se acreditó", "não caiu"). First, so it asks
+    # for the trace and not for the list of that kind; "mis pagos no están al día" is not a missing payment but the status.
+    (r"rastre|rastrea|(no|nunca) (me |le )?lleg|(n[aã]o|nunca) (me |lhe )?chegou|transfer[eê]ncia.*\bn(o|[aã]o)\b"
+     r"|(pago|pagamento|dep[oó]sito).*\bn(o|[aã]o) (me |le |lhe |se )?(lleg|aparec|acredit|ca[ií]|cheg|entr)"
+     r"|pendiente|pendente", "request_trace", {}),
+    # The status of a payment, said as such ("estado de pago", "estado de mis pagos", "situação do pagamento").
+    (r"estado de(l| mis?)? pagos?\b|(estado|situa[cç][aã]o) d[oe]s? (meus? )?pagamentos?", "get_payment_status", {"product_id": "Tarjeta Crédito"}),
     # One kind of movement, named in the plural ("transferencias", "mis pagos", "depósitos"): the list narrowed to it. Late
     # payments ("pagos atrasados", "al día") are the payment status below.
     (r"transfer[eê]ncias", "list_transactions", {"transaction_type": "Transfer"}),

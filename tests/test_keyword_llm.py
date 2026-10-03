@@ -82,3 +82,26 @@ def test_transfers_alone_answers_with_the_transfers_list(text, lang):
     assert (r.disposition, r.language) == ("AUTO_RESOLVE", lang), r.response_text
     [fact] = r.verified_facts
     assert fact["tool"] == "list_transactions" and fact["args"]["transaction_type"] == "Transfer"
+
+
+STATUS = ["mis pagos no están al día", "mis pagos no están atrasados", "estado de pago", "estado de pagos",
+          "meus pagamentos não estão em dia", "meus pagamentos não estão atrasados", "estado do pagamento", "situação dos pagamentos"]
+
+
+@pytest.mark.parametrize("text", STATUS)
+def test_a_payment_status_said_with_a_negation_or_as_a_status_is_the_status_not_a_trace(text):
+    from eval.keyword_llm import _lookup
+
+    assert _lookup(text)[0] == "get_payment_status", text
+    orch, login = make()
+    r = orch.handle_message(login(), text)
+    assert r.policy_rule != "action:trace_unmatched" and r.ticket_id is None, (r.policy_rule, r.response_text)
+    assert [f["tool"] for f in r.verified_facts] == ["get_payment_status"], (r.policy_rule, r.response_text)
+
+
+def test_a_payment_or_deposit_that_did_not_arrive_still_asks_for_the_trace():
+    from eval.keyword_llm import _lookup
+
+    for text in ("el pago no se acreditó", "mi depósito no aparece", "el pago no me llegó", "el depósito no entró",
+                 "o pagamento não caiu", "meu depósito não apareceu", "o pagamento não chegou"):
+        assert _lookup(text)[0] == "request_trace", text
