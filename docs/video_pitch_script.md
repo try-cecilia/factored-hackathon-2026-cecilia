@@ -3,7 +3,7 @@
 Narration in English (the language of every official document), over the demo in Spanish and Portuguese with
 English captions. Visuals: the slides (`docs/slides_outline.md`) and the demo segment recorded on the deployed
 app with `python -m ops.record_demo <URL> demo.webm <repo URL>` (about 2 minutes, silent, captioned). The numbers
-come from `eval/reports/SYSTEM_EVAL.md`, `SYSTEM_EVAL_ADVERSARIAL.md` and `SYSTEM_EVAL_LIVE.md` (2026-10-03); if a
+come from `eval/reports/SYSTEM_EVAL.md`, `SYSTEM_EVAL_ADVERSARIAL.md` and `SYSTEM_EVAL_LIVE.md` (2026-10-04); if a
 report is regenerated, copy them again from it, never from memory.
 
 1. **Hook (20 s).** "More than a third of this bank's contacts are filed as transactional: account and payment questions.
@@ -35,17 +35,19 @@ report is regenerated, copy them again from it, never from memory.
 5. **Why it is safe (30 s).** Three measurements, each with its denominator:
    - an adversarial model that obeys injections and invents figures: 0 unsafe outcomes in 548 cases;
    - the privacy judge, which reads every request sent to the model: 0 of 548 cases sent a customer record,
-     and 0 of the 138 of the live run, in every run of both models;
+     and 0 of the 548 of the live run, in every run of both models;
    - the action: 20 traces opened on 22 confirmations, each one read back from the tracing service before it is
-     announced, none opened after a "no"; live, Sonnet 5 traced 4 of 6 and left the other 2 proposed.
+     announced, none opened after a "no"; live, Sonnet 5 traced 20, 19 and 20 of 22 in its three runs and left the
+     others proposed.
 
-6. **The live evaluation (30 s).** 138 held-out cases, three of every case type in each language, on each model,
-   three runs each. In the first run, Claude Sonnet 5: 95.0% safe automated resolution, 68.8% containment, 1.2 s
-   p50 and 2.6 s p95 per case, USD 0.0034 per safe resolution; Claude Haiku 4.5: 76.7%, 73.2%, 1.0 s and 3.8 s,
-   USD 0.0080. Across the three runs, safe automated resolution was 95.0% in each run on Sonnet 5 and between 76.7
-   and 78.3% on Haiku 4.5; 2.9% of cases changed outcome on each. Sonnet 5 had 0 unsafe outcomes in every run and
-   missed one required escalation in two of its three runs; Haiku 4.5 had one unsafe outcome, in one run: asked for
-   the savings account ending 3862, it showed the movements of another of the customer's own products. Sonnet 5,
+6. **The live evaluation (30 s).** All 548 held-out cases, the same ones the keyword bot answered, on each model,
+   three runs each. In the first run, Claude Sonnet 5: 97.1% safe automated resolution against the keyword bot's
+   70.2%, 68.8% containment, 1.4 s p50 and 3.0 s p95 per case, USD 0.0034 per safe resolution; Claude Haiku 4.5:
+   79.0%, 75.0%, 1.1 s and 4.0 s, USD 0.0084. Across the three runs, safe automated resolution was between 96.6 and
+   97.5% on Sonnet 5 and between 78.6 and 80.7% on Haiku 4.5, in Spanish and in Portuguese alike; 2.6% and 5.8% of
+   cases changed outcome. Sonnet 5 had 0 unsafe outcomes in every run and missed one required escalation, in one
+   run; Haiku 4.5 had one unsafe outcome, in one run: asked for the balance of the savings account ending 1128, it
+   showed another of the customer's own products. Sonnet 5,
    the model the demo runs, also has the lower cost per safe resolution of the two. Groq's
    gpt-oss-120b did not run (no key). The scripted ideal model stays labeled as an upper bound (99.2%).
 

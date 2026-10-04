@@ -31,16 +31,17 @@ fingerprint, so changing a value invalidates the reports.
 
 ## Not yet measured
 
-1. **The live models, beyond a sample.** Claude Sonnet 5 and Haiku 4.5 ran on
-   138 of the 548 held-out test cases (3 of every case type in each language), three runs each, on 2026-10-03
+1. **The live models, beyond one test split.** Claude Sonnet 5 and Haiku 4.5 ran on
+   all 548 held-out test cases, three runs each, on 2026-10-04
    ([`eval/reports/SYSTEM_EVAL_LIVE.md`](eval/reports/SYSTEM_EVAL_LIVE.md)), on the code the other reports measure
-   (policy fingerprint `ad2212c4c416`).
-   The intervals are wide (Sonnet 5's safe automated resolution is 95.0%
-   [86.3–98.3]), a segment or country cell holds 12–20 in-scope cases, and
-   0 unsafe outcomes in 138 bounds the true rate only below ≈2.2%. Sonnet 5, the deployed model, had none in any run;
-   Haiku 4.5 had one in its second run (1 of 138, `wrong_account_or_figure`: asked for the savings account ending 3862, it
-   listed the movements of another of the customer's products). Sonnet 5 missed one required escalation in two of its
-   three runs (a Portuguese deposit that never arrived, which it asked about instead of handing over). The report keeps
+   (policy fingerprint `0a68b7fa6bc2`).
+   The cases are synthetic, generated from the warehouse by templates, and the Portuguese turns are team-written; each
+   language has 274 cases, 119 in scope, so a language holds intervals of about ±5 points (Sonnet 5's safe automated
+   resolution is 97.1% [94.0–98.6] overall), a segment or country cell holds 58–80 in-scope cases, and
+   0 unsafe outcomes in 548 bounds the true rate only below ≈0.55%. Sonnet 5, the deployed model, had none in any run;
+   Haiku 4.5 had one in its second run (1 of 548, `wrong_account_or_figure`: asked for the balance of the savings account
+   ending 1128, it showed another of the customer's products). Sonnet 5 missed one required escalation, in run 1 of 3 (a
+   Portuguese deposit that never arrived, which it asked about instead of handing over). The report keeps
    the per-case rows of every run. A live run costs money and a key the CI does not have, so the gate does not require
    it after every change: it requires that a change to the measured code be declared next to the live figures in
    README.md and EVALUATION.md until the live run is repeated. Groq ran only
@@ -116,7 +117,8 @@ fingerprint, so changing a value invalidates the reports.
    the gate was green and did not measure that edge. In the live run of 2026-10-02, one reply of Haiku 4.5 (run 2 of 3, 1 of 138) was text outside the
    templates, judged by that older judge. That run kept the rows of run 1 only, so it could not be inspected: either model text reached a reply, or it
    was one of these compositions the judge did not rebuild (the two-request notices of prompt 3.2.1), and it stays unknown. The evaluation now keeps
-   every run's rows, and the live run of 2026-10-03, judged by the current judge, had no reply outside the templates in any run of either model.
+   every run's rows, and the live runs of 2026-10-03 and 2026-10-04, judged by the current judge, had no reply outside the templates in any run of
+   either model.
 ## Data and ML
 
 - **The behavioral deviation shown to the operator does not detect the fraud labels.** Its AUC against `is_fraud` is

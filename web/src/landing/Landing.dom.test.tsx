@@ -37,7 +37,7 @@ describe('the landing', () => {
       'Línea base medida',
       'Cada pieza aprendida se midió contra un baseline. La que no aprendía nada, se descartó.',
       'Una consulta al modelo. Todo lo demás es código determinístico.',
-      '548 casos offline y 138 en vivo. Cero inseguros, salvo 1 de Haiku 4.5.',
+      '548 casos offline y 548 en vivo. Cero inseguros, salvo 1 de Haiku 4.5.',
       'Sin controles, un modelo malo da 74,8% de resultados inseguros. Con todos, 0,0%.',
       'Más evidencia',
       'Lo que Cecilia no resuelve, lo decide una persona con el caso ya armado.',
@@ -74,11 +74,11 @@ describe('the landing', () => {
     for (const text of ['4,4 M', '84,7%', '0,506', '+8,2 a +34,1', '0,0029', '4.316', '150.000']) {
       expect(screen.getAllByText((_, el) => el?.textContent === text).length, text).toBeGreaterThan(0)
     }
-    expect(screen.getByText('Casos de Sonnet 5 cuyo resultado cambió entre corridas (4 de 138).')).toBeTruthy()
-    expect(screen.getByText('Casos que mandaron un registro del cliente al modelo. En vivo: 0 de 138.')).toBeTruthy()
+    expect(screen.getByText('Casos de Sonnet 5 cuyo resultado cambió entre corridas (14 de 548).')).toBeTruthy()
+    expect(screen.getByText('Casos que mandaron un registro del cliente al modelo. En vivo: 0 de 548.')).toBeTruthy()
     expect(screen.getByText(/58\.234 movimientos pendientes en el dataset \(1,99%\)/)).toBeTruthy()
     expect(screen.getByText(/El 63,5% del baseline es una cota superior/)).toBeTruthy()
-    expect(screen.getByText(/En vivo: 3 de octubre de 2026; la tabla muestra la corrida 1 de 3/)).toBeTruthy()
+    expect(screen.getByText(/En vivo: 4 de octubre de 2026; la tabla muestra la corrida 1 de 3/)).toBeTruthy()
   })
 
   it('draws the results as real tables, each with a caption and its column headers', () => {
@@ -89,15 +89,15 @@ describe('the landing', () => {
     expect(within(queue).getAllByRole('columnheader').map((th) => th.textContent)).toEqual(['Tipo', 'Caso', 'Tiempo en espera', 'Objetivo'])
     expect(within(queue).getAllByRole('row').slice(1).map((tr) => tr.lastElementChild?.textContent)).toEqual(['15m', '2h', '4h'])
     expect(within(offline).getAllByRole('columnheader').map((th) => th.textContent)).toEqual(['Offline · 548 casos', 'Bot de palabras', 'Modelo ideal', 'Adversarial'])
-    expect(within(live).getAllByRole('columnheader').map((th) => th.textContent)).toEqual(['En vivo · muestra de 138 × 3 corridas', 'Sonnet 5 ★', 'Haiku 4.5'])
+    expect(within(live).getAllByRole('columnheader').map((th) => th.textContent)).toEqual(['En vivo · muestra de 548 × 3 corridas', 'Sonnet 5 ★', 'Haiku 4.5'])
     const unsafe = within(offline).getByRole('rowheader', { name: 'Resultados inseguros' }).closest('tr') as HTMLElement
     expect(within(unsafe).getAllByRole('cell').map((td) => td.textContent)).toEqual(['0/548', '0/548', '0/548'])
     const runs = within(live).getByRole('rowheader', { name: 'Inseguros por corrida' }).closest('tr') as HTMLElement
     expect(within(runs).getAllByRole('cell').map((td) => td.textContent)).toEqual(['0 · 0 · 0', '0 · 1 · 0'])
     const missed = within(live).getByRole('rowheader', { name: 'Derivaciones obligatorias perdidas, por corrida' }).closest('tr') as HTMLElement
-    expect(within(missed).getAllByRole('cell').map((td) => td.textContent)).toEqual(['1 · 1 · 0', '9 · 9 · 9'])
+    expect(within(missed).getAllByRole('cell').map((td) => td.textContent)).toEqual(['1 · 0 · 0', '37 · 36 · 36'])
     const recall = within(live).getByRole('rowheader', { name: 'Recall de derivación' }).closest('tr') as HTMLElement
-    expect(within(recall).getAllByRole('cell').map((td) => td.textContent)).toEqual(['97,6%', '78,6%'])
+    expect(within(recall).getAllByRole('cell').map((td) => td.textContent)).toEqual(['99,4%', '78,0%'])
     expect(within(ablation).getAllByRole('cell').map((td) => td.textContent)).toEqual(['17,5%', '74,8%', '13,1%', '49,3%', '8,8%', '8,8%', '0,0%', '0,0%'])
     for (const table of tables) expect(table.querySelector('caption')?.textContent).toBeTruthy()
   })
@@ -141,18 +141,18 @@ describe('the landing', () => {
     expect(screen.getByText('No es una medición: aplica la tasa en vivo a los contactos reales.')).toBeTruthy()
     expect(screen.getByText(/^Maqueta con datos de ejemplo\. Los objetivos \(15 min, 2 h, 4 h\) son una propuesta para la demo/)).toBeTruthy()
     expect(screen.getByText('test n = 85 · ADR-006 · 01/10/2026')).toBeTruthy()
-    expect(screen.getByText('57 de 60 en alcance · muestra de 138 · 03/10/2026')).toBeTruthy()
-    expect(screen.getAllByText('Sonnet 5 · muestra de 138 casos · 03/10/2026')).toHaveLength(2)
-    expect(screen.getByText(/^0 de 138 en vivo da una cota superior aproximada al 95% de ≈2,2%; 0 de 548 offline, de ≈0,55%\. Vale para este experimento/)).toBeTruthy()
+    expect(screen.getByText('231 de 238 en alcance · muestra de 548 · 04/10/2026')).toBeTruthy()
+    expect(screen.getAllByText('Sonnet 5 · muestra de 548 casos · 04/10/2026')).toHaveLength(2)
+    expect(screen.getByText(/^0 de 548 en vivo da una cota superior aproximada al 95% de ≈0,55%; 0 de 548 offline, de ≈0,55%\. Vale para este experimento/)).toBeTruthy()
   })
 
   it('says what each figure measures: its denominator, its exception, its sample and its caveat', () => {
     renderWithI18n(<Landing />)
     // Safe automated resolution is over the cases in scope, not the whole sample.
-    expect(screen.getByText('resolución automática segura, 57 de 60 casos en alcance')).toBeTruthy()
-    expect(screen.getByRole('rowheader', { name: 'Resolución automática segura (en alcance, n = 60)' })).toBeTruthy()
-    expect(screen.getByRole('rowheader', { name: 'Resolución automática segura (en alcance, n = 238)' })).toBeTruthy()
-    expect(screen.getByText(/se mide sobre los 60 casos dentro del alcance: 57 de 60, 95,0% \[86,3–98,3\]/)).toBeTruthy()
+    expect(screen.getByText('resolución automática segura, 231 de 238 casos en alcance')).toBeTruthy()
+    // Offline and live run the same 548 cases, so both tables count the same 238 in scope.
+    expect(screen.getAllByRole('rowheader', { name: 'Resolución automática segura (en alcance, n = 238)' })).toHaveLength(2)
+    expect(screen.getByText(/se mide sobre los 238 casos dentro del alcance: 231 de 238, 97,1% \[94,1–98,6\]/)).toBeTruthy()
     // The guard that recalls 93,3% is the lexicon and the classifier together.
     expect(screen.getByText(/^La guarda combinada, léxico \+ clasificador, detectó el 93,3%/)).toBeTruthy()
     // The 234 cases are failure and regression cases, no longer held out.
@@ -199,7 +199,7 @@ describe('the landing', () => {
     renderWithI18n(<Landing />, 'pt')
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Olá, sou a Cecilia. O modelo escolhe a consulta. O código escreve a resposta.')
     expect(screen.getByRole('link', { name: /Entrar na demo/ })).toBeTruthy()
-    expect(screen.getByText(/Ao vivo: 3 de outubro de 2026; a tabela mostra a rodada 1 de 3/)).toBeTruthy()
+    expect(screen.getByText(/Ao vivo: 4 de outubro de 2026; a tabela mostra a rodada 1 de 3/)).toBeTruthy()
     expect(screen.getAllByText((_, el) => el?.textContent === '84,7%').length).toBeGreaterThan(0)
   })
 })

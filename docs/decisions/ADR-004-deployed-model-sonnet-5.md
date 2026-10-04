@@ -7,8 +7,8 @@
   system can resolve without a person. It is not irrelevant to safety: a product the model names by its alias is taken
   as given (`resolve_product_ref` in `agent/core/orchestrator.py` does not compare it with the digits the customer
   wrote), so a model that picks the wrong one of the customer's own products gets a correct answer about the wrong
-  product (Haiku 4.5, 2026-10-03, below). We measured two candidates on the same
-  held-out sample.
+  product (Haiku 4.5, 2026-10-03 and 2026-10-04, below). We measured two candidates on the same
+  held-out cases.
 
 ## Decision
 
@@ -64,15 +64,32 @@ of the customer's own products and the reply listed that product's movements (`w
 none, and its one missed escalation (a Portuguese deposit that never arrived, asked about instead of handed over) is the
 first it has had in these runs.
 
+**Measured again on 2026-10-04, on the whole test split**: all 548 held-out cases, three runs each, Anthropic only, on
+the code the other reports measure (prompt 3.3.0, policy fingerprint `0a68b7fa6bc2`, commit `96d1f2d8`). The decision
+holds, with intervals about half as wide:
+
+| | Claude Sonnet 5 | Claude Haiku 4.5 |
+|---|---|---|
+| Safe automated resolution | 97.1% [94.0–98.6] | 79.0% [73.4–83.7] |
+| Escalation recall | 99.4% (1 missed, in run 1) | 78.0% (37 missed) |
+| Unsafe outcomes | 0 / 548 in each run | 0 / 548 in runs 1 and 3; 1 / 548 in run 2 |
+| Latency per case, p50 / p95 | 1.4 s / 3.0 s | 1.1 s / 4.0 s |
+| Model cost per safe resolution | USD 0.0034 | USD 0.0084 |
+
+Haiku 4.5's unsafe outcome is of the same kind as on 2026-10-03: asked for the balance of the savings account ending
+1128, it chose another of the customer's own products and the reply showed that one. Sonnet 5 had none in any run, and
+its one missed escalation is again a Portuguese deposit that never arrived, in run 1 only.
+
 ## Trade-offs
 
-- **The sample is 138 of the test cases, not all.** Zero unsafe in 138 bounds the true rate only below about 2.2%. The
-  intervals on resolution are wide (a segment or country cell holds 12 to 20 in-scope cases). The offline runs with
-  scripted models cover the whole workload, and they show that the controls checked offline hold with a deliberately
+- **The cases are one synthetic test split.** Zero unsafe in 548 bounds the true rate only below about 0.55%. A
+  segment or country cell holds 58 to 80 in-scope cases, and a language 119. The offline runs with
+  scripted models cover the same workload, and they show that the controls checked offline hold with a deliberately
   bad model (`SYSTEM_EVAL_ADVERSARIAL.md`, `ABLATION.md`). They do not show that the model's choice of product
-  cannot matter: the scripted models do not pick the wrong one of the customer's own products, and Haiku 4.5 did once.
-- **Haiku is faster** at the median (1.0 s against 1.2 s on 2026-10-03), not at p95 (3.8 s against 2.6 s). A
-  person's average inquiry takes about 341 s, so ≈0.2 s does not decide anything at this workload.
+  cannot matter: the scripted models do not pick the wrong one of the customer's own products, and Haiku 4.5 did, once
+  in each of the last two measurements.
+- **Haiku is faster** at the median (1.1 s against 1.4 s on 2026-10-04), not at p95 (4.0 s against 3.0 s). A
+  person's average inquiry takes about 341 s, so ≈0.3 s does not decide anything at this workload.
 - **The vendor is a dependency.** The fallbacks above (Groq, local, limited mode) exist for that, and each is measured
   or reported as not yet measured in `LIMITATIONS.md`.
 - The Groq model ran only on a small sample (42 of the 226 reserved failure cases), with 3 not handled as the policy

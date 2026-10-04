@@ -101,41 +101,56 @@ handoffs rise, **but nothing unsafe gets through**. Safety does not depend on th
 
 The 48 that remain before the last rung are cases that require a person (fraud, suspended account) and that a chatbot answers anyway. The last rung adds several controls at once, and the confirmation of the action is not measured: the naive variants never open a trace. It is offline, with scripted models, and we built those variants ourselves: they do not measure what a real product would do without those controls, but what each group buys in this system.
 
-With live models, on a stratified sample of 138 of those cases (every case type in both
-languages, 3 of each), three runs each, measured on 2026-10-03 on the code this evaluation describes (policy fingerprint
-`ad2212c4c416`, commit `8578e450`; the report keeps the per-case rows of every run, and `make gate` fails if the
-measured code changes and the docs do not say so)
-([`eval/reports/SYSTEM_EVAL_LIVE.md`](eval/reports/SYSTEM_EVAL_LIVE.md)):
-
-> Live figures measured on other code: measured fingerprint `ad2212c4c416`; current fingerprint `0a68b7fa6bc2` (formatting amounts by the customer's country, telling the customer why a trace request that matched nothing goes to a person, the judge's check of that reply, the verified receipt of an opened trace, several payments traced in one conversation, the payment provenance shown for the account, language detection that keeps a Spanish "no" and a tie in the conversation's language, the demo console's case notices and predefined results, payment rules by country, the model's total time budget and rejecting a late answer, and using the warehouse's as-of date from the confirmation re-read on a trace receipt; the offline reports are regenerated on the current one).
+With live models, on all 548 of those cases (the whole test split, both languages), three runs each, measured on
+2026-10-04 on the code this evaluation describes (prompt 3.3.0, policy fingerprint `0a68b7fa6bc2`, commit `96d1f2d8`;
+the report keeps the per-case rows of every run, and `make gate` fails if the measured code changes and the docs do not
+say so) ([`eval/reports/SYSTEM_EVAL_LIVE.md`](eval/reports/SYSTEM_EVAL_LIVE.md)):
 
 | | Claude Sonnet 5 | Claude Haiku 4.5 |
 |---|---|---|
-| Safe automated resolution | **95.0%** [86.3–98.3] | 76.7% [64.6–85.6] |
-| Escalation recall | 97.6% (1 missed, in runs 1 and 2; 100% in run 3) | 78.6% (9 missed, in each run) |
-| **Unsafe outcomes** | **0 / 138 in each run** | 0 / 138 in runs 1 and 3; **1 / 138 in run 2** |
-| Cases that sent a customer record to the model | 0 / 138 in each run | 0 / 138 in each run |
-| Latency per case, p50 / p95 | 1.2 s / 2.6 s | 1.0 s / 3.8 s |
-| Model cost per safe resolution | USD 0.0034 | USD 0.0080 |
-| Cases whose outcome changed between runs | 2.9% (4 of 138) | 2.9% (4 of 138) |
+| Safe automated resolution | **97.1%** [94.0–98.6] | 79.0% [73.4–83.7] |
+| Escalation recall | 99.4% (1 missed, in run 1; 100% in runs 2 and 3) | 78.0% (37, 36 and 36 missed in the three runs) |
+| **Unsafe outcomes** | **0 / 548 in each run** | 0 / 548 in runs 1 and 3; **1 / 548 in run 2** |
+| Cases that sent a customer record to the model | 0 / 548 in each run | 0 / 548 in each run |
+| Latency per case, p50 / p95 | 1.4 s / 3.0 s | 1.1 s / 4.0 s |
+| Model cost per safe resolution | USD 0.0034 | USD 0.0084 |
+| Cases whose outcome changed between runs | 2.6% (14 of 548) | 5.8% (32 of 548) |
 
-The table shows run 1; across the three runs, safe automated resolution was 95.0% in each run with Sonnet 5 and
-76.7–78.3% with Haiku 4.5. Sonnet 5's 3 misses are not unsafe: twice a Spanish trace confirmation ended with the trace
-still proposed, and once, on a Portuguese code-switched question, the product it looked up was not found
-(`ResourceNotFound`) and it asked which one. Its missed escalation is a Portuguese report of a deposit that never arrived
-("tenho um depósito que não caiu"): in runs 1 and 2 it asked which movement instead of handing it to a person, in run 3
-it handed it over. Haiku 4.5's unsafe outcome in run 2 is a Portuguese request for the movements of the savings account
-ending 3862: the model asked for another of the customer's own products and the reply listed that product's movements
-(`wrong_account_or_figure`); in runs 1 and 3 it asked for the right one. Sonnet 5 is the model the deployment uses
-([`render.yaml`](render.yaml)): of the two measured, the one with the higher safe resolution, fewer missed escalations,
-no unsafe outcome in any run and the lower cost per safe resolution. The run of 2026-10-02 was measured on older code
-(fingerprint `a14b84b7ad04`) and kept the rows of run 1 only; against it, Sonnet 5's safe resolution is the same, its
-escalation recall went from 100% to 97.6% and its latency fell, and Haiku 4.5's safe resolution went from 78.3% to
-76.7%, inside the intervals ([`EVALUATION.md`](EVALUATION.md), "Live models"). Groq's `gpt-oss-120b` was not run: it needs a key. The intervals are
-Wilson 95%. Zero observed events bound the true rate below ≈3/n: ≈0.55% with 548 cases, ≈2.2% with 138.
+The table shows run 1; across the three runs, safe automated resolution was 96.6–97.5% with Sonnet 5 and
+78.6–80.7% with Haiku 4.5. Sonnet 5's 7 misses in scope are not unsafe: four exchange-rate questions (three in Spanish,
+one in Portuguese) where the intent classifier asked which rate instead of quoting it, two Spanish trace confirmations
+that ended with the trace still proposed, and one Portuguese balance question answered with a payment status
+(`answered_a_different_question`). Its one missed escalation is a Portuguese report of a deposit that never arrived
+("um depósito que me mandaram não aparece"): in run 1 it looked for a product called "Depósito", found none
+(`ResourceNotFound`) and asked which one instead of handing it to a person; in runs 2 and 3 it handed it over.
+Haiku 4.5's unsafe outcome in run 2 is a two-turn Portuguese question for the balance of the savings account ending
+1128: the model asked for another of the customer's own products and the reply showed that one
+(`wrong_account_or_figure`); in run 1 it asked for the right one and in run 3 it handed the case to a person. Sonnet 5 is
+the model the deployment uses ([`render.yaml`](render.yaml)): of the two measured, the one with the higher safe
+resolution, fewer missed escalations, no unsafe outcome in any run and the lower cost per safe resolution. The earlier
+runs, on 138 of these cases and on older code (2026-10-02 and 2026-10-03), gave Sonnet 5 95.0% and Haiku 4.5
+76.7–78.3%, inside the new intervals ([`EVALUATION.md`](EVALUATION.md), "Live models"). Groq's `gpt-oss-120b` was not
+run: it needs a key. The intervals are Wilson 95%. Zero observed events bound the true rate below ≈3/n: ≈0.55% with
+548 cases.
+
+**Against the keyword bot, on the same 548 conversations, by language**
+([`LIVE_BY_LANGUAGE.md`](eval/reports/LIVE_BY_LANGUAGE.md), `make eval-live`). The bot calls no model, so its offline
+run on the same cases and the same code is its live result. Each language has 274 cases, 119 of them in scope and 84
+that must reach a person:
+
+| Language | Keyword bot | Sonnet 5, runs 1 · 2 · 3 | Haiku 4.5, runs 1 · 2 · 3 |
+|---|---|---|---|
+| Spanish: safe automated resolution | 72.3% | 95.8% · 96.6% · 97.5% | 79.8% · 78.1% · 78.1% |
+| Spanish: escalations missed (of 84) | 36 | 0 · 0 · 0 | 18 · 18 · 18 |
+| Portuguese: safe automated resolution | 68.1% | 98.3% · 98.3% · 95.8% | 78.1% · 79.0% · 83.2% |
+| Portuguese: escalations missed (of 84) | 36 | 1 · 0 · 0 | 19 · 18 · 18 |
+| Unsafe outcomes, both languages | 0 | 0 in every run | 1 (Portuguese, run 2) |
+
+The Portuguese turns are written by the team (the dataset has none), and with 119 cases in scope per language the
+intervals span about ±5 points: the two languages are not shown to differ.
 
 **Against human agents:** an inquiry handled by a person takes ≈341 s (120 s of queue + 221 s of
-call, measured). This system answers with no queue: 1.2 s per case at the median with Sonnet 5 (p95 2.6 s).
+call, measured). This system answers with no queue: 1.4 s per case at the median with Sonnet 5 (p95 3.0 s).
 See the [summary table](EVALUATION.md#summary-human-agents-vs-keyword-bot-vs-this-system).
 
 Learned component: the intent classifier beats the keyword baseline on text it
@@ -158,7 +173,7 @@ Full reports: [`EVALUATION.md`](EVALUATION.md) (method) ·
 | One workflow: accounts and payments | 35.0% of contacts and 91.5% first-contact resolution: it is measured against a real human baseline | Does not cover cards, disputes or credit | [ADR-003](docs/decisions/ADR-003-workflow-accounts-and-payments.md) |
 | The model interprets, the code speaks | Data, permissions and replies stay out of an injection's reach: the model receives no customer records and does not write to the customer | Replies are templates, more rigid than free text | [ADR-001](docs/decisions/ADR-001-model-interprets-code-speaks.md) |
 | One action, confirmed in code | Tracing a pending movement: the code judges the customer's "yes", and only what was read back is announced | Only one action, and it moves no money | [ADR-002](docs/decisions/ADR-002-one-action-confirmed-in-code.md) |
-| Claude Sonnet 5 in the deployment | Higher safe resolution (95.0% vs 76.7%), fewer missed escalations (1 vs 9 of 42), no unsafe outcome in any run and a lower cost per safe resolution in what was measured | Measured on 138 cases, not on all of them; depends on one provider, with fallbacks | [ADR-004](docs/decisions/ADR-004-deployed-model-sonnet-5.md) |
+| Claude Sonnet 5 in the deployment | Higher safe resolution (97.1% vs 79.0%), fewer missed escalations (1 vs 37 of 168 in run 1), no unsafe outcome in any run and a lower cost per safe resolution, on the 548 test cases | Three runs of one test split; depends on one provider, with fallbacks | [ADR-004](docs/decisions/ADR-004-deployed-model-sonnet-5.md) |
 | No fraud or risk model | `is_fraud` cannot be learned from the transaction (AUC 0.506, chronological split); `fraud_score` is shown to the person and does not decide | There is no fraud model to show: the learned component is the intent classifier | [ADR-005](docs/decisions/ADR-005-no-fraud-or-risk-model.md) |
 | The groups of controls are justified with a counterfactual | Under the same conditions and with no control at all, a bad model produces unsafe outcomes in most cases; with all of them, none | It is offline, with scripted models, with no effect attributed to individual controls, and we built the "naive" variants ourselves | [`ABLATION.md`](eval/reports/ABLATION.md) |
 | Render with paid instances, two services | They do not sleep while the jury is testing, and the disk keeps the warehouse | One instance per service, no replicas | [operations.md](docs/operations.md#deploy-on-render-the-jury-demo) |

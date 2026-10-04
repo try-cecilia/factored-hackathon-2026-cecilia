@@ -80,17 +80,17 @@ test('every landing figure is the value it is bound to, at the decimals the land
 test('a figure taken from the wrong column, percentile, unit or row is rejected', () => {
   const wrong: Array<[keyof typeof figures, number]> = [
     ['keywordSafe', 99.2], // the ideal model's column
-    ['sonnetP50', 4.2], // the p95
-    ['haikuP50', 1.9], // Sonnet's latency
+    ['sonnetP50', 3.0], // the p95
+    ['haikuP50', 1.4], // Sonnet's latency
     ['loadChatsPerSecond', 5.7], // the refusal time, in ms
-    ['sonnetSafe', 45.6], // automation attempted, over the 138 instead of the 60 in scope
+    ['sonnetSafe', 47.3], // automation attempted, over the 548 instead of the 238 in scope
     ['ablationNoneBad', 17.5], // the ideal model's column
     ['redTeamSessions', 224], // the turns
     ['guardRecall', 0], // the false escalations
     ['attemptsPerProvider', 4], // two providers × two attempts is not the per-provider constant
     ['haikuUnsafeRun2', 0], // run 2 had Haiku's one unsafe outcome
-    ['sonnetMissedRun3', 1], // Sonnet missed its escalation in runs 1 and 2, not 3
-    ['sonnetRecall', 100], // run 3's recall, not run 1's
+    ['sonnetMissedRun3', 1], // Sonnet missed its one escalation in run 1, not in run 3
+    ['sonnetRecall', 100], // the recall of runs 2 and 3, not run 1's
   ]
   for (const [name, value] of wrong) {
     if (!removedByExport(figures[name].source)) assert.notEqual(mismatch(name, { ...figures[name], value }), null, `${name} = ${value} passed`)
@@ -128,8 +128,8 @@ test('figures come out in the notation of each language', () => {
   assert.equal(formatNumber(95, 1, 'pt'), '95,0')
   assert.equal(formatFigure(figures.classifier, 'es'), '84,7')
   assert.equal(formatMillions(figures.transactions, 'es'), '4,4')
-  assert.equal(formatDate(liveRunDate.iso, 'es'), '3 de octubre de 2026')
-  assert.equal(formatDate(liveRunDate.iso, 'pt'), '3 de outubro de 2026')
-  assert.equal(formatShortDate(liveRunDate.iso, 'es'), '03/10/2026')
+  assert.equal(formatDate(liveRunDate.iso, 'es'), '4 de octubre de 2026')
+  assert.equal(formatDate(liveRunDate.iso, 'pt'), '4 de outubro de 2026')
+  assert.equal(formatShortDate(liveRunDate.iso, 'es'), '04/10/2026')
   assert.equal(formatShortDate(redTeamDate.iso, 'pt'), '30/09/2026')
 })

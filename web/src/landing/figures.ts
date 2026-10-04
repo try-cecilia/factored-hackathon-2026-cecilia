@@ -134,17 +134,17 @@ export const figures = {
 
   // Live results: a sample of 138 cases, three runs per model; the tables show run 1, except the per-run rows. Safe automated resolution is over the
   // 60 in-scope cases of the sample, not the 138.
-  liveCases: json(138, 0, LIVE, ['n_cases']),
+  liveCases: json(548, 0, LIVE, ['n_cases']),
   liveRuns: json(3, 0, LIVE, [...SONNET, 'repeat_variability', 'runs']),
-  liveEligible: json(60, 0, LIVE, [...SONNET, SAR, 'n']),
-  sonnetSafe: json(95.0, 1, LIVE, [...SONNET, SAR, 'rate'], 100),
-  sonnetSafeResolved: json(57, 0, LIVE, [...SONNET, SAR, 'k']),
-  sonnetSafeLow: json(86.3, 1, LIVE, [...SONNET, SAR, 'ci95', 0], 100),
-  sonnetSafeHigh: json(98.3, 1, LIVE, [...SONNET, SAR, 'ci95', 1], 100),
-  haikuSafe: json(76.7, 1, LIVE, [...HAIKU, SAR, 'rate'], 100),
-  haikuSafeResolved: json(46, 0, LIVE, [...HAIKU, SAR, 'k']),
-  sonnetRecall: json(97.6, 1, LIVE, [...SONNET, 'escalation_recall', 'rate'], 100),
-  haikuRecall: json(78.6, 1, LIVE, [...HAIKU, 'escalation_recall', 'rate'], 100),
+  liveEligible: json(238, 0, LIVE, [...SONNET, SAR, 'n']),
+  sonnetSafe: json(97.1, 1, LIVE, [...SONNET, SAR, 'rate'], 100),
+  sonnetSafeResolved: json(231, 0, LIVE, [...SONNET, SAR, 'k']),
+  sonnetSafeLow: json(94.1, 1, LIVE, [...SONNET, SAR, 'ci95', 0], 100),
+  sonnetSafeHigh: json(98.6, 1, LIVE, [...SONNET, SAR, 'ci95', 1], 100),
+  haikuSafe: json(79.0, 1, LIVE, [...HAIKU, SAR, 'rate'], 100),
+  haikuSafeResolved: json(188, 0, LIVE, [...HAIKU, SAR, 'k']),
+  sonnetRecall: json(99.4, 1, LIVE, [...SONNET, 'escalation_recall', 'rate'], 100),
+  haikuRecall: json(78.0, 1, LIVE, [...HAIKU, 'escalation_recall', 'rate'], 100),
   sonnetUnsafe: json(0, 0, LIVE, [...SONNET, 'repeat_variability', 'unsafe_outcomes', 'max']),
   // Per run, from the per-case rows of every run: unsafe outcomes, and required escalations that did not happen.
   sonnetUnsafeRun1: rows(0, LIVE, SONNET_ROWS, { repeat: 1, unsafe: true }),
@@ -154,27 +154,27 @@ export const figures = {
   haikuUnsafeRun2: rows(1, LIVE, HAIKU_ROWS, { repeat: 2, unsafe: true }),
   haikuUnsafeRun3: rows(0, LIVE, HAIKU_ROWS, { repeat: 3, unsafe: true }),
   sonnetMissedRun1: rows(1, LIVE, SONNET_ROWS, { repeat: 1, should_escalate: true, escalated: false }),
-  sonnetMissedRun2: rows(1, LIVE, SONNET_ROWS, { repeat: 2, should_escalate: true, escalated: false }),
+  sonnetMissedRun2: rows(0, LIVE, SONNET_ROWS, { repeat: 2, should_escalate: true, escalated: false }),
   sonnetMissedRun3: rows(0, LIVE, SONNET_ROWS, { repeat: 3, should_escalate: true, escalated: false }),
-  haikuMissedRun1: rows(9, LIVE, HAIKU_ROWS, { repeat: 1, should_escalate: true, escalated: false }),
-  haikuMissedRun2: rows(9, LIVE, HAIKU_ROWS, { repeat: 2, should_escalate: true, escalated: false }),
-  haikuMissedRun3: rows(9, LIVE, HAIKU_ROWS, { repeat: 3, should_escalate: true, escalated: false }),
+  haikuMissedRun1: rows(37, LIVE, HAIKU_ROWS, { repeat: 1, should_escalate: true, escalated: false }),
+  haikuMissedRun2: rows(36, LIVE, HAIKU_ROWS, { repeat: 2, should_escalate: true, escalated: false }),
+  haikuMissedRun3: rows(36, LIVE, HAIKU_ROWS, { repeat: 3, should_escalate: true, escalated: false }),
   sonnetRecordsToModel: json(0, 0, LIVE, [...SONNET, 'repeat_variability', 'records_sent_to_model', 'max']),
   haikuRecordsToModel: json(0, 0, LIVE, [...HAIKU, 'repeat_variability', 'records_sent_to_model', 'max']),
-  sonnetP50: json(1.2, 1, LIVE, [...SONNET, 'latency_ms_p50'], 0.001),
-  sonnetP95: json(2.6, 1, LIVE, [...SONNET, 'latency_ms_p95'], 0.001),
-  haikuP50: json(1.0, 1, LIVE, [...HAIKU, 'latency_ms_p50'], 0.001),
-  haikuP95: json(3.8, 1, LIVE, [...HAIKU, 'latency_ms_p95'], 0.001),
+  sonnetP50: json(1.4, 1, LIVE, [...SONNET, 'latency_ms_p50'], 0.001),
+  sonnetP95: json(3.0, 1, LIVE, [...SONNET, 'latency_ms_p95'], 0.001),
+  haikuP50: json(1.1, 1, LIVE, [...HAIKU, 'latency_ms_p50'], 0.001),
+  haikuP95: json(4.0, 1, LIVE, [...HAIKU, 'latency_ms_p95'], 0.001),
   sonnetCost: json(0.0034, 4, LIVE, [...SONNET, 'cost_per_safe_resolution_usd']),
-  haikuCost: json(0.0080, 4, LIVE, [...HAIKU, 'cost_per_safe_resolution_usd']),
-  sonnetFlips: json(2.9, 1, LIVE, [...SONNET, 'repeat_variability', 'outcome_flip_rate', 'rate'], 100),
-  sonnetFlippedCases: json(4, 0, LIVE, [...SONNET, 'repeat_variability', 'outcome_flip_rate', 'k']),
-  haikuFlips: json(2.9, 1, LIVE, [...HAIKU, 'repeat_variability', 'outcome_flip_rate', 'rate'], 100),
-  liveUpperBound: json(2.2, 1, LIVE, [...SONNET, 'unsafe_95pct_upper_bound_if_zero'], 100),
+  haikuCost: json(0.0084, 4, LIVE, [...HAIKU, 'cost_per_safe_resolution_usd']),
+  sonnetFlips: json(2.6, 1, LIVE, [...SONNET, 'repeat_variability', 'outcome_flip_rate', 'rate'], 100),
+  sonnetFlippedCases: json(14, 0, LIVE, [...SONNET, 'repeat_variability', 'outcome_flip_rate', 'k']),
+  haikuFlips: json(5.8, 1, LIVE, [...HAIKU, 'repeat_variability', 'outcome_flip_rate', 'rate'], 100),
+  liveUpperBound: json(0.55, 2, LIVE, [...SONNET, 'unsafe_95pct_upper_bound_if_zero'], 100),
 
   // A projection, not a measurement: Sonnet 5's live rate applied to the text-channel contacts.
-  projectedContacts: json(955, 0, LIVE, ['projection', 'projected_monthly_automated_contacts']),
-  projectedHours: json(59, 0, LIVE, ['projection', 'projected_monthly_agent_hours_saved']),
+  projectedContacts: json(976, 0, LIVE, ['projection', 'projected_monthly_automated_contacts']),
+  projectedHours: json(60, 0, LIVE, ['projection', 'projected_monthly_agent_hours_saved']),
   textContacts: json(1005, 0, LIVE, ['projection', 'monthly_text_channel_contacts_measured']),
   projectedFloor: fig(705, 0, EVALUATION, 'That gives ≈705 automated per month'),
 
@@ -225,7 +225,7 @@ export const figures = {
 
 /** Days, as ISO dates, each with where it is written: a quote of a document or the `generated_at` of a JSON report. */
 export type Day = { iso: string; source: string } & ({ quote: string } | { at: readonly string[] })
-export const liveRunDate: Day = { iso: '2026-10-03', source: LIVE, at: ['generated_at'] }
+export const liveRunDate: Day = { iso: '2026-10-04', source: LIVE, at: ['generated_at'] }
 export const offlineRunDate: Day = { iso: '2026-10-04', source: OFFLINE, at: ['generated_at'] }
 export const redTeamDate: Day = { iso: '2026-09-30', source: RED_TEAM, quote: '30/09/2026, from 20:30 to 21:53' }
 export const classifierDate: Day = { iso: '2026-10-01', source: ADR006, quote: 'accepted, recorded 2026-10-01' }
