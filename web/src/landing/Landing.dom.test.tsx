@@ -6,7 +6,7 @@ import { renderWithI18n } from '../test/render'
 import { figures as F, formatDate, formatFigure, offlineRunDate } from './figures'
 import { DemoEntryProvider } from './demo-entry'
 import { Landing } from './Landing'
-import { consoleEntry, demoEntry, sections, signInEntry } from './links'
+import { consoleEntry, demoEntry, publicRepository, sections, signInEntry } from './links'
 
 const navigate = vi.hoisted(() => vi.fn(async () => {}))
 const enterDemo = vi.hoisted(() => vi.fn())
@@ -110,7 +110,11 @@ describe('the landing', () => {
     expect(screen.getByRole('link', { name: 'Ingresar con PIN' }).getAttribute('href')).toBe(signInEntry.to)
     expect(screen.getByRole('link', { name: 'Consola con clave' }).getAttribute('href')).toBe(consoleEntry.to)
     expect(screen.getByRole('link', { name: 'Ver la evaluación' }).getAttribute('href')).toBe(`#${sections.results}`)
-    for (const link of screen.getAllByRole('link')) expect(link.getAttribute('href') ?? '').not.toMatch(/github\.com/)
+    // GitHub only through the public repository of the submission, never another one
+    for (const link of screen.getAllByRole('link')) {
+      const href = link.getAttribute('href') ?? ''
+      if (/github\.com/.test(href)) expect(href === publicRepository || href.startsWith(`${publicRepository}/blob/main/`), href).toBe(true)
+    }
   })
 
   it('with the demo console on, "Probar la demo" enters with one click as the default customer and lands in the chat; the sign-in stays the sign-in', async () => {
@@ -180,13 +184,15 @@ describe('the landing', () => {
     ])
   })
 
-  it('draws the evidence and the limits without links while there is no public repository', () => {
+  it('links every document of the evidence and the limits to the public repository', () => {
     renderWithI18n(<Landing />)
     const grid = screen.getByRole('heading', { name: 'Evaluación del sistema' }).closest('ul') as HTMLElement
     expect(within(grid).getAllByRole('heading', { level: 3 })).toHaveLength(9)
-    expect(within(grid).queryAllByRole('link')).toHaveLength(0)
-    expect(screen.queryByRole('link', { name: /repositorio/ })).toBeNull()
-    expect(screen.queryByRole('link', { name: /lista completa de límites/ })).toBeNull()
+    const documents = within(grid).getAllByRole('link').map((a) => a.getAttribute('href'))
+    expect(documents).toHaveLength(9)
+    for (const href of documents) expect(href?.startsWith(`${publicRepository}/blob/main/`), href ?? '').toBe(true)
+    expect(screen.getByRole('link', { name: /repositorio/ }).getAttribute('href')).toBe(publicRepository)
+    expect(screen.getByRole('link', { name: /lista completa de límites/ }).getAttribute('href')).toBe(`${publicRepository}/blob/main/LIMITATIONS.md`)
   })
 
   it('gives every image a text alternative, empty only when it repeats what is next to it', () => {

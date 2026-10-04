@@ -102,7 +102,7 @@ data; none of this is a production measurement.
 
 | Requirement | Status | Evidence | How to verify |
 |---|---|---|---|
-| **Public** GitHub repository, named `factored-hackathon-2026-[equipo]` | ⬜ | `cecilai-hack/factored-hackathon-2026-cecilai` exists but is **private** | Publish the clean copy generated with `ops/export_public.py` as a **new** repository |
+| **Public** GitHub repository, named `factored-hackathon-2026-[equipo]` | ✅ | [`try-cecilia/factored-hackathon-2026-cecilia`](https://github.com/try-cecilia/factored-hackathon-2026-cecilia), a new repository generated with `ops/export_public.py` from the team's private one: its history rewritten without the organizer's PDFs, the per-case reports and workloads (dataset ids) and the console keys; the tests that need them are skipped there | — |
 | Link to the deployed tool | ✅ | Web: https://cecil-ai.onrender.com · API: https://x-payments-agent.onrender.com | Open `/login`; the API responds at `/health` |
 | 4 to 6 slides | 🟡 | v3 deck of 6 slides, built from [slides_outline.md](slides_outline.md); the team name, the deployed URL and the public repository URL are missing ([docs/demo/README.md](demo/README.md)) | Complete and export |
 | Mandatory presentation video | 🟡 | Script ([video_pitch_script.md](video_pitch_script.md)) and a demo segment recordable with `ops.record_demo`; the voice-over on the demo is missing | Record and edit |
