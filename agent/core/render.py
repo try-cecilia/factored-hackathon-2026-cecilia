@@ -180,6 +180,17 @@ def movement(m: dict, lang: str, country: str | None = None) -> str:
     return f"{kind} de {money(m['amount'], m['currency'], country)} {on} {fmt_date(m['transaction_date'])} ({product_label(m, lang)})"
 
 
+def trace_candidate(m: dict, index: int, already_open: bool, lang: str, country: str | None = None) -> str:
+    """A numbered, safe candidate for the customer to recognize before confirming a trace."""
+    reference = "".join(ch for ch in str(m.get("transaction_id") or "") if ch.isalnum())
+    details = [movement(m, lang, country)]
+    if len(reference) > 4:
+        details.append(f"ref. ••••{reference[-4:]}")
+    details.append(("rastreo ya abierto" if lang == "es" else "rastreamento já aberto") if already_open
+                   else ("sin rastreo" if lang == "es" else "sem rastreamento"))
+    return f"{index}) " + " · ".join(details)
+
+
 def as_of_line(as_of: Any, lang: str, tools: list[str] | None = None) -> str:
     if not as_of:
         return ""

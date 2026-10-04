@@ -690,9 +690,7 @@ class Orchestrator:
             conv.pending_choice = items  # a plain "la segunda" is resolved in code next turn
             as_of = result.get("as_of")
             conv.pending_choice_as_of = as_of.isoformat() if hasattr(as_of, "isoformat") else (str(as_of) if as_of else None)
-            already_open = "rastreo ya abierto" if lang == "es" else "rastreamento j\u00e1 aberto"
-            not_open = "sin rastreo" if lang == "es" else "sem rastreamento"
-            opts = "; ".join(f"{i}) {render.movement(m, lang, country)} ({already_open if m.get('open_trace') else not_open})"
+            opts = "; ".join(render.trace_candidate(m, i, bool(m.get("open_trace")), lang, country)
                              for i, m in enumerate(items, start=1))
             return done(TurnResult(trace_id, decision.disposition.value, render.MSG["trace_choose"][lang].format(opts=opts), lang,
                                    decision.category, decision.rule, None, [], actions, **meta, model_view=MODEL_VIEW["trace_choose"],
