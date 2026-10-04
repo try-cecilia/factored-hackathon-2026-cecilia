@@ -26,3 +26,12 @@ test('a deadline from a rule is said with its number, zero included', () => {
     'Próximo passo: Operações responderá em até 1 dia útil.')
   assert.match(traceReceiptFacts({ ...receipt, sla_business_days: 0 }, 'es', translator(es)).nextStep, /hasta 0 días hábiles/)
 })
+
+test('an impossible receipt date does not throw while formatting the chat card', () => {
+  const facts = traceReceiptFacts({ ...receipt, transaction_date: '2024-13-99', data_as_of: '2024-13-99' }, 'es', translator(es)).facts
+  assert.equal(facts.find((fact) => fact.label === 'Fecha')?.value, '2024-13-99')
+  assert.equal(facts.some((fact) => fact.value.includes('2024-13-99') && fact.label !== 'Fecha'), false)
+
+  const normalized = traceReceiptFacts({ ...receipt, transaction_date: '2024-02-31' }, 'es', translator(es)).facts
+  assert.equal(normalized.find((fact) => fact.label === 'Fecha')?.value, '2024-02-31')
+})

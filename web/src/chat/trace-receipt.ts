@@ -5,6 +5,13 @@ import type { TraceReceipt } from './types.ts'
 
 export type ReceiptFact = { label: string; value: string }
 
+function formatDate(value: string, locale: Locale): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null
+  const parsed = new Date(`${value}T00:00:00Z`)
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) return null
+  return new Intl.DateTimeFormat(htmlLang[locale], { dateStyle: 'medium', timeZone: 'UTC' }).format(parsed)
+}
+
 /** One localized presentation shared by the chat card and copied conversation. */
 export function traceReceiptFacts(receipt: TraceReceipt, locale: Locale, t: Translate) {
   const types: Record<string, string> = {
@@ -14,10 +21,8 @@ export function traceReceiptFacts(receipt: TraceReceipt, locale: Locale, t: Tran
   }
   const movementStatuses: Record<string, string> = { Pending: t('chat.traceReceipt.status.pending') }
   const traceStatuses: Record<string, string> = { open: t('chat.traceReceipt.traceState.open') }
-  const parsedDate = new Date(`${receipt.transaction_date}T00:00:00Z`)
-  const date = Number.isNaN(parsedDate.getTime())
-    ? receipt.transaction_date
-    : new Intl.DateTimeFormat(htmlLang[locale], { dateStyle: 'medium', timeZone: 'UTC' }).format(parsedDate)
+  const date = formatDate(receipt.transaction_date, locale) ?? receipt.transaction_date
+  const dataAsOf = receipt.data_as_of ? formatDate(receipt.data_as_of, locale) : null
   let amount: string
   try {
     amount = new Intl.NumberFormat(htmlLang[locale], {
@@ -29,6 +34,11 @@ export function traceReceiptFacts(receipt: TraceReceipt, locale: Locale, t: Tran
   const facts: ReceiptFact[] = [
     { label: t('chat.traceReceipt.movement'), value: `${types[receipt.transaction_type] ?? receipt.transaction_type} · ${receipt.transaction_id}` },
     { label: t('chat.traceReceipt.date'), value: date },
+    ...(receipt.source === 'account_records' ? [{ label: t('chat.traceReceipt.source'), value: t('chat.traceReceipt.accountRecords') }] : []),
+    ...(dataAsOf ? [{
+      label: t('chat.traceReceipt.dataAsOf'),
+      value: dataAsOf,
+    }] : []),
     { label: t('chat.traceReceipt.amount'), value: amount },
     { label: t('chat.traceReceipt.movementStatus'), value: movementStatuses[receipt.movement_status] ?? receipt.movement_status },
     { label: t('chat.traceReceipt.traceStatus'), value: traceStatuses[receipt.trace_status] ?? receipt.trace_status },

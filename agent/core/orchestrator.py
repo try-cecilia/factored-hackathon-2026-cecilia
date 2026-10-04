@@ -126,7 +126,7 @@ class TurnResult:
         return self.policy_rule.startswith("degraded:") or self.category == "llm_unavailable"
 
 
-def _trace_receipt_for(movement: dict, request: dict, customer_id: str) -> dict[str, Any] | None:
+def _trace_receipt_for(movement: dict, request: dict, customer_id: str, as_of: Any = None) -> dict[str, Any] | None:
     """Build the public receipt only when the read-back matches this customer's exact movement."""
     transaction_id = movement.get("transaction_id")
     if (not transaction_id or request.get("transaction_id") != transaction_id
@@ -142,6 +142,8 @@ def _trace_receipt_for(movement: dict, request: dict, customer_id: str) -> dict[
             "transaction_id": transaction_id,
             "transaction_type": movement["transaction_type"],
             "transaction_date": date_value,
+            "data_as_of": as_of.isoformat() if hasattr(as_of, "isoformat") else (str(as_of) if as_of else None),
+            "source": "account_records",
             "amount": amount,
             "currency": movement["currency"],
             "movement_status": movement.get("transaction_status") or "Pending",
@@ -166,6 +168,7 @@ class _Conversation:
     pending_clarification: bool = False
     pending_action: dict | None = None  # a trace proposed on the last turn, kept in code: never sent to the model
     pending_choice: list[dict] | None = None  # the pending movements listed on the last turn, to pick one by number
+    pending_choice_as_of: str | None = None  # warehouse date for the pending movements, retained for the receipt
     last_answer: str | None = None  # a digest of the last reply when it was a read, to never send the same one twice in a row
     cases: dict[str, str] = field(default_factory=dict)  # legacy notices, retained when loading older conversations
     transcript: list[dict] = field(default_factory=list)  # what the customer saw, as rendered: card numbers masked, no model data
@@ -685,9 +688,9 @@ class Orchestrator:
             return escalate(decision, actions, [], notice="trace_unmatched_filtered" if narrowed else "trace_unmatched")
         if decision.rule == "action:trace_choose":
             conv.pending_choice = items  # a plain "la segunda" is resolved in code next turn
-            already_open = "rastreo ya abierto" if lang == "es" else "rastreamento j\u00e1 aberto"
-            not_open = "sin rastreo" if lang == "es" else "sem rastreamento"
-            opts = "; ".join(f"{i}) {render.movement(m, lang, country)} ({already_open if m.get('open_trace') else not_open})"
+            as_of = result.get("as_of")
+            conv.pending_choice_as_of = as_of.isoformat() if hasattr(as_of, "isoformat") else (str(as_of) if as_of else None)
+            opts = "; ".join(render.trace_candidate(m, i, bool(m.get("open_trace")), lang, country)
                              for i, m in enumerate(items, start=1))
             return done(TurnResult(trace_id, decision.disposition.value, render.MSG["trace_choose"][lang].format(opts=opts), lang,
                                    decision.category, decision.rule, None, [], actions, **meta, model_view=MODEL_VIEW["trace_choose"],
@@ -695,14 +698,15 @@ class Orchestrator:
         m = items[0]
         if decision.rule == "action:trace_already_open":
             opened = m["open_trace"]
-            receipt = _trace_receipt_for(m, opened, customer_id)
+            receipt = _trace_receipt_for(m, opened, customer_id, result.get("as_of"))
             text = (render.MSG["trace_already_open"][lang].format(tid=opened["trace_id"], mov=render.movement(m, lang, country)) +
                     render.trace_service_text(opened.get("service_rules", []), lang))
             return done(TurnResult(trace_id, decision.disposition.value, text, lang, decision.category, decision.rule, None,
                                    [{"tool": "request_trace", "args": {"product_id": m["product_id"]}, "result": opened}], actions,
                                    **meta, model_view=MODEL_VIEW["trace_already_open"], trace_receipt=receipt))
         # One movement: show it and ask for a plain yes; the proposal is kept in code for one turn.
-        conv.pending_action = {"transaction_id": m["transaction_id"], "product_id": m["product_id"], "movement": m}
+        conv.pending_action = {"transaction_id": m["transaction_id"], "product_id": m["product_id"], "movement": m,
+                               "data_as_of": result.get("as_of")}
         return done(TurnResult(trace_id, decision.disposition.value, render.MSG["trace_propose"][lang].format(mov=render.movement(m, lang, country)),
                                lang, decision.category, decision.rule, None, [], actions, **meta, model_view=MODEL_VIEW["trace_proposed"]))
 
@@ -723,8 +727,9 @@ class Orchestrator:
         try:
             # The proposal is one turn old: the movement may have settled since, so eligibility is checked again.
             with stage("tool:request_trace"):
-                pending = run_tool("request_trace", session.customer_id, product_id=proposal["product_id"],
-                                   transaction_id=proposal["transaction_id"])["items"]
+                pending_result = run_tool("request_trace", session.customer_id, product_id=proposal["product_id"],
+                                          transaction_id=proposal["transaction_id"])
+            pending = pending_result["items"]
             found = next((m for m in pending if m["transaction_id"] == proposal["transaction_id"]), None)
             still_pending = found is not None
             review = found.get("review_reason") if found else None
@@ -752,7 +757,7 @@ class Orchestrator:
         if not still_pending:
             return escalate(router.trace_step({"items": []}), [{**action, "success": False, "error_type": "MovementNoLongerPending"}], [],
                             case_action)
-        receipt = _trace_receipt_for(found, verified, session.customer_id) if verified else None
+        receipt = _trace_receipt_for(found, verified, session.customer_id, pending_result.get("as_of")) if verified else None
         if not receipt:
             return escalate(router.trace_unverified(), [{**action, "success": False, "error_type": "TraceNotReadBack"}], [],
                             case_action)
@@ -847,9 +852,10 @@ class Orchestrator:
         # A pending movement picked by its number in the list shown last turn ("la segunda"), also in code.
         if conv.pending_choice is not None:
             choices, conv.pending_choice = conv.pending_choice, None
+            as_of, conv.pending_choice_as_of = conv.pending_choice_as_of, None
             index = router.ordinal(text, len(choices))
             if index is not None:
-                return self._trace_step({"items": [choices[index]]}, conv, lang, session.attributes.get("country"), session.customer_id, trace_id, [], done, escalate, llm_meta())
+                return self._trace_step({"items": [choices[index]], "as_of": as_of}, conv, lang, session.attributes.get("country"), session.customer_id, trace_id, [], done, escalate, llm_meta())
 
         # Decide (pre-LLM): compliance hold, safety lexicon, classifier guard.
         with stage("pre_llm"):

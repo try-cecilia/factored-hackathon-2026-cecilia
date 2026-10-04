@@ -32,7 +32,7 @@ MSG = {
     "clarify_dates": {"es": "¿Para qué fechas? Indícalas como AAAA-MM-DD.", "pt": "Para quais datas? Informe como AAAA-MM-DD."},
     "clarify_currency": {"es": "¿Qué monedas quieres convertir? (MXN, COP, ARS o USD)", "pt": "Quais moedas você quer converter? (MXN, COP, ARS ou USD)"},
     "clarify_product": {"es": "¿Sobre cuál de tus productos?", "pt": "Sobre qual dos seus produtos?"},
-    "as_of": {"es": "Información al {d}.", "pt": "Informação de {d}."},
+    "as_of": {"es": "Información al {d}. Fuente: {source}.", "pt": "Informação de {d}. Fonte: {source}."},
     "trace_propose": {"es": "Encontré este movimiento pendiente: {mov}. ¿Quieres que abra un pedido de rastreo? Responde sí o no.",
                       "pt": "Encontrei esta movimentação pendente: {mov}. Quer que eu abra um pedido de rastreamento? Responda sim ou não."},
     "trace_choose": {"es": "Tienes varios movimientos pendientes: {opts}. ¿Cuál quieres rastrear? Responde con su número, o dime el monto o la fecha.",
@@ -180,8 +180,30 @@ def movement(m: dict, lang: str, country: str | None = None) -> str:
     return f"{kind} de {money(m['amount'], m['currency'], country)} {on} {fmt_date(m['transaction_date'])} ({product_label(m, lang)})"
 
 
-def as_of_line(as_of: Any, lang: str) -> str:
-    return MSG["as_of"][lang].format(d=fmt_date(as_of)) if as_of else ""
+def trace_candidate(m: dict, index: int, already_open: bool, lang: str, country: str | None = None) -> str:
+    """A numbered, safe candidate for the customer to recognize before confirming a trace."""
+    reference = "".join(ch for ch in str(m.get("transaction_id") or "") if ch.isalnum())
+    details = [movement(m, lang, country)]
+    if len(reference) > 4:
+        details.append(f"ref. ••••{reference[-4:]}")
+    details.append(("rastreo ya abierto" if lang == "es" else "rastreamento já aberto") if already_open
+                   else ("sin rastreo" if lang == "es" else "sem rastreamento"))
+    return f"{index}) " + " · ".join(details)
+
+
+def as_of_line(as_of: Any, lang: str, tools: list[str] | None = None) -> str:
+    if not as_of:
+        return ""
+    sources = {
+        "get_account_summary": ("registros de cuentas del banco", "registros de contas do banco"),
+        "list_transactions": ("registros de movimientos del banco", "registros de movimentações do banco"),
+        "get_payment_status": ("registros de pagos del banco", "registros de pagamentos do banco"),
+        "get_exchange_rate": ("cotizaciones del banco", "cotações do banco"),
+    }
+    indices = {"es": 0, "pt": 1}
+    labels = list(dict.fromkeys(sources[tool][indices[lang]] for tool in tools or [] if tool in sources))
+    source = "; ".join(labels) if labels else ("registros del banco" if lang == "es" else "registros do banco")
+    return MSG["as_of"][lang].format(d=fmt_date(as_of), source=source)
 
 
 def clarify(missing: list[str], catalog: list[dict], lang: str) -> str:
@@ -332,4 +354,4 @@ def render_answer(results: list[dict], lang: str, catalog: list[dict] | None = N
             label = _list_label(res, label, lang)
         parts.append(f"{label}:\n{body}" if label else body)
     as_of = next((r["result"].get("as_of") for r in results if isinstance(r.get("result"), dict) and r["result"].get("as_of")), None)
-    return "\n".join(p for p in parts + [as_of_line(as_of, lang)] if p)
+    return "\n".join(p for p in parts + [as_of_line(as_of, lang, [r.get("tool", "") for r in results])] if p)
