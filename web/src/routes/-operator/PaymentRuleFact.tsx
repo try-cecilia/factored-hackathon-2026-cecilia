@@ -9,6 +9,18 @@ const KINDS = ['commission', 'deadline', 'threshold']
 
 type Rule = Record<string, Json>
 const text = (v: Json | undefined) => (typeof v === 'string' ? v : typeof v === 'number' ? String(v) : '')
+/** The decimals a number has as written in the catalog (its shortest exact form, `1e-7` included), up to Intl's maximum. */
+function fractionDigits(n: number): number {
+  const [mantissa, exponent] = String(Math.abs(n)).split('e')
+  return Math.min(100, Math.max(0, (mantissa.split('.')[1] ?? '').length - Number(exponent ?? 0)))
+}
+
+/** A rule's figure in the operator's number format with every decimal it has: a 0.001 % commission is never shown as 0 %. */
+export function exactNumber(n: number, lang: string): string {
+  const digits = fractionDigits(n)
+  return new Intl.NumberFormat(lang, { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(n)
+}
+
 /** `2026-01-01` → `01/01/2026`; anything else as it came. */
 const day = (v: Json | undefined) => {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(text(v))
@@ -24,7 +36,7 @@ export function PaymentRuleFact({ result }: { result: Record<string, Json> }) {
   const rules = Array.isArray(result.rules) ? result.rules.filter((r): r is Rule => typeof r === 'object' && r !== null && !Array.isArray(r)) : []
   const value = (rule: Rule) => {
     const n = typeof rule.value === 'number' ? rule.value : Number.NaN
-    const amount = Number.isFinite(n) ? new Intl.NumberFormat(htmlLang[locale], { maximumFractionDigits: 2 }).format(n) : text(rule.value)
+    const amount = Number.isFinite(n) ? exactNumber(n, htmlLang[locale]) : text(rule.value)
     const unit = text(rule.unit)
     if (unit === 'business days' || unit === 'calendar days') {
       const base = unit === 'business days' ? 'businessDays' : 'calendarDays'

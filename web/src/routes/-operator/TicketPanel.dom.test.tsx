@@ -753,3 +753,26 @@ describe('a payment rule on the ticket is read in the operator language, not as 
     expect(shown).not.toMatch(raw)
   })
 })
+
+describe('a payment rule keeps every decimal of its figure', () => {
+  const rule = (value: number, unit: string) => ({
+    rule_id: `mx_small_${String(value).length}`, version: 1, kind: 'commission', value, unit, source_issuer: 'Banco Fixture',
+    source_url: 'https://example.test/fees', source_checked_at: '2026-09-01', valid_from: '2026-01-01', valid_until: null,
+  })
+  const facts = [[0.001, 'percent'], [0.125, 'percent'], [0.0005, 'percent'], [0.01, 'USD'], [1e-7, 'percent']].map(([value, unit]) => ({
+    tool: 'get_payment_conditions',
+    result: { country: 'MX', currency: 'USD', operation: 'Transfer', kind: 'commission', rules: [rule(value as number, unit as string)] },
+  }))
+
+  it.each([
+    ['es', /^Hechos verificados/],
+    ['pt', /^Fatos verificados/],
+  ] as const)('in %s, 0.001 % is never shown as 0 % and nothing small is rounded', async (locale, heading) => {
+    renderWithI18n(<TicketPanel ticket={ticket('open', { category: 'payment_rule_unavailable', verified_facts: facts })}
+      view={{ canAct: true, operator: 'ana.ruiz' }} act={vi.fn()} reload={vi.fn(async () => true)} />, locale)
+    await unfold(heading)
+    const box = screen.getByRole('button', { name: heading }).closest('.op-fold') as HTMLElement
+    const values = within(box).getAllByText('Valor', { selector: 'dt' }).map((dt) => dt.nextElementSibling?.textContent)
+    expect(values).toEqual(['0,001 %', '0,125 %', '0,0005 %', '0,01 USD', '0,0000001 %'])
+  })
+})
