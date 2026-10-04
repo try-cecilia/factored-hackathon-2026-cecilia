@@ -142,6 +142,10 @@
 .op-bullets li::before { content: '· '; }
 .op-facts li { display: flex; align-items: center; gap: 8px; min-height: 20px; }
 .op-facts svg { color: var(--color-success); }
+.op-facts li:has(.op-rule) { align-items: flex-start; }
+.op-rule dl { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 4px 0 0; }
+.op-rule dt { color: var(--color-ink-70); }
+.op-rule dd { margin: 0; overflow-wrap: anywhere; }
 .op-history li { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 22px; }
 .op-history .ui-status { flex: 1; min-width: 0; color: var(--color-ink-app); }
 .op-history em { font-style: normal; }

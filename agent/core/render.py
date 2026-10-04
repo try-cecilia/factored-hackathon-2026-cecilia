@@ -10,6 +10,8 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any
 
+from agent.policy.payment_rules import deadline_business_days
+
 MSG = {
     "reauth": {"es": "Tu sesión expiró o no es válida. Por favor vuelve a iniciar sesión para continuar.",
                "pt": "Sua sessão expirou ou não é válida. Por favor, faça login novamente para continuar."},
@@ -118,23 +120,21 @@ def case_update(status: str, lang: str, trace: dict | None = None, message: str 
     return line + trace_service_text(trace.get("service_rules", []), lang) if trace and status == "approved" else line
 
 
-# The day units a deadline rule may have (agent/policy/payment_rules.DAY_UNITS), in words: (singular, plural) per language.
-DAY_UNITS = {"business days": {"es": ("día hábil", "días hábiles"), "pt": ("dia útil", "dias úteis")},
-             "calendar days": {"es": ("día corrido", "días corridos"), "pt": ("dia corrido", "dias corridos")}}
+# The one unit a trace's deadline may have (agent/policy/payment_rules.validate_catalog), in words: (singular, plural) per language.
+BUSINESS_DAYS = {"es": ("día hábil", "días hábiles"), "pt": ("dia útil", "dias úteis")}
 
 
 def trace_service_text(rules: list[dict], lang: str) -> str:
-    """Customer-facing trace deadline only from a versioned snapshot with source metadata. A deadline of zero is a deadline;
-    a rule missing any field, or in a unit with no words here, says nothing."""
+    """Customer-facing trace deadline only from a versioned snapshot with source metadata, and only the one the receipt carries
+    too (`payment_rules.deadline_business_days`): a deadline of zero is a deadline; anything else says nothing."""
     es = lang == "es"
     lines = []
     for rule in rules or []:
-        value, words = rule.get("value"), DAY_UNITS.get(rule.get("unit"))
-        if (isinstance(value, bool) or not isinstance(value, (int, float)) or words is None
-                or not all(rule.get(k) for k in ("version", "source_issuer", "source_url", "source_checked_at", "valid_from"))):
+        days = deadline_business_days([rule])
+        if days is None or not all(rule.get(k) for k in ("version", "source_issuer", "source_url", "source_checked_at", "valid_from")):
             continue
-        amount = f"{value:g}" if es else f"{value:g}".replace(".", ",")
-        unit = words[lang if lang in words else "es"][0 if value == 1 else 1]
+        unit = BUSINESS_DAYS["es" if es else "pt"][0 if days == 1 else 1]
+        amount = days
         start, checked = (fmt_date(date.fromisoformat(v) if isinstance(v, str) else v)
                           for v in (rule["valid_from"], rule["source_checked_at"]))  # the snapshot keeps ISO dates
         if es:

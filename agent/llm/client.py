@@ -174,6 +174,11 @@ class ModelRefusal(ValueError):
     """The model declined the request (stop_reason "refusal"): not an answer, and not worth retrying."""
 
 
+class BudgetTimeout(TimeoutError):
+    """The model's total budget ran out outside the transport's reach (building the client, decoding the answer): what the
+    call returned, if anything, is discarded. A timeout, so it is transient and the turn degrades like any other timeout."""
+
+
 class IncompleteResponse(ValueError):
     """The answer was cut off (token or context limit): a tool call in it may be truncated, so it is not acted on."""
 
@@ -498,14 +503,23 @@ class LLMClient:
                     break
                 t0 = time.perf_counter()
                 try:
-                    request_s = min(self.timeout_s, remaining)
                     sdk = self._client(p, api_key)  # built (and its SDK imported) before the call's clock starts
-                    limit = call_limit.set(time.perf_counter() + request_s)  # the transport enforces it on the wall clock
+                    # Building the client (an import, a TLS context, a pause of the garbage collector) is time the total budget
+                    # already counts: what is left is measured after it, and the transport's limit never goes past the budget.
+                    remaining = deadline - time.perf_counter()
+                    if remaining <= 0:
+                        raise BudgetTimeout("the model's total budget ran out while its client was being built")
+                    request_s = min(self.timeout_s, remaining)
+                    limit = call_limit.set(min(time.perf_counter() + request_s, deadline))  # enforced by the transport on the wall clock
                     try:
                         content, tool_calls, usage, served_model, raw = (p.call or openai_compatible_call)(
                             sdk, p, messages, tools, temperature, request_s)
                     finally:
                         call_limit.reset(limit)
+                    # The transport bounds the reads, not what follows them (the SDK or the local client decoding the body): an
+                    # answer complete only after the budget is discarded, never returned as a success.
+                    if time.perf_counter() > deadline:
+                        raise BudgetTimeout("the model's answer was complete only after its total budget")
                     attempts.append({"provider": p.name, "outcome": "ok", "ms": round((time.perf_counter() - t0) * 1000, 1)})
                     self._record_success(p.name)
                     return LLMResponse(content, tool_calls, p.name, (time.perf_counter() - start) * 1000, served_model, usage, attempts, raw)
