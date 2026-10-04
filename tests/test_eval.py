@@ -271,7 +271,7 @@ def test_a_limited_run_reaches_every_country_segment_cell():
     cells = [(country, segment) for country in ("México", "Colombia", "Argentina") for segment in ("Premium", "Plus", "Basic", "Student")]
     workload = [replace(base, case_id=f"{t}-{lang}-{i}", template=t, language=lang, country=country, segment=segment)
                 for t in ("a", "b", "c", "d") for lang in ("es", "pt") for i, (country, segment) in enumerate(cells)]
-    picked = rse.sample(workload, 3 * 8)  # 3 per case type and language, as make eval-live takes them
+    picked = rse.sample(workload, 3 * 8)  # 3 per case type and language, as the 138-case live runs took them
     assert len(picked) == 24 and {(c.country, c.segment) for c in picked} == set(cells)
 
 
