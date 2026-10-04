@@ -193,8 +193,9 @@ eval-failures-local: ## el set reservado con un modelo local (Ollama; ver docker
 
 EVAL_MODELS ?= anthropic:claude-sonnet-5,anthropic:claude-haiku-4-5,groq:openai/gpt-oss-120b
 
-eval-live:        ## live models compared on one 138-case sample (3 per case type and language), 3 repeats each (a model without its API key is skipped)
-	$(PY) -m eval.run_system_eval --split test --system proposed --llm live --repeats 3 --limit 138 --models $(EVAL_MODELS)
+eval-live:        ## live models on the whole test split, 3 repeats each (a model without its API key is skipped), then the view by language beside the keyword baseline on the same cases
+	$(PY) -m eval.run_system_eval --split test --system proposed --llm live --repeats 3 --models $(EVAL_MODELS)
+	$(PY) -m eval.live_by_language
 
 # The human-written set, in order (docs/human_set.md). Its files live in eval/workload/, which the public export removes.
 HUMAN_SET_MODEL ?= anthropic:claude-sonnet-5
