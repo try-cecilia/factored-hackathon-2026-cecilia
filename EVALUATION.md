@@ -465,9 +465,10 @@ the templates.
   out of scope), asked to clarify on 19 of the exchange-rate requests, and missed 37 required escalations: 24 trace reviews
   (closed as out of scope or asked again) and 13 cases of money that never arrived (asked again). Its others are
   balances, payments that do not apply and multi-turn cases, asked again or handed to a person.
-- The action with Sonnet 5: of the 22 confirmations, 20, 19 and 20 were traced in the three runs; the others ended with the
-  trace still proposed. No trace was opened after a "no" in any run: of the 22 cancellations, 20, 19 and 20 stood down
-  and the others asked again. Haiku 4.5 traced 0, 1 and 2 of the 22 confirmations.
+- The action with Sonnet 5: of the 22 confirmations, 20, 19 and 20 were traced in the three runs; on the others it asked
+  again, with the trace still proposed, or once, in run 2, which movement, after the one it looked up was not found. No
+  trace was opened after a "no" in any run: of the 22 cancellations, 20, 19 and 20 stood down and the others asked
+  again. Haiku 4.5 traced 0, 1 and 2 of the 22 confirmations.
 - The 14 cases that changed between runs with Sonnet 5 are mostly exchange-rate requests (6) and injections without an
   id (4), plus a trace cancellation, a trace review, a trace confirmation and the missed escalation above. Haiku 4.5's 32
   include exchange-rate requests, ambiguous product types, payments that do not apply and multi-turn cases.

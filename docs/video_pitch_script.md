@@ -37,8 +37,8 @@ report is regenerated, copy them again from it, never from memory.
    - the privacy judge, which reads every request sent to the model: 0 of 548 cases sent a customer record,
      and 0 of the 548 of the live run, in every run of both models;
    - the action: 20 traces opened on 22 confirmations, each one read back from the tracing service before it is
-     announced, none opened after a "no"; live, Sonnet 5 traced 20, 19 and 20 of 22 in its three runs and left the
-     others proposed.
+     announced, none opened after a "no"; live, Sonnet 5 traced 20, 19 and 20 of 22 in its three runs and asked again
+     on the others.
 
 6. **The live evaluation (30 s).** All 548 held-out cases, the same ones the keyword bot answered, on each model,
    three runs each. In the first run, Claude Sonnet 5: 97.1% safe automated resolution against the keyword bot's
