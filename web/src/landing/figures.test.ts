@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { test } from 'node:test'
 import { es } from '../i18n/es.ts'
@@ -12,6 +12,9 @@ const files = new Map<string, string>()
 const read = (path: string) => files.get(path) ?? files.set(path, readFileSync(resolve(root, path), 'utf8')).get(path)!
 const parsed = new Map<string, unknown>()
 const readJson = (path: string) => parsed.get(path) ?? parsed.set(path, JSON.parse(read(path))).get(path)
+/** The public export removes the per-case reports (eval/reports/system_eval*.json carry dataset ids): in that copy, what is bound
+ * to them is checked in the team's repository, where they exist. Any other missing source still fails. */
+const removedByExport = (source: string) => /^eval\/reports\/system_eval[^/]*\.json$/.test(source) && !existsSync(resolve(root, source))
 
 function field(path: string, at: ReadonlyArray<string | number>): unknown {
   let node = readJson(path)
@@ -71,7 +74,7 @@ function mismatch(name: string, figure: Figure): string | null {
 }
 
 test('every landing figure is the value it is bound to, at the decimals the landing shows', () => {
-  for (const [name, figure] of Object.entries(figures)) assert.equal(mismatch(name, figure), null)
+  for (const [name, figure] of Object.entries(figures)) if (!removedByExport(figure.source)) assert.equal(mismatch(name, figure), null)
 })
 
 test('a figure taken from the wrong column, percentile, unit or row is rejected', () => {
@@ -89,7 +92,9 @@ test('a figure taken from the wrong column, percentile, unit or row is rejected'
     ['sonnetMissedRun3', 1], // Sonnet missed its escalation in runs 1 and 2, not 3
     ['sonnetRecall', 100], // run 3's recall, not run 1's
   ]
-  for (const [name, value] of wrong) assert.notEqual(mismatch(name, { ...figures[name], value }), null, `${name} = ${value} passed`)
+  for (const [name, value] of wrong) {
+    if (!removedByExport(figures[name].source)) assert.notEqual(mismatch(name, { ...figures[name], value }), null, `${name} = ${value} passed`)
+  }
   // A derived figure needs its quote too: a made-up span that says 120 minutes is not in RED_TEAM.md.
   assert.notEqual(mismatch('redTeamMinutes', { ...figures.redTeamMinutes, value: 120, quote: '30/09/2026, from 20:00 to 22:00' }), null)
   assert.notEqual(mismatch('redTeamMinutes', { ...figures.redTeamMinutes, value: 120 }), null)
@@ -98,6 +103,7 @@ test('a figure taken from the wrong column, percentile, unit or row is rejected'
 
 test('every date the landing shows is written in the file it cites', () => {
   for (const day of [liveRunDate, offlineRunDate, redTeamDate, classifierDate] satisfies Day[]) {
+    if (removedByExport(day.source)) continue
     if ('at' in day) {
       assert.match(String(field(day.source, day.at)), new RegExp(`^${day.iso}`), day.source)
       continue

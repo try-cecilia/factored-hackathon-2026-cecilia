@@ -9,6 +9,8 @@ import pytest
 
 from eval import tracking_report as tr
 
+if not Path("eval/reports/system_eval.json").exists():
+    pytest.skip("per-case reports are not in the public copy", allow_module_level=True)
 CLASSIFIER = json.loads(Path("eval/reports/intent_classifier.json").read_text(encoding="utf-8"))
 REPORTS = {mode: json.loads(p.read_text(encoding="utf-8")) for mode, p in tr.SYSTEM_REPORTS.items()}
 

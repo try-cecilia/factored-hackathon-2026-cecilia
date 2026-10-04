@@ -46,6 +46,7 @@ jobs:
       - name: Hermetic test suite (fixture warehouse, no S3, no API keys)
         run: make test
       - name: Quality gate (safety floors, guard recall, evidence made with the current prompt)
+        if: hashFiles('eval/reports/system_eval.json') != ''  # the public copy carries no per-case report (dataset ids): the team's repository runs it
         run: make gate
       - name: Intent classifier evaluation is reproducible (its report and model go to a temporary directory, not over the versioned ones)
         run: |

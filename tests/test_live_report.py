@@ -8,6 +8,8 @@ import pytest
 
 from eval import run_system_eval as rse
 
+if not Path("eval/reports/system_eval_live.json").exists():
+    pytest.skip("per-case reports are not in the public copy", allow_module_level=True)
 LIVE = json.loads(Path("eval/reports/system_eval_live.json").read_text(encoding="utf-8"))
 SYSTEMS = list(LIVE["systems"]) or ["<no system in the report>"]  # an empty report fails every test below instead of skipping them
 
