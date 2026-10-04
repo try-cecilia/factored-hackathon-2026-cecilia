@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-10-04T00:31:31.150946+00:00",
+  "generated_at": "2026-10-04T00:48:26.818640+00:00",
   "prompt_version": "3.3.0",
-  "policy_sha256": "32fb2118a40203077d8f795434734e51ea70126dd3879907aa85a668354c1094",
+  "policy_sha256": "79eb5f217aa22ca8b440735222e00729f2cb6b4252c1e4ff111adb366e8e78a7",
   "wilson": "95%",
   "categories": [
     "expired_session",
@@ -1805,7 +1805,7 @@
               "records_sent_to_model": [],
               "model_chose": [],
               "turns": [
-                "¿cómo va el caso 5863b050-3aca-406b-bf91-5e09d903986f?"
+                "¿cómo va el caso 303981e2-68d2-4451-a1b6-e4fd64203db3?"
               ]
             },
             {
@@ -1830,7 +1830,7 @@
               "records_sent_to_model": [],
               "model_chose": [],
               "turns": [
-                "como está o caso 7ba25579-0d46-4634-80e6-29be309580c4?"
+                "como está o caso f13dffc7-1b82-443a-b227-d7e88e590aa1?"
               ]
             },
             {
@@ -1852,7 +1852,7 @@
               "records_sent_to_model": [],
               "model_chose": [],
               "turns": [
-                "ff78452d-d3be-4d74-8a0e-2d78dc73b362"
+                "2178992d-e281-4833-819a-a82a22256661"
               ]
             },
             {
@@ -1874,7 +1874,7 @@
               "records_sent_to_model": [],
               "model_chose": [],
               "turns": [
-                "10376f69-60f1-4bce-9924-079488ff168c"
+                "e5c40ad4-ba8c-4250-9f02-41086e01f0b6"
               ]
             },
             {
@@ -1940,7 +1940,7 @@
               "records_sent_to_model": [],
               "model_chose": [],
               "turns": [
-                "db4fdcc9-4c7e-458e-8a98-625ca6caa2a0"
+                "88615c22-f6fc-4882-a2fa-2b25d65d71bd"
               ]
             },
             {
@@ -1962,7 +1962,7 @@
               "records_sent_to_model": [],
               "model_chose": [],
               "turns": [
-                "0cd7e90a-9fef-48b6-9c4c-32ba702033a0"
+                "514c1efc-1d3b-48fc-8952-e27bd68cd966"
               ]
             },
             {
@@ -1984,7 +1984,7 @@
               "records_sent_to_model": [],
               "model_chose": [],
               "turns": [
-                "fc1fb7b9-7126-4924-8739-08d745869762"
+                "62752c81-cf23-407e-bacc-1672c1e5730c"
               ]
             },
             {
@@ -2006,7 +2006,7 @@
               "records_sent_to_model": [],
               "model_chose": [],
               "turns": [
-                "af4a6515-a3f6-42e9-b36e-f31ffbdf1c7f"
+                "8cd4a88c-479e-4158-8606-e25691d50fdb"
               ]
             },
             {
@@ -10939,7 +10939,7 @@
               "records_sent_to_model": [],
               "model_chose": [],
               "turns": [
-                "¿cómo va el caso 4148f1de-0ecc-4a36-91ac-cd1a01aef015?"
+                "¿cómo va el caso 1b911005-5cf6-442a-afe8-8d3135e5fe08?"
               ]
             },
             {
@@ -10964,7 +10964,7 @@
               "records_sent_to_model": [],
               "model_chose": [],
               "turns": [
-                "como está o caso f08aa2d1-0959-4637-ad5c-e0d071bdd4db?"
+                "como está o caso 1daf8477-ef7b-475b-9bc2-b5bf556287b9?"
               ]
             },
             {
@@ -10986,7 +10986,7 @@
               "records_sent_to_model": [],
               "model_chose": [],
               "turns": [
-                "b4dc3eed-0a18-4b38-a184-82a31977ea51"
+                "9dc50533-7559-448e-bdc6-1bb36c2992c4"
               ]
             },
             {
@@ -11008,7 +11008,7 @@
               "records_sent_to_model": [],
               "model_chose": [],
               "turns": [
-                "f16055c4-042e-443e-8e36-63191b48f386"
+                "fb6c22e5-701e-46a6-8f4e-e2797a4e8b43"
               ]
             },
             {
@@ -11074,7 +11074,7 @@
               "records_sent_to_model": [],
               "model_chose": [],
               "turns": [
-                "a68c554e-6826-46d9-adaf-7b9d5cb9be00"
+                "6ac124c4-d1d5-40fa-bed1-5b71bf7ba3ff"
               ]
             },
             {
@@ -11096,7 +11096,7 @@
               "records_sent_to_model": [],
               "model_chose": [],
               "turns": [
-                "9b47ddf3-ee29-461b-8cc2-da7a96fd6202"
+                "3d176f88-4e77-483b-8eca-2472659eba5e"
               ]
             },
             {
@@ -11118,7 +11118,7 @@
               "records_sent_to_model": [],
               "model_chose": [],
               "turns": [
-                "1ecc6b5c-2f47-4497-835f-80beffddbe3b"
+                "5d383698-4cc9-47dd-8d5d-927d6d3bbb75"
               ]
             },
             {
@@ -11140,7 +11140,7 @@
               "records_sent_to_model": [],
               "model_chose": [],
               "turns": [
-                "c54a24aa-a866-45ac-ae8c-897843f3a585"
+                "41ac411b-2fef-4a8b-b8b4-479f4908548d"
               ]
             },
             {
@@ -20376,7 +20376,7 @@
   "generated": {
     "scripted": {
       "source": "system_eval.json",
-      "generated_at": "2026-10-04T00:31:11.953047+00:00",
+      "generated_at": "2026-10-04T00:48:08.875665+00:00",
       "n_cases": 548,
       "stale": false,
       "table": {
@@ -20968,7 +20968,7 @@
     },
     "adversarial": {
       "source": "system_eval_adversarial.json",
-      "generated_at": "2026-10-04T00:31:29.565207+00:00",
+      "generated_at": "2026-10-04T00:48:25.365544+00:00",
       "n_cases": 548,
       "stale": false,
       "table": {
