@@ -8,6 +8,8 @@ import pytest
 
 from analysis import unit_economics as ue
 
+PER_CASE_REPORTS = pytest.mark.skipif(not Path("eval/reports/system_eval.json").exists(), reason="per-case reports are not in the public copy")
+
 
 def test_hours_are_contacts_times_handle_time_and_the_shares_add_to_a_hundred():
     rows = ue.where_the_time_goes({"operations_by_reason": [
@@ -34,6 +36,7 @@ def test_automating_more_never_saves_less_and_a_perfect_rate_cannot_exceed_the_h
     assert saved == sorted(saved) and all(r["share_of_transactional_hours_pct"] <= 100 for r in rows)
 
 
+@PER_CASE_REPORTS
 def test_the_no_shift_scenario_is_the_projection_the_evaluation_already_publishes():
     live = json.loads(ue.LIVE.read_text(encoding="utf-8"))
     published = live["projection"]
@@ -45,6 +48,7 @@ def test_the_no_shift_scenario_is_the_projection_the_evaluation_already_publishe
         assert today["usd_avoided"][str(row["agent_cost_per_hour_usd"])] == pytest.approx(row["monthly_human_cost_avoided_usd"], abs=1)
 
 
+@PER_CASE_REPORTS
 def test_the_committed_report_is_what_the_inputs_give_today():
     committed = json.loads(Path("docs/evidence/unit_economics.json").read_text(encoding="utf-8"))
     fresh = ue.compute()

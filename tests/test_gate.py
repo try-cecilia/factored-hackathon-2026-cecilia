@@ -10,6 +10,11 @@ import pytest
 from eval import gate
 
 REPORTS = Path("eval/reports")
+# The public export removes the per-case reports and the workloads (they carry dataset ids): in that copy, what reads them is
+# left to the team's repository, where they exist.
+PER_CASE_REPORTS = pytest.mark.skipif(not (REPORTS / "system_eval.json").exists(), reason="per-case reports are not in the public copy")
+WORKLOADS = pytest.mark.skipif(not Path("eval/workload/cases_test.jsonl").exists(),
+                               reason="the workloads are not in the public copy: `make workload` rebuilds them")
 
 
 def load(name):
@@ -18,10 +23,13 @@ def load(name):
 
 @pytest.fixture
 def reports():
+    if not (REPORTS / "system_eval.json").exists():
+        pytest.skip("per-case reports are not in the public copy")
     return {"offline": load("system_eval.json"), "adversarial": load("system_eval_adversarial.json"),
             "classifier": load("intent_classifier.json")}
 
 
+@PER_CASE_REPORTS
 def test_the_committed_evidence_meets_the_gate():
     assert gate.check() == []
 
@@ -73,18 +81,21 @@ def test_evidence_measured_with_other_policies_is_stale(reports):
     assert any("volver a correr" in f for f in gate.check_policy_fresh({"system_eval.json": missing}, current="abc"))
 
 
+@PER_CASE_REPORTS
 def test_the_gate_fails_when_the_policies_changed_after_the_reports_were_made(monkeypatch):
     assert gate.check() == []                                          # with the reports just regenerated, it holds
     monkeypatch.setattr(gate, "policy_fingerprint", lambda: "0" * 64)  # ...and the policy files change afterwards
     assert any("volver a correr" in f for f in gate.check())
 
 
+@PER_CASE_REPORTS
 def test_the_committed_reports_carry_the_current_policy_fingerprint():
     current = gate.policy_fingerprint()
     assert load("system_eval.json")["policy_sha256"] == current == load("system_eval_adversarial.json")["policy_sha256"]
     assert load("ablation.json")["meta"]["policy_sha256"] == current
 
 
+@PER_CASE_REPORTS
 def test_an_ablation_measured_on_other_code_fails_the_gate(tmp_path):
     for name in ("system_eval.json", "system_eval_adversarial.json", "intent_classifier.json", "failure_eval.json", "system_eval_live.json"):
         (tmp_path / name).write_text((REPORTS / name).read_text(encoding="utf-8"), encoding="utf-8")
@@ -136,6 +147,7 @@ def test_the_generated_workloads_categories_are_held_to_the_same_floors(reports,
     assert any("workload generado" in f and "expired_session" in f for f in found)
 
 
+@WORKLOADS
 def test_a_failure_report_measured_with_other_policies_is_stale(failures):
     assert gate.check_policy_fresh({"failure_eval.json": failures}) == []
     assert any("volver a correr" in f for f in gate.check_policy_fresh({"failure_eval.json": failures}, current="0" * 64))
@@ -164,6 +176,7 @@ def _docs(*lines: str) -> dict[str, str]:
     return {name: "# doc\n" + "\n".join(lines) for name in gate.LIVE_DOCS}
 
 
+@PER_CASE_REPORTS
 def test_the_committed_live_report_keeps_every_run_and_says_what_it_measured():
     live = load("system_eval_live.json")
     assert gate.check_live(live) == []

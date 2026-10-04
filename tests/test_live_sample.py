@@ -12,6 +12,9 @@ from eval import heldout, live_sample
 from eval import run_system_eval as rse
 from eval.workload import load
 
+if not Path("eval/workload/cases_test.jsonl").exists():
+    pytest.skip("the workloads are not in the public copy: `make workload` rebuilds them", allow_module_level=True)
+
 
 def test_the_committed_selection_is_what_the_selector_produces():
     committed = json.loads(live_sample.SELECTION.read_text(encoding="utf-8"))

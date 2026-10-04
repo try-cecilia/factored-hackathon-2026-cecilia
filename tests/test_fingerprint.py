@@ -11,6 +11,8 @@ import pytest
 from eval import fingerprint
 
 FILES = ("agent/policy/router.py", "agent/tools/account_tools.py", "agent/core/orchestrator.py")
+WORKLOADS = pytest.mark.skipif(not Path("eval/workload/cases_test.jsonl").exists(),
+                               reason="the workloads are not in the public copy: `make workload` rebuilds them")
 
 
 def tree(root, content: bytes):
@@ -91,6 +93,7 @@ def test_editing_the_judge_or_the_gold_changes_the_fingerprint(tmp_path):
         assert fingerprint.policy_fingerprint(root) != before, rel
 
 
+@WORKLOADS
 def test_the_real_fingerprint_covers_the_judge_the_simulated_models_and_the_gold():
     names = {p.relative_to(fingerprint.ROOT).as_posix() for p in fingerprint.policy_files()}
     assert {"eval/run_system_eval.py", "eval/categories.py", "eval/failure_eval.py", "eval/heldout.py", "eval/workload.py",

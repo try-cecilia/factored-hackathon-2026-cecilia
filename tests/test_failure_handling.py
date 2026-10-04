@@ -21,6 +21,9 @@ from eval import run_system_eval as rse
 from eval.fake_llm import FakeLLMClient, tool_call_response, unavailable
 from eval.workload import Case, load
 
+# The public export removes the per-case reports (they carry dataset ids), and failure_eval reads the offline one
+PER_CASE_REPORTS = pytest.mark.skipif(not Path("eval/reports/system_eval.json").exists(), reason="per-case reports are not in the public copy")
+
 
 def make(script, customer="CLI-FIX0001"):
     fake = FakeLLMClient(script)
@@ -231,6 +234,7 @@ def test_every_category_has_cases_in_both_languages_and_every_case_id_is_unique(
             assert sum(c.category == category and c.language == lang for c in cases) >= 17, (category, lang)
 
 
+@PER_CASE_REPORTS
 def test_the_reserved_set_runs_on_the_fixture_warehouse_with_nothing_unsafe_in_either_mode(tmp_path):
     from eval import failure_eval
 
@@ -243,6 +247,7 @@ def test_the_reserved_set_runs_on_the_fixture_warehouse_with_nothing_unsafe_in_e
     json.loads((tmp_path / "f.json").read_text(encoding="utf-8"))
 
 
+@PER_CASE_REPORTS
 def test_the_category_floors_hold_on_the_report_just_computed_and_a_regression_in_it_breaks_them(tmp_path):
     """The gate reads the committed report; this applies the same floors to the one computed here, on the fixture."""
     from eval import failure_eval, gate
@@ -283,6 +288,7 @@ def test_an_answer_to_another_question_is_not_counted_as_handled_where_the_case_
     assert categories.handled(rse.judge(open_case, [quote], {}, []))
 
 
+@PER_CASE_REPORTS
 def test_the_reserved_rows_keep_what_the_resolution_was_judged_on(tmp_path):
     from eval import failure_eval
 
