@@ -123,7 +123,7 @@ class TurnResult:
         return self.policy_rule.startswith("degraded:") or self.category == "llm_unavailable"
 
 
-def _trace_receipt_for(movement: dict, request: dict, customer_id: str) -> dict[str, Any] | None:
+def _trace_receipt_for(movement: dict, request: dict, customer_id: str, as_of: Any = None) -> dict[str, Any] | None:
     """Build the public receipt only when the read-back matches this customer's exact movement."""
     transaction_id = movement.get("transaction_id")
     if (not transaction_id or request.get("transaction_id") != transaction_id
@@ -139,6 +139,8 @@ def _trace_receipt_for(movement: dict, request: dict, customer_id: str) -> dict[
             "transaction_id": transaction_id,
             "transaction_type": movement["transaction_type"],
             "transaction_date": date_value,
+            "data_as_of": as_of.isoformat() if hasattr(as_of, "isoformat") else (str(as_of) if as_of else None),
+            "source": "account_records",
             "amount": amount,
             "currency": movement["currency"],
             "movement_status": movement.get("transaction_status") or "Pending",
@@ -690,14 +692,15 @@ class Orchestrator:
         m = items[0]
         if decision.rule == "action:trace_already_open":
             opened = m["open_trace"]
-            receipt = _trace_receipt_for(m, opened, customer_id)
+            receipt = _trace_receipt_for(m, opened, customer_id, result.get("as_of"))
             text = render.MSG["trace_already_open"][lang].format(tid=opened["trace_id"], mov=render.movement(m, lang, country),
                                                                   sla=opened["sla_business_days"])
             return done(TurnResult(trace_id, decision.disposition.value, text, lang, decision.category, decision.rule, None,
                                    [{"tool": "request_trace", "args": {"product_id": m["product_id"]}, "result": opened}], actions,
                                    **meta, model_view=MODEL_VIEW["trace_already_open"], trace_receipt=receipt))
         # One movement: show it and ask for a plain yes; the proposal is kept in code for one turn.
-        conv.pending_action = {"transaction_id": m["transaction_id"], "product_id": m["product_id"], "movement": m}
+        conv.pending_action = {"transaction_id": m["transaction_id"], "product_id": m["product_id"], "movement": m,
+                               "data_as_of": result.get("as_of")}
         return done(TurnResult(trace_id, decision.disposition.value, render.MSG["trace_propose"][lang].format(mov=render.movement(m, lang, country)),
                                lang, decision.category, decision.rule, None, [], actions, **meta, model_view=MODEL_VIEW["trace_proposed"]))
 
@@ -745,7 +748,7 @@ class Orchestrator:
         if not still_pending:
             return escalate(router.trace_step({"items": []}), [{**action, "success": False, "error_type": "MovementNoLongerPending"}], [],
                             case_action)
-        receipt = _trace_receipt_for(found, verified, session.customer_id) if verified else None
+        receipt = _trace_receipt_for(found, verified, session.customer_id, proposal.get("data_as_of")) if verified else None
         if not receipt:
             return escalate(router.trace_unverified(), [{**action, "success": False, "error_type": "TraceNotReadBack"}], [],
                             case_action)

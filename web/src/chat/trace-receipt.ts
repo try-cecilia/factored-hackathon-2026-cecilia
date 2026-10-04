@@ -29,6 +29,11 @@ export function traceReceiptFacts(receipt: TraceReceipt, locale: Locale, t: Tran
   const facts: ReceiptFact[] = [
     { label: t('chat.traceReceipt.movement'), value: `${types[receipt.transaction_type] ?? receipt.transaction_type} · ${receipt.transaction_id}` },
     { label: t('chat.traceReceipt.date'), value: date },
+    ...(receipt.source === 'account_records' ? [{ label: t('chat.traceReceipt.source'), value: t('chat.traceReceipt.accountRecords') }] : []),
+    ...(receipt.data_as_of ? [{
+      label: t('chat.traceReceipt.dataAsOf'),
+      value: new Intl.DateTimeFormat(htmlLang[locale], { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(`${receipt.data_as_of}T00:00:00Z`)),
+    }] : []),
     { label: t('chat.traceReceipt.amount'), value: amount },
     { label: t('chat.traceReceipt.movementStatus'), value: movementStatuses[receipt.movement_status] ?? receipt.movement_status },
     { label: t('chat.traceReceipt.traceStatus'), value: traceStatuses[receipt.trace_status] ?? receipt.trace_status },

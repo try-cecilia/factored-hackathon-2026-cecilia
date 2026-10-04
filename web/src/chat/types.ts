@@ -40,6 +40,8 @@ export type TraceReceipt = {
   transaction_id: string
   transaction_type: string
   transaction_date: string
+  data_as_of?: string | null
+  source?: 'account_records'
   amount: number
   currency: string
   movement_status: string

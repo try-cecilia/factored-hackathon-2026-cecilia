@@ -16,6 +16,9 @@ function parseTraceReceipt(value: unknown): TraceReceipt | null {
       || typeof r.movement_status !== 'string' || typeof r.trace_id !== 'string'
       || typeof r.trace_status !== 'string' || r.read_back !== true
       || typeof r.sla_business_days !== 'number' || !Number.isInteger(r.sla_business_days) || r.sla_business_days < 0) return null
+  if (r.data_as_of !== undefined && r.data_as_of !== null
+      && (typeof r.data_as_of !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(r.data_as_of))) return null
+  if (r.source !== undefined && r.source !== 'account_records') return null
   return r as unknown as TraceReceipt
 }
 
