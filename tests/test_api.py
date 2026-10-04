@@ -59,6 +59,36 @@ def test_health(client):
     assert body["llm_budget_exhausted"] is False  # a monitor can alert on it; the amounts stay behind the admin key
 
 
+def test_chat_and_history_keep_trace_receipt_provenance_over_http(client, monkeypatch):
+    from agent.core.orchestrator import TurnResult
+
+    receipt = {
+        "transaction_id": "TXN-FIX0006", "transaction_type": "Transfer", "transaction_date": "2024-01-16",
+        "data_as_of": "2024-01-17", "source": "account_records", "amount": 42.0, "currency": "USD",
+        "movement_status": "Pending", "trace_id": "TR-FIX0006", "trace_status": "open", "read_back": True,
+        "sla_business_days": None,
+    }
+
+    class ReceiptOrchestrator:
+        def handle_message(self, *_):
+            return TurnResult("trace-1", "AUTO_RESOLVE", "Rastreo abierto", "es", trace_receipt=receipt)
+
+        def history(self, _):
+            return [{"role": "assistant", "text": "Rastreo abierto", "at": 1.0, "trace_receipt": receipt}]
+
+        def case_index(self, _):
+            return []
+
+    monkeypatch.setattr(main.demo, "orchestrator_for", lambda _: ReceiptOrchestrator())
+    token = "test-session-token"
+    chat_body = client.post("/chat", json={"session_token": token, "message": "sí"}).json()
+    history_body = client.get("/chat/history", headers={"X-Session-Token": token}).json()
+
+    for returned in (chat_body["trace_receipt"], history_body["turns"][0]["trace_receipt"]):
+        assert returned["source"] == "account_records"
+        assert returned["data_as_of"] == "2024-01-17"
+
+
 def test_the_operations_summary_counts_what_an_operator_watches(client):
     token = login(client).json()["token"]
     client.post("/chat", json={"session_token": token, "message": "Me clonaron la tarjeta"})  # theft, before any model

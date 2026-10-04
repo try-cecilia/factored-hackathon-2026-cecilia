@@ -727,8 +727,9 @@ class Orchestrator:
         try:
             # The proposal is one turn old: the movement may have settled since, so eligibility is checked again.
             with stage("tool:request_trace"):
-                pending = run_tool("request_trace", session.customer_id, product_id=proposal["product_id"],
-                                   transaction_id=proposal["transaction_id"])["items"]
+                pending_result = run_tool("request_trace", session.customer_id, product_id=proposal["product_id"],
+                                          transaction_id=proposal["transaction_id"])
+            pending = pending_result["items"]
             found = next((m for m in pending if m["transaction_id"] == proposal["transaction_id"]), None)
             still_pending = found is not None
             review = found.get("review_reason") if found else None
@@ -756,7 +757,7 @@ class Orchestrator:
         if not still_pending:
             return escalate(router.trace_step({"items": []}), [{**action, "success": False, "error_type": "MovementNoLongerPending"}], [],
                             case_action)
-        receipt = _trace_receipt_for(found, verified, session.customer_id, proposal.get("data_as_of")) if verified else None
+        receipt = _trace_receipt_for(found, verified, session.customer_id, pending_result.get("as_of")) if verified else None
         if not receipt:
             return escalate(router.trace_unverified(), [{**action, "success": False, "error_type": "TraceNotReadBack"}], [],
                             case_action)

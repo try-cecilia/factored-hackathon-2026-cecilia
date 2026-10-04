@@ -127,6 +127,8 @@ class TraceReceipt(BaseModel):
     transaction_id: str
     transaction_type: str
     transaction_date: str
+    data_as_of: str | None = None
+    source: str
     amount: float
     currency: str
     movement_status: str

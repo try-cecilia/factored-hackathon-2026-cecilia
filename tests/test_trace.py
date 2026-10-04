@@ -189,6 +189,29 @@ def test_a_pending_transfer_is_proposed_and_traced_only_after_the_customer_says_
     assert fake.call_count == 1  # the confirmation never reached the model
 
 
+def test_the_receipt_uses_the_as_of_date_from_the_confirmation_read(monkeypatch):
+    from agent.core import orchestrator as orchestrator_module
+
+    original = orchestrator_module.run_tool
+    request_reads = 0
+
+    def updated_warehouse_read(*args, **kwargs):
+        nonlocal request_reads
+        result = original(*args, **kwargs)
+        if args[0] == "request_trace":
+            request_reads += 1
+            if request_reads == 2:  # the confirmation revalidation
+                result = {**result, "as_of": "2024-01-17"}
+        return result
+
+    monkeypatch.setattr(orchestrator_module, "run_tool", updated_warehouse_read)
+    orch, tok, _ = make(tool_call_response("request_trace", {}))
+    orch.handle_message(tok, ASK["es"])
+    opened = orch.handle_message(tok, "sí")
+
+    assert opened.trace_receipt["data_as_of"] == "2024-01-17"
+
+
 @pytest.mark.parametrize("lang,no", [("es", "no"), ("es", "No"), ("es", "no, gracias"), ("pt", "não"), ("pt", "Não")])
 def test_a_plain_no_opens_nothing(lang, no):
     orch, tok, _ = make(tool_call_response("request_trace", {}))
