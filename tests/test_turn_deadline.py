@@ -103,6 +103,32 @@ def test_a_server_that_dribbles_its_answer_cannot_outlast_the_models_total_budge
         server.server_close()
 
 
+def test_the_time_spent_building_the_client_counts_against_the_models_total_budget(monkeypatch):
+    # Building the client (an SDK import, a TLS context, a garbage-collector pause) happens inside the total budget: the call that
+    # follows gets only what is left of it, never a full request timeout on top of it.
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Dribble)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    monkeypatch.setenv("LLM_PROVIDERS", "local")
+    monkeypatch.setenv("LOCAL_LLM_BASE_URL", f"http://127.0.0.1:{server.server_address[1]}/v1")
+    client = LLMClient(sleep=lambda s: None, timeout_s=5, total_budget_s=0.3, max_attempts_per_provider=1)
+    build = client._client
+
+    def slow_build(p, api_key):
+        time.sleep(0.2)
+        return build(p, api_key)
+
+    monkeypatch.setattr(client, "_client", slow_build)
+    try:
+        t0 = time.perf_counter()
+        with pytest.raises(LLMUnavailable) as e:
+            client.chat([{"role": "user", "content": "hi"}])
+        assert time.perf_counter() - t0 < 0.45  # 0.2 s building + what was left of 0.3 s; the full answer takes 0.2 + 0.5
+        assert any("timeout" in a.get("error", "").lower() for a in e.value.attempts)
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
 def test_the_handoff_has_a_budget_of_its_own_and_is_written_even_when_the_turn_is_out_of_time(monkeypatch):
     monkeypatch.setenv("TURN_BUDGET_SECONDS", "1e-9")
     real_open, opened = open, []

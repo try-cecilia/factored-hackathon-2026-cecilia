@@ -500,7 +500,9 @@ class LLMClient:
                 try:
                     request_s = min(self.timeout_s, remaining)
                     sdk = self._client(p, api_key)  # built (and its SDK imported) before the call's clock starts
-                    limit = call_limit.set(time.perf_counter() + request_s)  # the transport enforces it on the wall clock
+                    # The transport enforces the limit on the wall clock. It never goes past the total budget: building the client
+                    # (an import, a TLS context, a pause of the garbage collector) is time the budget already counts.
+                    limit = call_limit.set(min(time.perf_counter() + request_s, deadline))
                     try:
                         content, tool_calls, usage, served_model, raw = (p.call or openai_compatible_call)(
                             sdk, p, messages, tools, temperature, request_s)
