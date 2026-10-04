@@ -19,6 +19,7 @@ from agent.session.auth import SessionStore, session_ref
 from agent.tools import traces
 from eval.fake_llm import FakeLLMClient, text_response, tool_call_response
 
+
 ASK = {"es": "hice una transferencia que todavía no llega", "pt": "fiz uma transferência que ainda não chegou"}
 
 
@@ -46,8 +47,132 @@ def proposal(orch, tok) -> dict | None:
     return orch.conversations.get(session_ref(tok)).pending_action
 
 
-@pytest.mark.parametrize("lang,yes,sla", [("es", "sí", "2 días hábiles"), ("pt", "sim", "2 dias úteis")])
-def test_a_pending_transfer_is_proposed_and_traced_only_after_the_customer_says_yes(lang, yes, sla):
+TRACE_RULE = {"rule_id": "trace_deadline", "version": 2, "country": "MX", "operation": "Trace", "kind": "deadline",
+              "currency": "USD", "value": 3, "unit": "business days", "valid_from": "2026-10-01",
+              "source": {"issuer": "Payments regulator", "url": "https://example.test/trace", "checked_at": "2026-10-01",
+                         "officially_reviewed": True}}
+
+
+def deadline_rule(**changes):
+    """A trace deadline rule as the catalog loads it: through its validation, never built around it."""
+    from agent.policy.payment_rules import validate_catalog
+
+    [rule] = validate_catalog({"schema_version": 1, "rules": [{**TRACE_RULE, **changes}]})
+    return rule
+
+
+def test_legacy_trace_sla_is_never_repeated_in_a_customer_update():
+    update = render.case_update("approved", "es", trace={"trace_id": "TR-1", "sla_business_days": 2})
+    assert update == "Novedad de tu caso: un agente aprobó el rastreo y abrió el pedido TR-1."
+
+
+@pytest.mark.parametrize("lang,yes,words", [("es", "sí", "Plazo respaldado: 3 días hábiles. Regla v2, vigente desde 01/10/2026"),
+                                            ("pt", "sim", "Prazo respaldado: 3 dias úteis. Regra v2, vigente desde 01/10/2026")])
+def test_a_trace_snapshots_and_shows_only_a_country_rule_for_its_deadline(monkeypatch, lang, yes, words):
+    from agent.policy import payment_rules
+
+    monkeypatch.setattr(payment_rules, "resolve_rules", lambda *args, **kwargs: [deadline_rule()])
+    orch, tok, _ = make(tool_call_response("request_trace", {}))
+    orch.handle_message(tok, ASK[lang])
+    opened = orch.handle_message(tok, yes)
+    [trace] = stored()
+    assert trace["service_rules"][0]["rule_id"] == "trace_deadline" and trace["sla_business_days"] == 3
+    assert words in opened.response_text and "business days" not in opened.response_text
+    assert "Payments regulator" in opened.response_text and "https://example.test/trace" in opened.response_text
+    # the receipt of #18 carries the same deadline, from the same snapshot
+    assert opened.trace_receipt["sla_business_days"] == 3 and opened.trace_receipt["read_back"] is True
+
+
+@pytest.mark.parametrize("lang,yes", [("es", "sí"), ("pt", "sim")])
+def test_without_a_country_rule_the_trace_still_reads_back_with_a_receipt_and_no_deadline(lang, yes):
+    # the production catalog is empty: a trace that reads back is announced, with its receipt, and no deadline is invented
+    orch, tok, _ = make(tool_call_response("request_trace", {}))
+    orch.handle_message(tok, ASK[lang])
+    opened = orch.handle_message(tok, yes)
+    assert (opened.disposition, opened.policy_rule) == ("AUTO_RESOLVE", "action:trace_opened")
+    [trace] = stored()
+    assert trace["sla_business_days"] is None and "service_rules" not in trace
+    assert opened.trace_receipt is not None and opened.trace_receipt["trace_id"] == trace["trace_id"]
+    assert opened.trace_receipt["sla_business_days"] is None
+    assert not any(word in opened.response_text for word in ("hábil", "útil", "útei", "Plazo", "Prazo"))
+
+
+@pytest.mark.parametrize("lang,yes", [("es", "sí"), ("pt", "sim")])
+def test_a_legacy_record_with_the_synthetic_sla_never_revives_it(lang, yes):
+    # a record written before the country rules says 2 days and has no rule: the receipt and the reply say no deadline
+    from agent.core.orchestrator import _trace_receipt_for
+
+    movement = {"transaction_id": "TXN-FIX0006", "transaction_date": "2024-01-15", "amount": 40.0, "currency": "USD",
+                "transaction_type": "Transfer", "transaction_status": "Pending"}
+    legacy = {"trace_id": traces.default_traces.trace_id("CLI-FIX0004", "TXN-FIX0006"), "transaction_id": "TXN-FIX0006",
+              "status": "open", "sla_business_days": 2}
+    receipt = _trace_receipt_for(movement, legacy, "CLI-FIX0004")
+    assert receipt is not None and receipt["sla_business_days"] is None
+    assert render.trace_service_text(legacy.get("service_rules", []), lang) == ""
+
+
+@pytest.mark.parametrize("lang,expected", [("es", "Plazo respaldado: 0 días hábiles."), ("pt", "Prazo respaldado: 0 dias úteis.")])
+def test_a_backed_deadline_of_zero_is_said_and_an_incomplete_rule_is_not(lang, expected):
+    from agent.policy.payment_rules import deadline_business_days, snapshot
+
+    [zero] = snapshot([deadline_rule(value=0)])
+    assert render.trace_service_text([zero], lang).startswith("\n" + expected)
+    assert deadline_business_days([zero]) == 0
+    for missing in ("value", "unit", "source_url", "valid_from"):
+        incomplete = {k: v for k, v in zero.items() if k != missing}
+        assert render.trace_service_text([incomplete], lang) == "", missing
+    assert deadline_business_days([{**zero, "value": None}]) is None
+    assert deadline_business_days(None) is None and deadline_business_days([zero, zero]) is None
+
+
+@pytest.mark.parametrize("changes", [{"value": 5, "unit": "calendar days"}, {"value": 1.5}, {"kind": "commission", "unit": "USD"},
+                                     {"value": 2, "unit": "weeks"}])
+def test_a_trace_rule_that_is_not_a_whole_number_of_business_days_is_refused_by_the_catalog(changes):
+    # the reply, the receipt and the bank view say the same deadline only if it is whole business days: anything else is refused
+    with pytest.raises(ValueError):
+        deadline_rule(**changes)
+
+
+def test_a_whole_trace_deadline_written_as_a_decimal_loads_as_that_integer():
+    assert deadline_rule(value=4.0).value == 4 and isinstance(deadline_rule(value=4.0).value, int)
+
+
+@pytest.mark.parametrize("days", [0, 1, 4])
+@pytest.mark.parametrize("lang,yes,one,many", [("es", "sí", "1 día hábil", "días hábiles"), ("pt", "sim", "1 dia útil", "dias úteis")])
+def test_the_reply_and_the_receipt_say_the_same_deadline(monkeypatch, days, lang, yes, one, many):
+    from agent.policy import payment_rules
+
+    monkeypatch.setattr(payment_rules, "load_catalog", lambda: [deadline_rule(value=days)])
+    orch, tok, _ = make(tool_call_response("request_trace", {}))
+    orch.handle_message(tok, ASK[lang])
+    opened = orch.handle_message(tok, yes)
+    said = one if days == 1 else f"{days} {many}"
+    assert f"respaldado: {said}." in opened.response_text
+    assert opened.trace_receipt["sla_business_days"] == days and stored()[0]["sla_business_days"] == days
+
+
+@pytest.mark.parametrize("lang,words", [("es", "1 día hábil"), ("pt", "1 dia útil")])
+def test_an_agent_approved_trace_carries_the_country_rule_and_the_customer_hears_it(monkeypatch, lang, words):
+    from agent.policy import payment_rules
+    from agent.policy.desk import TicketDesk
+
+    seen = {}
+
+    def resolve(country, operation, kind, currency, on_date, **_):
+        seen.update(country=country, operation=operation, kind=kind, currency=currency)
+        return [deadline_rule(value=1)]
+
+    monkeypatch.setattr(payment_rules, "resolve_rules", resolve)
+    ticket = {"customer_id": "CLI-FIX0004", "session_ref": "ref",
+              "pending_action": {"transaction_id": "TXN-FIX0006", "product_id": "PRD-FIX0010"}}
+    outcome, trace = TicketDesk._execute(ticket, ticket["pending_action"])
+    assert outcome == "opened" and trace["sla_business_days"] == 1
+    assert seen == {"country": "México", "operation": "Trace", "kind": "deadline", "currency": "USD"}  # verified, from SQL
+    assert words in render.case_update("approved", lang, trace)
+
+
+@pytest.mark.parametrize("lang,yes", [("es", "sí"), ("pt", "sim")])
+def test_a_pending_transfer_is_proposed_and_traced_only_after_the_customer_says_yes(lang, yes):
     orch, tok, fake = make(tool_call_response("request_trace", {}))
     r1 = orch.handle_message(tok, ASK[lang])
     assert (r1.disposition, r1.category, r1.policy_rule) == ("CLARIFY", "confirm_action", "action:trace_proposed")
@@ -59,7 +184,8 @@ def test_a_pending_transfer_is_proposed_and_traced_only_after_the_customer_says_
     assert (r2.disposition, r2.policy_rule, r2.llm_calls, r2.language) == ("AUTO_RESOLVE", "action:trace_opened", 0, lang)
     [trace] = stored()
     assert trace["transaction_id"] == "TXN-FIX0006" and trace["trace_id"] in r2.response_text
-    assert sla in r2.response_text and r2.verified_facts[0]["tool"] == "request_trace"
+    assert "hábiles" not in r2.response_text and "úteis" not in r2.response_text
+    assert r2.verified_facts[0]["tool"] == "request_trace"
     assert fake.call_count == 1  # the confirmation never reached the model
 
 

@@ -33,6 +33,8 @@ REASONS = {
     "trace_unmatched": "The customer reports a movement that did not arrive, and none of theirs is pending.",
     "trace_unverified": "The customer confirmed, but the tracing service did not confirm the trace.",
     "trace_review": "The customer confirmed a trace, but the movement needs a person's approval ({review_reason}).",
+    "payment_rule_unavailable": "The customer asks about a payment condition; no reviewed, current rule covers their country, operation and currency.",
+    "payment_rule_for_agent": "The customer asks about a payment condition; rule {rule_id} v{version} covers it, and the assistant does not tell conditions to the customer.",
 }
 
 QUESTIONS = {
@@ -49,6 +51,7 @@ QUESTIONS = {
     "check_movement": "Check the movement with payments operations or the sending bank.",
     "open_trace_manually": "Open the trace manually and give the customer its number.",
     "decide_trace": "Approve or reject the trace: {review_reason}.",
+    "confirm_payment_condition": "Confirm the condition against the bank's current official source and answer the customer.",
     "evidence_failed": "Could not gather recent activity automatically: {detail}",
     "evidence_skipped_budget": "Evidence was not gathered: the handoff's time budget was spent.",
     "evidence_skipped_slow": "Evidence was not gathered: it did not finish inside the handoff's time budget, or too many earlier ones are still running.",

@@ -66,6 +66,7 @@ export const demo = {
     sla: 'Plazo',
     slaOne: '1 día hábil',
     slaMany: '{n} días hábiles',
+    slaNone: 'Sin plazo respaldado',
     traceStatus: { open: 'Abierto' },
   },
 }

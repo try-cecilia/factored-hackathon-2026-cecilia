@@ -84,6 +84,7 @@ const wholeRules: Record<string, RuleName> = {
   'action:trace_unverified': 'traceUnverified',
   'action:trace_review': 'traceReview',
   'action:trace_cancelled': 'traceCancelled',
+  payment_rule_for_agent: 'paymentRuleForAgent',
 }
 const ruleFamilies: Record<string, RuleName> = { lexicon: 'lexicon', intent_classifier: 'classifier', tool_error: 'toolError', session: 'session' }
 

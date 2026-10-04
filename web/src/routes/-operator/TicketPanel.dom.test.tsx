@@ -723,3 +723,56 @@ describe('the drawer, summary first', () => {
     expect(screen.getByRole('button', { name: /^Histórico/ }).textContent).toContain('1 evento · rastro')
   })
 })
+
+describe('a payment rule on the ticket is read in the operator language, not as JSON', () => {
+  const rule = (kind: string, value: number, unit: string, until: string | null) => ({
+    rule_id: `mx_rule_${kind.length}`, version: 4, kind, value, unit, source_issuer: 'Banco Fixture', source_url: 'https://example.test/fees',
+    source_checked_at: '2026-09-01', valid_from: '2026-01-01', valid_until: until,
+  })
+  const facts = [
+    { tool: 'get_payment_conditions', result: { country: 'MX', currency: 'USD', operation: 'Transfer', kind: 'commission', on_date: '2026-10-03', rules: [rule('commission', 1.5, 'percent', '2027-01-01')] } },
+    { tool: 'get_payment_conditions', result: { country: 'MX', currency: 'USD', operation: 'Transfer', kind: 'deadline', on_date: '2026-10-03', rules: [rule('deadline', 2, 'business days', null)] } },
+    { tool: 'get_payment_conditions', result: { country: 'MX', currency: 'USD', operation: 'Withdrawal', kind: 'threshold', on_date: '2026-10-03', rules: [rule('threshold', 5000, 'USD', null)] } },
+  ]
+  const panel = (locale: 'es' | 'pt') => renderWithI18n(
+    <TicketPanel ticket={ticket('open', { category: 'payment_rule_unavailable', verified_facts: facts })} view={{ canAct: true, operator: 'ana.ruiz' }} act={vi.fn()} reload={vi.fn(async () => true)} />, locale)
+  const raw = /"operation"|Transfer(?!\p{L})|Withdrawal|commission|deadline|threshold|business days|percent|"rules"/u
+
+  it.each([
+    ['es', /^Hechos verificados/, ['Comisión · Transferencia · mx_rule_10 v4', 'Plazo · Transferencia · mx_rule_8 v4', 'Umbral · Retiro · mx_rule_9 v4'],
+      ['1,5 %', '2 días hábiles', '5000 USD'], ['desde 01/01/2026 hasta 01/01/2027', 'desde 01/01/2026, sin fecha de fin'], 'País MX · moneda USD', 'consultada el 01/09/2026'],
+    ['pt', /^Fatos verificados/, ['Tarifa · Transferência · mx_rule_10 v4', 'Prazo · Transferência · mx_rule_8 v4', 'Limite · Saque · mx_rule_9 v4'],
+      ['1,5 %', '2 dias úteis', '5.000 USD'], ['de 01/01/2026 até 01/01/2027', 'desde 01/01/2026, sem data de fim'], 'País MX · moeda USD', 'consultada em 01/09/2026'],
+  ] as const)('in %s', async (locale, heading, rules, values, validity, scope, checked) => {
+    panel(locale)
+    await unfold(heading)
+    const box = screen.getByRole('button', { name: heading }).closest('.op-fold') as HTMLElement
+    const shown = box.textContent ?? ''
+    for (const text of [...rules, ...values, ...validity, scope, checked]) expect(shown).toContain(text)
+    expect(within(box).getAllByRole('link', { name: 'https://example.test/fees' })).toHaveLength(3)
+    expect(shown).not.toMatch(raw)
+  })
+})
+
+describe('a payment rule keeps every decimal of its figure', () => {
+  const rule = (value: number, unit: string) => ({
+    rule_id: `mx_small_${String(value).length}`, version: 1, kind: 'commission', value, unit, source_issuer: 'Banco Fixture',
+    source_url: 'https://example.test/fees', source_checked_at: '2026-09-01', valid_from: '2026-01-01', valid_until: null,
+  })
+  const facts = [[0.001, 'percent'], [0.125, 'percent'], [0.0005, 'percent'], [0.01, 'USD'], [1e-7, 'percent']].map(([value, unit]) => ({
+    tool: 'get_payment_conditions',
+    result: { country: 'MX', currency: 'USD', operation: 'Transfer', kind: 'commission', rules: [rule(value as number, unit as string)] },
+  }))
+
+  it.each([
+    ['es', /^Hechos verificados/],
+    ['pt', /^Fatos verificados/],
+  ] as const)('in %s, 0.001 % is never shown as 0 % and nothing small is rounded', async (locale, heading) => {
+    renderWithI18n(<TicketPanel ticket={ticket('open', { category: 'payment_rule_unavailable', verified_facts: facts })}
+      view={{ canAct: true, operator: 'ana.ruiz' }} act={vi.fn()} reload={vi.fn(async () => true)} />, locale)
+    await unfold(heading)
+    const box = screen.getByRole('button', { name: heading }).closest('.op-fold') as HTMLElement
+    const values = within(box).getAllByText('Valor', { selector: 'dt' }).map((dt) => dt.nextElementSibling?.textContent)
+    expect(values).toEqual(['0,001 %', '0,125 %', '0,0005 %', '0,01 USD', '0,0000001 %'])
+  })
+})

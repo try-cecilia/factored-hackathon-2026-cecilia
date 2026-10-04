@@ -1,0 +1,120 @@
+{"id":"es-intent-01","tool":"get_account_summary","allowed_tool_args":[],"required_args":{},"forbidden_args":["product_id"]}
+{"id":"es-intent-02","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{"transaction_type":"Transfer"},"forbidden_args":["product_id","start_date","end_date","status","limit"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"es-intent-03","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{},"forbidden_args":["product_id","start_date","end_date","status","limit"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"es-intent-04","tool":"get_payment_status","allowed_tool_args":["product_id"],"review_note":"Confirm whether context identifies one eligible credit product; otherwise expect clarification."}
+{"id":"es-intent-05","tool":"get_payment_status","allowed_tool_args":["product_id"],"review_note":"Confirm whether context identifies one eligible credit product; otherwise expect clarification."}
+{"id":"es-intent-06","tool":"get_account_summary","allowed_tool_args":[],"required_args":{},"forbidden_args":["product_id"]}
+{"id":"es-intent-07","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{},"forbidden_args":["product_id","start_date","end_date","status","limit"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"es-intent-08","tool":"get_account_summary","allowed_tool_args":[],"required_args":{},"forbidden_args":["product_id"]}
+{"id":"es-intent-09","tool":"get_payment_status","allowed_tool_args":["product_id"],"review_note":"Confirm whether context identifies one eligible credit product; otherwise expect clarification."}
+{"id":"es-intent-10","tool":"get_account_summary","allowed_tool_args":[],"required_args":{},"forbidden_args":["product_id"]}
+{"id":"es-intent-11","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{"transaction_type":"Transfer"},"forbidden_args":["product_id","start_date","end_date","status","limit"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"es-intent-12","tool":"get_account_summary","allowed_tool_args":[],"required_args":{},"forbidden_args":["product_id"]}
+{"id":"es-intent-13","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{"transaction_type":"Purchase"},"forbidden_args":["product_id","start_date","end_date","status","limit"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"es-intent-14","tool":"get_payment_status","allowed_tool_args":["product_id"],"review_note":"Confirm whether context identifies one eligible credit product; otherwise expect clarification."}
+{"id":"es-intent-15","tool":"get_account_summary","allowed_tool_args":[],"required_args":{},"forbidden_args":["product_id"]}
+{"id":"pt-intent-01","tool":"get_account_summary","allowed_tool_args":[],"required_args":{},"forbidden_args":["product_id"]}
+{"id":"pt-intent-02","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{"transaction_type":"Transfer"},"forbidden_args":["product_id","start_date","end_date","status","limit"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"pt-intent-03","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{},"forbidden_args":["product_id","start_date","end_date","status","limit"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"pt-intent-04","tool":"get_payment_status","allowed_tool_args":["product_id"],"review_note":"Confirm whether context identifies one eligible credit product; otherwise expect clarification."}
+{"id":"pt-intent-05","tool":"get_payment_status","allowed_tool_args":["product_id"],"review_note":"Confirm whether context identifies one eligible credit product; otherwise expect clarification."}
+{"id":"pt-intent-06","tool":"get_account_summary","allowed_tool_args":[],"required_args":{},"forbidden_args":["product_id"]}
+{"id":"pt-intent-07","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{},"forbidden_args":["product_id","start_date","end_date","status","limit"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"pt-intent-08","tool":"get_account_summary","allowed_tool_args":[],"required_args":{},"forbidden_args":["product_id"]}
+{"id":"pt-intent-09","tool":"get_payment_status","allowed_tool_args":["product_id"],"review_note":"Confirm whether context identifies one eligible credit product; otherwise expect clarification."}
+{"id":"pt-intent-10","tool":"get_account_summary","allowed_tool_args":[],"required_args":{},"forbidden_args":["product_id"]}
+{"id":"pt-intent-11","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{"transaction_type":"Transfer"},"forbidden_args":["product_id","start_date","end_date","status","limit"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"pt-intent-12","tool":"get_account_summary","allowed_tool_args":[],"required_args":{},"forbidden_args":["product_id"]}
+{"id":"pt-intent-13","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{"transaction_type":"Purchase"},"forbidden_args":["product_id","start_date","end_date","status","limit"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"pt-intent-14","tool":"get_payment_status","allowed_tool_args":["product_id"],"review_note":"Confirm whether context identifies one eligible credit product; otherwise expect clarification."}
+{"id":"pt-intent-15","tool":"get_account_summary","allowed_tool_args":[],"required_args":{},"forbidden_args":["product_id"]}
+{"id":"es-slot-01","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{"limit":7,"transaction_type":"Transfer"},"forbidden_args":["product_id"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"es-slot-02","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{"limit":9},"forbidden_args":["product_id"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"es-slot-03","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{"limit":6},"forbidden_args":["product_id"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"es-slot-04","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{"limit":8,"transaction_type":"Transfer"},"forbidden_args":["product_id"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"es-slot-05","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{"limit":10},"forbidden_args":["product_id"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"es-slot-06","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{"limit":12,"transaction_type":"Transfer"},"forbidden_args":["product_id"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"es-slot-07","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{"limit":4},"forbidden_args":["product_id"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"es-slot-08","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{"limit":15},"forbidden_args":["product_id"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"es-slot-09","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{"limit":5,"transaction_type":"Transfer"},"forbidden_args":["product_id"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"es-slot-10","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{"limit":11},"forbidden_args":["product_id"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"es-slot-11","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{"limit":9,"transaction_type":"Transfer"},"forbidden_args":["product_id"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"es-slot-12","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{"limit":3},"forbidden_args":["product_id"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"es-slot-13","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{"limit":13},"forbidden_args":["product_id"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"es-slot-14","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{"limit":6,"transaction_type":"Transfer"},"forbidden_args":["product_id"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"es-slot-15","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{"limit":14},"forbidden_args":["product_id"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"pt-slot-01","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{"limit":7,"transaction_type":"Transfer"},"forbidden_args":["product_id"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"pt-slot-02","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{"limit":9},"forbidden_args":["product_id"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"pt-slot-03","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{"limit":6},"forbidden_args":["product_id"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"pt-slot-04","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{"limit":8,"transaction_type":"Transfer"},"forbidden_args":["product_id"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"pt-slot-05","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{"limit":10},"forbidden_args":["product_id"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"pt-slot-06","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{"limit":12,"transaction_type":"Transfer"},"forbidden_args":["product_id"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"pt-slot-07","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{"limit":4},"forbidden_args":["product_id"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"pt-slot-08","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{"limit":15},"forbidden_args":["product_id"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"pt-slot-09","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{"limit":5,"transaction_type":"Transfer"},"forbidden_args":["product_id"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"pt-slot-10","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{"limit":11},"forbidden_args":["product_id"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"pt-slot-11","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{"limit":9,"transaction_type":"Transfer"},"forbidden_args":["product_id"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"pt-slot-12","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{"limit":3},"forbidden_args":["product_id"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"pt-slot-13","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{"limit":13},"forbidden_args":["product_id"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"pt-slot-14","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{"limit":6,"transaction_type":"Transfer"},"forbidden_args":["product_id"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"pt-slot-15","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{"limit":14},"forbidden_args":["product_id"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"es-imperfect-01","tool":"get_account_summary","allowed_tool_args":[],"required_args":{},"forbidden_args":["product_id"]}
+{"id":"es-imperfect-02","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{},"forbidden_args":["product_id"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"es-imperfect-03","tool":"get_payment_status","allowed_tool_args":["product_id"],"review_note":"Confirm whether context identifies one eligible credit product; otherwise expect clarification."}
+{"id":"es-imperfect-04","tool":"get_account_summary","allowed_tool_args":[],"required_args":{},"forbidden_args":["product_id"]}
+{"id":"es-imperfect-05","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{},"forbidden_args":["product_id"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"es-imperfect-06","tool":"get_account_summary","allowed_tool_args":[],"required_args":{},"forbidden_args":["product_id"]}
+{"id":"es-imperfect-07","tool":"get_payment_status","allowed_tool_args":["product_id"],"review_note":"Confirm whether context identifies one eligible credit product; otherwise expect clarification."}
+{"id":"es-imperfect-08","tool":"get_payment_status","allowed_tool_args":["product_id"],"review_note":"Confirm whether context identifies one eligible credit product; otherwise expect clarification."}
+{"id":"es-imperfect-09","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{},"forbidden_args":["product_id"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"es-imperfect-10","tool":"get_account_summary","allowed_tool_args":[],"required_args":{},"forbidden_args":["product_id"]}
+{"id":"es-imperfect-11","tool":"get_account_summary","allowed_tool_args":[],"required_args":{},"forbidden_args":["product_id"]}
+{"id":"es-imperfect-12","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{},"forbidden_args":["product_id"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"es-imperfect-13","tool":"get_payment_status","allowed_tool_args":["product_id"],"review_note":"Confirm whether context identifies one eligible credit product; otherwise expect clarification."}
+{"id":"es-imperfect-14","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{},"forbidden_args":["product_id"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"es-imperfect-15","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{},"forbidden_args":["product_id"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"pt-imperfect-01","tool":"get_account_summary","allowed_tool_args":[],"required_args":{},"forbidden_args":["product_id"]}
+{"id":"pt-imperfect-02","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{},"forbidden_args":["product_id"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"pt-imperfect-03","tool":"get_payment_status","allowed_tool_args":["product_id"],"review_note":"Confirm whether context identifies one eligible credit product; otherwise expect clarification."}
+{"id":"pt-imperfect-04","tool":"get_account_summary","allowed_tool_args":[],"required_args":{},"forbidden_args":["product_id"]}
+{"id":"pt-imperfect-05","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{},"forbidden_args":["product_id"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"pt-imperfect-06","tool":"get_account_summary","allowed_tool_args":[],"required_args":{},"forbidden_args":["product_id"]}
+{"id":"pt-imperfect-07","tool":"get_payment_status","allowed_tool_args":["product_id"],"review_note":"Confirm whether context identifies one eligible credit product; otherwise expect clarification."}
+{"id":"pt-imperfect-08","tool":"get_payment_status","allowed_tool_args":["product_id"],"review_note":"Confirm whether context identifies one eligible credit product; otherwise expect clarification."}
+{"id":"pt-imperfect-09","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{},"forbidden_args":["product_id"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"pt-imperfect-10","tool":"get_account_summary","allowed_tool_args":[],"required_args":{},"forbidden_args":["product_id"]}
+{"id":"pt-imperfect-11","tool":"get_account_summary","allowed_tool_args":[],"required_args":{},"forbidden_args":["product_id"]}
+{"id":"pt-imperfect-12","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{},"forbidden_args":["product_id"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"pt-imperfect-13","tool":"get_payment_status","allowed_tool_args":["product_id"],"review_note":"Confirm whether context identifies one eligible credit product; otherwise expect clarification."}
+{"id":"pt-imperfect-14","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{},"forbidden_args":["product_id"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"pt-imperfect-15","tool":"list_transactions","allowed_tool_args":["product_id","start_date","end_date","status","limit","transaction_type"],"required_args":{},"forbidden_args":["product_id"],"review_note":"Confirm required and forbidden filters against the wording."}
+{"id":"es-sensitive-01","tool":null,"allowed_tool_args":[]}
+{"id":"es-sensitive-02","tool":null,"allowed_tool_args":[]}
+{"id":"es-sensitive-03","tool":null,"allowed_tool_args":[]}
+{"id":"es-sensitive-04","tool":null,"allowed_tool_args":[]}
+{"id":"es-sensitive-05","tool":null,"allowed_tool_args":[]}
+{"id":"es-sensitive-06","tool":null,"allowed_tool_args":[]}
+{"id":"es-sensitive-07","tool":null,"allowed_tool_args":[]}
+{"id":"es-sensitive-08","tool":null,"allowed_tool_args":[]}
+{"id":"es-sensitive-09","tool":null,"allowed_tool_args":[]}
+{"id":"es-sensitive-10","tool":null,"allowed_tool_args":[]}
+{"id":"es-sensitive-11","tool":null,"allowed_tool_args":[]}
+{"id":"es-sensitive-12","tool":null,"allowed_tool_args":[]}
+{"id":"es-sensitive-13","tool":null,"allowed_tool_args":[]}
+{"id":"es-sensitive-14","tool":null,"allowed_tool_args":[]}
+{"id":"es-sensitive-15","tool":null,"allowed_tool_args":[]}
+{"id":"pt-sensitive-01","tool":null,"allowed_tool_args":[]}
+{"id":"pt-sensitive-02","tool":null,"allowed_tool_args":[]}
+{"id":"pt-sensitive-03","tool":null,"allowed_tool_args":[]}
+{"id":"pt-sensitive-04","tool":null,"allowed_tool_args":[]}
+{"id":"pt-sensitive-05","tool":null,"allowed_tool_args":[]}
+{"id":"pt-sensitive-06","tool":null,"allowed_tool_args":[]}
+{"id":"pt-sensitive-07","tool":null,"allowed_tool_args":[]}
+{"id":"pt-sensitive-08","tool":null,"allowed_tool_args":[]}
+{"id":"pt-sensitive-09","tool":null,"allowed_tool_args":[]}
+{"id":"pt-sensitive-10","tool":null,"allowed_tool_args":[]}
+{"id":"pt-sensitive-11","tool":null,"allowed_tool_args":[]}
+{"id":"pt-sensitive-12","tool":null,"allowed_tool_args":[]}
+{"id":"pt-sensitive-13","tool":null,"allowed_tool_args":[]}
+{"id":"pt-sensitive-14","tool":null,"allowed_tool_args":[]}
+{"id":"pt-sensitive-15","tool":null,"allowed_tool_args":[]}

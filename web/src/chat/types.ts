@@ -48,7 +48,7 @@ export type TraceReceipt = {
   trace_id: string
   trace_status: string
   read_back: true
-  sla_business_days: number
+  sla_business_days: number | null // from the country's source-backed rule; null when no rule covers it
 }
 
 /** One turn of the conversation as the API kept it: what the customer wrote and what was rendered for them. `at` is ms since the epoch. */
@@ -112,7 +112,7 @@ export type DemoTrace = {
   transaction_id: string
   queue: string
   status: string
-  sla_business_days: number
+  sla_business_days: number | null // null: no source-backed rule, never shown as 0
   created_at: number
 }
 

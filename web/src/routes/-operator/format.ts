@@ -29,6 +29,7 @@ const categoryKeys = {
   trace_unmatched: 'operator.category.trace_unmatched',
   trace_unverified: 'operator.category.trace_unverified',
   trace_review: 'operator.category.trace_review',
+  payment_rule_unavailable: 'operator.category.payment_rule_unavailable',
 } as const satisfies Record<string, MessageKey>
 
 const dispositionKeys = {

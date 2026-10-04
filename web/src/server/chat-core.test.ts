@@ -118,3 +118,16 @@ test('a reply without the kind of its options (an older API, a stored replay) ha
     assert.equal(kind.kind === 'clarify' && kind.options?.kind, 'movement')
   }
 })
+
+test('a trace receipt without a source-backed deadline keeps null and is never read as zero; a malformed deadline drops the receipt', () => {
+  const receipt = {
+    transaction_id: 'TXN-FIX0006', transaction_type: 'Transfer', transaction_date: '2024-01-10', amount: 150.5, currency: 'MXN',
+    movement_status: 'Pending', trace_id: 'TR-15B5F466D9D65B60', trace_status: 'open', read_back: true, sla_business_days: null,
+  }
+  assert.equal(parseReply({ ...reply, trace_receipt: receipt })?.trace_receipt?.sla_business_days, null)
+  assert.equal(parseReply({ ...reply, trace_receipt: { ...receipt, sla_business_days: 0 } })?.trace_receipt?.sla_business_days, 0)
+  assert.equal(parseReply({ ...reply, trace_receipt: { ...receipt, sla_business_days: 3 } })?.trace_receipt?.sla_business_days, 3)
+  for (const bad of [undefined, 'dos', -1, 1.5]) {
+    assert.equal(parseReply({ ...reply, trace_receipt: { ...receipt, sla_business_days: bad } })?.trace_receipt, undefined, String(bad))
+  }
+})

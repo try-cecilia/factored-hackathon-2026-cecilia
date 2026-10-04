@@ -133,7 +133,7 @@ class TraceReceipt(BaseModel):
     trace_id: str
     trace_status: str
     read_back: Literal[True]
-    sla_business_days: int
+    sla_business_days: int | None  # from the country's source-backed rule; None when no rule covers it, never a guessed 0
 
 
 class ChatResponse(BaseModel):

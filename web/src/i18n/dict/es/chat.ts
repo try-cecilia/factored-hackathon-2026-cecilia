@@ -49,6 +49,7 @@ export const chat = {
     readBackConfirmed: 'Pedido leído de vuelta y confirmado',
     nextStepOne: 'Próximo paso: Operaciones responderá en hasta 1 día hábil.',
     nextStepMany: 'Próximo paso: Operaciones responderá en hasta {n} días hábiles.',
+    nextStepNoDeadline: 'Próximo paso: Operaciones revisará el pedido. No hay un plazo de respuesta respaldado por una regla vigente para informarte.',
     types: { payment: 'Pago', transfer: 'Transferencia', deposit: 'Depósito' },
     status: { pending: 'Pendiente' },
     traceState: { open: 'Abierto' },

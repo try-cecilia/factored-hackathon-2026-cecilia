@@ -68,6 +68,7 @@ export const demo: Like<typeof es> = {
     sla: 'Prazo',
     slaOne: '1 dia útil',
     slaMany: '{n} dias úteis',
+    slaNone: 'Sem prazo respaldado',
     traceStatus: { open: 'Aberto' },
   },
 }

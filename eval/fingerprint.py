@@ -42,6 +42,7 @@ POLICY_GLOBS = (
     "eval/models/intent_clf.json",        # el modelo que se carga en ejecución (JSON, sin pickle)
     "eval/models/intent_clf.joblib",      # el clasificador que alimenta la guarda de escalación en ejecución
     "eval/models/intent_clf_meta.json",   # ...y su umbral
+    "agent/policy/payment_rules.json",    # el catálogo de reglas de pago por país: comisiones, plazos y su fuente
     "eval/run_system_eval.py",            # el juez (disposition_ok, seguridad, traspaso), los fallos simulados y el modelo ideal y adversarial
     "eval/categories.py",                 # cómo se agrupa y qué cuenta como resuelto o seguro por categoría
     "eval/failure_eval.py",               # el reporte por categoría de fallo

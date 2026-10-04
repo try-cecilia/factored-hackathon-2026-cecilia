@@ -10,6 +10,8 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any
 
+from agent.policy.payment_rules import deadline_business_days
+
 MSG = {
     "reauth": {"es": "Tu sesión expiró o no es válida. Por favor vuelve a iniciar sesión para continuar.",
                "pt": "Sua sessão expirou ou não é válida. Por favor, faça login novamente para continuar."},
@@ -17,6 +19,10 @@ MSG = {
                  "pt": "Entendo. Vou transferir seu caso para um atendente especializado com todos os detalhes, para você não precisar repetir."},
     "escalate_security": {"es": "Por seguridad no puedo mostrar esa información. Un agente revisará tu solicitud y te contactará.",
                           "pt": "Por segurança não posso mostrar essa informação. Um atendente vai revisar sua solicitação e entrar em contato."},
+    # A question about commissions, deadlines or thresholds: said the same whether a rule covers it or not, since its figures come
+    # from the rule catalog and not from SQL (agent/tools/account_tools.get_payment_conditions); an agent confirms them.
+    "payment_rule_unavailable": {"es": "No puedo confirmar esa condición por este canal: comisiones, plazos y límites te los confirma un agente. Ya derivé tu consulta.",
+                                 "pt": "Não posso confirmar essa condição por este canal: tarifas, prazos e limites são confirmados por um atendente. Já encaminhei sua consulta."},
     "escalate_unverified": {"es": "No pude registrar tu caso en este momento, así que no quedó derivado. Por favor comunícate con la línea de atención del banco y menciona el código {code}.",
                             "pt": "Não consegui registrar seu caso agora, então ele não foi encaminhado. Por favor, entre em contato com a central de atendimento do banco e informe o código {code}."},
     "abstain": {"es": "Eso está fuera de lo que puedo resolver en consultas de cuenta y pagos (saldos, movimientos, estado de pago y tipo de cambio). Te oriento al área correspondiente.",
@@ -31,10 +37,10 @@ MSG = {
                       "pt": "Encontrei esta movimentação pendente: {mov}. Quer que eu abra um pedido de rastreamento? Responda sim ou não."},
     "trace_choose": {"es": "Tienes varios movimientos pendientes: {opts}. ¿Cuál quieres rastrear? Responde con su número, o dime el monto o la fecha.",
                      "pt": "Você tem várias movimentações pendentes: {opts}. Qual quer rastrear? Responda com o número, ou me diga o valor ou a data."},
-    "trace_opened": {"es": "Listo: abrí el pedido de rastreo {tid} para la {mov}. Operaciones responde en hasta {sla} días hábiles; si te lo piden, el número es {tid}.",
-                     "pt": "Pronto: abri o pedido de rastreamento {tid} para a {mov}. A equipe de operações responde em até {sla} dias úteis; se pedirem, o número é {tid}."},
-    "trace_already_open": {"es": "Ya tienes abierto el pedido de rastreo {tid} para la {mov}. Operaciones responde en hasta {sla} días hábiles desde que se abrió.",
-                           "pt": "Você já tem aberto o pedido de rastreamento {tid} para a {mov}. A equipe de operações responde em até {sla} dias úteis desde a abertura."},
+    "trace_opened": {"es": "Listo: abrí el pedido de rastreo {tid} para la {mov}. Si te lo piden, el número es {tid}.",
+                     "pt": "Pronto: abri o pedido de rastreamento {tid} para a {mov}. Se pedirem, o número é {tid}."},
+    "trace_already_open": {"es": "Ya tienes abierto el pedido de rastreo {tid} para la {mov}.",
+                           "pt": "Você já tem aberto o pedido de rastreamento {tid} para a {mov}."},
     # A trace request that matched nothing, said only once the ticket reads back. "Nothing pending" only for a search the
     # customer did not narrow: with an amount, a date or a product, other movements may still be pending.
     "trace_unmatched": {"es": "No encontré transferencias, pagos ni depósitos pendientes en tus cuentas. Paso tu caso a un agente con todo el detalle para que revise el movimiento; no hace falta que lo repitas.",
@@ -47,8 +53,8 @@ MSG = {
     # rejection's note, which are internal; a resolution's message is the one text a person writes for the customer.
     "case_claimed": {"es": "Novedad de tu caso: un agente ya lo tomó y lo está revisando.",
                      "pt": "Novidade do seu caso: um atendente já assumiu e está analisando."},
-    "case_approved": {"es": "Novedad de tu caso: un agente aprobó el rastreo y abrió el pedido {tid}. Operaciones responde en hasta {sla} días hábiles.",
-                      "pt": "Novidade do seu caso: um atendente aprovou o rastreamento e abriu o pedido {tid}. A equipe de operações responde em até {sla} dias úteis."},
+    "case_approved": {"es": "Novedad de tu caso: un agente aprobó el rastreo y abrió el pedido {tid}.",
+                      "pt": "Novidade do seu caso: um atendente aprovou o rastreamento e abriu o pedido {tid}."},
     "case_rejected": {"es": "Novedad de tu caso: un agente lo revisó y no pudo abrir el rastreo. Si necesitas más ayuda, puedes comunicarte con la línea de atención del banco.",
                       "pt": "Novidade do seu caso: um atendente analisou e não conseguiu abrir o rastreamento. Se precisar de mais ajuda, entre em contato com a central de atendimento do banco."},
     # A rejected ticket that carried no trace: nothing was asked to be opened, so nothing is said about one.
@@ -109,8 +115,35 @@ def case_update(status: str, lang: str, trace: dict | None = None, message: str 
     entry = MSG.get(key)
     if entry is None:
         return None
-    return entry[lang].format(tid=(trace or {}).get("trace_id", ""), sla=(trace or {}).get("sla_business_days", ""),
-                              message=message or "", result=RESOLVE_RESULT[result][lang] if key.startswith("case_resolved_result") else "")
+    line = entry[lang].format(tid=(trace or {}).get("trace_id", ""), message=message or "",
+                              result=RESOLVE_RESULT[result][lang] if key.startswith("case_resolved_result") else "")
+    return line + trace_service_text(trace.get("service_rules", []), lang) if trace and status == "approved" else line
+
+
+# The one unit a trace's deadline may have (agent/policy/payment_rules.validate_catalog), in words: (singular, plural) per language.
+BUSINESS_DAYS = {"es": ("día hábil", "días hábiles"), "pt": ("dia útil", "dias úteis")}
+
+
+def trace_service_text(rules: list[dict], lang: str) -> str:
+    """Customer-facing trace deadline only from a versioned snapshot with source metadata, and only the one the receipt carries
+    too (`payment_rules.deadline_business_days`): a deadline of zero is a deadline; anything else says nothing."""
+    es = lang == "es"
+    lines = []
+    for rule in rules or []:
+        days = deadline_business_days([rule])
+        if days is None or not all(rule.get(k) for k in ("version", "source_issuer", "source_url", "source_checked_at", "valid_from")):
+            continue
+        unit = BUSINESS_DAYS["es" if es else "pt"][0 if days == 1 else 1]
+        amount = days
+        start, checked = (fmt_date(date.fromisoformat(v) if isinstance(v, str) else v)
+                          for v in (rule["valid_from"], rule["source_checked_at"]))  # the snapshot keeps ISO dates
+        if es:
+            lines.append(f"Plazo respaldado: {amount} {unit}. Regla v{rule['version']}, vigente desde {start}; "
+                         f"fuente {rule['source_issuer']} (consultada {checked}): {rule['source_url']}.")
+        else:
+            lines.append(f"Prazo respaldado: {amount} {unit}. Regra v{rule['version']}, vigente desde {start}; "
+                         f"fonte {rule['source_issuer']} (consultada {checked}): {rule['source_url']}.")
+    return "\n" + "\n".join(lines) if lines else ""
 
 
 _COUNTRY_NUMBER_FORMAT = {

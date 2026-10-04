@@ -39,8 +39,10 @@ export function traceReceiptFacts(receipt: TraceReceipt, locale: Locale, t: Tran
     { label: t('chat.traceReceipt.traceStatus'), value: traceStatuses[receipt.trace_status] ?? receipt.trace_status },
     { label: t('chat.traceReceipt.readBack'), value: t('chat.traceReceipt.readBackConfirmed') },
   ]
-  const nextStep = t(receipt.sla_business_days === 1
-    ? 'chat.traceReceipt.nextStepOne'
-    : 'chat.traceReceipt.nextStepMany', { n: receipt.sla_business_days })
+  // No source-backed rule, no deadline: the receipt says so instead of promising one.
+  const nextStep = receipt.sla_business_days === null
+    ? t('chat.traceReceipt.nextStepNoDeadline')
+    : t(receipt.sla_business_days === 1 ? 'chat.traceReceipt.nextStepOne' : 'chat.traceReceipt.nextStepMany',
+      { n: receipt.sla_business_days })
   return { facts, nextStep }
 }

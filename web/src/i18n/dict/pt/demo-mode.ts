@@ -76,6 +76,8 @@ export const demoMode: Like<typeof source> = {
       caption: 'Rastreios que esta sessão pediu',
       columns: { trace: 'Rastreio', movement: 'Movimentação', status: 'Status', sla: 'Prazo' },
       sla: '{days} dias úteis',
+      slaOne: '1 dia útil',
+      slaNone: 'Sem prazo respaldado',
       empty: 'Esta sessão ainda não pediu rastreios.',
     },
     expired: {

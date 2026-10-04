@@ -20,6 +20,7 @@ from agent.tools.errors import (
     MissingSlot,
     NotApplicable,
     PermissionDenied,
+    PaymentRuleUnavailable,
     ResourceNotFound,
 )
 
@@ -94,6 +95,9 @@ def after_tool(error: Exception | None) -> Decision | None:
         return Decision(Disposition.ESCALATE, reason("ownership_check_failed"),
                         "security", open_questions=[question("review_unauthorized_access")],
                         rule="tool_error:PermissionDenied")
+    if isinstance(error, PaymentRuleUnavailable):
+        return Decision(Disposition.ESCALATE, reason("payment_rule_unavailable"), "payment_rule_unavailable",
+                        open_questions=[question("confirm_payment_condition")], rule="tool_error:PaymentRuleUnavailable")
     if isinstance(error, DataUnavailable):
         unavailable = reason("data_unavailable", str(error), field=error.field) if error.field else reason("data_unavailable_unspecified", str(error))
         return Decision(Disposition.ESCALATE, unavailable, "data_unavailable",
@@ -101,6 +105,15 @@ def after_tool(error: Exception | None) -> Decision | None:
                         rule="tool_error:DataUnavailable")
     return Decision(Disposition.ESCALATE, reason("tool_failure", type(error).__name__, error_type=type(error).__name__), "tool_failure",
                     open_questions=[question("manual_check")], rule=f"tool_error:{type(error).__name__}")
+
+
+def payment_rule_for_agent(result: dict) -> Decision:
+    """A reviewed rule covers the condition the customer asked about. Its figures come from the catalog, not from SQL, so the
+    customer is not told them: an agent confirms them, with the rule on the ticket (the same category and reply as no rule)."""
+    rule = result["rules"][0]
+    return Decision(Disposition.ESCALATE, reason("payment_rule_for_agent", rule_id=rule["rule_id"], version=rule["version"]),
+                    "payment_rule_unavailable", open_questions=[question("confirm_payment_condition")],
+                    rule="payment_rule_for_agent")
 
 
 def no_tool_answer(reading: intent_guard.IntentReading, text: str) -> Decision:
