@@ -403,8 +403,6 @@ tests/       hermetic suite (`make test`) + fixtures
 
 ## Status
 
-- Status of the ongoing integration (branches, what was tested, how to reproduce it and what is missing):
-  [`docs/estado-integracion.md`](docs/estado-integracion.md).
 - Built and evaluated end to end, offline and with live models, on the organizer's warehouse.
   CI runs the hermetic suite and verifies the classifier report. Every classifier selection and evaluation
   is logged in MLflow: model, effort, prompt hash, data hashes, code version

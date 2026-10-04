@@ -70,8 +70,7 @@ other case) and must stay off in any real environment.
 
 ## 2. Operator identity
 
-**Today.** `agent/session/operators.py`, `OperatorDirectory`. Design in
-`docs/superpowers/specs/2026-09-29-identidad-operador-design.md`.
+**Today.** `agent/session/operators.py`, `OperatorDirectory`.
 
 **Current contract.**
 
