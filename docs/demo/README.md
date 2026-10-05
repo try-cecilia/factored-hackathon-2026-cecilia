@@ -8,7 +8,7 @@ The approved delivery is in [final-demo-v10-2026-10-04](final-demo-v10-2026-10-0
 - [Exact script](final-demo-v10-2026-10-04/script.json), [deployment check](final-demo-v10-2026-10-04/deployment-check.json), [video validation](final-demo-v10-2026-10-04/validation.json) and [artifact hashes](final-demo-v10-2026-10-04/artifact-manifest.json).
 
 Demo: https://cecil-ai.onrender.com. Public repository: https://github.com/try-cecilia/factored-hackathon-2026-cecilia.
-The approved media retain the repository placeholder from recording time. Customer data is synthetic; the outage is deliberately simulated.
+The presentation now links the public repository; the video's closing still shows the placeholder from recording time. Customer data is synthetic; the outage is deliberately simulated.
 Only the final delivery is retained. Earlier pitch exports and the legacy silent recording have been removed.
 
 ## UI development evidence

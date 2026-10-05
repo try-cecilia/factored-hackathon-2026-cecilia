@@ -2,12 +2,12 @@
   "created_at": "2026-10-05T02:09:35.906293+00:00",
   "duration_seconds": 163.2,
   "revision": "v10 removes the production checklist, adds measured resolution lift, handoff completeness and evaluation latency, and preserves continuous mastered audio and gentle motion",
-  "public_repository_url": null,
+  "public_repository_url": "https://github.com/try-cecilia/factored-hackathon-2026-cecilia",
   "files": [
     {
       "path": "README.md",
-      "bytes": 2831,
-      "sha256": "e90e783a28d388def1530b2ebda3a75c19c4c32a91ea3c10e9d2403072e17afa"
+      "bytes": 2977,
+      "sha256": "aa82d9450145038958d240c38f28450639fdcabc51e5b106279b68c9c812ebc2"
     },
     {
       "path": "audio-boundary-check.json",
@@ -36,13 +36,13 @@
     },
     {
       "path": "cecilia-presentation.html",
-      "bytes": 412177,
-      "sha256": "312af9cdc0bf1e72161bb1f53dbdec6f9b4a396e1d5476cfa24d4b177083fac8"
+      "bytes": 412290,
+      "sha256": "09c75f718f35d318434eabe3abb493e026fdc3920d77f855b4caaace2aa64170"
     },
     {
       "path": "cecilia-presentation.pdf",
-      "bytes": 461983,
-      "sha256": "b23ceec6ac8142c5ab534f0f5d7efdab9cf5668488d83ad077d8ae0b082a289a"
+      "bytes": 462951,
+      "sha256": "47f7f4ea9df9c7708e986bf5b9bb7910b5a695ec4d8629c5673cf7fe5676268b"
     },
     {
       "path": "cecilia-remotion-project.zip",

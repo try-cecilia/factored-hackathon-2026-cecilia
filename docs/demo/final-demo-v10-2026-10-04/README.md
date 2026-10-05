@@ -20,4 +20,4 @@ The app recordings and deployment verification are unchanged from V8, captured o
 
 The [six-slide PDF](cecilia-presentation.pdf), [editable HTML](cecilia-presentation.html) and [slide sources](slide-sources.json) are included here. Only this final delivery is retained.
 
-Public repository: https://github.com/try-cecilia/factored-hackathon-2026-cecilia. The approved media retain the earlier repository placeholder. The video and presentation are unchanged from the approved exports.
+Public repository: https://github.com/try-cecilia/factored-hackathon-2026-cecilia. On 5 October the presentation's slide 6 replaced its "Public repository: pending" placeholder with this URL and a link, in both the PDF and the HTML; slides 1 to 5 are pixel-identical to the approved export. The video is unchanged and its closing still shows the placeholder.

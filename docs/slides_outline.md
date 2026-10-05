@@ -1,7 +1,7 @@
 # Slide outline (a cover and 5 slides)
 
 Final exports: [PDF](demo/final-demo-v10-2026-10-04/cecilia-presentation.pdf) and
-[editable HTML](demo/final-demo-v10-2026-10-04/cecilia-presentation.html). Public repository: https://github.com/try-cecilia/factored-hackathon-2026-cecilia. The approved deck retains its earlier placeholder.
+[editable HTML](demo/final-demo-v10-2026-10-04/cecilia-presentation.html). Public repository: https://github.com/try-cecilia/factored-hackathon-2026-cecilia, also linked on the deck's last slide.
 The deck condenses this outline into six slides; detailed supporting figures remain here.
 
 Evaluation results are measured; dollar costs use the reports' assumed September 2026 list prices. Sources: the offline ones come from `eval/reports/SYSTEM_EVAL.md` and
