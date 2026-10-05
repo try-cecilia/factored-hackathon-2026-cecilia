@@ -315,10 +315,12 @@ python ops/export_public.py . ../factored-hackathon-2026-<team> <redactions-file
   live console), and replaces the strings in the redactions file (kept
   outside any repository): the organizer's bucket name and account id,
   which early commits carried, and the same console keys.
-- It removes every PDF from every commit. The organizer's documents were
-  committed once, and the complete data dictionary carries their AWS keys as
-  compressed text, which a scan by shape cannot read; a PDF that survives
-  fails the export. `.gitignore` keeps new ones out.
+- It removes every PDF from every commit except the team's deck
+  (`KEPT_PDF`, generated from the editable HTML next to it, which the scan
+  reads). The organizer's documents were committed once, and the complete data
+  dictionary carries their AWS keys as compressed text, which a scan by shape
+  cannot read; any other PDF that survives fails the export. `.gitignore`
+  keeps new ones out.
 - It scans every blob of every commit by shape (keys, tokens, JWTs, private
   keys, credential assignments, literal fallbacks of environment variables,
   S3 URIs, 12-digit numbers, real dataset ids) and fails if a redacted value

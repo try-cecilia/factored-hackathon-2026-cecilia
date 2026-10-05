@@ -14,7 +14,7 @@ outcome (run, case, type) are read from the report (`_live_runs`).
 The page's links to code are written as [`symbol`](../path.py#L123). The check parses that file and finds where `symbol` is
 defined in its own scope (a def, a class or an assignment at the top of the module; `Class.method` only inside that class),
 and fails if the line number is not that one or the symbol is not there. Any other relative link must point to a file that
-exists, except the files the public export removes (`ops/export_public.py`, `REMOVE_GLOBS`): the per-case reports. `--write`
+exists, except the files the public export removes (`ops/export_public.py`, `removed`): the per-case reports. `--write`
 moves the line numbers to where the definitions are now, and exits 1 only if something it cannot fix is left.
 
 This module is not part of what the evaluation measures: it only reads reports, and it is outside the fingerprint.
@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import argparse
 import ast
-import fnmatch
 import json
 import re
 import sys
@@ -270,12 +269,12 @@ def _fix_code_links(text: str, page: Path, problems: list[str]) -> str:
 
 def _removed_by_export(path: Path, root: Path = ROOT) -> bool:
     """Whether the public export removes this file (it is then missing there by design, and only there)."""
-    from ops.export_public import REMOVE_GLOBS
+    from ops.export_public import removed
     try:
         rel = path.relative_to(root).as_posix()
     except ValueError:
         return False
-    return any(fnmatch.fnmatch(rel, glob) for glob in REMOVE_GLOBS)
+    return removed(rel)
 
 
 def _missing_files(text: str, page: Path, root: Path = ROOT) -> list[str]:

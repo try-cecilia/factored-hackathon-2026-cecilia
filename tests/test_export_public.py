@@ -1,14 +1,7 @@
-"""What the public export removes from every commit (ops/export_public.py), matched as git-filter-repo's --path-glob
-matches it: fnmatch, whose * crosses "/"."""
+"""What the public export removes from every commit (ops/export_public.py), matched as git-filter-repo matches it."""
 from __future__ import annotations
 
-from fnmatch import fnmatch
-
-from ops.export_public import REMOVE_GLOBS, found
-
-
-def removed(path: str) -> bool:
-    return any(fnmatch(path, glob) for glob in REMOVE_GLOBS)
+from ops.export_public import KEPT_PDF, found, removed
 
 
 def test_every_file_with_human_messages_or_customer_ids_is_removed_at_the_root_and_under_any_folder():
@@ -23,6 +16,14 @@ def test_every_file_with_human_messages_or_customer_ids_is_removed_at_the_root_a
 def test_the_team_console_keys_are_removed():
     """The scan by shape does not see KEY=value without quotes, so only the path keeps these keys out."""
     assert removed("CLAVES_CONSOLA.md") and removed("x-payments-agent/CLAVES_CONSOLA.md")
+
+
+def test_every_pdf_but_the_team_deck_is_removed():
+    """The organizer's PDFs carry their AWS keys as compressed text the scan cannot read; the deck is the team's own."""
+    for path in ("LATAM_Bank_Complete_Data_Dictionary (1).pdf", "x-payments-agent/docs/dictionary.pdf", "docs/OTHER.PDF",
+                 "docs/demo/final-demo-v10-2026-10-04/other.pdf", f"x-payments-agent/{KEPT_PDF}", f"{KEPT_PDF}.pdf"):
+        assert removed(path), path
+    assert not removed(KEPT_PDF)
 
 
 def test_only_the_invented_ids_pass_the_real_id_scan():

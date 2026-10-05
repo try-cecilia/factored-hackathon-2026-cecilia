@@ -12,9 +12,10 @@
   rebuilt with `make workload eval`; the human set's report (eval/reports/HUMAN_SET.md) stays.
 - Removes CLAVES_CONSOLA.md from every commit: the team's read and operator keys for the live console, which the scan
   below does not recognize by shape (KEY=value, no quotes). The redactions file carries the same keys as a second net.
-- Removes every PDF from every commit: the organizer's documents were committed once, and the complete data
-  dictionary carries their AWS keys as compressed text, which the scan below cannot read. A PDF that survives
-  fails the export.
+- Removes every PDF from every commit but the team's own deck (KEPT_PDF, written by ReportLab from the editable HTML
+  next to it, which the scan reads): the organizer's documents were committed once, and the complete data
+  dictionary carries their AWS keys as compressed text, which the scan below cannot read. Any other PDF that
+  survives fails the export.
 - Replaces the strings listed in REDACTIONS_FILE (git filter-repo format, "value==>***REMOVED***"), kept outside
   any repository: the organizer's bucket name and account id, which early commits carried, and the links to
   their documents.
@@ -31,13 +32,24 @@ import os
 import re
 import subprocess
 import sys
+from fnmatch import fnmatch
 from pathlib import Path
 
 # Each pattern also runs under any folder ("*/" prefix, fnmatch's * crosses "/"): the history carries these files at
 # the root and under x-payments-agent/, where the subtree import put them before the move to the root.
 REMOVE_GLOBS = [p for g in ("docs/demo/demo_app.webm", "eval/workload/*",  # by pattern: a new file too
                             "eval/reports/system_eval*.json", "eval/reports/human_set_agreement.json", "CLAVES_CONSOLA.md")
-                for p in (g, "*/" + g)] + ["*.pdf"]
+                for p in (g, "*/" + g)]
+KEPT_PDF = "docs/demo/final-demo-v10-2026-10-04/cecilia-presentation.pdf"
+REMOVE_PDFS = rf"(?i)^(?!{re.escape(KEPT_PDF)}$).*\.pdf$"  # git-filter-repo's --path-regex, run with re.search
+
+
+def removed(path: str) -> bool:
+    """Whether the export drops this path from every commit, matched the way git-filter-repo matches it (fnmatch for
+    --path-glob, whose * crosses "/"; re.search for --path-regex)."""
+    return any(fnmatch(path, g) for g in REMOVE_GLOBS) or re.search(REMOVE_PDFS, path) is not None
+
+
 SHAPES = {
     "aws_access_key": r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b",
     "anthropic_key": r"sk-ant-[A-Za-z0-9_-]{10,}",
@@ -74,7 +86,8 @@ def main(src: Path, target: Path, redactions: Path) -> int:
         if "/" in ref and not ref.endswith("/HEAD"):
             subprocess.run(["git", "branch", "--quiet", ref.split("/", 1)[1], ref], cwd=target, capture_output=True)
     filtered = subprocess.run([os.environ.get("GIT_FILTER_REPO", "git-filter-repo"), "--force", "--invert-paths",
-                               *[a for g in REMOVE_GLOBS for a in ("--path-glob", g)], "--replace-text", str(redactions)],
+                               *[a for g in REMOVE_GLOBS for a in ("--path-glob", g)], "--path-regex", REMOVE_PDFS,
+                               "--replace-text", str(redactions)],
                               cwd=target, capture_output=True, text=True, encoding="utf-8", errors="replace")
     if filtered.returncode:  # say why: the history was not rewritten, so nothing here may be published
         sys.exit(f"git-filter-repo failed (exit {filtered.returncode}); {target} must not be published:\n"
@@ -105,7 +118,7 @@ def main(src: Path, target: Path, redactions: Path) -> int:
         text = git("cat-file", "-p", sha, cwd=target)
         survived += sum(v in text for v in redacted)
     print(f"redacted values still present: {survived}")
-    pdfs = sorted({path for path, _ in blobs.values() if path.lower().endswith(".pdf")})
+    pdfs = sorted({path for path, _ in blobs.values() if path.lower().endswith(".pdf") and path != KEPT_PDF})
     print(f"PDF files still present: {len(pdfs)}" + "".join(f"\n    {p}" for p in pdfs))
     # A real dataset id is organizer row-level data: the files that carry them are removed above, so one left means a
     # pattern missed a copy (as the x-payments-agent/ one did) and nothing here may be published.

@@ -1,7 +1,6 @@
 """docs/EVIDENCE.md says what the reports and the code say (eval/evidence_table.py)."""
 from __future__ import annotations
 
-import fnmatch
 import json
 import shutil
 from pathlib import Path
@@ -9,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from eval import evidence_table
-from ops.export_public import REMOVE_GLOBS
+from ops.export_public import removed as export_removes
 
 PER_CASE_REPORTS = pytest.mark.skipif(not Path("eval/reports/system_eval.json").exists(),
                                       reason="per-case reports are not in the public copy")
@@ -35,7 +34,7 @@ def test_every_other_link_of_the_page_points_at_a_file_or_at_a_report_the_public
 
 
 def test_in_the_public_copy_only_the_reports_the_export_removes_are_missing_and_the_links_still_pass(tmp_path):
-    """The page and every file it links, copied the way ops/export_public.py leaves them (REMOVE_GLOBS applied)."""
+    """The page and every file it links, copied the way ops/export_public.py leaves them (`export_removes` applied)."""
     root = evidence_table.ROOT
     removed = []
     for rel in {*evidence_table.FILE_LINK.findall(_page_text()), *(m[1] for m in evidence_table.CODE_LINK.findall(_page_text()))}:
@@ -43,7 +42,7 @@ def test_in_the_public_copy_only_the_reports_the_export_removes_are_missing_and_
             continue
         source = (evidence_table.PAGE.parent / rel).resolve()
         target = tmp_path / source.relative_to(root)
-        if any(fnmatch.fnmatch(source.relative_to(root).as_posix(), g) for g in REMOVE_GLOBS):
+        if export_removes(source.relative_to(root).as_posix()):
             removed.append(source.name)  # by its name: in the public copy itself it is already gone
         elif not source.exists():
             continue  # the other link test reports it
