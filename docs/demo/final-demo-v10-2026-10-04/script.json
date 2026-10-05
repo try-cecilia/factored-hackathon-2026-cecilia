@@ -1,0 +1,100 @@
+[
+  {
+    "id": "intro",
+    "seconds": 17.1,
+    "type": "intro",
+    "chapter": "Cecilia",
+    "title": "Account and payment answers, from the bank's own data.",
+    "text": "Cecilia answers account and payment questions for Spanish- and Portuguese-speaking bank customers, straight from verified bank data. Customers check a balance or chase a pending transfer in their own language, and see where each figure came from. Anything sensitive goes to a person."
+  },
+  {
+    "id": "problem",
+    "seconds": 12.0,
+    "type": "problem",
+    "chapter": "Why it matters",
+    "title": "More than a third of contacts are account and payment questions.",
+    "text": "These everyday questions make up thirty-five percent of contacts in the bank's synthetic history. Customers queue for about two minutes, and satisfaction sits at two point nine out of five."
+  },
+  {
+    "id": "architecture",
+    "seconds": 14.8,
+    "type": "promise",
+    "chapter": "How it stays honest",
+    "title": "The model chooses. The code checks.",
+    "text": "But nobody wants a model inventing a balance. In Cecilia, the model only chooses which lookup to run. Code checks ownership, reads the bank record and writes the reply. Customer records never enter the model request."
+  },
+  {
+    "id": "balance",
+    "seconds": 12.0,
+    "type": "demo",
+    "chapter": "Espa\u00f1ol \u00b7 Balance",
+    "title": "Every answer shows its source.",
+    "clip": "balance.mp4",
+    "tag": "ES",
+    "text": "Here's how that looks in Spanish. Ask for a balance, and Cecilia returns the recorded balances with their source and date. Open Why to see the lookup the model chose and the checks the code ran."
+  },
+  {
+    "id": "portuguese",
+    "seconds": 9.0,
+    "type": "demo",
+    "chapter": "Portugu\u00eas \u00b7 Card payments",
+    "title": "Same checks, em portugu\u00eas.",
+    "clip": "portuguese.mp4",
+    "tag": "PT",
+    "text": "Portuguese gets the same treatment. Ask about late card payments, and the reply comes back in Portuguese, with the same source and date."
+  },
+  {
+    "id": "trace",
+    "seconds": 18.3,
+    "type": "demo",
+    "chapter": "Espa\u00f1ol \u00b7 Pending transfer",
+    "title": "Nothing happens without a yes.",
+    "clip": "trace.mp4",
+    "tag": "ES",
+    "text": "Those were lookups. For a pending transfer, Cecilia finds the movement and asks before acting. Only after a clear yes does code open a trace and read it back from the service. The receipt says the trace is open, not that the money arrived. The bank console shows the same request."
+  },
+  {
+    "id": "handoff",
+    "seconds": 18.1,
+    "type": "demo",
+    "chapter": "Human handoff",
+    "title": "Sensitive cases reach a person.",
+    "clip": "handoff.mp4",
+    "tag": "OPS",
+    "text": "Some cases belong with a person. An unrecognized charge goes to the bank before any model call. In that same console, the operator gets verified evidence, open questions and a suggested next step, then takes the case. Cecilia doesn't block cards or decide disputes."
+  },
+  {
+    "id": "safety",
+    "seconds": 15.4,
+    "type": "demo",
+    "chapter": "Privacy + fallback",
+    "title": "Someone else's data stays hidden.",
+    "clip": "safety.mp4",
+    "tag": "SAFE",
+    "text": "Nor will it hand over someone else's data. Ask for another customer's balance, and it opens a security case. When we deliberately simulate a model outage, verified balances keep working, and anything that needs the model goes to a person."
+  },
+  {
+    "id": "evidence",
+    "seconds": 23.4,
+    "type": "evidence",
+    "chapter": "Measured",
+    "title": "Tested on 548 cases we wrote.",
+    "text": "A demo only shows the cases we picked. So we wrote five hundred forty-eight tests in Spanish and Portuguese. On the two hundred thirty-eight in scope, Cecilia on Sonnet five resolved ninety-seven point one percent safely, versus seventy point two for keywords. Three runs, zero unsafe outcomes, though the first run missed one required escalation."
+  },
+  {
+    "id": "impact",
+    "seconds": 20,
+    "type": "impact",
+    "chapter": "What the results mean",
+    "title": "More useful answers. Better handoffs.",
+    "text": "That's twenty-six point nine percentage points above keywords. All one hundred seventy-one handoffs included the required context for an operator. Speed mattered too: half of responses took under one point five seconds, and ninety-five percent took under three in that test run."
+  },
+  {
+    "id": "closing",
+    "seconds": 7,
+    "type": "closing",
+    "chapter": "Try Cecilia",
+    "title": "Verified answers. A person when it matters.",
+    "text": "The deployed demo passed the seven scenarios we selected. Try the customer app and the bank console today."
+  }
+]

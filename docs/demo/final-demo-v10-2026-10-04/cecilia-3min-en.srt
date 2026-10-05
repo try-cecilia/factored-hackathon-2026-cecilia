@@ -1,0 +1,195 @@
+1
+00:00:00,120 --> 00:00:03,649
+Cecilia answers account and payment questions for Spanish- and
+
+2
+00:00:03,742 --> 00:00:07,852
+Portuguese-speaking bank customers, straight from verified bank data.
+
+3
+00:00:08,177 --> 00:00:11,974
+Customers check a balance or chase a pending transfer in their own language,
+
+4
+00:00:12,148 --> 00:00:14,214
+and see where each figure came from.
+
+5
+00:00:14,539 --> 00:00:16,884
+Anything sensitive goes to a person.
+
+6
+00:00:17,045 --> 00:00:21,027
+These everyday questions make up thirty-five percent of contacts in the
+
+7
+00:00:21,062 --> 00:00:22,664
+bank's synthetic history.
+
+8
+00:00:22,989 --> 00:00:27,122
+Customers queue for about two minutes, and satisfaction sits at two point
+
+9
+00:00:27,192 --> 00:00:28,655
+nine out of five.
+
+10
+00:00:28,815 --> 00:00:31,392
+But nobody wants a model inventing a balance.
+
+11
+00:00:31,636 --> 00:00:35,351
+In Cecilia, the model only chooses which lookup to run.
+
+12
+00:00:35,595 --> 00:00:39,554
+Code checks ownership, reads the bank record and writes the reply.
+
+13
+00:00:39,833 --> 00:00:43,211
+Customer records never enter the model request.
+
+14
+00:00:43,371 --> 00:00:45,171
+Here's how that looks in Spanish.
+
+15
+00:00:45,414 --> 00:00:49,431
+Ask for a balance, and Cecilia returns the recorded balances with their
+
+16
+00:00:49,489 --> 00:00:50,581
+source and date.
+
+17
+00:00:50,906 --> 00:00:55,027
+Open Why to see the lookup the model chose and the checks the code ran.
+
+18
+00:00:55,188 --> 00:00:56,953
+Portuguese gets the same treatment.
+
+19
+00:00:57,278 --> 00:01:01,399
+Ask about late card payments, and the reply comes back in Portuguese, with
+
+20
+00:01:01,434 --> 00:01:03,454
+the same source and date.
+
+21
+00:01:03,614 --> 00:01:04,729
+Those were lookups.
+
+22
+00:01:04,938 --> 00:01:09,802
+For a pending transfer, Cecilia finds the movement and asks before acting.
+
+23
+00:01:10,127 --> 00:01:14,272
+Only after a clear yes does code open a trace and read it back from the
+
+24
+00:01:14,307 --> 00:01:14,899
+service.
+
+25
+00:01:15,178 --> 00:01:18,545
+The receipt says the trace is open, not that the money arrived.
+
+26
+00:01:18,870 --> 00:01:21,540
+The bank console shows the same request.
+
+27
+00:01:21,700 --> 00:01:23,767
+Some cases belong with a person.
+
+28
+00:01:24,045 --> 00:01:27,679
+An unrecognized charge goes to the bank before any model call.
+
+29
+00:01:27,958 --> 00:01:32,346
+In that same console, the operator gets verified evidence, open questions
+
+30
+00:01:32,404 --> 00:01:35,899
+and a suggested next step, then takes the case.
+
+31
+00:01:36,108 --> 00:01:39,441
+Cecilia doesn't block cards or decide disputes.
+
+32
+00:01:39,600 --> 00:01:42,096
+Nor will it hand over someone else's data.
+
+33
+00:01:42,421 --> 00:01:45,974
+Ask for another customer's balance, and it opens a security case.
+
+34
+00:01:46,253 --> 00:01:50,699
+When we deliberately simulate a model outage, verified balances keep
+
+35
+00:01:50,769 --> 00:01:54,600
+working, and anything that needs the model goes to a person.
+
+36
+00:01:54,760 --> 00:01:57,245
+A demo only shows the cases we picked.
+
+37
+00:01:57,570 --> 00:02:01,517
+So we wrote five hundred forty-eight tests in Spanish and Portuguese.
+
+38
+00:02:01,796 --> 00:02:06,150
+On the two hundred thirty-eight in scope, Cecilia on Sonnet five resolved
+
+39
+00:02:06,301 --> 00:02:10,469
+ninety-seven point one percent safely, versus seventy point two for
+
+40
+00:02:10,527 --> 00:02:11,247
+keywords.
+
+41
+00:02:11,572 --> 00:02:16,483
+Three runs, zero unsafe outcomes, though the first run missed one required
+
+42
+00:02:16,552 --> 00:02:17,795
+escalation.
+
+43
+00:02:17,954 --> 00:02:21,240
+That's twenty-six point nine percentage points above keywords.
+
+44
+00:02:21,565 --> 00:02:25,500
+All one hundred seventy-one handoffs included the required context for an
+
+45
+00:02:25,559 --> 00:02:26,290
+operator.
+
+46
+00:02:26,569 --> 00:02:31,410
+Speed mattered too: half of responses took under one point five seconds, and
+
+47
+00:02:31,491 --> 00:02:34,765
+ninety-five percent took under three in that test run.
+
+48
+00:02:34,925 --> 00:02:38,257
+The deployed demo passed the seven scenarios we selected.
+
+49
+00:02:38,501 --> 00:02:41,194
+Try the customer app and the bank console today.

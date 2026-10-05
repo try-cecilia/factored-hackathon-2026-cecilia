@@ -1,0 +1,247 @@
+[
+  {
+    "start": 0.12,
+    "end": 3.649,
+    "text": "Cecilia answers account and payment questions for Spanish- and"
+  },
+  {
+    "start": 3.742,
+    "end": 7.852,
+    "text": "Portuguese-speaking bank customers, straight from verified bank data."
+  },
+  {
+    "start": 8.177,
+    "end": 11.973999999999998,
+    "text": "Customers check a balance or chase a pending transfer in their own language,"
+  },
+  {
+    "start": 12.148,
+    "end": 14.213999999999999,
+    "text": "and see where each figure came from."
+  },
+  {
+    "start": 14.539,
+    "end": 16.884,
+    "text": "Anything sensitive goes to a person."
+  },
+  {
+    "start": 17.044812500000003,
+    "end": 21.026812500000002,
+    "text": "These everyday questions make up thirty-five percent of contacts in the"
+  },
+  {
+    "start": 21.061812500000002,
+    "end": 22.663812500000002,
+    "text": "bank's synthetic history."
+  },
+  {
+    "start": 22.9888125,
+    "end": 27.121812500000004,
+    "text": "Customers queue for about two minutes, and satisfaction sits at two point"
+  },
+  {
+    "start": 27.191812500000005,
+    "end": 28.654812500000002,
+    "text": "nine out of five."
+  },
+  {
+    "start": 28.81479166666667,
+    "end": 31.39179166666667,
+    "text": "But nobody wants a model inventing a balance."
+  },
+  {
+    "start": 31.635791666666673,
+    "end": 35.35079166666667,
+    "text": "In Cecilia, the model only chooses which lookup to run."
+  },
+  {
+    "start": 35.59479166666667,
+    "end": 39.55379166666667,
+    "text": "Code checks ownership, reads the bank record and writes the reply."
+  },
+  {
+    "start": 39.83279166666667,
+    "end": 43.21079166666667,
+    "text": "Customer records never enter the model request."
+  },
+  {
+    "start": 43.371166666666674,
+    "end": 45.17116666666667,
+    "text": "Here's how that looks in Spanish."
+  },
+  {
+    "start": 45.414166666666674,
+    "end": 49.43116666666668,
+    "text": "Ask for a balance, and Cecilia returns the recorded balances with their"
+  },
+  {
+    "start": 49.48916666666668,
+    "end": 50.581166666666675,
+    "text": "source and date."
+  },
+  {
+    "start": 50.90616666666668,
+    "end": 55.02716666666667,
+    "text": "Open Why to see the lookup the model chose and the checks the code ran."
+  },
+  {
+    "start": 55.187604166666674,
+    "end": 56.952604166666674,
+    "text": "Portuguese gets the same treatment."
+  },
+  {
+    "start": 57.27760416666668,
+    "end": 61.39860416666667,
+    "text": "Ask about late card payments, and the reply comes back in Portuguese, with"
+  },
+  {
+    "start": 61.433604166666676,
+    "end": 63.45360416666667,
+    "text": "the same source and date."
+  },
+  {
+    "start": 63.613916666666675,
+    "end": 64.72891666666668,
+    "text": "Those were lookups."
+  },
+  {
+    "start": 64.93791666666668,
+    "end": 69.80191666666667,
+    "text": "For a pending transfer, Cecilia finds the movement and asks before acting."
+  },
+  {
+    "start": 70.12691666666667,
+    "end": 74.27191666666667,
+    "text": "Only after a clear yes does code open a trace and read it back from the"
+  },
+  {
+    "start": 74.30691666666668,
+    "end": 74.89891666666668,
+    "text": "service."
+  },
+  {
+    "start": 75.17791666666668,
+    "end": 78.54491666666668,
+    "text": "The receipt says the trace is open, not that the money arrived."
+  },
+  {
+    "start": 78.86991666666668,
+    "end": 81.53991666666667,
+    "text": "The bank console shows the same request."
+  },
+  {
+    "start": 81.69972916666667,
+    "end": 83.76672916666666,
+    "text": "Some cases belong with a person."
+  },
+  {
+    "start": 84.04472916666667,
+    "end": 87.67872916666667,
+    "text": "An unrecognized charge goes to the bank before any model call."
+  },
+  {
+    "start": 87.95772916666667,
+    "end": 92.34572916666667,
+    "text": "In that same console, the operator gets verified evidence, open questions"
+  },
+  {
+    "start": 92.40372916666666,
+    "end": 95.89872916666667,
+    "text": "and a suggested next step, then takes the case."
+  },
+  {
+    "start": 96.10772916666667,
+    "end": 99.44072916666667,
+    "text": "Cecilia doesn't block cards or decide disputes."
+  },
+  {
+    "start": 99.59979166666668,
+    "end": 102.09579166666667,
+    "text": "Nor will it hand over someone else's data."
+  },
+  {
+    "start": 102.42079166666667,
+    "end": 105.97379166666667,
+    "text": "Ask for another customer's balance, and it opens a security case."
+  },
+  {
+    "start": 106.25279166666668,
+    "end": 110.69879166666668,
+    "text": "When we deliberately simulate a model outage, verified balances keep"
+  },
+  {
+    "start": 110.76879166666667,
+    "end": 114.59979166666668,
+    "text": "working, and anything that needs the model goes to a person."
+  },
+  {
+    "start": 114.75989583333335,
+    "end": 117.24489583333335,
+    "text": "A demo only shows the cases we picked."
+  },
+  {
+    "start": 117.56989583333335,
+    "end": 121.51689583333335,
+    "text": "So we wrote five hundred forty-eight tests in Spanish and Portuguese."
+  },
+  {
+    "start": 121.79589583333335,
+    "end": 126.14989583333335,
+    "text": "On the two hundred thirty-eight in scope, Cecilia on Sonnet five resolved"
+  },
+  {
+    "start": 126.30089583333334,
+    "end": 130.46889583333333,
+    "text": "ninety-seven point one percent safely, versus seventy point two for"
+  },
+  {
+    "start": 130.52689583333336,
+    "end": 131.24689583333335,
+    "text": "keywords."
+  },
+  {
+    "start": 131.57189583333334,
+    "end": 136.48289583333334,
+    "text": "Three runs, zero unsafe outcomes, though the first run missed one required"
+  },
+  {
+    "start": 136.55189583333333,
+    "end": 137.79489583333336,
+    "text": "escalation."
+  },
+  {
+    "start": 137.95410416666667,
+    "end": 141.24010416666667,
+    "text": "That's twenty-six point nine percentage points above keywords."
+  },
+  {
+    "start": 141.56510416666666,
+    "end": 145.50010416666666,
+    "text": "All one hundred seventy-one handoffs included the required context for an"
+  },
+  {
+    "start": 145.55910416666666,
+    "end": 146.29010416666668,
+    "text": "operator."
+  },
+  {
+    "start": 146.56910416666668,
+    "end": 151.41010416666666,
+    "text": "Speed mattered too: half of responses took under one point five seconds, and"
+  },
+  {
+    "start": 151.49110416666667,
+    "end": 154.76510416666667,
+    "text": "ninety-five percent took under three in that test run."
+  },
+  {
+    "start": 154.92535416666666,
+    "end": 158.25735416666666,
+    "text": "The deployed demo passed the seven scenarios we selected."
+  },
+  {
+    "start": 158.50135416666666,
+    "end": 161.19435416666667,
+    "text": "Try the customer app and the bank console today."
+  }
+]

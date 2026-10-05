@@ -1,0 +1,75 @@
+{
+  "method": "FFmpeg silence detection at -42 dB, minimum 50 ms; all joins under 500 ms; full source take lengths retained",
+  "boundaries": [
+    {
+      "from": "intro",
+      "to": "problem",
+      "longest_silence_seconds": 0.2904,
+      "full_previous_take_preserved": true,
+      "voice_overlap": false
+    },
+    {
+      "from": "problem",
+      "to": "architecture",
+      "longest_silence_seconds": 0.215,
+      "full_previous_take_preserved": true,
+      "voice_overlap": false
+    },
+    {
+      "from": "architecture",
+      "to": "balance",
+      "longest_silence_seconds": 0.2686,
+      "full_previous_take_preserved": true,
+      "voice_overlap": false
+    },
+    {
+      "from": "balance",
+      "to": "portuguese",
+      "longest_silence_seconds": 0.3035,
+      "full_previous_take_preserved": true,
+      "voice_overlap": false
+    },
+    {
+      "from": "portuguese",
+      "to": "trace",
+      "longest_silence_seconds": 0.1874,
+      "full_previous_take_preserved": true,
+      "voice_overlap": false
+    },
+    {
+      "from": "trace",
+      "to": "handoff",
+      "longest_silence_seconds": 0.1801,
+      "full_previous_take_preserved": true,
+      "voice_overlap": false
+    },
+    {
+      "from": "handoff",
+      "to": "safety",
+      "longest_silence_seconds": 0.1868,
+      "full_previous_take_preserved": true,
+      "voice_overlap": false
+    },
+    {
+      "from": "safety",
+      "to": "evidence",
+      "longest_silence_seconds": 0.2237,
+      "full_previous_take_preserved": true,
+      "voice_overlap": false
+    },
+    {
+      "from": "evidence",
+      "to": "impact",
+      "longest_silence_seconds": 0.3456,
+      "full_previous_take_preserved": true,
+      "voice_overlap": false
+    },
+    {
+      "from": "impact",
+      "to": "closing",
+      "longest_silence_seconds": 0.2602,
+      "full_previous_take_preserved": true,
+      "voice_overlap": false
+    }
+  ]
+}

@@ -104,8 +104,8 @@ data; none of this is a production measurement.
 |---|---|---|---|
 | **Public** GitHub repository, named `factored-hackathon-2026-[equipo]` | ✅ | [`try-cecilia/factored-hackathon-2026-cecilia`](https://github.com/try-cecilia/factored-hackathon-2026-cecilia), a new repository generated with `ops/export_public.py` from the team's private one: its history rewritten without the organizer's PDFs, the per-case reports and workloads (dataset ids) and the console keys; the tests that need them are skipped there | — |
 | Link to the deployed tool | ✅ | Web: https://cecil-ai.onrender.com · API: https://x-payments-agent.onrender.com | Open `/login`; the API responds at `/health` |
-| 4 to 6 slides | 🟡 | v3 deck of 6 slides, built from [slides_outline.md](slides_outline.md); the team name, the deployed URL and the public repository URL are missing ([docs/demo/README.md](demo/README.md)) | Complete and export |
-| Mandatory presentation video | 🟡 | Script ([video_pitch_script.md](video_pitch_script.md)) and a demo segment recordable with `ops.record_demo`; the voice-over on the demo is missing | Record and edit |
+| 4 to 6 slides | ✅ | New six-slide [PDF](demo/final-demo-v10-2026-10-04/cecilia-presentation.pdf) and [editable HTML](demo/final-demo-v10-2026-10-04/cecilia-presentation.html), with Team Cecilia, deployment URL and sourced figures. The approved exports retain their repository placeholder; the current public URL is listed above. | Open both exports |
+| Mandatory presentation video | ✅ | [Updated English pitch](demo/final-demo-v10-2026-10-04/cecilia-3min-en.mp4), 163.2 seconds, real deployed ES/PT scenarios, ElevenLabs voice, captions and animated architectural explanation. Editable Remotion project included. | Play video; inspect [deployment check](demo/final-demo-v10-2026-10-04/deployment-check.json) and [video validation](demo/final-demo-v10-2026-10-04/validation.json) |
 | Send everything to hackathon.admin@factored.ai | ⬜ | Not sent | Send |
 
 ## Evaluation criteria (kickoff)

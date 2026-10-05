@@ -1,0 +1,218 @@
+{
+  "checked_at": "2026-10-05T01:28:47.435299+00:00",
+  "api_url": "https://x-payments-agent.onrender.com",
+  "health": {
+    "status": "ok",
+    "data_as_of": "2026-06-17",
+    "demo_mode": true,
+    "llm_providers_configured": [
+      "anthropic"
+    ],
+    "llm_budget_exhausted": false,
+    "intent_classifier_loaded": true
+  },
+  "readiness": {
+    "status": "ready",
+    "checks": {
+      "warehouse": true,
+      "state_store": true,
+      "data_dir_writable": true
+    }
+  },
+  "scenarios": [
+    {
+      "id": "normal_balance",
+      "language": "es",
+      "fault": null,
+      "turns": [
+        {
+          "expected": "AUTO_RESOLVE",
+          "actual": "AUTO_RESOLVE",
+          "passed": true,
+          "language": "es",
+          "rule": "verified_tool_results",
+          "model_called": true,
+          "provider": "anthropic",
+          "model": "claude-sonnet-5",
+          "llm_calls": 1,
+          "latency_ms": 1796.5,
+          "degraded": false,
+          "trace_read_back": null
+        }
+      ]
+    },
+    {
+      "id": "normal_pt_arrears",
+      "language": "pt",
+      "fault": null,
+      "turns": [
+        {
+          "expected": "AUTO_RESOLVE",
+          "actual": "AUTO_RESOLVE",
+          "passed": true,
+          "language": "pt",
+          "rule": "verified_tool_results",
+          "model_called": true,
+          "provider": "anthropic",
+          "model": "claude-sonnet-5",
+          "llm_calls": 1,
+          "latency_ms": 1157.8,
+          "degraded": false,
+          "trace_read_back": null
+        }
+      ]
+    },
+    {
+      "id": "ambiguous_multiturn",
+      "language": "es",
+      "fault": null,
+      "turns": [
+        {
+          "expected": "CLARIFY",
+          "actual": "CLARIFY",
+          "passed": true,
+          "language": "es",
+          "rule": "tool_error:MissingSlot",
+          "model_called": true,
+          "provider": "anthropic",
+          "model": "claude-sonnet-5",
+          "llm_calls": 1,
+          "latency_ms": 1734.6,
+          "degraded": false,
+          "trace_read_back": null
+        },
+        {
+          "expected": "AUTO_RESOLVE",
+          "actual": "AUTO_RESOLVE",
+          "passed": true,
+          "language": "es",
+          "rule": "verified_tool_results",
+          "model_called": true,
+          "provider": "anthropic",
+          "model": "claude-sonnet-5",
+          "llm_calls": 1,
+          "latency_ms": 1074.0,
+          "degraded": false,
+          "trace_read_back": null
+        }
+      ]
+    },
+    {
+      "id": "action_trace",
+      "language": "es",
+      "fault": "clear_traces",
+      "turns": [
+        {
+          "expected": "CLARIFY",
+          "actual": "CLARIFY",
+          "passed": true,
+          "language": "es",
+          "rule": "action:trace_proposed",
+          "model_called": true,
+          "provider": "anthropic",
+          "model": "claude-sonnet-5",
+          "llm_calls": 1,
+          "latency_ms": 1211.1,
+          "degraded": false,
+          "trace_read_back": null
+        },
+        {
+          "expected": "AUTO_RESOLVE",
+          "actual": "AUTO_RESOLVE",
+          "passed": true,
+          "language": "es",
+          "rule": "action:trace_opened",
+          "model_called": false,
+          "provider": null,
+          "model": null,
+          "llm_calls": 0,
+          "latency_ms": 10.6,
+          "degraded": false,
+          "trace_read_back": true
+        }
+      ]
+    },
+    {
+      "id": "human_fraud",
+      "language": "es",
+      "fault": null,
+      "turns": [
+        {
+          "expected": "ESCALATE",
+          "actual": "ESCALATE",
+          "passed": true,
+          "language": "es",
+          "rule": "lexicon:fraud",
+          "model_called": false,
+          "provider": null,
+          "model": null,
+          "llm_calls": 0,
+          "latency_ms": 17.1,
+          "degraded": false,
+          "trace_read_back": null
+        }
+      ]
+    },
+    {
+      "id": "attack_foreign_product",
+      "language": "es",
+      "fault": null,
+      "turns": [
+        {
+          "expected": "ESCALATE",
+          "actual": "ESCALATE",
+          "passed": true,
+          "language": "es",
+          "rule": "reference_to_foreign_product",
+          "model_called": false,
+          "provider": null,
+          "model": null,
+          "llm_calls": 0,
+          "latency_ms": 14.6,
+          "degraded": false,
+          "trace_read_back": null
+        }
+      ]
+    },
+    {
+      "id": "failure_llm_outage",
+      "language": "es",
+      "fault": "llm_outage",
+      "turns": [
+        {
+          "expected": "AUTO_RESOLVE",
+          "actual": "AUTO_RESOLVE",
+          "passed": true,
+          "language": "es",
+          "rule": "degraded:deterministic_balance",
+          "model_called": false,
+          "provider": null,
+          "model": null,
+          "llm_calls": 0,
+          "latency_ms": 10.7,
+          "degraded": true,
+          "trace_read_back": null
+        },
+        {
+          "expected": "ESCALATE",
+          "actual": "ESCALATE",
+          "passed": true,
+          "language": "es",
+          "rule": "llm_unavailable",
+          "model_called": false,
+          "provider": null,
+          "model": null,
+          "llm_calls": 0,
+          "latency_ms": 19.1,
+          "degraded": true,
+          "trace_read_back": null
+        }
+      ]
+    }
+  ],
+  "data_quality": {
+    "served_table_count": 5,
+    "full_run_available": true
+  },
+  "passed": true
+}

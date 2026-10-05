@@ -37,3 +37,6 @@ web/.tanstack/
 data/reports/quality_report_*.json
 
 data/lake/
+
+# Final generated presentation, not an organizer document.
+!docs/demo/final-demo-v10-2026-10-04/cecilia-presentation.pdf
