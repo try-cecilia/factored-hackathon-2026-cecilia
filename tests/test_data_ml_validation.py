@@ -53,6 +53,8 @@ from tests.conftest import FIXTURES, SERVING, build_fixture_warehouse
 from tests.test_orchestrator import make
 
 ROOT = Path(__file__).resolve().parent.parent
+WORKLOADS = pytest.mark.skipif(not (ROOT / "eval" / "workload" / "cases_test.jsonl").exists(),
+                               reason="the workloads are not in the public copy: `make workload` rebuilds them")
 DATA_QUALITY_DOC = (ROOT / "docs" / "data_quality.md").read_text(encoding="utf-8")
 EVALUATION_DOC = (ROOT / "EVALUATION.md").read_text(encoding="utf-8")
 LIMITATIONS_DOC = (ROOT / "LIMITATIONS.md").read_text(encoding="utf-8")
@@ -749,6 +751,7 @@ def test_leakage_the_only_input_of_the_learned_component_is_the_customers_words(
                                 "probabilities; neither the classifier nor the guard imports duckdb, tools or the warehouse (no information from after the outcome)")
 
 
+@WORKLOADS
 def test_leakage_the_two_datasets_are_the_ones_frozen_before_measuring_and_the_workloads_do_not_share_cases(committed, record_property):
     meta = json.loads((ROOT / "eval" / "models" / "intent_clf_meta.json").read_text(encoding="utf-8"))
     assert meta["train_sha256"] == committed["versions"]["train_sha256"] == hashlib.sha256(Path(evaluation.TRAIN).read_bytes()).hexdigest()
