@@ -2,7 +2,7 @@
 
 The approved delivery is in [final-demo-v10-2026-10-04](final-demo-v10-2026-10-04/README.md).
 
-- [Video pitch](final-demo-v10-2026-10-04/cecilia-3min-en.mp4), 2:43.2, 1080p at 30 fps. Continuous English Sarah narration, real deployed Spanish/Portuguese Chrome footage, animated results and gentle transitions.
+- [Video pitch](final-demo-v10-2026-10-04/cecilia-3min-en.mp4), 2:43.2, 1080p at 30 fps; also on YouTube: https://youtu.be/dZU4_NcoIDw. Continuous English Sarah narration, real deployed Spanish/Portuguese Chrome footage, animated results and gentle transitions.
 - [Presentation PDF](final-demo-v10-2026-10-04/cecilia-presentation.pdf), six slides, and [editable HTML](final-demo-v10-2026-10-04/cecilia-presentation.html). Use **Edit text** and **Save HTML** to edit the deck.
 - [Editable Remotion project](final-demo-v10-2026-10-04/cecilia-remotion-project.zip), [narration](final-demo-v10-2026-10-04/cecilia-3min-en.m4a) and [captions](final-demo-v10-2026-10-04/cecilia-3min-en.srt).
 - [Exact script](final-demo-v10-2026-10-04/script.json), [deployment check](final-demo-v10-2026-10-04/deployment-check.json), [video validation](final-demo-v10-2026-10-04/validation.json) and [artifact hashes](final-demo-v10-2026-10-04/artifact-manifest.json).

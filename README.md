@@ -159,7 +159,7 @@ fraud/dispute recall from 86.7% to **93.3%**† with **0%** false escalations:
 [`eval/reports/intent_classifier.md`](eval/reports/intent_classifier.md).
 † Post-hoc: two lexicon patterns were added after this split was scored and match two of its utterances, so the keyword baseline and lexicon-only figures are an upper bound ([`EVALUATION.md`](EVALUATION.md), "Contamination of the test split").
 
-Submission slides and demo video: [`docs/demo/`](docs/demo/README.md).
+Submission slides and demo video: [`docs/demo/`](docs/demo/README.md). Watch the video on YouTube: https://youtu.be/dZU4_NcoIDw.
 
 Full reports: [`EVALUATION.md`](EVALUATION.md) (method) ·
 [`eval/reports/SYSTEM_EVAL.md`](eval/reports/SYSTEM_EVAL.md) ·
