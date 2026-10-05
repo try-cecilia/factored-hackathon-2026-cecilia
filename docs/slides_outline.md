@@ -1,8 +1,12 @@
 # Slide outline (a cover and 5 slides)
 
-Every number is measured: the offline ones come from `eval/reports/SYSTEM_EVAL.md` and
+Final exports: [PDF](demo/final-demo-v10-2026-10-04/cecilia-presentation.pdf) and
+[editable HTML](demo/final-demo-v10-2026-10-04/cecilia-presentation.html). Public repository: https://github.com/try-cecilia/factored-hackathon-2026-cecilia. The approved deck retains its earlier placeholder.
+The deck condenses this outline into six slides; detailed supporting figures remain here.
+
+Evaluation results are measured; dollar costs use the reports' assumed September 2026 list prices. Sources: the offline ones come from `eval/reports/SYSTEM_EVAL.md` and
 `SYSTEM_EVAL_ADVERSARIAL.md`, the live ones from `eval/reports/SYSTEM_EVAL_LIVE.md` (2026-10-04). If a report is
-regenerated, copy the numbers again from it. Speaker notes follow `docs/video_pitch_script.md`.
+regenerated, copy the numbers again from it. The under-three-minute recorded narration is in `docs/demo/final-demo-v10-2026-10-04/script.json`.
 
 ## 0. Cover
 - "Account and payment questions, answered in seconds, only with verified data": balances, movements, payment
@@ -16,9 +20,9 @@ regenerated, copy the numbers again from it. Speaker notes follow `docs/video_pi
 - Who has it: the customers, and the bank's contact center: about **411 agent hours a month** (median) on these contacts.
 - Account and payment questions are **35%** of 686K contacts, the largest reason.
 - They are the simplest: **91.5%** resolved on first contact, 221 s calls.
-- Yet customers rate it **2.91/5** (NPS −70), and every call starts with **120 s** in the queue.
+- Yet customers rate it **2.91/5** (NPS −70), and average queue time is **120 s**.
 - Simple, repetitive and already resolvable → automate it, safely.
-- *(footnote: the wait is 120 s for every reason in this synthetic data, so we do not claim it drives the score)*
+- *(footnote: average waits are about 120 s across reasons in this synthetic data, so we do not claim it drives the score)*
 - *(chart: contact reasons; handle time vs CSAT by reason, `docs/evidence/baseline_metrics.md`)*
 
 ## 2. The model interprets; the code speaks
@@ -57,15 +61,19 @@ regenerated, copy the numbers again from it. Speaker notes follow `docs/video_pi
 - Contracts with a quarantine gate and rollback; lineage per row, run and partition; a late-arrival fixture.
 - Findings the data dictionary hides: 57% missing USD amounts; registration branch keys broken for 149,995 of
   150,000 customers; no MXN at all; transcripts with 42 distinct texts; a third of movements dated before their
-  product or customer existed; 58K pending movements (the action's ground). Full load: 294 checks, 0 errors.
+  product or customer existed; 58K pending movements (the action's ground). Full load: 294 checks, 0 errors, 16 warnings; one check not run.
 - Every classifier selection and evaluation run tracked in MLflow: model, effort, prompt hash, data hashes,
   code version and metrics.
 - 1,400 hermetic Python tests and about 700 web tests; CI builds the container and boots it like the host; `make all`
   rebuilds every number.
 
 ## 5. Try it, and what it takes to make it real
-- **Try it:** [deployed URL]. Guided scenarios, "Why?" on every reply, the bank view, fault buttons, and the
-  data-quality view (lineage, failed checks and freshness, live from the warehouse).
+- **Try it:** https://cecil-ai.onrender.com. Guided scenarios, reply explanations, the bank view and fault buttons.
+  Data quality: https://x-payments-agent.onrender.com, **Data quality**. This view distinguishes the deployed sample
+  from the complete dataset run.
+- **Public repository:** https://github.com/try-cecilia/factored-hackathon-2026-cecilia.
+- **Deployment verified 2026-10-04:** seven selected scenarios, ten turns passed; model calls used `claude-sonnet-5`.
+  The demo serves 5,000 synthetic customers, data as of 2026-06-17; freshness enforcement is off for this snapshot.
 - **Before production:** the bank's IdP instead of the test PIN; Redis sessions; PII encryption and redaction;
   the metrics stack wired to the specified alerts; voice (85% of contacts are calls).
 - **Next workflow:** transaction disputes, on the same spine.

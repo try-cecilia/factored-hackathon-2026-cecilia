@@ -1,2 +1,5 @@
 # Shell scripts run inside Linux containers: never check them out with CRLF, even on Windows.
 *.sh text eol=lf
+
+# Keep the final PDF byte-for-byte intact and out of textual diffs.
+docs/demo/final-demo-v10-2026-10-04/cecilia-presentation.pdf binary

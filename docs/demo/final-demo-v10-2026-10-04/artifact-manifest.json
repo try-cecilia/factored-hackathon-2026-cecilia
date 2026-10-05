@@ -1,0 +1,83 @@
+{
+  "created_at": "2026-10-05T02:09:35.906293+00:00",
+  "duration_seconds": 163.2,
+  "revision": "v10 removes the production checklist, adds measured resolution lift, handoff completeness and evaluation latency, and preserves continuous mastered audio and gentle motion",
+  "public_repository_url": null,
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 2831,
+      "sha256": "e90e783a28d388def1530b2ebda3a75c19c4c32a91ea3c10e9d2403072e17afa"
+    },
+    {
+      "path": "audio-boundary-check.json",
+      "bytes": 1906,
+      "sha256": "4d7dbee068ebd64a880a6442e77fe96cec26946ecf5dad1c972b03762427aff7"
+    },
+    {
+      "path": "captions.json",
+      "bytes": 6662,
+      "sha256": "5474c97fd9211d2391c201bdf65e59e5adf511d76549f95856569e615c448d39"
+    },
+    {
+      "path": "cecilia-3min-en.m4a",
+      "bytes": 3895738,
+      "sha256": "121a2cf2770f802f0a1c5e7230efcda51336cd6d01cb7881d4c3d23724f818f1"
+    },
+    {
+      "path": "cecilia-3min-en.mp4",
+      "bytes": 37062466,
+      "sha256": "90815d7683dc6d12d5d22f3f173227a2e73d49053848e85388b7025b12abc9e6"
+    },
+    {
+      "path": "cecilia-3min-en.srt",
+      "bytes": 4199,
+      "sha256": "63d3a28b1d2f561a44a44c3434d045ed74e62aa0c8dd093dda136e337c904f7a"
+    },
+    {
+      "path": "cecilia-presentation.html",
+      "bytes": 412177,
+      "sha256": "312af9cdc0bf1e72161bb1f53dbdec6f9b4a396e1d5476cfa24d4b177083fac8"
+    },
+    {
+      "path": "cecilia-presentation.pdf",
+      "bytes": 461983,
+      "sha256": "b23ceec6ac8142c5ab534f0f5d7efdab9cf5668488d83ad077d8ae0b082a289a"
+    },
+    {
+      "path": "cecilia-remotion-project.zip",
+      "bytes": 19650799,
+      "sha256": "a507ae59395936063e0b212ecccaaad00a24e4aa9570cce129cf9e552dd9873f"
+    },
+    {
+      "path": "deployment-check.json",
+      "bytes": 5456,
+      "sha256": "f6cd4a002f60f291f2b790c6494788ce8f709a25129cc6103ddbcb4d280dc932"
+    },
+    {
+      "path": "provenance.json",
+      "bytes": 8483,
+      "sha256": "0a9047eee3978ece78cfc8b0840a71ba3b4f05c0ce04572ee99b03c0a02d534f"
+    },
+    {
+      "path": "script.json",
+      "bytes": 4739,
+      "sha256": "93f71de4ccd8ff854e8dcfc1736a8fec8fa610ed9c243c233c5ff7e4d42fa02d"
+    },
+    {
+      "path": "slide-sources.json",
+      "bytes": 874,
+      "sha256": "7f62db9b5d3341aa178e231db28db2c5270fecb1be624f80e8e8cbfca4e8955d"
+    },
+    {
+      "path": "timeline.json",
+      "bytes": 6934,
+      "sha256": "52f834d00042564c3972377f6f1d453843d1a9f1950fc6f921886e3d84fccb53"
+    },
+    {
+      "path": "validation.json",
+      "bytes": 3147,
+      "sha256": "8352bb497fc8108c9c6e1bfe7ac29e3dad8dfb10c262df389204e0737234024a"
+    }
+  ]
+}

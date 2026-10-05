@@ -1,0 +1,102 @@
+{
+  "verified_at": "2026-10-05T02:04:03.243104+00:00",
+  "duration_seconds": 163.2,
+  "container_duration_seconds": 163.2,
+  "frames": 4896,
+  "transition_seconds": 0.6,
+  "fps": 30,
+  "width": 1920,
+  "height": 1080,
+  "decode": "passed",
+  "captions": {
+    "cues": 49,
+    "complete_script": true,
+    "ordered_nonoverlapping": true
+  },
+  "audio": {
+    "mean_volume": "-20.9",
+    "max_volume": "-5.0",
+    "playback": "single continuous master",
+    "mastering": "Complete Sarah takes including new V10 results and closing recordings, constant per-take gain, 40ms crossfades in silence padding, one global loudness master; single uninterrupted playback asset.",
+    "boundary_checks": {
+      "method": "FFmpeg silence detection at -42 dB, minimum 50 ms; all joins under 500 ms; full source take lengths retained",
+      "boundaries": [
+        {
+          "from": "intro",
+          "to": "problem",
+          "longest_silence_seconds": 0.2904,
+          "full_previous_take_preserved": true,
+          "voice_overlap": false
+        },
+        {
+          "from": "problem",
+          "to": "architecture",
+          "longest_silence_seconds": 0.215,
+          "full_previous_take_preserved": true,
+          "voice_overlap": false
+        },
+        {
+          "from": "architecture",
+          "to": "balance",
+          "longest_silence_seconds": 0.2686,
+          "full_previous_take_preserved": true,
+          "voice_overlap": false
+        },
+        {
+          "from": "balance",
+          "to": "portuguese",
+          "longest_silence_seconds": 0.3035,
+          "full_previous_take_preserved": true,
+          "voice_overlap": false
+        },
+        {
+          "from": "portuguese",
+          "to": "trace",
+          "longest_silence_seconds": 0.1874,
+          "full_previous_take_preserved": true,
+          "voice_overlap": false
+        },
+        {
+          "from": "trace",
+          "to": "handoff",
+          "longest_silence_seconds": 0.1801,
+          "full_previous_take_preserved": true,
+          "voice_overlap": false
+        },
+        {
+          "from": "handoff",
+          "to": "safety",
+          "longest_silence_seconds": 0.1868,
+          "full_previous_take_preserved": true,
+          "voice_overlap": false
+        },
+        {
+          "from": "safety",
+          "to": "evidence",
+          "longest_silence_seconds": 0.2237,
+          "full_previous_take_preserved": true,
+          "voice_overlap": false
+        },
+        {
+          "from": "evidence",
+          "to": "impact",
+          "longest_silence_seconds": 0.3456,
+          "full_previous_take_preserved": true,
+          "voice_overlap": false
+        },
+        {
+          "from": "impact",
+          "to": "closing",
+          "longest_silence_seconds": 0.2602,
+          "full_previous_take_preserved": true,
+          "voice_overlap": false
+        }
+      ]
+    }
+  },
+  "voice": "ElevenLabs Sarah / eleven_multilingual_v2",
+  "scenes": 11,
+  "sha256": "90815d7683dc6d12d5d22f3f173227a2e73d49053848e85388b7025b12abc9e6",
+  "bytes": 37062466,
+  "visual_review": "Representative scene frames inspected before render."
+}

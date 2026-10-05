@@ -1,0 +1,32 @@
+[
+  {
+    "slide": 1,
+    "title": "Cecilia",
+    "source": "README.md; deployment-check.json"
+  },
+  {
+    "slide": 2,
+    "title": "Account and payment demand",
+    "source": "docs/evidence/baseline_metrics.md"
+  },
+  {
+    "slide": 3,
+    "title": "Model interpretation and verified actions",
+    "source": "ARCHITECTURE.md; ADR-001; ADR-002; deployment-check.json"
+  },
+  {
+    "slide": 4,
+    "title": "Evaluation on the same 548 cases",
+    "source": "eval/reports/SYSTEM_EVAL.md; SYSTEM_EVAL_LIVE.md; SYSTEM_EVAL_ADVERSARIAL.md"
+  },
+  {
+    "slide": 5,
+    "title": "Data quality and engineering evidence",
+    "source": "docs/DATA.md; docs/evidence/ml_tracking.md; docs/evidence/label_signal.md; /demo/data_quality"
+  },
+  {
+    "slide": 6,
+    "title": "The deployed demo and the next steps",
+    "source": "deployment-check.json; README.md; LIMITATIONS.md"
+  }
+]

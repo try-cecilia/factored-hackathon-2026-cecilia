@@ -1,23 +1,19 @@
-# Submission deliverables: slides and video
+# Final presentation and video pitch
 
-## Slides (6: a cover and 5)
+The approved delivery is in [final-demo-v10-2026-10-04](final-demo-v10-2026-10-04/README.md).
 
-The v3 deck is a private claude.ai artifact (downloadable as PDF or PPTX), built on 2026-09-28 from
-`docs/slides_outline.md` with the measured numbers. Still to fill before sending: the team name, the deployed
-URL and the public repository's URL. The first deck (6 slides) described design v2 and is superseded.
+- [Video pitch](final-demo-v10-2026-10-04/cecilia-3min-en.mp4), 2:43.2, 1080p at 30 fps. Continuous English Sarah narration, real deployed Spanish/Portuguese Chrome footage, animated results and gentle transitions.
+- [Presentation PDF](final-demo-v10-2026-10-04/cecilia-presentation.pdf), six slides, and [editable HTML](final-demo-v10-2026-10-04/cecilia-presentation.html). Use **Edit text** and **Save HTML** to edit the deck.
+- [Editable Remotion project](final-demo-v10-2026-10-04/cecilia-remotion-project.zip), [narration](final-demo-v10-2026-10-04/cecilia-3min-en.m4a) and [captions](final-demo-v10-2026-10-04/cecilia-3min-en.srt).
+- [Exact script](final-demo-v10-2026-10-04/script.json), [deployment check](final-demo-v10-2026-10-04/deployment-check.json), [video validation](final-demo-v10-2026-10-04/validation.json) and [artifact hashes](final-demo-v10-2026-10-04/artifact-manifest.json).
 
-## Video
+Demo: https://cecil-ai.onrender.com. Public repository: https://github.com/try-cecilia/factored-hackathon-2026-cecilia.
+The approved media retain the repository placeholder from recording time. Customer data is synthetic; the outage is deliberately simulated.
+Only the final delivery is retained. Earlier pitch exports and the legacy silent recording have been removed.
 
-The submission asks for a pitch video with voice that explains the solution and the architectural decisions.
-- **Script:** `docs/video_pitch_script.md` (about 4 minutes, English narration).
-- **Demo segment:** `python -m ops.record_demo <deployed URL> demo.webm <public repo URL>` records the jury demo
-  (DEMO_MODE=1) through its guided scenarios and its data-quality view, about 2 minutes, 1280×720, silent, with
-  English captions. It was checked against a local server with Claude Sonnet 5 on 2026-09-28 (109 s), and again
-  after the data-quality view was added, in degraded mode (114 s; a live model adds its latency).
-- **Edit:** the voice-over over the demo segment and the slides.
+## UI development evidence
 
-`demo_app.webm` in this folder is the first recording (design v2, degraded mode, no voice). It is kept here
-for the record and left out of the public repository.
+The screenshots below document local UI development and are not final deployment/model evidence.
 
 ## Operator console (web)
 

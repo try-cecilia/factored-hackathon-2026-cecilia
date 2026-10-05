@@ -1,0 +1,262 @@
+{
+  "app": "https://cecil-ai.onrender.com",
+  "captured_on": "2026-10-04",
+  "source_package": "public/source-clips/chrome-capture.json",
+  "duration_seconds": 163.2,
+  "transition_seconds": 0.6,
+  "voice": {
+    "provider": "ElevenLabs",
+    "name": "Sarah",
+    "voice_id": "EXAVITQu4vr4xnSDxMaL",
+    "model_id": "eleven_multilingual_v2",
+    "language": "en",
+    "synthetic": true
+  },
+  "voice_settings": {
+    "stability": 0.6,
+    "similarity_boost": 0.75,
+    "style": 0.15,
+    "use_speaker_boost": true,
+    "speed": 1.0
+  },
+  "narration": {
+    "method": "Complete Sarah takes including new V10 results and closing recordings, constant per-take gain, 40ms crossfades in silence padding, one global loudness master; single uninterrupted playback asset.",
+    "sha256": "ae90d890225d0c0859f968ff82fc55b74a7956918f22303281a51b94c8473c75",
+    "asset": "audio/continuous.m4a"
+  },
+  "edits": [
+    {
+      "scene": "balance",
+      "source": "01-balance.mp4",
+      "start": 3.69,
+      "end": 15.79,
+      "sha256": "2b15570fb8cf034a601e33d018def97af5af41dcf4a0c70c0ad167c4a0af3e0b"
+    },
+    {
+      "scene": "trace",
+      "source": "03-trace.mp4",
+      "start": 0,
+      "end": 14.5,
+      "sha256": "73b998ac86d3582d0d6082705f8367590fd3873cc91f90444bff6c569f211bf6"
+    },
+    {
+      "scene": "trace",
+      "source": "03-bank-trace.mp4",
+      "start": 0,
+      "end": 3.9,
+      "sha256": "810dd447d3b9ed7c78cc556322ec8a858bb13cd0f222346efb7654df061f78d5"
+    },
+    {
+      "scene": "portuguese",
+      "source": "04-portuguese.mp4",
+      "start": 0,
+      "end": 9.1,
+      "sha256": "9bc43eb3ccabd223ca5394bda3f18c0f1fc4e8778e541a4f2ff4d345184e4526"
+    },
+    {
+      "scene": "handoff",
+      "source": "05-handoff.mp4",
+      "start": 0,
+      "end": 17.1,
+      "sha256": "60bc77539600ff70e1ed5b0a153215fe64dda061beefbf87b9541f0e6abec49d"
+    },
+    {
+      "scene": "safety",
+      "source": "06-injection.mp4",
+      "start": 0,
+      "end": 6.5,
+      "sha256": "209e8ef0d18608b69afd9a47e87bbf29ce8515c72165dea39f60608349a8299b"
+    },
+    {
+      "scene": "safety",
+      "source": "07-outage.mp4",
+      "start": 0,
+      "end": 9.0,
+      "sha256": "e28169fa43a1689930717ccb22380ad84f04da7504cb98b12dd01cfbdbafd055"
+    }
+  ],
+  "brand_source": {
+    "url": "https://cecil-ai.onrender.com/",
+    "tokens": "cecilai/web/src/tokens.css",
+    "layout": "cecilai/web/src/landing/landing.css",
+    "fonts": [
+      "Inter Variable",
+      "DM Mono"
+    ],
+    "primary_color": "#014FFB",
+    "mascot": "cecilai/web/public/cecilia-hero.png"
+  },
+  "motion_reference_only": "https://www.youtube.com/watch?v=2t495uAfTak",
+  "treatment": "V10: production checklist removed; added measured 26.9-point resolution lift, 171/171 complete handoffs and 1.43s/2.99s evaluation case latency from SYSTEM_EVAL_LIVE.md run 1. New Sarah narration for results and closing joins the continuous master. Visuals dissolve over uninterrupted audio with 0.6-second eased overlaps, gentle camera motion, and 0.4-second dissolves between app views. No large flying headlines, full-screen frosted scrims, window zoom kicks or square spotlights. Native 3840x2400 Chrome footage retained. Source wait trims and held frames do not measure service latency.",
+  "capture": {
+    "browser": "Google Chrome 154.0.8037.93",
+    "captured_on": "2026-10-04",
+    "app": "https://cecil-ai.onrender.com",
+    "capture_method": "Native device-pixel PNG frames captured from real deployed UI interactions at up to 8.3 fps. Actual capture timestamps preserved, then encoded to 30 fps H.264 CRF 10. Repeated frames fill intervals between captures. No reconstructed UI, generated app responses or synthetic motion interpolation.",
+    "files": [
+      {
+        "file": "01-balance.mp4",
+        "sha256": "2b15570fb8cf034a601e33d018def97af5af41dcf4a0c70c0ad167c4a0af3e0b",
+        "native_capture_pixels": [
+          3840,
+          2400
+        ],
+        "viewport_css_pixels": [
+          1920,
+          1200
+        ],
+        "device_scale_factor": 2,
+        "lossless_frame_count": 131,
+        "capture_duration_seconds": 16.2342072499996,
+        "markers": {
+          "load": 0.12544625000009546,
+          "answer": 4.1929430839991255,
+          "why_click": 11.19402779200027,
+          "why_open": 11.233125167000253,
+          "end": 16.2342072499996
+        }
+      },
+      {
+        "file": "03-trace.mp4",
+        "sha256": "73b998ac86d3582d0d6082705f8367590fd3873cc91f90444bff6c569f211bf6",
+        "native_capture_pixels": [
+          3840,
+          2400
+        ],
+        "viewport_css_pixels": [
+          1920,
+          1200
+        ],
+        "device_scale_factor": 2,
+        "lossless_frame_count": 376,
+        "capture_duration_seconds": 47.89157750000231,
+        "markers": {
+          "proposal": 0.1230837920011254,
+          "confirm_click": 4.124202333001449,
+          "receipt_observed": 47.72476395800186,
+          "end": 47.89157750000231
+        }
+      },
+      {
+        "file": "03-bank-trace.mp4",
+        "sha256": "810dd447d3b9ed7c78cc556322ec8a858bb13cd0f222346efb7654df061f78d5",
+        "native_capture_pixels": [
+          3840,
+          2400
+        ],
+        "viewport_css_pixels": [
+          1920,
+          1200
+        ],
+        "device_scale_factor": 2,
+        "lossless_frame_count": 116,
+        "capture_duration_seconds": 13.964266124999995,
+        "markers": {
+          "trace_visible": 11.963195707998239,
+          "end": 13.964266124999995
+        }
+      },
+      {
+        "file": "04-portuguese.mp4",
+        "sha256": "9bc43eb3ccabd223ca5394bda3f18c0f1fc4e8778e541a4f2ff4d345184e4526",
+        "native_capture_pixels": [
+          3840,
+          2400
+        ],
+        "viewport_css_pixels": [
+          1920,
+          1200
+        ],
+        "device_scale_factor": 2,
+        "lossless_frame_count": 79,
+        "capture_duration_seconds": 9.647417000000132,
+        "markers": {
+          "answer": 0.14706404199750978,
+          "end": 9.647417000000132
+        }
+      },
+      {
+        "file": "05-handoff.mp4",
+        "sha256": "60bc77539600ff70e1ed5b0a153215fe64dda061beefbf87b9541f0e6abec49d",
+        "native_capture_pixels": [
+          3840,
+          2400
+        ],
+        "viewport_css_pixels": [
+          1920,
+          1200
+        ],
+        "device_scale_factor": 2,
+        "lossless_frame_count": 138,
+        "capture_duration_seconds": 17.104130290998,
+        "markers": {
+          "customer_case": 0.16647287500018138,
+          "bank_click": 5.467435082999145,
+          "operator_open": 6.47616645800008,
+          "take_click": 11.47723699999915,
+          "taken": 11.923197166001046,
+          "end": 17.104130290998
+        }
+      },
+      {
+        "file": "06-injection.mp4",
+        "sha256": "209e8ef0d18608b69afd9a47e87bbf29ce8515c72165dea39f60608349a8299b",
+        "native_capture_pixels": [
+          3840,
+          2400
+        ],
+        "viewport_css_pixels": [
+          1920,
+          1200
+        ],
+        "device_scale_factor": 2,
+        "lossless_frame_count": 52,
+        "capture_duration_seconds": 7.132607999999891,
+        "markers": {
+          "end": 7.132607999999891
+        }
+      },
+      {
+        "file": "07-outage.mp4",
+        "sha256": "e28169fa43a1689930717ccb22380ad84f04da7504cb98b12dd01cfbdbafd055",
+        "native_capture_pixels": [
+          3840,
+          2400
+        ],
+        "viewport_css_pixels": [
+          1920,
+          1200
+        ],
+        "device_scale_factor": 2,
+        "lossless_frame_count": 72,
+        "capture_duration_seconds": 9.623883500000375,
+        "markers": {
+          "balance": 0.13236233300267486,
+          "second_question": 3.6344432920013787,
+          "handoff": 4.62352091700086,
+          "end": 9.623883500000375
+        }
+      }
+    ]
+  },
+  "public_repository": null,
+  "metrics_sources": {
+    "resolution_lift": {
+      "value_pp": 26.9,
+      "calculation": "97.1 - 70.2",
+      "denominator": 238,
+      "source": "eval/reports/SYSTEM_EVAL_LIVE.md + SYSTEM_EVAL.md, run 1"
+    },
+    "handoff_completeness": {
+      "complete": 171,
+      "total": 171,
+      "source": "eval/reports/SYSTEM_EVAL_LIVE.md, Sonnet 5 run 1"
+    },
+    "latency": {
+      "median_ms": 1425.5,
+      "p95_ms": 2992.1,
+      "scope": "End-to-end evaluation case time, 548 synthetic test cases; not deployed-app latency",
+      "source": "eval/reports/SYSTEM_EVAL_LIVE.md, Sonnet 5 run 1"
+    }
+  }
+}
